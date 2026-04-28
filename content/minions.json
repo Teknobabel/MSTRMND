@@ -1,0 +1,16 @@
+[
+  {
+    "id": "operative_alpha",
+    "name": "Operative Alpha",
+    "description": "A field agent with a knack for systems.",
+    "startingTraitIds": ["loyal"],
+    "levelUpTraitOrder": ["hacker", "tactician", "injured", "burnout"]
+  },
+  {
+    "id": "asset_beta",
+    "name": "Asset Beta",
+    "description": "A local contact; fragile but insightful.",
+    "startingTraitIds": ["injured"],
+    "levelUpTraitOrder": ["hacker", "loyal", "tactician"]
+  }
+]

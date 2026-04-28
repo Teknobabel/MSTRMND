@@ -1,0 +1,14 @@
+[
+  {
+    "id": "metro_night",
+    "name": "Metro night",
+    "description": "Primary city operations map.",
+    "locationIds": ["safehouse", "downtown_dead_drop"]
+  },
+  {
+    "id": "training_grid",
+    "name": "Training grid",
+    "description": "Rehearsal layout; reuses downtown for drills.",
+    "locationIds": ["downtown_dead_drop"]
+  }
+]

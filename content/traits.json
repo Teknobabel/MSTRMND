@@ -1,0 +1,27 @@
+[
+  {
+    "id": "hacker",
+    "name": "Hacker",
+    "type": "primary"
+  },
+  {
+    "id": "injured",
+    "name": "Injured",
+    "type": "status"
+  },
+  {
+    "id": "loyal",
+    "name": "Loyal",
+    "type": "secondary"
+  },
+  {
+    "id": "burnout",
+    "name": "Burnout",
+    "type": "status"
+  },
+  {
+    "id": "tactician",
+    "name": "Tactician",
+    "type": "primary"
+  }
+]

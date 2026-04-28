@@ -1,0 +1,34 @@
+[
+  {
+    "id": "operation_nightfall",
+    "name": "Operation Nightfall",
+    "description": "A three-stage escalation ending in extraction.",
+    "stages": [
+      {
+        "missionIds": ["breach_server", "breach_server", "extract_asset"]
+      },
+      {
+        "missionIds": ["extract_asset", "breach_server", "extract_asset"]
+      },
+      {
+        "missionIds": ["breach_server", "extract_asset", "breach_server"]
+      }
+    ]
+  },
+  {
+    "id": "operation_sunrise",
+    "name": "Operation Sunrise",
+    "description": "Alternate path with heavier extraction focus.",
+    "stages": [
+      {
+        "missionIds": ["extract_asset", "extract_asset", "breach_server"]
+      },
+      {
+        "missionIds": ["breach_server", "extract_asset", "breach_server"]
+      },
+      {
+        "missionIds": ["extract_asset", "breach_server", "extract_asset"]
+      }
+    ]
+  }
+]

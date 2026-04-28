@@ -1,0 +1,16 @@
+[
+  {
+    "id": "money",
+    "name": "Money",
+    "description": "Spendable currency for operations."
+  },
+  {
+    "id": "guns",
+    "name": "Guns"
+  },
+  {
+    "id": "bio_lab",
+    "name": "Bio Lab",
+    "description": "A portable research node."
+  }
+]

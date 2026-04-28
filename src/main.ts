@@ -1,5 +1,25 @@
 import { resizeCanvasToDisplaySize, setupCanvas } from "./canvas/setup";
+import { loadContent } from "./game/loadContent";
 import { initNavigation } from "./navigation";
+
+const catalog = loadContent();
+console.info(
+  "[Mastermind] content:",
+  catalog.traits.length,
+  "traits,",
+  catalog.minions.length,
+  "minion templates,",
+  catalog.missions.length,
+  "missions,",
+  catalog.locations.length,
+  "locations,",
+  catalog.maps.length,
+  "maps,",
+  catalog.assets.length,
+  "assets,",
+  catalog.omegaPlans.length,
+  "omega plans",
+);
 
 const canvas = document.getElementById("game-canvas");
 if (!(canvas instanceof HTMLCanvasElement)) {

@@ -1,0 +1,16 @@
+[
+  {
+    "id": "breach_server",
+    "name": "Breach the server",
+    "description": "Gain access before the trace completes.",
+    "requiredTraitIds": ["hacker", "tactician"],
+    "durationTurns": 3
+  },
+  {
+    "id": "extract_asset",
+    "name": "Extract the asset",
+    "description": "Escort the contact out under pressure.",
+    "requiredTraitIds": ["loyal", "injured", "hacker"],
+    "durationTurns": 5
+  }
+]

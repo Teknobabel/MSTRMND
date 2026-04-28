@@ -1,0 +1,14 @@
+[
+  {
+    "id": "safehouse",
+    "name": "Safehouse",
+    "description": "Staging area for sensitive ops.",
+    "availableMissionIds": ["breach_server", "extract_asset"]
+  },
+  {
+    "id": "downtown_dead_drop",
+    "name": "Downtown dead drop",
+    "description": "High-traffic corner; fast in and out.",
+    "availableMissionIds": ["breach_server"]
+  }
+]
