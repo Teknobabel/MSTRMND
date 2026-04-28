@@ -12,7 +12,39 @@
   </head>
   <body>
     <div id="app" class="app-root">
-      <canvas id="game-canvas" class="game-canvas" aria-label="Game canvas"></canvas>
+      <section id="screen-main" class="screen screen-main" aria-labelledby="main-title">
+        <h1 id="main-title" class="screen-title">Mastermind</h1>
+        <div class="screen-actions">
+          <button type="button" class="btn btn-primary" id="btn-play">Play</button>
+          <button type="button" class="btn" id="btn-main-settings">Settings</button>
+        </div>
+      </section>
+
+      <section id="screen-settings" class="screen screen-settings" hidden aria-hidden="true">
+        <h2 class="screen-title">Settings</h2>
+        <div class="screen-actions">
+          <button type="button" class="btn" id="btn-settings-back">Back</button>
+        </div>
+      </section>
+
+      <section id="screen-game" class="screen screen-game" hidden aria-hidden="true">
+        <canvas id="game-canvas" class="game-canvas" aria-label="Game canvas"></canvas>
+        <div class="game-hud">
+          <p class="game-hud-label">Game</p>
+          <button type="button" class="btn btn-hud" id="btn-pause">Pause</button>
+        </div>
+        <div id="overlay-pause" class="pause-overlay" hidden aria-hidden="true">
+          <div class="pause-backdrop" aria-hidden="true"></div>
+          <div class="pause-panel" role="dialog" aria-modal="true" aria-labelledby="pause-heading">
+            <h2 id="pause-heading" class="pause-title visually-hidden">Paused</h2>
+            <div class="screen-actions pause-actions">
+              <button type="button" class="btn" id="btn-pause-back">Back</button>
+              <button type="button" class="btn" id="btn-pause-quit">Quit</button>
+              <button type="button" class="btn" id="btn-pause-settings">Settings</button>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
