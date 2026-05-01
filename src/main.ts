@@ -5,7 +5,9 @@ import {
   busyInstanceIds,
   createInitialGameState,
   executePlan,
+  fireMinion,
   hireMinion,
+  rehireMinion,
   rerollHireOffers,
   REROLL_HIRE_OFFERS_CP,
   type GameState,
@@ -431,8 +433,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function renderMinionsPanel(): void {
     const p = state.player;
+    const eligibleRehires = state.minionRehireQueue.filter(
+      (e) => state.turnNumber >= e.availableFromTurn,
+    );
+    const hireOfferCount = state.availableMinionTemplateIds.length + eligibleRehires.length;
     minionsRosterHeading.textContent = `Your roster (${p.minions.length}/${p.maxRosterSize})`;
-    minionsAvailableHeading.textContent = `Available to hire (${state.availableMinionTemplateIds.length}/${p.maxHireOffers})`;
+    minionsAvailableHeading.textContent = `Available to hire (${hireOfferCount})`;
 
     minionsRosterEl.innerHTML = "";
     if (state.player.minions.length === 0) {
@@ -446,7 +452,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       for (const inst of state.player.minions) {
         const tpl = content.minions.find((m) => m.id === inst.templateId);
         const card = document.createElement("article");
-        card.className = "minions-card";
+        card.className = "minions-card minions-card--roster";
         card.dataset.assignInstanceId = inst.instanceId;
         const isBusy = busy.has(inst.instanceId);
         const canDrag = mainOnly && !isBusy;
@@ -470,15 +476,57 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           { label: "Traits", value: traitDisplayNames(content, inst.traitIds) },
         ]);
         card.appendChild(dl);
+
+        const fireBtn = document.createElement("button");
+        fireBtn.type = "button";
+        fireBtn.className = "minions-card-fire";
+        fireBtn.setAttribute(
+          "aria-label",
+          `Fire ${tpl?.name ?? "minion"} from roster`,
+        );
+        fireBtn.innerHTML =
+          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+        const canFire = mainOnly && !isBusy;
+        fireBtn.disabled = !canFire;
+        if (!mainOnly) {
+          fireBtn.title = "Only during Main Phase";
+        } else if (isBusy) {
+          fireBtn.title = "Cannot fire while on a mission";
+        } else {
+          fireBtn.title = "Remove from roster (returns to hire pool after cooldown)";
+        }
+        fireBtn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (state.phase !== "main" || busy.has(inst.instanceId)) {
+            return;
+          }
+          const result = fireMinion(state, inst.instanceId);
+          if (result.ok) {
+            state = result.value;
+            refresh();
+          }
+        });
+        fireBtn.addEventListener("mousedown", (ev) => {
+          ev.stopPropagation();
+        });
+        card.appendChild(fireBtn);
+
         minionsRosterEl.appendChild(card);
       }
     }
 
     minionsAvailableEl.innerHTML = "";
-    if (state.availableMinionTemplateIds.length === 0) {
+    if (
+      state.availableMinionTemplateIds.length === 0 &&
+      eligibleRehires.length === 0
+    ) {
       const empty = document.createElement("p");
       empty.className = "minions-panel-empty";
-      empty.textContent = "No minion templates in catalog.";
+      empty.textContent =
+        content.minions.length === 0
+          ? "No minion templates in catalog."
+          : "No hire offers right now.";
       minionsAvailableEl.appendChild(empty);
     }
     for (const templateId of state.availableMinionTemplateIds) {
@@ -541,6 +589,64 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       actions.appendChild(hireBtn);
       card.appendChild(actions);
 
+      minionsAvailableEl.appendChild(card);
+    }
+
+    for (const { minion: rehireInst } of eligibleRehires) {
+      const tpl = content.minions.find((m) => m.id === rehireInst.templateId);
+      const card = document.createElement("article");
+      card.className = "minions-card minions-card--available minions-card--rehire";
+      const title = document.createElement("h4");
+      title.className = "minions-card-title";
+      title.textContent = tpl?.name ?? rehireInst.templateId;
+      card.appendChild(title);
+      const dl = document.createElement("dl");
+      dl.className = "minions-card-stats";
+      appendMinionStatRows(dl, [
+        { label: "CP cost", value: String(tpl?.hireCommandPoints ?? "—") },
+        { label: "Level", value: String(rehireInst.currentLevel) },
+        { label: "XP", value: String(rehireInst.currentExperience) },
+        { label: "Traits", value: traitDisplayNames(content, rehireInst.traitIds) },
+      ]);
+      card.appendChild(dl);
+
+      const actions = document.createElement("div");
+      actions.className = "minions-card-actions";
+      const hireBtn = document.createElement("button");
+      hireBtn.type = "button";
+      hireBtn.className = "btn btn-primary minions-card-hire";
+      hireBtn.textContent = "Re-hire";
+
+      const mainOnly = state.phase === "main";
+      const cost = tpl?.hireCommandPoints ?? 0;
+      const canAfford = state.player.commandPoints >= cost;
+      const rosterFull = state.player.minions.length >= state.player.maxRosterSize;
+      hireBtn.disabled = !mainOnly || !canAfford || rosterFull || !tpl;
+      if (!tpl) {
+        hireBtn.title = "Unknown minion template";
+      } else if (!mainOnly) {
+        hireBtn.title = "Only during Main Phase";
+      } else if (rosterFull) {
+        hireBtn.title = `Roster full (${state.player.minions.length}/${state.player.maxRosterSize})`;
+      } else if (!canAfford) {
+        hireBtn.title = `Need ${cost} CP (${state.player.commandPoints} available)`;
+      } else {
+        hireBtn.title = `Spend ${cost} CP to restore this minion`;
+      }
+
+      hireBtn.addEventListener("click", () => {
+        if (state.phase !== "main") {
+          return;
+        }
+        const result = rehireMinion(state, content, rehireInst.instanceId);
+        if (result.ok) {
+          state = result.value;
+          refresh();
+        }
+      });
+
+      actions.appendChild(hireBtn);
+      card.appendChild(actions);
       minionsAvailableEl.appendChild(card);
     }
   }

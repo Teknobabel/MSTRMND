@@ -64,6 +64,13 @@ export type TurnActivityEntry = {
   events: ResolveEvent[];
 };
 
+/** Fired roster minion waiting out cooldown before appearing in the hire column again. */
+export type MinionRehireQueueEntry = {
+  minion: MinionInstance;
+  /** First `turnNumber` (inclusive) when they may be re-hired from the pool. */
+  availableFromTurn: number;
+};
+
 export type GameState = {
   phase: TurnPhase;
   turnNumber: number;
@@ -73,6 +80,8 @@ export type GameState = {
   activeMissions: ActiveMission[];
   /** Minion template ids offered for hire until the next resolve rerolls them */
   availableMinionTemplateIds: string[];
+  /** Fired minions (same instance stats) pending cooldown before re-offer. */
+  minionRehireQueue: MinionRehireQueueEntry[];
   /** Resolve outcomes from each Execute Plan; newest turn first. */
   activityLog: TurnActivityEntry[];
   /** Win-path plan for this run; chosen once at game start. */
@@ -94,7 +103,14 @@ export type GameError =
   | { code: "mission_not_at_location"; missionId: string; locationId: string }
   | { code: "invalid_participants"; reason: string }
   | { code: "unknown_instance"; instanceId: string }
-  | { code: "location_not_on_active_map"; locationId: string };
+  | { code: "location_not_on_active_map"; locationId: string }
+  | { code: "minion_on_mission"; instanceId: string }
+  | { code: "not_on_rehire_offer"; instanceId: string }
+  | {
+      code: "rehire_on_cooldown";
+      instanceId: string;
+      availableFromTurn: number;
+    };
 
 export type Ok<T> = { ok: true; value: T };
 export type Err<E> = { ok: false; error: E };
@@ -107,6 +123,9 @@ const DEFAULT_MAX_ROSTER_SIZE = 5;
 const DEFAULT_MAX_HIRE_OFFERS = 3;
 /** CP spent to reroll the hire offer pool during Main Phase */
 export const REROLL_HIRE_OFFERS_CP = 1;
+
+/** Turns (`GameState.turnNumber`) before a fired minion appears in the hire pool again. */
+export const MINION_FIRE_REHIRE_COOLDOWN_TURNS = 3;
 
 export function clampInfamy(value: number): number {
   return Math.max(0, Math.min(100, value));
@@ -237,6 +256,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
       rng,
       ownedMinionTemplateIds(player),
     ),
+    minionRehireQueue: [],
     activityLog: [],
     activeOmegaPlanId,
     locationSecurityStates: initialLocationSecurityStatesForLocations(runLocations),
@@ -310,6 +330,101 @@ export function hireMinion(
         ...state.player,
         commandPoints: state.player.commandPoints - cost,
         minions: [...state.player.minions, instance],
+      },
+    },
+  };
+}
+
+export function fireMinion(
+  state: GameState,
+  instanceId: string,
+): Result<GameState, GameError> {
+  if (state.phase !== "main") {
+    return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
+  }
+  const idx = state.player.minions.findIndex((m) => m.instanceId === instanceId);
+  if (idx === -1) {
+    return { ok: false, error: { code: "unknown_instance", instanceId } };
+  }
+  const busy = busyInstanceIds(state.activeMissions);
+  if (busy.has(instanceId)) {
+    return { ok: false, error: { code: "minion_on_mission", instanceId } };
+  }
+  const minion = state.player.minions[idx]!;
+  const newMinions = state.player.minions.filter((_, i) => i !== idx);
+  return {
+    ok: true,
+    value: {
+      ...state,
+      player: { ...state.player, minions: newMinions },
+      minionRehireQueue: [
+        ...state.minionRehireQueue,
+        {
+          minion: { ...minion },
+          availableFromTurn: state.turnNumber + MINION_FIRE_REHIRE_COOLDOWN_TURNS,
+        },
+      ],
+    },
+  };
+}
+
+export function rehireMinion(
+  state: GameState,
+  catalog: ContentCatalog,
+  instanceId: string,
+): Result<GameState, GameError> {
+  if (state.phase !== "main") {
+    return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
+  }
+  const qIdx = state.minionRehireQueue.findIndex((e) => e.minion.instanceId === instanceId);
+  if (qIdx === -1) {
+    return { ok: false, error: { code: "not_on_rehire_offer", instanceId } };
+  }
+  const entry = state.minionRehireQueue[qIdx]!;
+  if (state.turnNumber < entry.availableFromTurn) {
+    return {
+      ok: false,
+      error: {
+        code: "rehire_on_cooldown",
+        instanceId,
+        availableFromTurn: entry.availableFromTurn,
+      },
+    };
+  }
+  if (state.player.minions.some((m) => m.instanceId === instanceId)) {
+    return { ok: false, error: { code: "not_on_rehire_offer", instanceId } };
+  }
+  const template = minionTemplateById(catalog, entry.minion.templateId);
+  if (!template) {
+    return {
+      ok: false,
+      error: { code: "unknown_minion_template", templateId: entry.minion.templateId },
+    };
+  }
+  const have = state.player.minions.length;
+  if (have >= state.player.maxRosterSize) {
+    return {
+      ok: false,
+      error: { code: "roster_full", max: state.player.maxRosterSize, have },
+    };
+  }
+  const cost = template.hireCommandPoints;
+  if (state.player.commandPoints < cost) {
+    return {
+      ok: false,
+      error: { code: "not_enough_cp", need: cost, have: state.player.commandPoints },
+    };
+  }
+  const restQueue = state.minionRehireQueue.filter((_, i) => i !== qIdx);
+  return {
+    ok: true,
+    value: {
+      ...state,
+      minionRehireQueue: restQueue,
+      player: {
+        ...state.player,
+        commandPoints: state.player.commandPoints - cost,
+        minions: [...state.player.minions, { ...entry.minion }],
       },
     },
   };
