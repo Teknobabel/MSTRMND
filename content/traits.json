@@ -5,6 +5,41 @@
     "type": "primary"
   },
   {
+    "id": "spy",
+    "name": "Spy",
+    "type": "primary"
+  },
+  {
+    "id": "soldier",
+    "name": "Soldier",
+    "type": "primary"
+  },
+  {
+    "id": "bodyguard",
+    "name": "Bodyguard",
+    "type": "primary"
+  },
+  {
+    "id": "scientist",
+    "name": "Scientist",
+    "type": "primary"
+  },
+  {
+    "id": "engineer",
+    "name": "Engineer",
+    "type": "primary"
+  },
+  {
+    "id": "thief",
+    "name": "Thief",
+    "type": "primary"
+  },
+  {
+    "id": "politician",
+    "name": "Politician",
+    "type": "primary"
+  },
+  {
     "id": "injured",
     "name": "Injured",
     "type": "status"
@@ -23,5 +58,55 @@
     "id": "tactician",
     "name": "Tactician",
     "type": "primary"
+  },
+  {
+    "id": "charismatic",
+    "name": "Charismatic",
+    "type": "secondary"
+  },
+  {
+    "id": "persuasive",
+    "name": "Persuasive",
+    "type": "secondary"
+  },
+  {
+    "id": "clever",
+    "name": "Clever",
+    "type": "secondary"
+  },
+  {
+    "id": "intelligent",
+    "name": "Intelligent",
+    "type": "secondary"
+  },
+  {
+    "id": "sneaky",
+    "name": "Sneaky",
+    "type": "secondary"
+  },
+  {
+    "id": "fast",
+    "name": "Fast",
+    "type": "secondary"
+  },
+  {
+    "id": "strong",
+    "name": "Strong",
+    "type": "secondary"
+  },
+  {
+    "id": "agile",
+    "name": "Agile",
+    "type": "secondary"
+  },
+  {
+    "id": "resilient",
+    "name": "Resilient",
+    "type": "secondary"
+  },
+  {
+    "id": "lucky",
+    "name": "Lucky",
+    "type": "secondary"
   }
 ]

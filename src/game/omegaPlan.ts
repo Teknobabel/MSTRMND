@@ -8,6 +8,21 @@ export function getOmegaPlanById(
 }
 
 /**
+ * Picks a random omega plan id for a new run, or null if the catalog has none.
+ */
+export function pickRandomOmegaPlanId(
+  catalog: ContentCatalog,
+  rng: () => number,
+): string | null {
+  const { omegaPlans } = catalog;
+  if (omegaPlans.length === 0) {
+    return null;
+  }
+  const i = Math.floor(rng() * omegaPlans.length);
+  return omegaPlans[i]!.id;
+}
+
+/**
  * Mission id at zero-based stage and mission indices, or undefined if out of bounds.
  */
 export function missionIdAt(

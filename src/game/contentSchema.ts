@@ -40,6 +40,7 @@ const minionTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
+  hireCommandPoints: z.number().int().min(0),
   startingTraitIds: z.array(z.string().min(1)).optional(),
   levelUpTraitOrder: z.array(z.string().min(1)),
 });
@@ -114,11 +115,6 @@ function parseMissionsWithTraitRefs(
   return arr;
 }
 
-const locationAssetSlotSchema = z.object({
-  assetId: z.string().min(1).optional(),
-  initialState: z.enum(["hidden", "revealed"]),
-});
-
 const locationTypeSchema = z.enum(["political", "military", "economic"]);
 
 const locationTemplateSchema = z.object({
@@ -128,13 +124,11 @@ const locationTemplateSchema = z.object({
   locationType: locationTypeSchema,
   locationLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   availableMissionIds: z.array(z.string().min(1)),
-  assetSlots: z.array(locationAssetSlotSchema).default([]),
 });
 
 function parseLocationsWithRefs(
   locationsRaw: unknown,
   missionIds: Set<string>,
-  assetIds: Set<string>,
 ): LocationTemplate[] {
   const parsed = z.array(locationTemplateSchema).safeParse(locationsRaw);
   if (!parsed.success) {
@@ -159,14 +153,6 @@ function parseLocationsWithRefs(
       if (!missionIds.has(mid)) {
         throw new Error(
           `Unknown mission id "${mid}" referenced by location "${loc.id}"`,
-        );
-      }
-    }
-    for (let si = 0; si < loc.assetSlots.length; si += 1) {
-      const slot = loc.assetSlots[si];
-      if (slot.assetId !== undefined && !assetIds.has(slot.assetId)) {
-        throw new Error(
-          `Unknown asset id "${slot.assetId}" in assetSlots[${si}] for location "${loc.id}"`,
         );
       }
     }
@@ -317,8 +303,7 @@ export function parseCatalog(
     throw assetsResult.error;
   }
   const assets: Asset[] = assetsResult.data;
-  const assetIds = new Set(assets.map((a) => a.id));
-  const locations = parseLocationsWithRefs(locationsRaw, missionIds, assetIds);
+  const locations = parseLocationsWithRefs(locationsRaw, missionIds);
   const locationIds = new Set(locations.map((l) => l.id));
   const maps = parseMapsWithLocationRefs(mapsRaw, locationIds);
   return { traits, minions, missions, locations, maps, assets, omegaPlans };

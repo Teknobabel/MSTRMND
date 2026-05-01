@@ -29,8 +29,62 @@
 
       <section id="screen-game" class="screen screen-game" hidden aria-hidden="true">
         <canvas id="game-canvas" class="game-canvas" aria-label="Game canvas"></canvas>
+        <div class="game-ui-layer">
+        <aside class="game-panel" aria-label="Game controls">
+          <div id="game-stats" class="game-stats"></div>
+          <div class="game-controls">
+            <div class="game-controls-section">
+              <h3 class="game-controls-heading">Assign mission</h3>
+              <label class="game-field">
+                <span class="game-field-label">Location</span>
+                <select id="assign-location" class="game-select"></select>
+              </label>
+              <label class="game-field">
+                <span class="game-field-label">Mission</span>
+                <select id="assign-mission" class="game-select"></select>
+              </label>
+              <fieldset id="assign-minions" class="game-fieldset">
+                <legend class="game-field-label">Minions (1–3)</legend>
+                <div id="assign-minions-list"></div>
+              </fieldset>
+              <button type="button" class="btn" id="btn-assign-mission">Assign</button>
+            </div>
+            <div class="game-controls-actions">
+              <button type="button" class="btn btn-primary" id="btn-execute-plan">Execute Plan</button>
+              <button type="button" class="btn" id="btn-next-turn">Next Turn</button>
+            </div>
+          </div>
+          <div id="game-summary" class="game-summary" aria-live="polite"></div>
+        </aside>
+        <div class="game-ui-stack-column">
+          <aside class="game-panel game-panel--omega" aria-labelledby="omega-plan-panel-title">
+            <h2 id="omega-plan-panel-title" class="game-panel-title">Omega Plan</h2>
+            <div id="omega-plan-panel" class="omega-plan-panel"></div>
+          </aside>
+          <aside class="game-panel game-panel--locations" aria-labelledby="locations-panel-title">
+            <h2 id="locations-panel-title" class="game-panel-title">Locations</h2>
+            <div id="locations-panel" class="locations-panel"></div>
+          </aside>
+        </div>
+        <aside class="game-panel game-panel--minions" aria-labelledby="minions-panel-title">
+          <h2 id="minions-panel-title" class="game-panel-title">Minions</h2>
+          <section class="minions-panel-section" aria-label="Hired minions">
+            <h3 id="minions-roster-heading" class="game-controls-heading">Your roster</h3>
+            <div id="minions-roster-list" class="minions-panel-list"></div>
+          </section>
+          <section class="minions-panel-section" aria-label="Minions available for hire">
+            <div class="minions-section-heading-row">
+              <h3 id="minions-available-heading" class="game-controls-heading">Available to hire</h3>
+              <button type="button" class="btn btn-reroll-hire" id="btn-reroll-hire" aria-label="Reroll hire offers for 1 CP">
+                Reroll
+              </button>
+            </div>
+            <div id="minions-available-list" class="minions-panel-list"></div>
+          </section>
+        </aside>
+        </div>
         <div class="game-hud">
-          <p class="game-hud-label">Game</p>
+          <p class="game-hud-label" id="game-hud-short">Game</p>
           <button type="button" class="btn btn-hud" id="btn-pause">Pause</button>
         </div>
         <div id="overlay-pause" class="pause-overlay" hidden aria-hidden="true">

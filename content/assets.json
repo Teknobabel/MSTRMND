@@ -1,16 +1,181 @@
 [
   {
-    "id": "money",
-    "name": "Money",
-    "description": "Spendable currency for operations."
+    "id": "antiquities_cache",
+    "name": "Antiquities Cache",
+    "description": "Looted relics ready to fence or leverage."
+  },
+  {
+    "id": "armored_transport",
+    "name": "Armored Transport",
+    "description": "Heavy vehicles rated for extracted cargo and personnel."
+  },
+  {
+    "id": "bio_lab",
+    "name": "Bio Lab",
+    "description": "A portable research node."
+  },
+  {
+    "id": "blackmail_files",
+    "name": "Blackmail Files",
+    "description": "Compromising material on marks who matter."
+  },
+  {
+    "id": "burner_network",
+    "name": "Burner Network",
+    "description": "Disposable devices and SIMs that vanish after use."
+  },
+  {
+    "id": "chemical_precursors",
+    "name": "Chemical Precursors",
+    "description": "Feedstock for synthesis—handled carefully."
+  },
+  {
+    "id": "classified_documents",
+    "name": "Classified Documents",
+    "description": "Documents that are classified."
+  },
+  {
+    "id": "computer_lab",
+    "name": "Computer Lab",
+    "description": "A portable research node."
+  },
+  {
+    "id": "computer_virus",
+    "name": "Computer Virus",
+    "description": "A computer virus."
+  },
+  {
+    "id": "counterfeit_passports",
+    "name": "Counterfeit Passports",
+    "description": "Clean-looking papers for crossing borders quietly."
+  },
+  {
+    "id": "cryptographic_keys",
+    "name": "Cryptographic Keys",
+    "description": "Secrets that open vaults, servers, and dead drops."
+  },
+  {
+    "id": "deep_cover_ids",
+    "name": "Deep Cover IDs",
+    "description": "Legends deep enough to survive casual scrutiny."
+  },
+  {
+    "id": "deepfake_suite",
+    "name": "Deepfake Suite",
+    "description": "Tools to forge faces and voices at scale."
+  },
+  {
+    "id": "drone_swarm",
+    "name": "Drone Swarm",
+    "description": "Disposable eyes and distractions in the sky."
+  },
+  {
+    "id": "explosives",
+    "name": "Explosives",
+    "description": "Shaped charges and breaching kits—stored cold."
+  },
+  {
+    "id": "forged_ledgers",
+    "name": "Forged Ledgers",
+    "description": "Books that say what auditors want to see."
+  },
+  {
+    "id": "front_companies",
+    "name": "Front Companies",
+    "description": "Shell networks that wash money and hide ownership."
   },
   {
     "id": "guns",
     "name": "Guns"
   },
   {
-    "id": "bio_lab",
-    "name": "Bio Lab",
-    "description": "A portable research node."
+    "id": "hazmat_gear",
+    "name": "Hazmat Gear",
+    "description": "Suits and detectors for hostile environments."
+  },
+  {
+    "id": "insider_contacts",
+    "name": "Insider Contacts",
+    "description": "People on payroll who pick up the phone."
+  },
+  {
+    "id": "judicial_leverage",
+    "name": "Judicial Leverage",
+    "description": "Favors owed by clerks, cops, and judges."
+  },
+  {
+    "id": "lobbyist_roster",
+    "name": "Lobbyist Roster",
+    "description": "Fixers who move votes and rewrite drafts."
+  },
+  {
+    "id": "mercenary_contracts",
+    "name": "Mercenary Contracts",
+    "description": "Standing offers with outfits that don’t ask names."
+  },
+  {
+    "id": "money",
+    "name": "Money",
+    "description": "Spendable currency for operations."
+  },
+  {
+    "id": "offshore_accounts",
+    "name": "Offshore Accounts",
+    "description": "Pools that never quite surface on tax forms."
+  },
+  {
+    "id": "patent_filings",
+    "name": "Patent Filings",
+    "description": "IP filings before competitors—or governments—notice."
+  },
+  {
+    "id": "prototype_plans",
+    "name": "Prototype Plans",
+    "description": "Plans for prototype weapons."
+  },
+  {
+    "id": "rare_minerals",
+    "name": "Rare Minerals",
+    "description": "Strategic metals stockpiled for fabrication."
+  },
+  {
+    "id": "satellite_windows",
+    "name": "Satellite Windows",
+    "description": "Booked uplink time over targets that matter."
+  },
+  {
+    "id": "shipping_manifests",
+    "name": "Shipping Manifests",
+    "description": "Paper trails that reroute containers mid-ocean."
+  },
+  {
+    "id": "signal_jammers",
+    "name": "Signal Jammers",
+    "description": "Local denial for drones, radios, and door locks."
+  },
+  {
+    "id": "stolen_art",
+    "name": "Stolen Art",
+    "description": "Art that is stolen."
+  },
+  {
+    "id": "surveillance_archive",
+    "name": "Surveillance Archive",
+    "description": "Years of footage indexed by face and plate."
+  },
+  {
+    "id": "toxin_stockpile",
+    "name": "Toxin Stockpile",
+    "description": "Small doses with outsized leverage."
+  },
+  {
+    "id": "warehouse_access",
+    "name": "Warehouse Access",
+    "description": "Badges and gate codes for logistics choke points."
+  },
+  {
+    "id": "weapon_components",
+    "name": "Weapon Components",
+    "description": "Parts that assemble into something louder later."
   }
 ]

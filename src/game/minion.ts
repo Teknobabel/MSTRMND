@@ -6,12 +6,14 @@ export type CreateMinionOverrides = Partial<
 
 export function createMinionFromTemplate(
   template: MinionTemplate,
+  instanceId: string,
   overrides?: CreateMinionOverrides,
 ): MinionInstance {
   const starting = template.startingTraitIds ?? [];
   const traitIds =
     overrides?.traitIds !== undefined ? [...overrides.traitIds] : [...starting];
   return {
+    instanceId,
     templateId: template.id,
     currentLevel: overrides?.currentLevel ?? 1,
     currentExperience: overrides?.currentExperience ?? 0,

@@ -3,14 +3,72 @@
     "id": "operative_alpha",
     "name": "Operative Alpha",
     "description": "A field agent with a knack for systems.",
+    "hireCommandPoints": 3,
     "startingTraitIds": ["loyal"],
-    "levelUpTraitOrder": ["hacker", "tactician", "injured", "burnout"]
+    "levelUpTraitOrder": ["hacker", "tactician", "lucky", "burnout"]
   },
   {
     "id": "asset_beta",
     "name": "Asset Beta",
     "description": "A local contact; fragile but insightful.",
+    "hireCommandPoints": 2,
     "startingTraitIds": ["injured"],
     "levelUpTraitOrder": ["hacker", "loyal", "tactician"]
+  },
+  {
+    "id": "courier_gamma",
+    "name": "Courier Gamma",
+    "description": "Dead drops and burned phones—gets packages where they need to go.",
+    "hireCommandPoints": 2,
+    "startingTraitIds": ["tactician"],
+    "levelUpTraitOrder": ["hacker", "loyal", "lucky", "burnout"]
+  },
+  {
+    "id": "analyst_theta",
+    "name": "Analyst Theta",
+    "description": "Patterns in noise; spreadsheets where others see chaos.",
+    "hireCommandPoints": 3,
+    "startingTraitIds": ["hacker"],
+    "levelUpTraitOrder": ["tactician", "loyal", "lucky", "burnout"]
+  },
+  {
+    "id": "muscle_kappa",
+    "name": "Muscle Kappa",
+    "description": "When the plan needs someone to stand in the doorway.",
+    "hireCommandPoints": 4,
+    "startingTraitIds": ["injured"],
+    "levelUpTraitOrder": ["loyal", "tactician", "hacker", "burnout"]
+  },
+  {
+    "id": "ghost_delta",
+    "name": "Ghost Delta",
+    "description": "Insertion specialist; quiet footprints, loud results.",
+    "hireCommandPoints": 4,
+    "startingTraitIds": ["loyal"],
+    "levelUpTraitOrder": ["hacker", "lucky", "tactician", "burnout"]
+  },
+  {
+    "id": "brass_liaison",
+    "name": "Brass Liaison",
+    "description": "Knows which desks need a smile and which need a folder.",
+    "hireCommandPoints": 3,
+    "startingTraitIds": ["tactician"],
+    "levelUpTraitOrder": ["loyal", "hacker", "lucky", "burnout"]
+  },
+  {
+    "id": "wire_jockey",
+    "name": "Wire Jockey",
+    "description": "Builds bridges—digital ones—and burns them when paid.",
+    "hireCommandPoints": 3,
+    "startingTraitIds": ["hacker"],
+    "levelUpTraitOrder": ["tactician", "lucky", "loyal", "burnout"]
+  },
+  {
+    "id": "mirror_guard",
+    "name": "Mirror Guard",
+    "description": "Personal protection with a talent for reading exits.",
+    "hireCommandPoints": 4,
+    "startingTraitIds": ["loyal"],
+    "levelUpTraitOrder": ["lucky", "tactician", "hacker", "burnout"]
   }
 ]

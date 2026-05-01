@@ -3,7 +3,27 @@
     "id": "metro_night",
     "name": "Metro night",
     "description": "Primary city operations map.",
-    "locationIds": ["safehouse", "downtown_dead_drop"]
+    "locationIds": [
+      "abandoned_substation",
+      "airport_cargo_hold",
+      "auction_backroom",
+      "clinic_front",
+      "courthouse_records_vault",
+      "downtown_dead_drop",
+      "embassy_service_tunnel",
+      "fusion_research_park",
+      "harbor_manifest_office",
+      "industrial_wharf",
+      "legislator_smoking_room",
+      "marina_dead_drop",
+      "mercenary_bar",
+      "news_network_floor",
+      "private_bank_box_room",
+      "rooftop_satfarm",
+      "safehouse",
+      "shell_company_suite",
+      "underground_server_farm"
+    ]
   },
   {
     "id": "training_grid",

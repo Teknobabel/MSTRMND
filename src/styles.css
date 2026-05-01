@@ -171,6 +171,381 @@ body {
   max-width: none;
 }
 
+.game-ui-layer {
+  position: absolute;
+  top: max(0.5rem, env(safe-area-inset-top));
+  left: max(0.5rem, env(safe-area-inset-left));
+  right: max(0.5rem, env(safe-area-inset-right));
+  bottom: max(4.25rem, calc(env(safe-area-inset-bottom) + 3.25rem));
+  z-index: 1;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.game-ui-layer > .game-panel {
+  pointer-events: auto;
+  flex: 1 1 min(240px, calc(33vw - 0.35rem));
+  min-width: 0;
+  max-height: 100%;
+}
+
+.game-ui-layer > .game-ui-stack-column {
+  pointer-events: auto;
+  flex: 1 1 min(240px, calc(33vw - 0.35rem));
+  min-width: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: auto;
+}
+
+.game-ui-stack-column > .game-panel {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.game-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: rgba(24, 24, 27, 0.92);
+  border: 1px solid #3f3f46;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.game-panel-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f4f4f5;
+}
+
+.omega-plan-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.omega-plan-name {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.omega-plan-description {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: #a1a1aa;
+}
+
+.omega-plan-phase {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.omega-plan-phase-title {
+  margin: 0;
+}
+
+.omega-plan-mission-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: #d4d4d8;
+}
+
+.omega-plan-mission-list li {
+  margin: 0.12rem 0;
+}
+
+.omega-plan-empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #71717a;
+  font-style: italic;
+}
+
+.locations-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.location-card {
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(39, 39, 42, 0.85);
+  border: 1px solid #3f3f46;
+}
+
+.location-card-title {
+  margin: 0 0 0.3rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.location-card-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.65rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.location-card-stats dt {
+  margin: 0;
+  color: #a1a1aa;
+  font-weight: 500;
+}
+
+.location-card-stats dd {
+  margin: 0;
+  color: #d4d4d8;
+}
+
+.minions-panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.minions-section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.minions-section-heading-row .game-controls-heading {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.btn-reroll-hire {
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+.minions-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.minions-panel-empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #71717a;
+  font-style: italic;
+}
+
+.minions-card {
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(39, 39, 42, 0.85);
+  border: 1px solid #3f3f46;
+}
+
+.minions-card--available {
+  border-style: dashed;
+  opacity: 0.95;
+}
+
+.minions-card-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.minions-card-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.65rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.minions-card-stats dt {
+  margin: 0;
+  color: #a1a1aa;
+  font-weight: 500;
+}
+
+.minions-card-stats dd {
+  margin: 0;
+  color: #d4d4d8;
+  word-break: break-word;
+}
+
+.minions-card-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: stretch;
+}
+
+.minions-card-hire {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 720px) {
+  .game-ui-layer {
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: auto;
+    pointer-events: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .game-ui-layer > .game-panel,
+  .game-ui-layer > .game-ui-stack-column {
+    flex: 1 1 auto;
+    max-height: min(48vh, 420px);
+    max-width: none;
+  }
+
+  .game-ui-stack-column > .game-panel {
+    max-height: min(40vh, 360px);
+  }
+}
+
+.game-stats {
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #e4e4e7;
+}
+
+.game-stats div {
+  margin: 0.15rem 0;
+}
+
+.game-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.game-controls-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.game-controls-heading {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #a1a1aa;
+}
+
+.game-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.game-button-row .btn {
+  flex: 1 1 auto;
+  min-height: 40px;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.875rem;
+}
+
+.game-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.game-field-label {
+  font-size: 0.75rem;
+  color: #a1a1aa;
+}
+
+.game-select {
+  min-height: 40px;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #3f3f46;
+  background: #18181b;
+  color: inherit;
+  font: inherit;
+}
+
+.game-fieldset {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #3f3f46;
+  border-radius: 8px;
+}
+
+.game-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.game-controls-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.game-controls-actions .btn {
+  min-height: 44px;
+}
+
+.game-summary {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: #d4d4d8;
+}
+
+.game-summary-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #a1a1aa;
+}
+
+.game-summary-list {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+.game-summary-list li {
+  margin: 0.25rem 0;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

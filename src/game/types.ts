@@ -10,11 +10,15 @@ export type MinionTemplate = {
   id: string;
   name: string;
   description: string;
+  /** CP cost to hire during the Main Phase. */
+  hireCommandPoints: number;
   startingTraitIds?: string[];
   levelUpTraitOrder: string[];
 };
 
 export type MinionInstance = {
+  /** Stable id for this hire for mission assignment and catalogs. */
+  instanceId: string;
   templateId: string;
   currentLevel: number;
   currentExperience: number;
@@ -33,12 +37,18 @@ export type MissionTemplate = {
 export type LocationAssetVisibility = "hidden" | "revealed";
 
 /**
- * One asset position at a location. `assetId` may be omitted for slots filled at game start
- * (e.g. pseudo-random allocation); when set, it must reference the asset catalog.
+ * One asset slot at a location at runtime (not authored in `locations.json`).
+ * Assigned when a run starts; `assetId` references the asset catalog.
  */
 export type LocationAssetSlot = {
-  assetId?: string;
-  initialState: LocationAssetVisibility;
+  assetId: string;
+  visibility: LocationAssetVisibility;
+};
+
+/** Per-location asset slots for the current run (from `createInitialGameState`). */
+export type LocationAssetPlacement = {
+  locationId: string;
+  slots: LocationAssetSlot[];
 };
 
 /** Designer-authored category for a location. */
@@ -53,7 +63,6 @@ export type LocationTemplate = {
   /** Designer difficulty or importance tier, 1–3. */
   locationLevel: 1 | 2 | 3;
   availableMissionIds: string[];
-  assetSlots: LocationAssetSlot[];
 };
 
 /**

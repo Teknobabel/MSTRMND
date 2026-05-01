@@ -1,16 +1,43 @@
 [
   {
-    "id": "safehouse",
-    "name": "Safehouse",
-    "description": "Staging area for sensitive ops.",
-    "locationType": "political",
+    "id": "abandoned_substation",
+    "name": "Abandoned substation",
+    "description": "Hum from dead transformers; perfect cover for jammers and caches.",
+    "locationType": "military",
     "locationLevel": 2,
-    "availableMissionIds": ["breach_server", "extract_asset"],
-    "assetSlots": [
-      { "initialState": "hidden" },
-      { "assetId": "money", "initialState": "hidden" },
-      { "assetId": "guns", "initialState": "revealed" }
-    ]
+    "availableMissionIds": ["breach_server"]
+  },
+  {
+    "id": "airport_cargo_hold",
+    "name": "Airport cargo hold",
+    "description": "Rubber-stamped pallets and crews who stopped asking questions.",
+    "locationType": "economic",
+    "locationLevel": 3,
+    "availableMissionIds": ["breach_server", "extract_asset"]
+  },
+  {
+    "id": "auction_backroom",
+    "name": "Auction backroom",
+    "description": "Polite bidding upstairs; provenance burns downstairs.",
+    "locationType": "economic",
+    "locationLevel": 2,
+    "availableMissionIds": ["extract_asset"]
+  },
+  {
+    "id": "clinic_front",
+    "name": "Clinic front",
+    "description": "Flu shots in front; precursor chemistry out the service door.",
+    "locationType": "economic",
+    "locationLevel": 2,
+    "availableMissionIds": ["extract_asset"]
+  },
+  {
+    "id": "courthouse_records_vault",
+    "name": "Courthouse records vault",
+    "description": "Sealed filings and favors filed between the lines.",
+    "locationType": "political",
+    "locationLevel": 3,
+    "availableMissionIds": ["breach_server"]
   },
   {
     "id": "downtown_dead_drop",
@@ -18,10 +45,110 @@
     "description": "High-traffic corner; fast in and out.",
     "locationType": "military",
     "locationLevel": 1,
-    "availableMissionIds": ["breach_server"],
-    "assetSlots": [
-      { "initialState": "hidden" },
-      { "assetId": "bio_lab", "initialState": "hidden" }
-    ]
+    "availableMissionIds": ["breach_server"]
+  },
+  {
+    "id": "embassy_service_tunnel",
+    "name": "Embassy service tunnel",
+    "description": "Laundry carts and diplomatic pouches share the same rats.",
+    "locationType": "political",
+    "locationLevel": 3,
+    "availableMissionIds": ["breach_server", "extract_asset"]
+  },
+  {
+    "id": "fusion_research_park",
+    "name": "Fusion research park",
+    "description": "Glass campuses hiding cores that glow when the grid dips.",
+    "locationType": "economic",
+    "locationLevel": 3,
+    "availableMissionIds": ["breach_server"]
+  },
+  {
+    "id": "harbor_manifest_office",
+    "name": "Harbor manifest office",
+    "description": "Rubber stamps for containers that never matched their bills.",
+    "locationType": "economic",
+    "locationLevel": 2,
+    "availableMissionIds": ["breach_server", "extract_asset"]
+  },
+  {
+    "id": "industrial_wharf",
+    "name": "Industrial wharf",
+    "description": "Cranes that swing wide for crates no inspector booked.",
+    "locationType": "military",
+    "locationLevel": 2,
+    "availableMissionIds": ["extract_asset"]
+  },
+  {
+    "id": "legislator_smoking_room",
+    "name": "Legislator smoking room",
+    "description": "Where amendments die quietly and wallets grow loud.",
+    "locationType": "political",
+    "locationLevel": 3,
+    "availableMissionIds": ["extract_asset"]
+  },
+  {
+    "id": "marina_dead_drop",
+    "name": "Marina dead drop",
+    "description": "Locker combinations whispered over diesel and gulls.",
+    "locationType": "economic",
+    "locationLevel": 1,
+    "availableMissionIds": ["breach_server"]
+  },
+  {
+    "id": "mercenary_bar",
+    "name": "Mercenary bar",
+    "description": "House vodka; contracts laminated so blood wipes clean.",
+    "locationType": "military",
+    "locationLevel": 2,
+    "availableMissionIds": ["extract_asset"]
+  },
+  {
+    "id": "news_network_floor",
+    "name": "News network floor",
+    "description": "Green rooms where truth gets graded before airtime.",
+    "locationType": "political",
+    "locationLevel": 2,
+    "availableMissionIds": ["breach_server"]
+  },
+  {
+    "id": "private_bank_box_room",
+    "name": "Private bank box room",
+    "description": "Quiet desks; louder ledgers one corridor over.",
+    "locationType": "economic",
+    "locationLevel": 3,
+    "availableMissionIds": ["breach_server", "extract_asset"]
+  },
+  {
+    "id": "rooftop_satfarm",
+    "name": "Rooftop satfarm",
+    "description": "Dishes angled just shy of legal spectrum; drones recharge beside.",
+    "locationType": "military",
+    "locationLevel": 2,
+    "availableMissionIds": ["breach_server"]
+  },
+  {
+    "id": "safehouse",
+    "name": "Safehouse",
+    "description": "Staging area for sensitive ops.",
+    "locationType": "political",
+    "locationLevel": 2,
+    "availableMissionIds": ["breach_server", "extract_asset"]
+  },
+  {
+    "id": "shell_company_suite",
+    "name": "Shell company suite",
+    "description": "Brass plaques for firms whose desks have never been sat at.",
+    "locationType": "economic",
+    "locationLevel": 2,
+    "availableMissionIds": ["breach_server"]
+  },
+  {
+    "id": "underground_server_farm",
+    "name": "Underground server farm",
+    "description": "Cold aisles humming under a bakery’s flour dust.",
+    "locationType": "military",
+    "locationLevel": 3,
+    "availableMissionIds": ["breach_server"]
   }
 ]
