@@ -1,10 +1,28 @@
-import type { ContentCatalog, LocationTemplate, MapTemplate, MissionTemplate } from "./types";
+import type {
+  ContentCatalog,
+  LocationSecurityState,
+  LocationTemplate,
+  MapTemplate,
+  MissionTemplate,
+} from "./types";
 
 export function getLocationById(
   catalog: ContentCatalog,
   id: string,
 ): LocationTemplate | undefined {
   return catalog.locations.find((l) => l.id === id);
+}
+
+/**
+ * Default per-location security when starting a run (gameplay may change these).
+ */
+export function initialLocationSecurityStates(
+  catalog: ContentCatalog,
+): LocationSecurityState[] {
+  return catalog.locations.map((l) => ({
+    locationId: l.id,
+    securityLevel: 1,
+  }));
 }
 
 export function getMapById(catalog: ContentCatalog, id: string): MapTemplate | undefined {

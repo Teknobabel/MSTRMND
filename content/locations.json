@@ -3,12 +3,25 @@
     "id": "safehouse",
     "name": "Safehouse",
     "description": "Staging area for sensitive ops.",
-    "availableMissionIds": ["breach_server", "extract_asset"]
+    "locationType": "political",
+    "locationLevel": 2,
+    "availableMissionIds": ["breach_server", "extract_asset"],
+    "assetSlots": [
+      { "initialState": "hidden" },
+      { "assetId": "money", "initialState": "hidden" },
+      { "assetId": "guns", "initialState": "revealed" }
+    ]
   },
   {
     "id": "downtown_dead_drop",
     "name": "Downtown dead drop",
     "description": "High-traffic corner; fast in and out.",
-    "availableMissionIds": ["breach_server"]
+    "locationType": "military",
+    "locationLevel": 1,
+    "availableMissionIds": ["breach_server"],
+    "assetSlots": [
+      { "initialState": "hidden" },
+      { "assetId": "bio_lab", "initialState": "hidden" }
+    ]
   }
 ]
