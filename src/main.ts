@@ -21,6 +21,7 @@ import { loadContent } from "./game/loadContent";
 import {
   locationTemplatesForOmegaPlan,
 } from "./game/locationCatalog";
+import { getLairById, LAIR_LOCATION_ID } from "./game/lair";
 import { getOmegaPlanById } from "./game/omegaPlan";
 import { initNavigation } from "./navigation";
 
@@ -131,6 +132,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const assetsPanelEl = req<HTMLElement>("assets-panel");
   const activeMissionsPanelEl = req<HTMLElement>("active-missions-panel");
+  const lairPanelEl = req<HTMLElement>("lair-panel");
   const missionDetailsEl = req<HTMLElement>("mission-details");
 
   const rng = (): number => Math.random();
@@ -192,6 +194,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       opt.textContent = loc.name;
       selLoc.appendChild(opt);
     }
+    if (state.activeLairId !== null) {
+      const lair = getLairById(content, state.activeLairId);
+      const opt = document.createElement("option");
+      opt.value = LAIR_LOCATION_ID;
+      opt.textContent = lair ? `Lair: ${lair.name}` : "Lair";
+      selLoc.appendChild(opt);
+    }
   }
 
   function updateMissionDetailsPanel(): void {
@@ -250,8 +259,26 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function syncMissionSelect(): void {
     const locId = selLoc.value;
-    const loc = runLocations().find((l) => l.id === locId);
     selMission.innerHTML = "";
+    if (locId === LAIR_LOCATION_ID) {
+      if (state.activeLairId === null) {
+        updateMissionDetailsPanel();
+        syncAssignButtonState();
+        return;
+      }
+      for (const mid of state.lairMissionIds) {
+        const m = content.missions.find((x) => x.id === mid);
+        const opt = document.createElement("option");
+        opt.value = mid;
+        const cost = m?.startCommandPoints ?? 0;
+        opt.textContent = `${m?.name ?? mid} (${cost} CP)`;
+        selMission.appendChild(opt);
+      }
+      updateMissionDetailsPanel();
+      syncAssignButtonState();
+      return;
+    }
+    const loc = runLocations().find((l) => l.id === locId);
     if (!loc) {
       updateMissionDetailsPanel();
       syncAssignButtonState();
@@ -678,11 +705,6 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       article.appendChild(desc);
     }
 
-    const offeringLocs = runLocations().filter((loc) =>
-      loc.availableMissionIds.includes(missionId),
-    );
-    const locNames = offeringLocs.map((l) => l.name).join(", ");
-
     const dl = document.createElement("dl");
     dl.className = "asset-card-stats";
     const rows: Array<{ label: string; value: string }> = [];
@@ -697,20 +719,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           label: "Required traits",
           value: traitDisplayNames(content, mission.requiredTraitIds),
         },
-        {
-          label: "Playable locations",
-          value: locNames.length > 0 ? locNames : "None on current map",
-        },
         { label: "Success chance", value: "—" },
       );
     } else {
-      rows.push(
-        { label: "Mission id", value: missionId },
-        {
-          label: "Playable locations",
-          value: locNames.length > 0 ? locNames : "—",
-        },
-      );
+      rows.push({ label: "Mission id", value: missionId });
     }
     appendMinionStatRows(dl, rows);
     article.appendChild(dl);
@@ -831,7 +843,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     for (const am of state.activeMissions) {
       const mission = content.missions.find((x) => x.id === am.missionTemplateId);
-      const loc = content.locations.find((l) => l.id === am.locationId);
+      const atLair = am.locationId === LAIR_LOCATION_ID;
+      const loc = atLair
+        ? undefined
+        : content.locations.find((l) => l.id === am.locationId);
+      const lairTpl =
+        atLair && state.activeLairId ? getLairById(content, state.activeLairId) : undefined;
+      const locationLabel = atLair ? (lairTpl?.name ?? "Lair") : (loc?.name ?? am.locationId);
       const participants = state.player.minions.filter((inst) =>
         am.participantInstanceIds.includes(inst.instanceId),
       );
@@ -861,7 +879,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         .join(", ");
 
       const rows: Array<{ label: string; value: string }> = [
-        { label: "Location", value: loc?.name ?? am.locationId },
+        { label: "Location", value: locationLabel },
       ];
       if (loc) {
         rows.push(
@@ -976,6 +994,48 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
+  function renderLairPanel(): void {
+    lairPanelEl.innerHTML = "";
+    if (state.activeLairId === null) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent = "No lair in this run.";
+      lairPanelEl.appendChild(empty);
+      return;
+    }
+    const lair = getLairById(content, state.activeLairId);
+    if (!lair) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent = "Lair not found in catalog.";
+      lairPanelEl.appendChild(empty);
+      return;
+    }
+    const nameEl = document.createElement("p");
+    nameEl.className = "lair-panel-name";
+    nameEl.textContent = lair.name;
+    lairPanelEl.appendChild(nameEl);
+    if (lair.description) {
+      const desc = document.createElement("p");
+      desc.className = "lair-panel-description";
+      desc.textContent = lair.description;
+      lairPanelEl.appendChild(desc);
+    }
+    const list = document.createElement("div");
+    list.className = "lair-panel-missions";
+    if (state.lairMissionIds.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent = "No missions at this lair.";
+      list.appendChild(empty);
+    } else {
+      for (const mid of state.lairMissionIds) {
+        list.appendChild(omegaPlanMissionCard(mid));
+      }
+    }
+    lairPanelEl.appendChild(list);
+  }
+
   function renderActivityPanel(): void {
     activityPanelEl.innerHTML = "";
     const log = state.activityLog;
@@ -1015,7 +1075,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
             li.className = "activity-event";
             const inf =
               ev.infamyDelta >= 0 ? `+${ev.infamyDelta}` : String(ev.infamyDelta);
-            li.textContent = `${ev.missionName} @ ${ev.locationId}: ${
+            const whereLabel =
+              ev.locationId === LAIR_LOCATION_ID
+                ? (state.activeLairId
+                    ? getLairById(content, state.activeLairId)?.name
+                    : undefined) ?? "Lair"
+                : ev.locationId;
+            li.textContent = `${ev.missionName} @ ${whereLabel}: ${
               ev.success ? "Success" : "Failure"
             } (roll ${ev.roll} vs ${ev.successChancePercent}%). Infamy ${inf}.`;
             ul.appendChild(li);
@@ -1053,6 +1119,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     renderLocationsPanel();
     renderAssetsPanel();
     renderActiveMissionsPanel();
+    renderLairPanel();
     renderActivityPanel();
 
     const rerollCost = REROLL_HIRE_OFFERS_CP;

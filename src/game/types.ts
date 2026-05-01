@@ -101,6 +101,17 @@ export type OmegaPlanTemplate = {
   stages: [OmegaPlanStage, OmegaPlanStage, OmegaPlanStage];
 };
 
+/** Designer-authored home base; one chosen per run. */
+export type LairTemplate = {
+  id: string;
+  name: string;
+  description?: string;
+  /** Mission templates the player may assign while at the lair (runtime pool starts as a copy). */
+  availableMissionIds: string[];
+  /** Optional starting `Asset.id` quantities merged into `player.assets` at run start. */
+  startingAssets?: Record<string, number>;
+};
+
 export type ContentCatalog = {
   traits: Trait[];
   minions: MinionTemplate[];
@@ -109,6 +120,7 @@ export type ContentCatalog = {
   maps: MapTemplate[];
   assets: Asset[];
   omegaPlans: OmegaPlanTemplate[];
+  lairs: LairTemplate[];
   /** Display names for the player's evil organization; one chosen per run. */
   organizationNames: string[];
 };

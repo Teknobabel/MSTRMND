@@ -1,4 +1,5 @@
 import assetsJson from "../../content/assets.json";
+import lairsJson from "../../content/lairs.json";
 import locationsJson from "../../content/locations.json";
 import mapsJson from "../../content/maps.json";
 import minionsJson from "../../content/minions.json";
@@ -18,6 +19,7 @@ export function loadContent(): ContentCatalog {
     mapsJson,
     assetsJson,
     omegaPlansJson,
+    lairsJson,
     organizationNamesJson,
   );
 }

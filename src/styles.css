@@ -329,18 +329,43 @@ body {
   min-height: 0;
 }
 
-.game-panel.game-panel--active-missions .active-missions-panel {
+.lair-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
 }
 
-.game-panel.game-panel--missions-column-bottom {
+.lair-panel-name {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.lair-panel-description {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: #a1a1aa;
+}
+
+.lair-panel-missions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.game-panel.game-panel--lair {
+  min-height: 0;
+}
+
+.game-panel.game-panel--active-missions .active-missions-panel {
   flex: 1 1 0;
   min-height: 0;
-  border: 1px dashed #3f3f46;
-  background: rgba(24, 24, 27, 0.35);
-  pointer-events: none;
+  overflow: auto;
 }
 
 .active-missions-panel {

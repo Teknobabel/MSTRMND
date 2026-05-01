@@ -1,0 +1,18 @@
+[
+  {
+    "id": "subterranean_hub",
+    "name": "Subterranean Hub",
+    "description": "Cold-war bunker retrofitted for ops and off-site planning.",
+    "availableMissionIds": ["breach_server", "extract_asset"],
+    "startingAssets": {
+      "burner_network": 1,
+      "classified_documents": 1
+    }
+  },
+  {
+    "id": "penthouse_safehouse",
+    "name": "Penthouse Safehouse",
+    "description": "Glass walls, better optics, faster exits.",
+    "availableMissionIds": ["breach_server"]
+  }
+]

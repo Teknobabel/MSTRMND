@@ -18,6 +18,7 @@ import {
   successChancePercent,
 } from "./mission";
 import { pickRandomOmegaPlanId } from "./omegaPlan";
+import { getLairById, LAIR_LOCATION_ID, pickRandomLairId } from "./lair";
 
 export type TurnPhase = "main" | "resolve" | "summary";
 
@@ -94,6 +95,10 @@ export type GameState = {
   locationSecurityStates: LocationSecurityState[];
   /** Random catalog assets per location; 1–3 slots each, exactly three slots revealed globally when possible. */
   locationAssetSlots: LocationAssetPlacement[];
+  /** Chosen lair template id for this run, or null if `catalog.lairs` is empty. */
+  activeLairId: string | null;
+  /** Mission template ids available from the lair (starts as copy of template; gameplay may append). */
+  lairMissionIds: string[];
 };
 
 export type GameError =
@@ -116,7 +121,10 @@ export type GameError =
       availableFromTurn: number;
     }
   | { code: "unknown_active_mission"; activeMissionId: string }
-  | { code: "max_concurrent_missions"; max: number; have: number };
+  | { code: "max_concurrent_missions"; max: number; have: number }
+  | { code: "no_active_lair" }
+  | { code: "mission_not_on_lair"; missionId: string }
+  | { code: "lair_mission_already_in_pool"; missionId: string };
 
 export type Ok<T> = { ok: true; value: T };
 export type Err<E> = { ok: false; error: E };
@@ -240,18 +248,27 @@ function pickRandomOrganizationName(catalog: ContentCatalog, rng: Rng): string {
 
 export function createInitialGameState(catalog: ContentCatalog): GameState {
   const rng: Rng = () => Math.random();
+  const activeOmegaPlanId = pickRandomOmegaPlanId(catalog, rng);
+  const activeLairId = pickRandomLairId(catalog, rng);
+  const lairTemplate = activeLairId !== null ? getLairById(catalog, activeLairId) : undefined;
+  const assetsFromLair: Record<string, number> = {};
+  if (lairTemplate?.startingAssets) {
+    for (const [k, v] of Object.entries(lairTemplate.startingAssets)) {
+      assetsFromLair[k] = (assetsFromLair[k] ?? 0) + v;
+    }
+  }
   const player: PlayerState = {
     commandPoints: 5,
     maxCommandPoints: 5,
     infamy: 0,
     minions: [],
-    assets: {},
+    assets: assetsFromLair,
     maxRosterSize: DEFAULT_MAX_ROSTER_SIZE,
     maxHireOffers: DEFAULT_MAX_HIRE_OFFERS,
     maxConcurrentMissions: DEFAULT_MAX_CONCURRENT_MISSIONS,
   };
-  const activeOmegaPlanId = pickRandomOmegaPlanId(catalog, rng);
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
+  const lairMissionIds = lairTemplate ? [...lairTemplate.availableMissionIds] : [];
   return {
     phase: "main",
     turnNumber: 1,
@@ -269,6 +286,8 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     activeOmegaPlanId,
     locationSecurityStates: initialLocationSecurityStatesForLocations(runLocations),
     locationAssetSlots: initializeLocationAssetPlacements(catalog, rng, runLocations),
+    activeLairId,
+    lairMissionIds,
   };
 }
 
@@ -499,32 +518,45 @@ export function assignMission(
       },
     };
   }
-  const location = locationById(catalog, locationId);
-  if (!location) {
-    return { ok: false, error: { code: "unknown_location", locationId } };
-  }
-  if (
-    state.activeOmegaPlanId !== null &&
-    !activeLocationIds(catalog, state.activeOmegaPlanId).has(locationId)
-  ) {
-    return {
-      ok: false,
-      error: { code: "location_not_on_active_map", locationId },
-    };
-  }
   const missionTemplate = missionTemplateById(catalog, missionTemplateId);
   if (!missionTemplate) {
     return { ok: false, error: { code: "unknown_mission", missionId: missionTemplateId } };
   }
-  if (!location.availableMissionIds.includes(missionTemplateId)) {
-    return {
-      ok: false,
-      error: {
-        code: "mission_not_at_location",
-        missionId: missionTemplateId,
-        locationId,
-      },
-    };
+
+  if (locationId === LAIR_LOCATION_ID) {
+    if (state.activeLairId === null) {
+      return { ok: false, error: { code: "no_active_lair" } };
+    }
+    if (!state.lairMissionIds.includes(missionTemplateId)) {
+      return {
+        ok: false,
+        error: { code: "mission_not_on_lair", missionId: missionTemplateId },
+      };
+    }
+  } else {
+    const location = locationById(catalog, locationId);
+    if (!location) {
+      return { ok: false, error: { code: "unknown_location", locationId } };
+    }
+    if (
+      state.activeOmegaPlanId !== null &&
+      !activeLocationIds(catalog, state.activeOmegaPlanId).has(locationId)
+    ) {
+      return {
+        ok: false,
+        error: { code: "location_not_on_active_map", locationId },
+      };
+    }
+    if (!location.availableMissionIds.includes(missionTemplateId)) {
+      return {
+        ok: false,
+        error: {
+          code: "mission_not_at_location",
+          missionId: missionTemplateId,
+          locationId,
+        },
+      };
+    }
   }
 
   const busy = busyInstanceIds(state.activeMissions);
@@ -622,6 +654,35 @@ export function cancelMission(
         ...state.player,
         commandPoints: state.player.commandPoints + refundCp,
       },
+    },
+  };
+}
+
+/**
+ * Append a mission template id to the lair pool (e.g. future rewards). No-op duplicate is an error.
+ */
+export function addLairMissionToPool(
+  state: GameState,
+  catalog: ContentCatalog,
+  missionTemplateId: string,
+): Result<GameState, GameError> {
+  if (state.activeLairId === null) {
+    return { ok: false, error: { code: "no_active_lair" } };
+  }
+  if (!missionTemplateById(catalog, missionTemplateId)) {
+    return { ok: false, error: { code: "unknown_mission", missionId: missionTemplateId } };
+  }
+  if (state.lairMissionIds.includes(missionTemplateId)) {
+    return {
+      ok: false,
+      error: { code: "lair_mission_already_in_pool", missionId: missionTemplateId },
+    };
+  }
+  return {
+    ok: true,
+    value: {
+      ...state,
+      lairMissionIds: [...state.lairMissionIds, missionTemplateId],
     },
   };
 }

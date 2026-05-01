@@ -2,6 +2,7 @@ import { z } from "zod";
 import type {
   Asset,
   ContentCatalog,
+  LairTemplate,
   LocationTemplate,
   MapTemplate,
   MinionTemplate,
@@ -290,6 +291,64 @@ const assetsArraySchema = z
 
 const organizationNamesArraySchema = z.array(z.string().min(1)).min(1);
 
+const lairTemplateSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().min(1).optional(),
+  availableMissionIds: z.array(z.string().min(1)),
+  startingAssets: z.record(z.string().min(1), z.number().int().min(1)).optional(),
+});
+
+function parseLairsWithRefs(
+  lairsRaw: unknown,
+  missionIds: Set<string>,
+  assetIds: Set<string>,
+): LairTemplate[] {
+  const parsed = z.array(lairTemplateSchema).safeParse(lairsRaw);
+  if (!parsed.success) {
+    throw parsed.error;
+  }
+  const arr = parsed.data;
+  const seenLairIds = new Set<string>();
+  for (let i = 0; i < arr.length; i += 1) {
+    const lair = arr[i];
+    if (seenLairIds.has(lair.id)) {
+      throw new Error(`Duplicate lair id: ${lair.id} (index ${i})`);
+    }
+    seenLairIds.add(lair.id);
+    const seenMission = new Set<string>();
+    for (const mid of lair.availableMissionIds) {
+      if (seenMission.has(mid)) {
+        throw new Error(
+          `Duplicate mission id "${mid}" in availableMissionIds for lair "${lair.id}"`,
+        );
+      }
+      seenMission.add(mid);
+      if (!missionIds.has(mid)) {
+        throw new Error(
+          `Unknown mission id "${mid}" referenced by lair "${lair.id}"`,
+        );
+      }
+    }
+    if (lair.startingAssets) {
+      for (const aid of Object.keys(lair.startingAssets)) {
+        if (!assetIds.has(aid)) {
+          throw new Error(`Unknown asset id "${aid}" in startingAssets for lair "${lair.id}"`);
+        }
+      }
+    }
+  }
+  return arr.map((l) => ({
+    id: l.id,
+    name: l.name,
+    ...(l.description !== undefined ? { description: l.description } : {}),
+    availableMissionIds: [...l.availableMissionIds],
+    ...(l.startingAssets !== undefined
+      ? { startingAssets: { ...l.startingAssets } }
+      : {}),
+  }));
+}
+
 export function parseCatalog(
   traitsRaw: unknown,
   minionsRaw: unknown,
@@ -298,6 +357,7 @@ export function parseCatalog(
   mapsRaw: unknown,
   assetsRaw: unknown,
   omegaPlansRaw: unknown,
+  lairsRaw: unknown,
   organizationNamesRaw: unknown,
 ): ContentCatalog {
   const traitsResult = traitsArraySchema.safeParse(traitsRaw);
@@ -314,6 +374,7 @@ export function parseCatalog(
     throw assetsResult.error;
   }
   const assets: Asset[] = assetsResult.data;
+  const assetIds = new Set(assets.map((a) => a.id));
   const locations = parseLocationsWithRefs(locationsRaw, missionIds);
   const locationIds = new Set(locations.map((l) => l.id));
   const maps = parseMapsWithLocationRefs(mapsRaw, locationIds);
@@ -323,6 +384,7 @@ export function parseCatalog(
     missionIds,
     mapIds,
   );
+  const lairs = parseLairsWithRefs(lairsRaw, missionIds, assetIds);
   const organizationNamesResult =
     organizationNamesArraySchema.safeParse(organizationNamesRaw);
   if (!organizationNamesResult.success) {
@@ -337,6 +399,7 @@ export function parseCatalog(
     maps,
     assets,
     omegaPlans,
+    lairs,
     organizationNames,
   };
 }
