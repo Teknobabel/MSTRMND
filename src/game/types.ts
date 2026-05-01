@@ -109,4 +109,6 @@ export type ContentCatalog = {
   maps: MapTemplate[];
   assets: Asset[];
   omegaPlans: OmegaPlanTemplate[];
+  /** Display names for the player's evil organization; one chosen per run. */
+  organizationNames: string[];
 };

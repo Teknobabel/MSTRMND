@@ -67,6 +67,8 @@ export type TurnActivityEntry = {
 export type GameState = {
   phase: TurnPhase;
   turnNumber: number;
+  /** Evil organization display name for this run (from `ContentCatalog.organizationNames`). */
+  organizationName: string;
   player: PlayerState;
   activeMissions: ActiveMission[];
   /** Minion template ids offered for hire until the next resolve rerolls them */
@@ -204,6 +206,12 @@ function ownedMinionTemplateIds(player: PlayerState): Set<string> {
   return new Set(player.minions.map((m) => m.templateId));
 }
 
+function pickRandomOrganizationName(catalog: ContentCatalog, rng: Rng): string {
+  const names = catalog.organizationNames;
+  const i = Math.floor(rng() * names.length);
+  return names[i]!;
+}
+
 export function createInitialGameState(catalog: ContentCatalog): GameState {
   const rng: Rng = () => Math.random();
   const player: PlayerState = {
@@ -220,6 +228,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
   return {
     phase: "main",
     turnNumber: 1,
+    organizationName: pickRandomOrganizationName(catalog, rng),
     player,
     activeMissions: [],
     availableMinionTemplateIds: pickRandomMinionTemplateIds(

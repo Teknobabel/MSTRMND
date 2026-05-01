@@ -13,7 +13,7 @@ This document describes the **current** architecture, data flow, and content mod
 
 | Path | Role |
 |------|------|
-| `content/*.json` | Designer-authored catalogs (traits, minions, missions, locations, maps, assets, omega plans). |
+| `content/*.json` | Designer-authored catalogs (traits, minions, missions, locations, maps, assets, omega plans, organization names). |
 | `src/game/types.ts` | Canonical TypeScript types for templates, catalog shape, and some runtime-only types. |
 | `src/game/contentSchema.ts` | Zod schemas, cross-reference checks, **`parseCatalog(...)`** entry point. |
 | `src/game/loadContent.ts` | Imports all JSON modules and returns `parseCatalog(...)`. |
@@ -21,15 +21,15 @@ This document describes the **current** architecture, data flow, and content mod
 | `src/game/mission.ts` | Runtime: participant trait union, mission success % (linear set rule), roster size 1–3. |
 | `src/game/locationCatalog.ts` | Lookups: location/map by id, missions for a location, **`locationTemplatesForOmegaPlan`** (run locations from active plan’s map), **initial location security** snapshots. |
 | `src/game/omegaPlan.ts` | Lookups: omega plan by id, **`pickRandomOmegaPlanId`** for new-run selection, mission id at stage/slot indices. |
-| `src/game/gameState.ts` | Runtime turn loop: **Main → Summary** (resolve runs inside **Execute Plan**), CP/infamy/minions/assets, hire, mission assignment, resolve rolls vs `mission.ts`. |
+| `src/game/gameState.ts` | Runtime turn loop: **Main → Summary** (resolve runs inside **Execute Plan**), CP/infamy/minions/assets, hire, mission assignment, resolve rolls vs `mission.ts`; **`organizationName`** at run start. |
 | `src/navigation.ts` | Menu state machine (main / settings / game / pause overlay). |
 | `src/main.ts` | Boot: `loadContent()`, game controller (`initGameController`), canvas loop, `initNavigation()`. |
 
 ## Content catalog pipeline
 
 1. **Authoring**: Edit JSON under `content/`. Use stable string **`id`** fields for cross-references (lowercase slugs are typical).
-2. **Loading (app)**: `loadContent()` in `loadContent.ts` imports JSON and calls **`parseCatalog(traits, minions, missions, locations, maps, assets, omegaPlans)`** (seven arguments, fixed order).
-3. **Parsing order inside `parseCatalog`**: Traits first (defines `traitIds`), then minions (trait refs), missions (trait refs), **assets** (standalone), **locations** (mission refs only), **maps** (location refs), **omega plans** (mission refs + **`mapId`** → maps). Returned object is a **`ContentCatalog`** (`types.ts`).
+2. **Loading (app)**: `loadContent()` in `loadContent.ts` imports JSON and calls **`parseCatalog(traits, minions, missions, locations, maps, assets, omegaPlans, organizationNames)`** (eight arguments, fixed order).
+3. **Parsing order inside `parseCatalog`**: Traits first (defines `traitIds`), then minions (trait refs), missions (trait refs), **assets** (standalone), **locations** (mission refs only), **maps** (location refs), **omega plans** (mission refs + **`mapId`** → maps), **organization names** (standalone JSON array of display strings). Returned object is a **`ContentCatalog`** (`types.ts`).
 
 **Cross-reference rules** (enforced in `contentSchema.ts`):
 
@@ -40,6 +40,7 @@ This document describes the **current** architecture, data flow, and content mod
 - Location `availableMissionIds` → missions; no duplicate mission id **within the same location’s list**; **same mission may appear on multiple locations**.
 - Map `locationIds` → locations; no duplicate location id **within the same map**; a location may appear on multiple maps.
 - Asset ids unique in `assets.json`.
+- **`organizationNames.json`**: JSON array of at least one non-empty string (no cross-references).
 
 ## Domain objects (catalog templates)
 
@@ -79,12 +80,17 @@ Enums in JSON are generally **lowercase** strings (e.g. trait `type`, location `
 
 - **OmegaPlanTemplate**: `id`, `name`, `description`, **`mapId`** (must match **`MapTemplate.id`**), `stages` — exactly **3** stages, each with **`missionIds` of length 3** (fixed 3×3 grid). Win-path content only; **progress** is **not** in JSON (future game state). **`GameState.activeOmegaPlanId`** picks one plan at random when `createInitialGameState(catalog)` runs (if any plans exist). Playable locations for that run are **`map.locationIds`** for **`omegaPlan.mapId`** (see **`locationTemplatesForOmegaPlan`**).
 
+### Organization names (`content/organizationNames.json`)
+
+- JSON **array of strings** (each non-empty). At run start **`createInitialGameState`** picks one at random for **`GameState.organizationName`** (shown at the top of the controls panel). No ids or cross-references.
+
 ## Runtime game state (`src/game/gameState.ts`)
 
 Not persisted in JSON; created per session via **`createInitialGameState(catalog)`** (requires **`ContentCatalog`** to roll initial hire offers).
 
 - **`TurnPhase`**: `main` | `resolve` | `summary` — today **`executePlan`** goes **`main` → `summary`** in one step after resolve logic; **`resolve`** is part of the union for forward compatibility. Player acts in **main**; **Next Turn** refills CP, increments turn, returns to **main**.
 - **`PlayerState`**: `commandPoints` / `maxCommandPoints` (new game: 5/5; **Next Turn** sets `commandPoints = maxCommandPoints`), `infamy` (0–100, clamped), `minions` (`MinionInstance[]`), `assets` (`Record<assetId, quantity>`), **`maxRosterSize`** (default **5**; hire blocked at cap), **`maxHireOffers`** (default **3**; cap on random offers per resolve).
+- **`GameState.organizationName`**: display string for the player’s evil organization, chosen once at **`createInitialGameState`** from **`catalog.organizationNames`**.
 - **`GameState.activeOmegaPlanId`**: catalog **`OmegaPlanTemplate.id`** for this run, or **`null`** if **`catalog.omegaPlans`** is empty. Chosen once at **`createInitialGameState`** via **`pickRandomOmegaPlanId`**. Display-only in the **Omega Plan** panel (three phases, three missions each, names from mission templates). Defines the active **`mapId`** for location scope.
 - **`GameState.locationSecurityStates`**: one **`LocationSecurityState`** per **playable** location this run (same set as **`locationTemplatesForOmegaPlan`**), initialized at security **1**. Shown in the **Locations** panel; gameplay may update these later.
 - **`GameState.locationAssetSlots`**: **`LocationAssetPlacement[]`** (each **`locationId`** + **`slots`** of **`LocationAssetSlot`**). Initialized in **`createInitialGameState`** only for playable locations: each gets **1–3** distinct random **`catalog.assets`** ids (none if the asset catalog is empty); all slots start **hidden**, then **`min(3, total slots)`** slots are set **revealed**. The Locations panel shows label **Asset** with value **"Asset"** when hidden, or the catalog **name** when revealed.
@@ -97,7 +103,7 @@ Assignment rules: mission id must appear on the chosen location’s **`available
 ## UI / navigation
 
 - Screens: Main (Play, Settings), Settings (Back with return stack from pause vs main), Game (canvas + **game UI layer**: **controls + Activity** (stacked) / **Omega plan + Locations** / **Minions + Assets**; **bottom HUD** for plan actions, turn/phase, and Pause), Pause overlay (Back / Quit / Settings).
-- **Game panel** (`index.html`): stats (CP, infamy, active missions), assign mission (location dropdown lists **only locations on the active omega plan’s map**; mission; minion checkboxes). **Activity panel** (below controls): resolve results **by turn**, newest first, from **`GameState.activityLog`** (`aria-live` on the list region). **Bottom HUD**: **Execute Plan** / **Next Turn** in a **left** panel; **turn · phase** text **center**; **Pause** **right**. **Omega column**: **Omega Plan** (active plan, phases, mission names) and **Locations** (each **playable** location’s **type**, **level**, **security**, plus **Asset** rows per slot—hidden slots show **"Asset"**, revealed slots show the catalog asset **name**). **Minions panel**: roster plus **Available to hire** (random offer list from **`executePlan`** or **Reroll** for **1 CP** during Main); **Hire** is Main Phase only and disabled when roster is full, CP is insufficient, or the template is off-offer. **Assets panel** (below Minions): entries from **`PlayerState.assets`** with quantity **> 0**, resolved to catalog **name** / optional **description**; empty state when the player owns none.
+- **Game panel** (`index.html`): **organization name** at the top (from **`GameState.organizationName`**), then stats (CP, infamy, active missions), assign mission (location dropdown lists **only locations on the active omega plan’s map**; mission; minion checkboxes). **Activity panel** (below controls): resolve results **by turn**, newest first, from **`GameState.activityLog`** (`aria-live` on the list region). **Bottom HUD**: **Execute Plan** / **Next Turn** in a **left** panel; **turn · phase** text **center**; **Pause** **right**. **Omega column**: **Omega Plan** (active plan, phases, mission names) and **Locations** (each **playable** location’s **type**, **level**, **security**, plus **Asset** rows per slot—hidden slots show **"Asset"**, revealed slots show the catalog asset **name**). **Minions panel**: roster plus **Available to hire** (random offer list from **`executePlan`** or **Reroll** for **1 CP** during Main); **Hire** is Main Phase only and disabled when roster is full, CP is insufficient, or the template is off-offer. **Assets panel** (below Minions): entries from **`PlayerState.assets`** with quantity **> 0**, resolved to catalog **name** / optional **description**; empty state when the player owns none.
 - `navigation.ts` wires visibility and **starts/stops** the canvas RAF loop when the game screen is visible and not paused.
 - Canvas draws a placeholder “Game” label; rules and economy are driven from the DOM panel, not the canvas.
 

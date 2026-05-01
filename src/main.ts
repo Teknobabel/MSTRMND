@@ -37,7 +37,9 @@ console.info(
   catalog.assets.length,
   "assets,",
   catalog.omegaPlans.length,
-  "omega plans",
+  "omega plans,",
+  catalog.organizationNames.length,
+  "organization names",
 );
 
 const canvas = document.getElementById("game-canvas");
@@ -107,6 +109,7 @@ function formatLocationTypeLabel(locationType: string): string {
 function initGameController(content: ReturnType<typeof loadContent>): void {
   let state: GameState = createInitialGameState(content);
 
+  const organizationNameEl = req<HTMLElement>("organization-name");
   const statsEl = req<HTMLElement>("game-stats");
   const activityPanelEl = req<HTMLElement>("activity-panel");
   const minionsRosterEl = req<HTMLElement>("minions-roster-list");
@@ -570,6 +573,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function refresh(): void {
     const p = state.player;
+    organizationNameEl.textContent = state.organizationName;
     statsEl.innerHTML = `
       <div><strong>CP:</strong> ${p.commandPoints} / ${p.maxCommandPoints}</div>
       <div><strong>Infamy:</strong> ${p.infamy}</div>

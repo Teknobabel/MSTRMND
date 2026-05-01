@@ -526,6 +526,14 @@ body {
   }
 }
 
+.organization-name {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #f4f4f5;
+}
+
 .game-stats {
   font-size: 0.875rem;
   line-height: 1.45;

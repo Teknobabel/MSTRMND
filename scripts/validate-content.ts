@@ -9,13 +9,25 @@ try {
   const traits = JSON.parse(readFileSync(join(root, "content/traits.json"), "utf8"));
   const minions = JSON.parse(readFileSync(join(root, "content/minions.json"), "utf8"));
   const missions = JSON.parse(readFileSync(join(root, "content/missions.json"), "utf8"));
+  const organizationNames = JSON.parse(
+    readFileSync(join(root, "content/organizationNames.json"), "utf8"),
+  );
   const locations = JSON.parse(readFileSync(join(root, "content/locations.json"), "utf8"));
   const maps = JSON.parse(readFileSync(join(root, "content/maps.json"), "utf8"));
   const assets = JSON.parse(readFileSync(join(root, "content/assets.json"), "utf8"));
   const omegaPlans = JSON.parse(readFileSync(join(root, "content/omegaPlans.json"), "utf8"));
-  const catalog = parseCatalog(traits, minions, missions, locations, maps, assets, omegaPlans);
+  const catalog = parseCatalog(
+    traits,
+    minions,
+    missions,
+    locations,
+    maps,
+    assets,
+    omegaPlans,
+    organizationNames,
+  );
   console.log(
-    `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans`,
+    `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.organizationNames.length} organization names`,
   );
 } catch (e) {
   console.error(e);

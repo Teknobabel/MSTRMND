@@ -288,6 +288,8 @@ const assetsArraySchema = z
     }
   });
 
+const organizationNamesArraySchema = z.array(z.string().min(1)).min(1);
+
 export function parseCatalog(
   traitsRaw: unknown,
   minionsRaw: unknown,
@@ -296,6 +298,7 @@ export function parseCatalog(
   mapsRaw: unknown,
   assetsRaw: unknown,
   omegaPlansRaw: unknown,
+  organizationNamesRaw: unknown,
 ): ContentCatalog {
   const traitsResult = traitsArraySchema.safeParse(traitsRaw);
   if (!traitsResult.success) {
@@ -320,5 +323,20 @@ export function parseCatalog(
     missionIds,
     mapIds,
   );
-  return { traits, minions, missions, locations, maps, assets, omegaPlans };
+  const organizationNamesResult =
+    organizationNamesArraySchema.safeParse(organizationNamesRaw);
+  if (!organizationNamesResult.success) {
+    throw organizationNamesResult.error;
+  }
+  const organizationNames = organizationNamesResult.data;
+  return {
+    traits,
+    minions,
+    missions,
+    locations,
+    maps,
+    assets,
+    omegaPlans,
+    organizationNames,
+  };
 }
