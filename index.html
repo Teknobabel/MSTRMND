@@ -86,48 +86,23 @@
               <div id="minions-available-list" class="minions-panel-list"></div>
             </section>
           </aside>
-          <aside class="game-panel game-panel--assets" aria-label="Assets and active missions">
-            <div class="panel-tabs" role="tablist">
-              <button
-                type="button"
-                class="panel-tab"
-                id="assets-tab-btn-assets"
-                role="tab"
-                aria-selected="true"
-                aria-controls="assets-tab-panel-assets"
-              >
-                Assets
-              </button>
-              <button
-                type="button"
-                class="panel-tab"
-                id="assets-tab-btn-missions"
-                role="tab"
-                aria-selected="false"
-                aria-controls="assets-tab-panel-missions"
-                tabindex="-1"
-              >
-                Active missions
-              </button>
-            </div>
-            <div
-              id="assets-tab-panel-assets"
-              class="assets-tab-panel"
-              role="tabpanel"
-              aria-labelledby="assets-tab-btn-assets"
-            >
-              <div id="assets-panel" class="assets-panel"></div>
-            </div>
-            <div
-              id="assets-tab-panel-missions"
-              class="assets-tab-panel"
-              role="tabpanel"
-              aria-labelledby="assets-tab-btn-missions"
-              hidden
-            >
-              <div id="active-missions-panel" class="active-missions-panel"></div>
-            </div>
+          <aside class="game-panel game-panel--assets" aria-labelledby="assets-panel-title">
+            <h2 id="assets-panel-title" class="game-panel-title">Assets</h2>
+            <div id="assets-panel" class="assets-panel"></div>
           </aside>
+        </div>
+        <div class="game-ui-stack-column">
+          <aside
+            class="game-panel game-panel--active-missions"
+            aria-labelledby="active-missions-panel-title"
+          >
+            <h2 id="active-missions-panel-title" class="game-panel-title">Active Mission</h2>
+            <div id="active-missions-panel" class="active-missions-panel"></div>
+          </aside>
+          <aside
+            class="game-panel game-panel--missions-column-bottom"
+            aria-hidden="true"
+          ></aside>
         </div>
         </div>
         <div class="game-hud">

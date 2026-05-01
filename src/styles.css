@@ -224,7 +224,7 @@ body {
 
 .game-ui-layer > .game-panel {
   pointer-events: auto;
-  flex: 1 1 min(240px, calc(33vw - 0.35rem));
+  flex: 1 1 min(200px, calc(25vw - 0.35rem));
   min-width: 0;
   min-height: 0;
   max-height: 100%;
@@ -232,7 +232,7 @@ body {
 
 .game-ui-layer > .game-ui-stack-column {
   pointer-events: auto;
-  flex: 1 1 min(240px, calc(33vw - 0.35rem));
+  flex: 1 1 min(200px, calc(25vw - 0.35rem));
   min-width: 0;
   min-height: 0;
   max-height: 100%;
@@ -289,23 +289,21 @@ body {
 .omega-plan-phase {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.45rem;
 }
 
 .omega-plan-phase-title {
   margin: 0;
 }
 
-.omega-plan-mission-list {
-  margin: 0;
-  padding-left: 1.15rem;
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  color: #d4d4d8;
+.omega-plan-phase-missions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
-.omega-plan-mission-list li {
-  margin: 0.12rem 0;
+.omega-plan-mission-card {
+  flex-shrink: 0;
 }
 
 .omega-plan-empty {
@@ -331,54 +329,86 @@ body {
   min-height: 0;
 }
 
-.panel-tabs {
-  display: flex;
-  flex-shrink: 0;
-  gap: 0.25rem;
-  margin-bottom: 0.35rem;
-}
-
-.panel-tab {
-  flex: 1 1 0;
-  margin: 0;
-  padding: 0.35rem 0.45rem;
-  min-height: 32px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #a1a1aa;
-  background: rgba(39, 39, 42, 0.65);
-  border: 1px solid #3f3f46;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.panel-tab:hover {
-  color: #e4e4e7;
-  border-color: #52525b;
-}
-
-.panel-tab--selected {
-  color: #f4f4f5;
-  background: rgba(63, 63, 70, 0.85);
-  border-color: #71717a;
-}
-
-.assets-tab-panel {
+.game-panel.game-panel--active-missions .active-missions-panel {
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
-  display: flex;
-  flex-direction: column;
 }
 
-.assets-tab-panel[hidden] {
-  display: none !important;
+.game-panel.game-panel--missions-column-bottom {
+  flex: 1 1 0;
+  min-height: 0;
+  border: 1px dashed #3f3f46;
+  background: rgba(24, 24, 27, 0.35);
+  pointer-events: none;
 }
 
 .active-missions-panel {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.active-missions-summary {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #a1a1aa;
+}
+
+.active-mission-card {
+  position: relative;
+}
+
+.active-mission-card .asset-card-title {
+  padding-right: 6rem;
+}
+
+.active-mission-card-actions {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.45rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.active-mission-card:hover .active-mission-card-actions,
+.active-mission-card:focus-within .active-mission-card-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.active-mission-card-cancel {
+  min-height: auto;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  border-color: #52525b;
+  color: #d4d4d8;
+  background: rgba(39, 39, 42, 0.95);
+}
+
+.active-mission-card:hover .active-mission-card-cancel:disabled,
+.active-mission-card:focus-within .active-mission-card-cancel:disabled {
+  opacity: 0.55;
+}
+
+.active-mission-card-cancel:hover:not(:disabled) {
+  border-color: #a1a1aa;
+  color: #f4f4f5;
+}
+
+.active-mission-card-cancel:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.active-mission-card-cancel:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
 }
 
 .assets-panel-empty {

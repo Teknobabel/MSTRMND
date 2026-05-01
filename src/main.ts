@@ -3,6 +3,7 @@ import {
   advanceToNextTurn,
   assignMission,
   busyInstanceIds,
+  cancelMission,
   createInitialGameState,
   executePlan,
   fireMinion,
@@ -130,15 +131,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const assetsPanelEl = req<HTMLElement>("assets-panel");
   const activeMissionsPanelEl = req<HTMLElement>("active-missions-panel");
-  const assetsTabBtnAssets = req<HTMLButtonElement>("assets-tab-btn-assets");
-  const assetsTabBtnMissions = req<HTMLButtonElement>("assets-tab-btn-missions");
-  const assetsTabPanelAssets = req<HTMLElement>("assets-tab-panel-assets");
-  const assetsTabPanelMissions = req<HTMLElement>("assets-tab-panel-missions");
   const missionDetailsEl = req<HTMLElement>("mission-details");
 
   const rng = (): number => Math.random();
-
-  let assetsPanelTab: "assets" | "missions" = "assets";
 
   const assignSlotInstanceIds: (string | null)[] = [null, null, null];
   let dndDragSource: { kind: "roster" } | { kind: "slot"; slotIndex: number } | null = null;
@@ -285,6 +280,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (!missionTemplate) {
       btnAssign.disabled = true;
       btnAssign.title = "Choose a mission";
+      return;
+    }
+    const atMissionCap =
+      state.activeMissions.length >= state.player.maxConcurrentMissions;
+    if (atMissionCap) {
+      btnAssign.disabled = true;
+      btnAssign.title = `At concurrent mission limit (${state.activeMissions.length}/${state.player.maxConcurrentMissions})`;
       return;
     }
     const cost = missionTemplate.startCommandPoints;
@@ -467,9 +469,17 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         title.className = "minions-card-title";
         title.textContent = tpl?.name ?? inst.templateId;
         card.appendChild(title);
+        const activeForMinion = state.activeMissions.find((am) =>
+          am.participantInstanceIds.includes(inst.instanceId),
+        );
+        const statusValue = activeForMinion
+          ? content.missions.find((m) => m.id === activeForMinion.missionTemplateId)
+              ?.name ?? activeForMinion.missionTemplateId
+          : "Waiting";
         const dl = document.createElement("dl");
         dl.className = "minions-card-stats";
         appendMinionStatRows(dl, [
+          { label: "Status", value: statusValue },
           { label: "CP cost", value: String(tpl?.hireCommandPoints ?? "—") },
           { label: "Level", value: String(inst.currentLevel) },
           { label: "XP", value: String(inst.currentExperience) },
@@ -651,6 +661,62 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
+  function omegaPlanMissionCard(missionId: string): HTMLElement {
+    const mission = content.missions.find((m) => m.id === missionId);
+    const article = document.createElement("article");
+    article.className = "asset-card omega-plan-mission-card";
+
+    const title = document.createElement("h4");
+    title.className = "asset-card-title";
+    title.textContent = mission?.name ?? missionId;
+    article.appendChild(title);
+
+    if (mission?.description) {
+      const desc = document.createElement("p");
+      desc.className = "asset-card-description";
+      desc.textContent = mission.description;
+      article.appendChild(desc);
+    }
+
+    const offeringLocs = runLocations().filter((loc) =>
+      loc.availableMissionIds.includes(missionId),
+    );
+    const locNames = offeringLocs.map((l) => l.name).join(", ");
+
+    const dl = document.createElement("dl");
+    dl.className = "asset-card-stats";
+    const rows: Array<{ label: string; value: string }> = [];
+    if (mission) {
+      rows.push(
+        { label: "Start cost", value: `${mission.startCommandPoints} CP` },
+        {
+          label: "Duration",
+          value: `${mission.durationTurns} turn${mission.durationTurns === 1 ? "" : "s"}`,
+        },
+        {
+          label: "Required traits",
+          value: traitDisplayNames(content, mission.requiredTraitIds),
+        },
+        {
+          label: "Playable locations",
+          value: locNames.length > 0 ? locNames : "None on current map",
+        },
+        { label: "Success chance", value: "—" },
+      );
+    } else {
+      rows.push(
+        { label: "Mission id", value: missionId },
+        {
+          label: "Playable locations",
+          value: locNames.length > 0 ? locNames : "—",
+        },
+      );
+    }
+    appendMinionStatRows(dl, rows);
+    article.appendChild(dl);
+    return article;
+  }
+
   function renderOmegaPlanPanel(): void {
     omegaPlanPanelEl.innerHTML = "";
     const activeId = state.activeOmegaPlanId;
@@ -690,18 +756,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       heading.className = "game-controls-heading omega-plan-phase-title";
       heading.textContent = `Phase ${stageIndex + 1}`;
 
-      const ol = document.createElement("ol");
-      ol.className = "omega-plan-mission-list";
+      const missionWrap = document.createElement("div");
+      missionWrap.className = "omega-plan-phase-missions";
       for (let mi = 0; mi < 3; mi += 1) {
         const missionId = stage.missionIds[mi]!;
-        const missionTemplate = content.missions.find((m) => m.id === missionId);
-        const li = document.createElement("li");
-        li.textContent = missionTemplate?.name ?? missionId;
-        ol.appendChild(li);
+        missionWrap.appendChild(omegaPlanMissionCard(missionId));
       }
 
       section.appendChild(heading);
-      section.appendChild(ol);
+      section.appendChild(missionWrap);
       omegaPlanPanelEl.appendChild(section);
     }
   }
@@ -751,20 +814,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
-  function syncAssetsTabUi(): void {
-    const isAssets = assetsPanelTab === "assets";
-    assetsTabBtnAssets.setAttribute("aria-selected", String(isAssets));
-    assetsTabBtnMissions.setAttribute("aria-selected", String(!isAssets));
-    assetsTabBtnAssets.tabIndex = isAssets ? 0 : -1;
-    assetsTabBtnMissions.tabIndex = isAssets ? -1 : 0;
-    assetsTabPanelAssets.hidden = !isAssets;
-    assetsTabPanelMissions.hidden = isAssets;
-    assetsTabBtnAssets.classList.toggle("panel-tab--selected", isAssets);
-    assetsTabBtnMissions.classList.toggle("panel-tab--selected", !isAssets);
-  }
-
   function renderActiveMissionsPanel(): void {
     activeMissionsPanelEl.innerHTML = "";
+    const summary = document.createElement("p");
+    summary.className = "active-missions-summary";
+    summary.textContent = `${state.activeMissions.length} / ${state.player.maxConcurrentMissions} concurrent missions`;
+    activeMissionsPanelEl.appendChild(summary);
+
     if (state.activeMissions.length === 0) {
       const empty = document.createElement("p");
       empty.className = "assets-panel-empty";
@@ -848,6 +904,29 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
       appendMinionStatRows(dl, rows);
       article.appendChild(dl);
+
+      const mainOnly = state.phase === "main";
+      const actions = document.createElement("div");
+      actions.className = "active-mission-card-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "btn active-mission-card-cancel";
+      cancelBtn.textContent = "Cancel mission";
+      cancelBtn.disabled = !mainOnly;
+      cancelBtn.title = mainOnly ? "Remove mission; minions free immediately" : "Only during Main Phase";
+      cancelBtn.addEventListener("click", () => {
+        if (state.phase !== "main") {
+          return;
+        }
+        const result = cancelMission(state, content, am.id);
+        if (result.ok) {
+          state = result.value;
+          refresh();
+        }
+      });
+      actions.appendChild(cancelBtn);
+      article.appendChild(actions);
+
       activeMissionsPanelEl.appendChild(article);
     }
   }
@@ -956,7 +1035,6 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     statsEl.innerHTML = `
       <div><strong>CP:</strong> ${p.commandPoints} / ${p.maxCommandPoints}</div>
       <div><strong>Infamy:</strong> ${p.infamy}</div>
-      <div><strong>Active missions:</strong> ${state.activeMissions.length}</div>
     `;
     hudShort.textContent = `T${state.turnNumber} · ${state.phase}`;
 
@@ -975,7 +1053,6 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     renderLocationsPanel();
     renderAssetsPanel();
     renderActiveMissionsPanel();
-    syncAssetsTabUi();
     renderActivityPanel();
 
     const rerollCost = REROLL_HIRE_OFFERS_CP;
@@ -1044,16 +1121,6 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       state = result.value;
     }
     refresh();
-  });
-
-  assetsTabBtnAssets.addEventListener("click", () => {
-    assetsPanelTab = "assets";
-    syncAssetsTabUi();
-  });
-
-  assetsTabBtnMissions.addEventListener("click", () => {
-    assetsPanelTab = "missions";
-    syncAssetsTabUi();
   });
 
   minionsRosterEl.addEventListener("dragstart", (e) => {

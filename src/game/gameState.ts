@@ -33,6 +33,8 @@ export type PlayerState = {
   maxRosterSize: number;
   /** How many minion templates are offered after each resolve (random pick). */
   maxHireOffers: number;
+  /** Max active missions at once (assign blocked at cap; can rise during a run). */
+  maxConcurrentMissions: number;
 };
 
 export type ActiveMission = {
@@ -41,6 +43,8 @@ export type ActiveMission = {
   locationId: string;
   participantInstanceIds: string[];
   turnsRemaining: number;
+  /** `GameState.turnNumber` when this mission was assigned (Main Phase). */
+  startedOnTurn: number;
 };
 
 export type ResolveEventMissionCompleted = {
@@ -110,7 +114,9 @@ export type GameError =
       code: "rehire_on_cooldown";
       instanceId: string;
       availableFromTurn: number;
-    };
+    }
+  | { code: "unknown_active_mission"; activeMissionId: string }
+  | { code: "max_concurrent_missions"; max: number; have: number };
 
 export type Ok<T> = { ok: true; value: T };
 export type Err<E> = { ok: false; error: E };
@@ -121,6 +127,7 @@ const INFAMY_FAILURE_DELTA = 5;
 
 const DEFAULT_MAX_ROSTER_SIZE = 5;
 const DEFAULT_MAX_HIRE_OFFERS = 3;
+const DEFAULT_MAX_CONCURRENT_MISSIONS = 2;
 /** CP spent to reroll the hire offer pool during Main Phase */
 export const REROLL_HIRE_OFFERS_CP = 1;
 
@@ -241,6 +248,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     assets: {},
     maxRosterSize: DEFAULT_MAX_ROSTER_SIZE,
     maxHireOffers: DEFAULT_MAX_HIRE_OFFERS,
+    maxConcurrentMissions: DEFAULT_MAX_CONCURRENT_MISSIONS,
   };
   const activeOmegaPlanId = pickRandomOmegaPlanId(catalog, rng);
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
@@ -480,6 +488,17 @@ export function assignMission(
   if (state.phase !== "main") {
     return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
   }
+  const activeCount = state.activeMissions.length;
+  if (activeCount >= state.player.maxConcurrentMissions) {
+    return {
+      ok: false,
+      error: {
+        code: "max_concurrent_missions",
+        max: state.player.maxConcurrentMissions,
+        have: activeCount,
+      },
+    };
+  }
   const location = locationById(catalog, locationId);
   if (!location) {
     return { ok: false, error: { code: "unknown_location", locationId } };
@@ -555,6 +574,7 @@ export function assignMission(
     locationId,
     participantInstanceIds: [...participantInstanceIds],
     turnsRemaining: missionTemplate.durationTurns,
+    startedOnTurn: state.turnNumber,
   };
 
   return {
@@ -566,6 +586,56 @@ export function assignMission(
         ...state.player,
         commandPoints: state.player.commandPoints - cost,
       },
+    },
+  };
+}
+
+export function cancelMission(
+  state: GameState,
+  catalog: ContentCatalog,
+  activeMissionId: string,
+): Result<GameState, GameError> {
+  if (state.phase !== "main") {
+    return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
+  }
+  const idx = state.activeMissions.findIndex((am) => am.id === activeMissionId);
+  if (idx === -1) {
+    return { ok: false, error: { code: "unknown_active_mission", activeMissionId } };
+  }
+  const am = state.activeMissions[idx]!;
+  const template = missionTemplateById(catalog, am.missionTemplateId);
+  let refundCp = 0;
+  if (
+    template !== undefined &&
+    am.startedOnTurn === state.turnNumber &&
+    am.turnsRemaining === template.durationTurns
+  ) {
+    refundCp = template.startCommandPoints;
+  }
+  const nextMissions = state.activeMissions.filter((_, i) => i !== idx);
+  return {
+    ok: true,
+    value: {
+      ...state,
+      activeMissions: nextMissions,
+      player: {
+        ...state.player,
+        commandPoints: state.player.commandPoints + refundCp,
+      },
+    },
+  };
+}
+
+/**
+ * Raise how many missions may run at once (e.g. rewards or upgrades). Floors at 1.
+ */
+export function increaseMaxConcurrentMissions(state: GameState, delta: number): GameState {
+  const next = Math.max(1, state.player.maxConcurrentMissions + delta);
+  return {
+    ...state,
+    player: {
+      ...state.player,
+      maxConcurrentMissions: next,
     },
   };
 }
