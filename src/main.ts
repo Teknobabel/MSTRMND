@@ -1042,9 +1042,87 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (log.length === 0) {
       const empty = document.createElement("p");
       empty.className = "activity-panel-empty";
-      empty.textContent = "No resolve activity yet.";
+      empty.textContent = "No activity yet.";
       activityPanelEl.appendChild(empty);
       return;
+    }
+
+    function minionTemplateName(templateId: string): string {
+      return content.minions.find((m) => m.id === templateId)?.name ?? templateId;
+    }
+
+    function missionName(missionTemplateId: string): string {
+      return content.missions.find((m) => m.id === missionTemplateId)?.name ?? missionTemplateId;
+    }
+
+    function assetDisplayName(assetId: string): string {
+      return content.assets.find((a) => a.id === assetId)?.name ?? assetId;
+    }
+
+    function activityLocationLabel(locationId: string): string {
+      if (locationId === LAIR_LOCATION_ID) {
+        return (
+          (state.activeLairId ? getLairById(content, state.activeLairId)?.name : undefined) ??
+          "Lair"
+        );
+      }
+      return content.locations.find((l) => l.id === locationId)?.name ?? locationId;
+    }
+
+    function participantNames(instanceIds: string[]): string {
+      const names = instanceIds.map((iid) => {
+        const inst = state.player.minions.find((m) => m.instanceId === iid);
+        if (inst) {
+          return minionTemplateName(inst.templateId);
+        }
+        return "Unknown minion";
+      });
+      return names.join(", ");
+    }
+
+    function formatActivityEvent(ev: (typeof log)[number]["events"][number]): string {
+      switch (ev.kind) {
+        case "mission_completed": {
+          const inf =
+            ev.infamyDelta >= 0 ? `+${ev.infamyDelta}` : String(ev.infamyDelta);
+          const whereLabel = activityLocationLabel(ev.locationId);
+          return `${ev.missionName} @ ${whereLabel}: ${
+            ev.success ? "Success" : "Failure"
+          } (roll ${ev.roll} vs ${ev.successChancePercent}%). Infamy ${inf}.`;
+        }
+        case "minion_hired":
+        case "minion_rehired": {
+          const n = minionTemplateName(ev.templateId);
+          return `${n} joined ${state.organizationName}.`;
+        }
+        case "minion_fired": {
+          const n = minionTemplateName(ev.templateId);
+          return `${n} left ${state.organizationName}.`;
+        }
+        case "mission_started": {
+          const m = missionName(ev.missionTemplateId);
+          const place = activityLocationLabel(ev.locationId);
+          const who = participantNames(ev.participantInstanceIds);
+          return `${m} started at ${place} (${who}).`;
+        }
+        case "mission_cancelled": {
+          const m = missionName(ev.missionTemplateId);
+          const place = activityLocationLabel(ev.locationId);
+          return `${m} cancelled at ${place}.`;
+        }
+        case "asset_gained": {
+          const a = assetDisplayName(ev.assetId);
+          return `${state.organizationName} gained ${a} ×${ev.quantity}.`;
+        }
+        case "asset_lost": {
+          const a = assetDisplayName(ev.assetId);
+          return `${state.organizationName} lost ${a} ×${ev.quantity}.`;
+        }
+        default: {
+          const _exhaustive: never = ev;
+          return String(_exhaustive);
+        }
+      }
     }
 
     for (let i = 0; i < log.length; i += 1) {
@@ -1070,22 +1148,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         ul.appendChild(li);
       } else {
         for (const ev of events) {
-          if (ev.kind === "mission_completed") {
-            const li = document.createElement("li");
-            li.className = "activity-event";
-            const inf =
-              ev.infamyDelta >= 0 ? `+${ev.infamyDelta}` : String(ev.infamyDelta);
-            const whereLabel =
-              ev.locationId === LAIR_LOCATION_ID
-                ? (state.activeLairId
-                    ? getLairById(content, state.activeLairId)?.name
-                    : undefined) ?? "Lair"
-                : ev.locationId;
-            li.textContent = `${ev.missionName} @ ${whereLabel}: ${
-              ev.success ? "Success" : "Failure"
-            } (roll ${ev.roll} vs ${ev.successChancePercent}%). Infamy ${inf}.`;
-            ul.appendChild(li);
-          }
+          const li = document.createElement("li");
+          li.className = "activity-event";
+          li.textContent = formatActivityEvent(ev);
+          ul.appendChild(li);
         }
       }
       section.appendChild(ul);

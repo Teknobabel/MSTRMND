@@ -48,7 +48,7 @@ export type ActiveMission = {
   startedOnTurn: number;
 };
 
-export type ResolveEventMissionCompleted = {
+export type ActivityEventMissionCompleted = {
   kind: "mission_completed";
   activeMissionId: string;
   missionTemplateId: string;
@@ -61,12 +61,31 @@ export type ResolveEventMissionCompleted = {
   infamyDelta: number;
 };
 
-export type ResolveEvent = ResolveEventMissionCompleted;
+/** @deprecated Use {@link ActivityEventMissionCompleted} */
+export type ResolveEventMissionCompleted = ActivityEventMissionCompleted;
 
-/** One Execute Plan resolve, keyed to the turn it was run on (newest entries first in {@link GameState.activityLog}). */
+export type ActivityEvent =
+  | ActivityEventMissionCompleted
+  | { kind: "minion_hired"; templateId: string }
+  | { kind: "minion_rehired"; templateId: string }
+  | { kind: "minion_fired"; templateId: string }
+  | {
+      kind: "mission_started";
+      missionTemplateId: string;
+      locationId: string;
+      participantInstanceIds: string[];
+    }
+  | { kind: "mission_cancelled"; missionTemplateId: string; locationId: string }
+  | { kind: "asset_gained"; assetId: string; quantity: number }
+  | { kind: "asset_lost"; assetId: string; quantity: number };
+
+/** @deprecated Use {@link ActivityEvent} */
+export type ResolveEvent = ActivityEventMissionCompleted;
+
+/** Activity for one turn (player actions + resolve outcomes); newest turn first in {@link GameState.activityLog}. */
 export type TurnActivityEntry = {
   turnNumber: number;
-  events: ResolveEvent[];
+  events: ActivityEvent[];
 };
 
 /** Fired roster minion waiting out cooldown before appearing in the hire column again. */
@@ -87,7 +106,7 @@ export type GameState = {
   availableMinionTemplateIds: string[];
   /** Fired minions (same instance stats) pending cooldown before re-offer. */
   minionRehireQueue: MinionRehireQueueEntry[];
-  /** Resolve outcomes from each Execute Plan; newest turn first. */
+  /** Activity log (player actions + resolve outcomes); newest turn first. */
   activityLog: TurnActivityEntry[];
   /** Win-path plan for this run; chosen once at game start. */
   activeOmegaPlanId: string | null;
@@ -269,7 +288,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
   };
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
   const lairMissionIds = lairTemplate ? [...lairTemplate.availableMissionIds] : [];
-  return {
+  const base: GameState = {
     phase: "main",
     turnNumber: 1,
     organizationName: pickRandomOrganizationName(catalog, rng),
@@ -289,6 +308,20 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     activeLairId,
     lairMissionIds,
   };
+
+  const assetEvents: ActivityEvent[] = [];
+  for (const [assetId, qty] of Object.entries(assetsFromLair)) {
+    if (qty > 0) {
+      assetEvents.push({ kind: "asset_gained", assetId, quantity: qty });
+    }
+  }
+  if (assetEvents.length === 0) {
+    return base;
+  }
+  return {
+    ...base,
+    activityLog: [{ turnNumber: 1, events: assetEvents }, ...base.activityLog],
+  };
 }
 
 function missionTemplateById(
@@ -304,6 +337,44 @@ function locationById(catalog: ContentCatalog, id: string) {
 
 function minionTemplateById(catalog: ContentCatalog, id: string) {
   return catalog.minions.find((m) => m.id === id);
+}
+
+function appendActivityEvent(state: GameState, event: ActivityEvent): GameState {
+  const { turnNumber, activityLog } = state;
+  const idx = activityLog.findIndex((e) => e.turnNumber === turnNumber);
+  if (idx === -1) {
+    return {
+      ...state,
+      activityLog: [{ turnNumber, events: [event] }, ...activityLog],
+    };
+  }
+  const entry = activityLog[idx]!;
+  const nextEntry: TurnActivityEntry = {
+    ...entry,
+    events: [...entry.events, event],
+  };
+  return {
+    ...state,
+    activityLog: [...activityLog.slice(0, idx), nextEntry, ...activityLog.slice(idx + 1)],
+  };
+}
+
+function mergeMissionEventsIntoActivityLog(
+  activityLog: TurnActivityEntry[],
+  turnNumber: number,
+  missionEvents: ActivityEventMissionCompleted[],
+): TurnActivityEntry[] {
+  const copied = missionEvents.map((e) => ({ ...e }));
+  const idx = activityLog.findIndex((e) => e.turnNumber === turnNumber);
+  if (idx === -1) {
+    return [{ turnNumber, events: copied }, ...activityLog];
+  }
+  const entry = activityLog[idx]!;
+  const nextEntry: TurnActivityEntry = {
+    ...entry,
+    events: [...entry.events, ...copied],
+  };
+  return [...activityLog.slice(0, idx), nextEntry, ...activityLog.slice(idx + 1)];
 }
 
 export function busyInstanceIds(activeMissions: ActiveMission[]): Set<string> {
@@ -348,17 +419,18 @@ export function hireMinion(
   }
   const instance = createMinionFromTemplate(template, newInstanceId);
   const remainingOffers = state.availableMinionTemplateIds.filter((id) => id !== templateId);
+  const next: GameState = {
+    ...state,
+    availableMinionTemplateIds: remainingOffers,
+    player: {
+      ...state.player,
+      commandPoints: state.player.commandPoints - cost,
+      minions: [...state.player.minions, instance],
+    },
+  };
   return {
     ok: true,
-    value: {
-      ...state,
-      availableMinionTemplateIds: remainingOffers,
-      player: {
-        ...state.player,
-        commandPoints: state.player.commandPoints - cost,
-        minions: [...state.player.minions, instance],
-      },
-    },
+    value: appendActivityEvent(next, { kind: "minion_hired", templateId }),
   };
 }
 
@@ -379,19 +451,20 @@ export function fireMinion(
   }
   const minion = state.player.minions[idx]!;
   const newMinions = state.player.minions.filter((_, i) => i !== idx);
+  const next: GameState = {
+    ...state,
+    player: { ...state.player, minions: newMinions },
+    minionRehireQueue: [
+      ...state.minionRehireQueue,
+      {
+        minion: { ...minion },
+        availableFromTurn: state.turnNumber + MINION_FIRE_REHIRE_COOLDOWN_TURNS,
+      },
+    ],
+  };
   return {
     ok: true,
-    value: {
-      ...state,
-      player: { ...state.player, minions: newMinions },
-      minionRehireQueue: [
-        ...state.minionRehireQueue,
-        {
-          minion: { ...minion },
-          availableFromTurn: state.turnNumber + MINION_FIRE_REHIRE_COOLDOWN_TURNS,
-        },
-      ],
-    },
+    value: appendActivityEvent(next, { kind: "minion_fired", templateId: minion.templateId }),
   };
 }
 
@@ -443,17 +516,21 @@ export function rehireMinion(
     };
   }
   const restQueue = state.minionRehireQueue.filter((_, i) => i !== qIdx);
+  const next: GameState = {
+    ...state,
+    minionRehireQueue: restQueue,
+    player: {
+      ...state.player,
+      commandPoints: state.player.commandPoints - cost,
+      minions: [...state.player.minions, { ...entry.minion }],
+    },
+  };
   return {
     ok: true,
-    value: {
-      ...state,
-      minionRehireQueue: restQueue,
-      player: {
-        ...state.player,
-        commandPoints: state.player.commandPoints - cost,
-        minions: [...state.player.minions, { ...entry.minion }],
-      },
-    },
+    value: appendActivityEvent(next, {
+      kind: "minion_rehired",
+      templateId: entry.minion.templateId,
+    }),
   };
 }
 
@@ -609,16 +686,22 @@ export function assignMission(
     startedOnTurn: state.turnNumber,
   };
 
+  const next: GameState = {
+    ...state,
+    activeMissions: [...state.activeMissions, activeMission],
+    player: {
+      ...state.player,
+      commandPoints: state.player.commandPoints - cost,
+    },
+  };
   return {
     ok: true,
-    value: {
-      ...state,
-      activeMissions: [...state.activeMissions, activeMission],
-      player: {
-        ...state.player,
-        commandPoints: state.player.commandPoints - cost,
-      },
-    },
+    value: appendActivityEvent(next, {
+      kind: "mission_started",
+      missionTemplateId,
+      locationId,
+      participantInstanceIds: [...participantInstanceIds],
+    }),
   };
 }
 
@@ -645,16 +728,21 @@ export function cancelMission(
     refundCp = template.startCommandPoints;
   }
   const nextMissions = state.activeMissions.filter((_, i) => i !== idx);
+  const next: GameState = {
+    ...state,
+    activeMissions: nextMissions,
+    player: {
+      ...state.player,
+      commandPoints: state.player.commandPoints + refundCp,
+    },
+  };
   return {
     ok: true,
-    value: {
-      ...state,
-      activeMissions: nextMissions,
-      player: {
-        ...state.player,
-        commandPoints: state.player.commandPoints + refundCp,
-      },
-    },
+    value: appendActivityEvent(next, {
+      kind: "mission_cancelled",
+      missionTemplateId: am.missionTemplateId,
+      locationId: am.locationId,
+    }),
   };
 }
 
@@ -715,7 +803,7 @@ export function executePlan(
   }
 
   let player = state.player;
-  const events: ResolveEvent[] = [];
+  const events: ActivityEventMissionCompleted[] = [];
   const remaining: ActiveMission[] = [];
 
   const instanceById = new Map(state.player.minions.map((m) => [m.instanceId, m]));
@@ -780,10 +868,11 @@ export function executePlan(
     ownedIds,
   );
 
-  const newEntry: TurnActivityEntry = {
-    turnNumber: state.turnNumber,
-    events: events.map((e) => ({ ...e })),
-  };
+  const activityLog = mergeMissionEventsIntoActivityLog(
+    state.activityLog,
+    state.turnNumber,
+    events,
+  );
 
   return {
     ok: true,
@@ -793,7 +882,7 @@ export function executePlan(
       player,
       activeMissions: remaining,
       availableMinionTemplateIds,
-      activityLog: [newEntry, ...state.activityLog],
+      activityLog,
     },
   };
 }
