@@ -109,14 +109,49 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: max(0.75rem, env(safe-area-inset-bottom)) 1rem 1rem;
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 0.5rem 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
   pointer-events: none;
+}
+
+.game-hud-left {
+  justify-self: start;
+  align-self: end;
+}
+
+.game-hud-center {
+  justify-self: center;
+  align-self: end;
+  text-align: center;
+}
+
+.game-hud-right {
+  justify-self: end;
+  align-self: end;
+}
+
+.game-hud-actions-panel {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(24, 24, 27, 0.95);
+  border: 1px solid #3f3f46;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.game-hud-actions-panel .btn {
+  min-height: 40px;
+  white-space: nowrap;
 }
 
 .game-hud .btn-hud {
@@ -132,7 +167,7 @@ body {
 }
 
 .btn-hud {
-  margin-left: auto;
+  min-height: 40px;
 }
 
 .pause-overlay {
@@ -176,12 +211,13 @@ body {
   top: max(0.5rem, env(safe-area-inset-top));
   left: max(0.5rem, env(safe-area-inset-left));
   right: max(0.5rem, env(safe-area-inset-right));
-  bottom: max(4.25rem, calc(env(safe-area-inset-bottom) + 3.25rem));
+  /* Tight clearance above bottom HUD (plan buttons + pause); columns scroll inside if needed */
+  bottom: max(1.35rem, calc(env(safe-area-inset-bottom, 0px) + 5.5rem));
   z-index: 1;
   display: flex;
   flex-direction: row;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 0.5rem;
   pointer-events: none;
 }
@@ -190,6 +226,7 @@ body {
   pointer-events: auto;
   flex: 1 1 min(240px, calc(33vw - 0.35rem));
   min-width: 0;
+  min-height: 0;
   max-height: 100%;
 }
 
@@ -197,15 +234,16 @@ body {
   pointer-events: auto;
   flex: 1 1 min(240px, calc(33vw - 0.35rem));
   min-width: 0;
+  min-height: 0;
   max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .game-ui-stack-column > .game-panel {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-height: 0;
 }
 
@@ -281,6 +319,60 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.assets-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.assets-panel-empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #71717a;
+  font-style: italic;
+}
+
+.asset-card {
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(39, 39, 42, 0.85);
+  border: 1px solid #3f3f46;
+}
+
+.asset-card-title {
+  margin: 0 0 0.3rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.asset-card-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.65rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.asset-card-stats dt {
+  margin: 0;
+  color: #a1a1aa;
+  font-weight: 500;
+}
+
+.asset-card-stats dd {
+  margin: 0;
+  color: #d4d4d8;
+}
+
+.asset-card-description {
+  margin: 0.35rem 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: #a1a1aa;
 }
 
 .location-card {
@@ -424,10 +516,13 @@ body {
     flex: 1 1 auto;
     max-height: min(48vh, 420px);
     max-width: none;
+    min-height: 0;
   }
 
   .game-ui-stack-column > .game-panel {
-    max-height: min(40vh, 360px);
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: none;
   }
 }
 
@@ -496,6 +591,43 @@ body {
   font: inherit;
 }
 
+.mission-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(39, 39, 42, 0.65);
+  border: 1px solid #3f3f46;
+}
+
+.mission-details-description {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: #d4d4d8;
+}
+
+.mission-details-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.65rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.mission-details-stats dt {
+  margin: 0;
+  color: #a1a1aa;
+  font-weight: 500;
+}
+
+.mission-details-stats dd {
+  margin: 0;
+  color: #e4e4e7;
+}
+
 .game-fieldset {
   margin: 0;
   padding: 0.5rem 0.75rem;
@@ -512,23 +644,30 @@ body {
   cursor: pointer;
 }
 
-.game-controls-actions {
+.activity-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-}
-
-.game-controls-actions .btn {
-  min-height: 44px;
-}
-
-.game-summary {
+  gap: 0.65rem;
   font-size: 0.8125rem;
   line-height: 1.4;
   color: #d4d4d8;
 }
 
-.game-summary-title {
+.activity-panel-empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #71717a;
+  font-style: italic;
+}
+
+.activity-turn {
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(39, 39, 42, 0.65);
+  border: 1px solid #3f3f46;
+}
+
+.activity-turn-heading {
   margin: 0 0 0.35rem;
   font-size: 0.75rem;
   font-weight: 600;
@@ -537,12 +676,12 @@ body {
   color: #a1a1aa;
 }
 
-.game-summary-list {
+.activity-event-list {
   margin: 0;
   padding-left: 1.15rem;
 }
 
-.game-summary-list li {
+.activity-event {
   margin: 0.25rem 0;
 }
 

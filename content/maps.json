@@ -29,6 +29,12 @@
     "id": "training_grid",
     "name": "Training grid",
     "description": "Rehearsal layout; reuses downtown for drills.",
-    "locationIds": ["downtown_dead_drop"]
+    "locationIds": ["downtown_dead_drop",
+    "news_network_floor",
+    "private_bank_box_room",
+    "rooftop_satfarm",
+    "safehouse",
+    "shell_company_suite",
+    "underground_server_farm"]
   }
 ]

@@ -77,6 +77,7 @@ const missionTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
+  startCommandPoints: z.coerce.number().int().min(0),
   requiredTraitIds: z.array(z.string().min(1)).min(1),
   durationTurns: z.coerce.number().int().min(1),
 });
@@ -207,6 +208,7 @@ const omegaPlanTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
+  mapId: z.string().min(1),
   stages: z.array(omegaPlanStageSchema).length(3),
 });
 
@@ -222,9 +224,10 @@ function assertOmegaPlanStages(
   return [tuple(0), tuple(1), tuple(2)];
 }
 
-function parseOmegaPlansWithMissionRefs(
+function parseOmegaPlansWithMissionAndMapRefs(
   omegaPlansRaw: unknown,
   missionIds: Set<string>,
+  mapIds: Set<string>,
 ): OmegaPlanTemplate[] {
   const parsed = z.array(omegaPlanTemplateSchema).safeParse(omegaPlansRaw);
   if (!parsed.success) {
@@ -238,6 +241,11 @@ function parseOmegaPlansWithMissionRefs(
       throw new Error(`Duplicate omega plan id: ${plan.id} (index ${i})`);
     }
     seenPlanIds.add(plan.id);
+    if (!mapIds.has(plan.mapId)) {
+      throw new Error(
+        `Unknown map id "${plan.mapId}" referenced by omega plan "${plan.id}"`,
+      );
+    }
     for (let si = 0; si < plan.stages.length; si += 1) {
       for (const mid of plan.stages[si].missionIds) {
         if (!missionIds.has(mid)) {
@@ -252,6 +260,7 @@ function parseOmegaPlansWithMissionRefs(
     id: p.id,
     name: p.name,
     description: p.description,
+    mapId: p.mapId,
     stages: assertOmegaPlanStages(p.stages),
   }));
 }
@@ -297,7 +306,6 @@ export function parseCatalog(
   const minions = parseMinionsWithTraitRefs(minionsRaw, traitIds);
   const missions = parseMissionsWithTraitRefs(missionsRaw, traitIds);
   const missionIds = new Set(missions.map((m) => m.id));
-  const omegaPlans = parseOmegaPlansWithMissionRefs(omegaPlansRaw, missionIds);
   const assetsResult = assetsArraySchema.safeParse(assetsRaw);
   if (!assetsResult.success) {
     throw assetsResult.error;
@@ -306,5 +314,11 @@ export function parseCatalog(
   const locations = parseLocationsWithRefs(locationsRaw, missionIds);
   const locationIds = new Set(locations.map((l) => l.id));
   const maps = parseMapsWithLocationRefs(mapsRaw, locationIds);
+  const mapIds = new Set(maps.map((m) => m.id));
+  const omegaPlans = parseOmegaPlansWithMissionAndMapRefs(
+    omegaPlansRaw,
+    missionIds,
+    mapIds,
+  );
   return { traits, minions, missions, locations, maps, assets, omegaPlans };
 }

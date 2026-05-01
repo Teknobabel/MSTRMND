@@ -29,6 +29,8 @@ export type MissionTemplate = {
   id: string;
   name: string;
   description: string;
+  /** CP spent when starting this mission (Main Phase). */
+  startCommandPoints: number;
   requiredTraitIds: string[];
   durationTurns: number;
 };
@@ -94,6 +96,8 @@ export type OmegaPlanTemplate = {
   id: string;
   name: string;
   description: string;
+  /** Map (`MapTemplate.id`) whose locations are playable for this plan. */
+  mapId: string;
   stages: [OmegaPlanStage, OmegaPlanStage, OmegaPlanStage];
 };
 

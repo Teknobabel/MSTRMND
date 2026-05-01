@@ -3,11 +3,16 @@ import type {
   LocationAssetPlacement,
   LocationAssetSlot,
   LocationSecurityState,
+  LocationTemplate,
   MinionInstance,
   MissionTemplate,
 } from "./types";
 import { createMinionFromTemplate } from "./minion";
-import { initialLocationSecurityStates } from "./locationCatalog";
+import {
+  activeLocationIds,
+  initialLocationSecurityStatesForLocations,
+  locationTemplatesForOmegaPlan,
+} from "./locationCatalog";
 import {
   canAssignParticipants,
   successChancePercent,
@@ -53,7 +58,9 @@ export type ResolveEventMissionCompleted = {
 
 export type ResolveEvent = ResolveEventMissionCompleted;
 
-export type ResolvePhaseResult = {
+/** One Execute Plan resolve, keyed to the turn it was run on (newest entries first in {@link GameState.activityLog}). */
+export type TurnActivityEntry = {
+  turnNumber: number;
   events: ResolveEvent[];
 };
 
@@ -64,8 +71,8 @@ export type GameState = {
   activeMissions: ActiveMission[];
   /** Minion template ids offered for hire until the next resolve rerolls them */
   availableMinionTemplateIds: string[];
-  /** Populated after Execute Plan until Next Turn */
-  lastResolveResult: ResolvePhaseResult | null;
+  /** Resolve outcomes from each Execute Plan; newest turn first. */
+  activityLog: TurnActivityEntry[];
   /** Win-path plan for this run; chosen once at game start. */
   activeOmegaPlanId: string | null;
   /** Per-location security (runtime); initialized from `initialLocationSecurityStates`. */
@@ -84,7 +91,8 @@ export type GameError =
   | { code: "unknown_mission"; missionId: string }
   | { code: "mission_not_at_location"; missionId: string; locationId: string }
   | { code: "invalid_participants"; reason: string }
-  | { code: "unknown_instance"; instanceId: string };
+  | { code: "unknown_instance"; instanceId: string }
+  | { code: "location_not_on_active_map"; locationId: string };
 
 export type Ok<T> = { ok: true; value: T };
 export type Err<E> = { ok: false; error: E };
@@ -133,9 +141,10 @@ function pickDistinctRandomAssetIds(
 function initializeLocationAssetPlacements(
   catalog: ContentCatalog,
   rng: Rng,
+  runLocations: LocationTemplate[],
 ): LocationAssetPlacement[] {
   const placements: LocationAssetPlacement[] = [];
-  for (const loc of catalog.locations) {
+  for (const loc of runLocations) {
     let slots: LocationAssetSlot[] = [];
     if (catalog.assets.length > 0) {
       const targetCount = 1 + Math.floor(rng() * 3);
@@ -206,6 +215,8 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     maxRosterSize: DEFAULT_MAX_ROSTER_SIZE,
     maxHireOffers: DEFAULT_MAX_HIRE_OFFERS,
   };
+  const activeOmegaPlanId = pickRandomOmegaPlanId(catalog, rng);
+  const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
   return {
     phase: "main",
     turnNumber: 1,
@@ -217,10 +228,10 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
       rng,
       ownedMinionTemplateIds(player),
     ),
-    lastResolveResult: null,
-    activeOmegaPlanId: pickRandomOmegaPlanId(catalog, rng),
-    locationSecurityStates: initialLocationSecurityStates(catalog),
-    locationAssetSlots: initializeLocationAssetPlacements(catalog, rng),
+    activityLog: [],
+    activeOmegaPlanId,
+    locationSecurityStates: initialLocationSecurityStatesForLocations(runLocations),
+    locationAssetSlots: initializeLocationAssetPlacements(catalog, rng, runLocations),
   };
 }
 
@@ -349,6 +360,15 @@ export function assignMission(
   if (!location) {
     return { ok: false, error: { code: "unknown_location", locationId } };
   }
+  if (
+    state.activeOmegaPlanId !== null &&
+    !activeLocationIds(catalog, state.activeOmegaPlanId).has(locationId)
+  ) {
+    return {
+      ok: false,
+      error: { code: "location_not_on_active_map", locationId },
+    };
+  }
   const missionTemplate = missionTemplateById(catalog, missionTemplateId);
   if (!missionTemplate) {
     return { ok: false, error: { code: "unknown_mission", missionId: missionTemplateId } };
@@ -393,6 +413,18 @@ export function assignMission(
     };
   }
 
+  const cost = missionTemplate.startCommandPoints;
+  if (state.player.commandPoints < cost) {
+    return {
+      ok: false,
+      error: {
+        code: "not_enough_cp",
+        need: cost,
+        have: state.player.commandPoints,
+      },
+    };
+  }
+
   const activeMission: ActiveMission = {
     id: activeMissionId,
     missionTemplateId,
@@ -406,6 +438,10 @@ export function assignMission(
     value: {
       ...state,
       activeMissions: [...state.activeMissions, activeMission],
+      player: {
+        ...state.player,
+        commandPoints: state.player.commandPoints - cost,
+      },
     },
   };
 }
@@ -489,6 +525,11 @@ export function executePlan(
     ownedIds,
   );
 
+  const newEntry: TurnActivityEntry = {
+    turnNumber: state.turnNumber,
+    events: events.map((e) => ({ ...e })),
+  };
+
   return {
     ok: true,
     value: {
@@ -497,7 +538,7 @@ export function executePlan(
       player,
       activeMissions: remaining,
       availableMinionTemplateIds,
-      lastResolveResult: { events },
+      activityLog: [newEntry, ...state.activityLog],
     },
   };
 }
@@ -519,7 +560,6 @@ export function advanceToNextTurn(state: GameState): Result<GameState, GameError
         ...state.player,
         commandPoints: state.player.maxCommandPoints,
       },
-      lastResolveResult: null,
     },
   };
 }

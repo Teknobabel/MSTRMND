@@ -10,7 +10,14 @@ import {
   REROLL_HIRE_OFFERS_CP,
   type GameState,
 } from "./game/gameState";
+import {
+  canAssignParticipants,
+  successChancePercent,
+} from "./game/mission";
 import { loadContent } from "./game/loadContent";
+import {
+  locationTemplatesForOmegaPlan,
+} from "./game/locationCatalog";
 import { getOmegaPlanById } from "./game/omegaPlan";
 import { initNavigation } from "./navigation";
 
@@ -101,7 +108,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   let state: GameState = createInitialGameState(content);
 
   const statsEl = req<HTMLElement>("game-stats");
-  const summaryEl = req<HTMLElement>("game-summary");
+  const activityPanelEl = req<HTMLElement>("activity-panel");
   const minionsRosterEl = req<HTMLElement>("minions-roster-list");
   const minionsAvailableEl = req<HTMLElement>("minions-available-list");
   const minionsRosterHeading = req<HTMLElement>("minions-roster-heading");
@@ -116,12 +123,18 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const hudShort = req<HTMLElement>("game-hud-short");
   const omegaPlanPanelEl = req<HTMLElement>("omega-plan-panel");
   const locationsPanelEl = req<HTMLElement>("locations-panel");
+  const assetsPanelEl = req<HTMLElement>("assets-panel");
+  const missionDetailsEl = req<HTMLElement>("mission-details");
 
   const rng = (): number => Math.random();
 
+  function runLocations(): (typeof content.locations)[number][] {
+    return locationTemplatesForOmegaPlan(content, state.activeOmegaPlanId);
+  }
+
   function populateLocationSelect(): void {
     selLoc.innerHTML = "";
-    for (const loc of content.locations) {
+    for (const loc of runLocations()) {
       const opt = document.createElement("option");
       opt.value = loc.id;
       opt.textContent = loc.name;
@@ -129,20 +142,99 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
+  function updateMissionDetailsPanel(): void {
+    missionDetailsEl.innerHTML = "";
+    const mid = selMission.value;
+    const m = content.missions.find((x) => x.id === mid);
+    if (!m) {
+      missionDetailsEl.hidden = true;
+      return;
+    }
+    missionDetailsEl.hidden = false;
+
+    const desc = document.createElement("p");
+    desc.className = "mission-details-description";
+    desc.textContent = m.description;
+
+    const dl = document.createElement("dl");
+    dl.className = "mission-details-stats";
+    const checkedIds = [
+      ...minionsList.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'),
+    ].map((c) => c.value);
+    const participants = state.player.minions.filter((inst) =>
+      checkedIds.includes(inst.instanceId),
+    );
+    let successValue: string;
+    if (canAssignParticipants(participants)) {
+      successValue = `${successChancePercent(m, participants)}%`;
+    } else if (checkedIds.length === 0) {
+      successValue = "—";
+    } else {
+      successValue = "Pick 1–3 minions";
+    }
+
+    const rows: Array<{ label: string; value: string }> = [
+      { label: "Cost", value: `${m.startCommandPoints} CP` },
+      { label: "Duration", value: `${m.durationTurns} turn${m.durationTurns === 1 ? "" : "s"}` },
+      {
+        label: "Required traits",
+        value: traitDisplayNames(content, m.requiredTraitIds),
+      },
+      { label: "Success chance", value: successValue },
+    ];
+    for (const { label, value } of rows) {
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+      const dd = document.createElement("dd");
+      dd.textContent = value;
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    }
+
+    missionDetailsEl.appendChild(desc);
+    missionDetailsEl.appendChild(dl);
+  }
+
   function syncMissionSelect(): void {
     const locId = selLoc.value;
-    const loc = content.locations.find((l) => l.id === locId);
+    const loc = runLocations().find((l) => l.id === locId);
     selMission.innerHTML = "";
     if (!loc) {
+      updateMissionDetailsPanel();
+      syncAssignButtonState();
       return;
     }
     for (const mid of loc.availableMissionIds) {
       const m = content.missions.find((x) => x.id === mid);
       const opt = document.createElement("option");
       opt.value = mid;
-      opt.textContent = m?.name ?? mid;
+      const cost = m?.startCommandPoints ?? 0;
+      opt.textContent = `${m?.name ?? mid} (${cost} CP)`;
       selMission.appendChild(opt);
     }
+    updateMissionDetailsPanel();
+    syncAssignButtonState();
+  }
+
+  function syncAssignButtonState(): void {
+    const mainOnly = state.phase === "main";
+    if (!mainOnly) {
+      btnAssign.disabled = true;
+      btnAssign.title = "Only during Main Phase";
+      return;
+    }
+    const missionTemplate = content.missions.find((x) => x.id === selMission.value);
+    if (!missionTemplate) {
+      btnAssign.disabled = true;
+      btnAssign.title = "Choose a mission";
+      return;
+    }
+    const cost = missionTemplate.startCommandPoints;
+    const canAfford = state.player.commandPoints >= cost;
+    btnAssign.disabled = !canAfford;
+    btnAssign.title = canAfford
+      ? `Spend ${cost} CP to assign`
+      : `Need ${cost} CP (${state.player.commandPoints} available)`;
   }
 
   function renderMinionCheckboxes(): void {
@@ -335,6 +427,51 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
+  function renderAssetsPanel(): void {
+    assetsPanelEl.innerHTML = "";
+    const assetById = new Map(content.assets.map((a) => [a.id, a]));
+    const rows = Object.entries(state.player.assets)
+      .filter(([, qty]) => qty > 0)
+      .map(([assetId, quantity]) => {
+        const template = assetById.get(assetId);
+        const sortKey = (template?.name ?? assetId).toLowerCase();
+        return { assetId, quantity, template, sortKey };
+      })
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+    if (rows.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent = "None owned yet.";
+      assetsPanelEl.appendChild(empty);
+      return;
+    }
+
+    for (const { assetId, quantity, template } of rows) {
+      const article = document.createElement("article");
+      article.className = "asset-card";
+      const title = document.createElement("h4");
+      title.className = "asset-card-title";
+      title.textContent = template?.name ?? assetId;
+      article.appendChild(title);
+
+      const dl = document.createElement("dl");
+      dl.className = "asset-card-stats";
+      appendMinionStatRows(dl, [{ label: "Quantity", value: String(quantity) }]);
+      article.appendChild(dl);
+
+      const descText = template?.description?.trim();
+      if (descText) {
+        const desc = document.createElement("p");
+        desc.className = "asset-card-description";
+        desc.textContent = descText;
+        article.appendChild(desc);
+      }
+
+      assetsPanelEl.appendChild(article);
+    }
+  }
+
   function renderLocationsPanel(): void {
     locationsPanelEl.innerHTML = "";
     const securityByLocationId = new Map(
@@ -345,7 +482,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     );
     const assetNameById = new Map(content.assets.map((a) => [a.id, a.name]));
 
-    for (const loc of content.locations) {
+    for (const loc of runLocations()) {
       const article = document.createElement("article");
       article.className = "location-card";
       const title = document.createElement("h4");
@@ -380,11 +517,60 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
+  function renderActivityPanel(): void {
+    activityPanelEl.innerHTML = "";
+    const log = state.activityLog;
+    if (log.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "activity-panel-empty";
+      empty.textContent = "No resolve activity yet.";
+      activityPanelEl.appendChild(empty);
+      return;
+    }
+
+    for (let i = 0; i < log.length; i += 1) {
+      const entry = log[i]!;
+      const section = document.createElement("section");
+      section.className = "activity-turn";
+      const headingId = `activity-turn-h-${i}`;
+      section.setAttribute("aria-labelledby", headingId);
+
+      const heading = document.createElement("h3");
+      heading.id = headingId;
+      heading.className = "activity-turn-heading";
+      heading.textContent = `Turn ${entry.turnNumber}`;
+      section.appendChild(heading);
+
+      const ul = document.createElement("ul");
+      ul.className = "activity-event-list";
+      const { events } = entry;
+      if (events.length === 0) {
+        const li = document.createElement("li");
+        li.className = "activity-event";
+        li.textContent = "No missions completed this resolve.";
+        ul.appendChild(li);
+      } else {
+        for (const ev of events) {
+          if (ev.kind === "mission_completed") {
+            const li = document.createElement("li");
+            li.className = "activity-event";
+            const inf =
+              ev.infamyDelta >= 0 ? `+${ev.infamyDelta}` : String(ev.infamyDelta);
+            li.textContent = `${ev.missionName} @ ${ev.locationId}: ${
+              ev.success ? "Success" : "Failure"
+            } (roll ${ev.roll} vs ${ev.successChancePercent}%). Infamy ${inf}.`;
+            ul.appendChild(li);
+          }
+        }
+      }
+      section.appendChild(ul);
+      activityPanelEl.appendChild(section);
+    }
+  }
+
   function refresh(): void {
     const p = state.player;
     statsEl.innerHTML = `
-      <div><strong>Phase:</strong> ${state.phase}</div>
-      <div><strong>Turn:</strong> ${state.turnNumber}</div>
       <div><strong>CP:</strong> ${p.commandPoints} / ${p.maxCommandPoints}</div>
       <div><strong>Infamy:</strong> ${p.infamy}</div>
       <div><strong>Active missions:</strong> ${state.activeMissions.length}</div>
@@ -392,17 +578,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     hudShort.textContent = `T${state.turnNumber} · ${state.phase}`;
 
     const mainOnly = state.phase === "main";
+    btnExec.hidden = !mainOnly;
     btnExec.disabled = !mainOnly;
+    btnNext.hidden = mainOnly;
     btnNext.disabled = state.phase !== "summary";
-    btnAssign.disabled = !mainOnly;
     selLoc.disabled = !mainOnly;
     selMission.disabled = !mainOnly;
 
     renderMinionCheckboxes();
     syncMissionSelect();
+    syncAssignButtonState();
     renderMinionsPanel();
     renderOmegaPlanPanel();
     renderLocationsPanel();
+    renderAssetsPanel();
+    renderActivityPanel();
 
     const rerollCost = REROLL_HIRE_OFFERS_CP;
     const canRerollOffers = mainOnly && p.commandPoints >= rerollCost;
@@ -414,39 +604,19 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     } else {
       btnRerollHire.title = `Spend ${rerollCost} CP to draw a new hire pool`;
     }
-
-    summaryEl.innerHTML = "";
-    if (state.phase === "summary" && state.lastResolveResult) {
-      const title = document.createElement("h3");
-      title.className = "game-summary-title";
-      title.textContent = "Resolve summary";
-      summaryEl.appendChild(title);
-      const ul = document.createElement("ul");
-      ul.className = "game-summary-list";
-      const { events } = state.lastResolveResult;
-      if (events.length === 0) {
-        const li = document.createElement("li");
-        li.textContent = "No missions completed this resolve.";
-        ul.appendChild(li);
-      } else {
-        for (const ev of events) {
-          if (ev.kind === "mission_completed") {
-            const li = document.createElement("li");
-            const inf =
-              ev.infamyDelta >= 0 ? `+${ev.infamyDelta}` : String(ev.infamyDelta);
-            li.textContent = `${ev.missionName} @ ${ev.locationId}: ${
-              ev.success ? "Success" : "Failure"
-            } (roll ${ev.roll} vs ${ev.successChancePercent}%). Infamy ${inf}.`;
-            ul.appendChild(li);
-          }
-        }
-      }
-      summaryEl.appendChild(ul);
-    }
   }
 
   selLoc.addEventListener("change", () => {
     syncMissionSelect();
+  });
+
+  selMission.addEventListener("change", () => {
+    updateMissionDetailsPanel();
+    syncAssignButtonState();
+  });
+
+  minionsList.addEventListener("change", () => {
+    updateMissionDetailsPanel();
   });
 
   btnAssign.addEventListener("click", () => {
