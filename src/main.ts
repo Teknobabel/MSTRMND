@@ -127,9 +127,61 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const omegaPlanPanelEl = req<HTMLElement>("omega-plan-panel");
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const assetsPanelEl = req<HTMLElement>("assets-panel");
+  const activeMissionsPanelEl = req<HTMLElement>("active-missions-panel");
+  const assetsTabBtnAssets = req<HTMLButtonElement>("assets-tab-btn-assets");
+  const assetsTabBtnMissions = req<HTMLButtonElement>("assets-tab-btn-missions");
+  const assetsTabPanelAssets = req<HTMLElement>("assets-tab-panel-assets");
+  const assetsTabPanelMissions = req<HTMLElement>("assets-tab-panel-missions");
   const missionDetailsEl = req<HTMLElement>("mission-details");
 
   const rng = (): number => Math.random();
+
+  let assetsPanelTab: "assets" | "missions" = "assets";
+
+  const assignSlotInstanceIds: (string | null)[] = [null, null, null];
+  let dndDragSource: { kind: "roster" } | { kind: "slot"; slotIndex: number } | null = null;
+
+  function getAssignParticipantIds(): string[] {
+    return assignSlotInstanceIds.filter((id): id is string => id !== null);
+  }
+
+  function reconcileAssignSlots(): void {
+    const busy = busyInstanceIds(state.activeMissions);
+    const valid = new Set(state.player.minions.map((m) => m.instanceId));
+    for (let i = 0; i < 3; i += 1) {
+      const id = assignSlotInstanceIds[i];
+      if (id === null) {
+        continue;
+      }
+      if (!valid.has(id) || busy.has(id)) {
+        assignSlotInstanceIds[i] = null;
+      }
+    }
+  }
+
+  function clearAssignSlot(slotIndex: number): void {
+    assignSlotInstanceIds[slotIndex] = null;
+  }
+
+  function clearAllAssignSlots(): void {
+    assignSlotInstanceIds[0] = null;
+    assignSlotInstanceIds[1] = null;
+    assignSlotInstanceIds[2] = null;
+  }
+
+  function placeInstanceInSlot(instanceId: string, slotIndex: number): void {
+    for (let i = 0; i < 3; i += 1) {
+      if (assignSlotInstanceIds[i] === instanceId) {
+        assignSlotInstanceIds[i] = null;
+      }
+    }
+    assignSlotInstanceIds[slotIndex] = instanceId;
+  }
+
+  function onAssignSlotsChanged(): void {
+    updateMissionDetailsPanel();
+    syncAssignButtonState();
+  }
 
   function runLocations(): (typeof content.locations)[number][] {
     return locationTemplatesForOmegaPlan(content, state.activeOmegaPlanId);
@@ -161,16 +213,17 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     const dl = document.createElement("dl");
     dl.className = "mission-details-stats";
-    const checkedIds = [
-      ...minionsList.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'),
-    ].map((c) => c.value);
-    const participants = state.player.minions.filter((inst) =>
-      checkedIds.includes(inst.instanceId),
+    const slotIds = getAssignParticipantIds();
+    const instanceById = new Map(
+      state.player.minions.map((m) => [m.instanceId, m] as const),
     );
+    const participants = slotIds
+      .map((id) => instanceById.get(id))
+      .filter((x): x is NonNullable<typeof x> => x !== undefined);
     let successValue: string;
     if (canAssignParticipants(participants)) {
       successValue = `${successChancePercent(m, participants)}%`;
-    } else if (checkedIds.length === 0) {
+    } else if (slotIds.length === 0) {
       successValue = "—";
     } else {
       successValue = "Pick 1–3 minions";
@@ -240,21 +293,126 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       : `Need ${cost} CP (${state.player.commandPoints} available)`;
   }
 
-  function renderMinionCheckboxes(): void {
+  function renderAssignMinionSlots(): void {
     minionsList.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.className = "assign-minion-slots";
+
     const busy = busyInstanceIds(state.activeMissions);
-    for (const inst of state.player.minions) {
-      const wrap = document.createElement("label");
-      wrap.className = "game-checkbox";
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.value = inst.instanceId;
-      cb.disabled = busy.has(inst.instanceId);
-      const tpl = content.minions.find((t) => t.id === inst.templateId);
-      wrap.appendChild(cb);
-      wrap.appendChild(document.createTextNode(` ${tpl?.name ?? inst.templateId}`));
-      minionsList.appendChild(wrap);
+    const mainOnly = state.phase === "main";
+
+    for (let slotIndex = 0; slotIndex < 3; slotIndex += 1) {
+      const slot = document.createElement("div");
+      slot.className = "assign-minion-slot";
+      slot.dataset.slotIndex = String(slotIndex);
+
+      slot.addEventListener("dragenter", (e) => {
+        e.preventDefault();
+        slot.classList.add("assign-minion-slot--dragover");
+      });
+      slot.addEventListener("dragleave", () => {
+        slot.classList.remove("assign-minion-slot--dragover");
+      });
+      slot.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        const dt = e.dataTransfer;
+        if (dt) {
+          dt.dropEffect = dndDragSource?.kind === "slot" ? "move" : "copy";
+        }
+      });
+      slot.addEventListener("drop", (e) => {
+        e.preventDefault();
+        slot.classList.remove("assign-minion-slot--dragover");
+        const raw = e.dataTransfer?.getData("text/plain")?.trim();
+        if (!raw) {
+          return;
+        }
+        const inst = state.player.minions.find((m) => m.instanceId === raw);
+        if (!inst || busy.has(raw)) {
+          return;
+        }
+        placeInstanceInSlot(raw, slotIndex);
+        renderAssignMinionSlots();
+        onAssignSlotsChanged();
+      });
+
+      const instanceId = assignSlotInstanceIds[slotIndex];
+      if (instanceId === null) {
+        const ph = document.createElement("span");
+        ph.className = "assign-minion-slot-placeholder";
+        ph.textContent = `Slot ${slotIndex + 1}`;
+        slot.appendChild(ph);
+      } else {
+        const inst = state.player.minions.find((m) => m.instanceId === instanceId);
+        const tpl = inst
+          ? content.minions.find((t) => t.id === inst.templateId)
+          : undefined;
+        const mission = content.missions.find((x) => x.id === selMission.value);
+        const requiredTraitSet = new Set(mission?.requiredTraitIds ?? []);
+
+        const chip = document.createElement("div");
+        chip.className = "assign-minion-chip";
+        chip.draggable = mainOnly && !busy.has(instanceId);
+        chip.dataset.instanceId = instanceId;
+
+        const chipMain = document.createElement("div");
+        chipMain.className = "assign-minion-chip-main";
+
+        const chipLabel = document.createElement("span");
+        chipLabel.className = "assign-minion-chip-label";
+        chipLabel.textContent = tpl?.name ?? instanceId;
+        chipMain.appendChild(chipLabel);
+
+        if (inst && inst.traitIds.length > 0) {
+          const traitsEl = document.createElement("div");
+          traitsEl.className = "assign-minion-chip-traits";
+          for (const tid of inst.traitIds) {
+            const span = document.createElement("span");
+            span.className = "assign-minion-chip-trait";
+            if (requiredTraitSet.has(tid)) {
+              span.classList.add("assign-minion-chip-trait--match");
+            }
+            span.textContent = content.traits.find((t) => t.id === tid)?.name ?? tid;
+            traitsEl.appendChild(span);
+          }
+          chipMain.appendChild(traitsEl);
+        }
+
+        chip.appendChild(chipMain);
+
+        chip.addEventListener("dragstart", (e) => {
+          if (!chip.draggable) {
+            e.preventDefault();
+            return;
+          }
+          dndDragSource = { kind: "slot", slotIndex };
+          e.dataTransfer?.setData("text/plain", instanceId);
+          e.dataTransfer!.effectAllowed = "move";
+        });
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "assign-minion-chip-remove";
+        removeBtn.setAttribute("aria-label", `Remove ${tpl?.name ?? "minion"} from slot`);
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          clearAssignSlot(slotIndex);
+          renderAssignMinionSlots();
+          onAssignSlotsChanged();
+        });
+        removeBtn.addEventListener("mousedown", (ev) => {
+          ev.stopPropagation();
+        });
+        chip.appendChild(removeBtn);
+        slot.appendChild(chip);
+      }
+
+      wrap.appendChild(slot);
     }
+
+    minionsList.appendChild(wrap);
   }
 
   function appendMinionStatRows(
@@ -283,10 +441,22 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       empty.textContent = "None hired yet.";
       minionsRosterEl.appendChild(empty);
     } else {
+      const busy = busyInstanceIds(state.activeMissions);
+      const mainOnly = state.phase === "main";
       for (const inst of state.player.minions) {
         const tpl = content.minions.find((m) => m.id === inst.templateId);
         const card = document.createElement("article");
         card.className = "minions-card";
+        card.dataset.assignInstanceId = inst.instanceId;
+        const isBusy = busy.has(inst.instanceId);
+        const canDrag = mainOnly && !isBusy;
+        card.draggable = canDrag;
+        if (canDrag) {
+          card.classList.add("assign-draggable-minion");
+        }
+        if (isBusy) {
+          card.classList.add("minions-card--busy");
+        }
         const title = document.createElement("h4");
         title.className = "minions-card-title";
         title.textContent = tpl?.name ?? inst.templateId;
@@ -475,6 +645,107 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
+  function syncAssetsTabUi(): void {
+    const isAssets = assetsPanelTab === "assets";
+    assetsTabBtnAssets.setAttribute("aria-selected", String(isAssets));
+    assetsTabBtnMissions.setAttribute("aria-selected", String(!isAssets));
+    assetsTabBtnAssets.tabIndex = isAssets ? 0 : -1;
+    assetsTabBtnMissions.tabIndex = isAssets ? -1 : 0;
+    assetsTabPanelAssets.hidden = !isAssets;
+    assetsTabPanelMissions.hidden = isAssets;
+    assetsTabBtnAssets.classList.toggle("panel-tab--selected", isAssets);
+    assetsTabBtnMissions.classList.toggle("panel-tab--selected", !isAssets);
+  }
+
+  function renderActiveMissionsPanel(): void {
+    activeMissionsPanelEl.innerHTML = "";
+    if (state.activeMissions.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent = "No active missions.";
+      activeMissionsPanelEl.appendChild(empty);
+      return;
+    }
+
+    for (const am of state.activeMissions) {
+      const mission = content.missions.find((x) => x.id === am.missionTemplateId);
+      const loc = content.locations.find((l) => l.id === am.locationId);
+      const participants = state.player.minions.filter((inst) =>
+        am.participantInstanceIds.includes(inst.instanceId),
+      );
+
+      const article = document.createElement("article");
+      article.className = "asset-card active-mission-card";
+
+      const title = document.createElement("h4");
+      title.className = "asset-card-title";
+      title.textContent = mission?.name ?? am.missionTemplateId;
+      article.appendChild(title);
+
+      if (mission?.description) {
+        const desc = document.createElement("p");
+        desc.className = "asset-card-description";
+        desc.textContent = mission.description;
+        article.appendChild(desc);
+      }
+
+      const dl = document.createElement("dl");
+      dl.className = "asset-card-stats";
+      const participantNames = participants
+        .map((inst) => {
+          const tpl = content.minions.find((t) => t.id === inst.templateId);
+          return tpl?.name ?? inst.templateId;
+        })
+        .join(", ");
+
+      const rows: Array<{ label: string; value: string }> = [
+        { label: "Location", value: loc?.name ?? am.locationId },
+      ];
+      if (loc) {
+        rows.push(
+          { label: "Location type", value: formatLocationTypeLabel(loc.locationType) },
+          { label: "Location level", value: String(loc.locationLevel) },
+        );
+      }
+      rows.push({
+        label: "Participants",
+        value: participantNames.length > 0 ? participantNames : "—",
+      });
+
+      if (mission) {
+        rows.push(
+          { label: "Start cost", value: `${mission.startCommandPoints} CP (paid)` },
+          {
+            label: "Progress",
+            value: `${am.turnsRemaining} / ${mission.durationTurns} turn${
+              mission.durationTurns === 1 ? "" : "s"
+            } remaining`,
+          },
+          {
+            label: "Required traits",
+            value: traitDisplayNames(content, mission.requiredTraitIds),
+          },
+        );
+        let successValue: string;
+        if (canAssignParticipants(participants)) {
+          successValue = `${successChancePercent(mission, participants)}%`;
+        } else {
+          successValue = "—";
+        }
+        rows.push({ label: "Success chance", value: successValue });
+      } else {
+        rows.push(
+          { label: "Turns remaining", value: String(am.turnsRemaining) },
+          { label: "Mission template", value: am.missionTemplateId },
+        );
+      }
+
+      appendMinionStatRows(dl, rows);
+      article.appendChild(dl);
+      activeMissionsPanelEl.appendChild(article);
+    }
+  }
+
   function renderLocationsPanel(): void {
     locationsPanelEl.innerHTML = "";
     const securityByLocationId = new Map(
@@ -573,6 +844,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function refresh(): void {
     const p = state.player;
+    reconcileAssignSlots();
+
     organizationNameEl.textContent = state.organizationName;
     statsEl.innerHTML = `
       <div><strong>CP:</strong> ${p.commandPoints} / ${p.maxCommandPoints}</div>
@@ -589,13 +862,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     selLoc.disabled = !mainOnly;
     selMission.disabled = !mainOnly;
 
-    renderMinionCheckboxes();
-    syncMissionSelect();
-    syncAssignButtonState();
     renderMinionsPanel();
+    renderAssignMinionSlots();
+    syncMissionSelect();
     renderOmegaPlanPanel();
     renderLocationsPanel();
     renderAssetsPanel();
+    renderActiveMissionsPanel();
+    syncAssetsTabUi();
     renderActivityPanel();
 
     const rerollCost = REROLL_HIRE_OFFERS_CP;
@@ -615,12 +889,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   });
 
   selMission.addEventListener("change", () => {
+    renderAssignMinionSlots();
     updateMissionDetailsPanel();
     syncAssignButtonState();
-  });
-
-  minionsList.addEventListener("change", () => {
-    updateMissionDetailsPanel();
   });
 
   btnAssign.addEventListener("click", () => {
@@ -629,9 +900,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
     const locId = selLoc.value;
     const missionId = selMission.value;
-    const checked = [
-      ...minionsList.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'),
-    ].map((c) => c.value);
+    const checked = getAssignParticipantIds();
     const result = assignMission(
       state,
       content,
@@ -642,6 +911,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     );
     if (result.ok) {
       state = result.value;
+      clearAllAssignSlots();
       refresh();
     }
   });
@@ -668,6 +938,51 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       state = result.value;
     }
     refresh();
+  });
+
+  assetsTabBtnAssets.addEventListener("click", () => {
+    assetsPanelTab = "assets";
+    syncAssetsTabUi();
+  });
+
+  assetsTabBtnMissions.addEventListener("click", () => {
+    assetsPanelTab = "missions";
+    syncAssetsTabUi();
+  });
+
+  minionsRosterEl.addEventListener("dragstart", (e) => {
+    const t = e.target as HTMLElement | null;
+    const card = t?.closest("[data-assign-instance-id]") as HTMLElement | null;
+    if (!card?.dataset.assignInstanceId) {
+      return;
+    }
+    if (!card.draggable) {
+      e.preventDefault();
+      return;
+    }
+    const id = card.dataset.assignInstanceId;
+    e.dataTransfer?.setData("text/plain", id);
+    e.dataTransfer!.effectAllowed = "copy";
+    dndDragSource = { kind: "roster" };
+  });
+
+  minionsRosterEl.addEventListener("dragend", () => {
+    if (dndDragSource?.kind === "roster") {
+      dndDragSource = null;
+    }
+  });
+
+  document.addEventListener("dragend", (e: DragEvent) => {
+    const src = dndDragSource;
+    dndDragSource = null;
+    if (src?.kind !== "slot") {
+      return;
+    }
+    if (e.dataTransfer?.dropEffect === "none") {
+      clearAssignSlot(src.slotIndex);
+      renderAssignMinionSlots();
+      onAssignSlotsChanged();
+    }
   });
 
   populateLocationSelect();

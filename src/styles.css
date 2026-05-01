@@ -327,6 +327,60 @@ body {
   gap: 0.45rem;
 }
 
+.game-panel.game-panel--assets {
+  min-height: 0;
+}
+
+.panel-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.25rem;
+  margin-bottom: 0.35rem;
+}
+
+.panel-tab {
+  flex: 1 1 0;
+  margin: 0;
+  padding: 0.35rem 0.45rem;
+  min-height: 32px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #a1a1aa;
+  background: rgba(39, 39, 42, 0.65);
+  border: 1px solid #3f3f46;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.panel-tab:hover {
+  color: #e4e4e7;
+  border-color: #52525b;
+}
+
+.panel-tab--selected {
+  color: #f4f4f5;
+  background: rgba(63, 63, 70, 0.85);
+  border-color: #71717a;
+}
+
+.assets-tab-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.assets-tab-panel[hidden] {
+  display: none !important;
+}
+
+.active-missions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
 .assets-panel-empty {
   margin: 0;
   font-size: 0.8125rem;
@@ -650,6 +704,142 @@ body {
   margin: 0.25rem 0;
   font-size: 0.875rem;
   cursor: pointer;
+}
+
+.assign-minion-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.assign-minion-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px dashed #52525b;
+  background: rgba(24, 24, 27, 0.5);
+}
+
+.assign-minion-slot--dragover {
+  border-color: #71717a;
+  background: rgba(63, 63, 70, 0.45);
+}
+
+.assign-minion-slot-placeholder {
+  font-size: 0.8125rem;
+  color: #71717a;
+  font-style: italic;
+}
+
+.assign-minion-chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  min-height: 2rem;
+  padding: 0.15rem 1.75rem 0.25rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.assign-minion-chip-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 0.15rem;
+}
+
+.assign-minion-chip[draggable="true"] {
+  cursor: grab;
+}
+
+.assign-minion-chip[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.assign-minion-chip[draggable="false"] {
+  cursor: default;
+}
+
+.assign-minion-chip-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assign-minion-chip-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.35rem;
+  margin-top: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.assign-minion-chip-trait {
+  padding: 0.08rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(63, 63, 70, 0.55);
+  border: 1px solid #52525b;
+  color: #d4d4d8;
+}
+
+.assign-minion-chip-trait--match {
+  color: #86efac;
+  border-color: #166534;
+  background: rgba(22, 101, 52, 0.35);
+  font-weight: 600;
+}
+
+.assign-minion-chip-remove {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.25rem;
+  width: 1.65rem;
+  height: 1.65rem;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #a1a1aa;
+  background: rgba(39, 39, 42, 0.95);
+  border: 1px solid #3f3f46;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.assign-minion-slot:hover .assign-minion-chip-remove,
+.assign-minion-chip:hover .assign-minion-chip-remove {
+  opacity: 1;
+}
+
+.assign-minion-chip-remove:hover {
+  color: #f4f4f5;
+  border-color: #71717a;
+}
+
+.assign-draggable-minion {
+  cursor: grab;
+}
+
+.assign-draggable-minion:active {
+  cursor: grabbing;
+}
+
+.minions-card--busy {
+  opacity: 0.62;
 }
 
 .activity-panel {

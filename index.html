@@ -47,7 +47,7 @@
                 </label>
                 <div id="mission-details" class="mission-details" aria-label="Selected mission details"></div>
                 <fieldset id="assign-minions" class="game-fieldset">
-                  <legend class="game-field-label">Minions (1–3)</legend>
+                  <legend class="game-field-label">Minions (drag up to 3 from roster)</legend>
                   <div id="assign-minions-list"></div>
                 </fieldset>
                 <button type="button" class="btn" id="btn-assign-mission">Assign</button>
@@ -86,9 +86,47 @@
               <div id="minions-available-list" class="minions-panel-list"></div>
             </section>
           </aside>
-          <aside class="game-panel game-panel--assets" aria-labelledby="assets-panel-title">
-            <h2 id="assets-panel-title" class="game-panel-title">Assets</h2>
-            <div id="assets-panel" class="assets-panel"></div>
+          <aside class="game-panel game-panel--assets" aria-label="Assets and active missions">
+            <div class="panel-tabs" role="tablist">
+              <button
+                type="button"
+                class="panel-tab"
+                id="assets-tab-btn-assets"
+                role="tab"
+                aria-selected="true"
+                aria-controls="assets-tab-panel-assets"
+              >
+                Assets
+              </button>
+              <button
+                type="button"
+                class="panel-tab"
+                id="assets-tab-btn-missions"
+                role="tab"
+                aria-selected="false"
+                aria-controls="assets-tab-panel-missions"
+                tabindex="-1"
+              >
+                Active missions
+              </button>
+            </div>
+            <div
+              id="assets-tab-panel-assets"
+              class="assets-tab-panel"
+              role="tabpanel"
+              aria-labelledby="assets-tab-btn-assets"
+            >
+              <div id="assets-panel" class="assets-panel"></div>
+            </div>
+            <div
+              id="assets-tab-panel-missions"
+              class="assets-tab-panel"
+              role="tabpanel"
+              aria-labelledby="assets-tab-btn-missions"
+              hidden
+            >
+              <div id="active-missions-panel" class="active-missions-panel"></div>
+            </div>
           </aside>
         </div>
         </div>
