@@ -5,14 +5,205 @@
     "description": "Gain access before the trace completes.",
     "startCommandPoints": 2,
     "requiredTraitIds": ["hacker", "tactician"],
-    "durationTurns": 1
+    "durationTurns": 1,
+    "targetKind": "location"
   },
   {
     "id": "extract_asset",
     "name": "Extract the asset",
     "description": "Escort the contact out under pressure.",
     "startCommandPoints": 3,
-    "requiredTraitIds": ["loyal", "injured", "hacker"],
-    "durationTurns": 3
+    "requiredTraitIds": ["loyal", "lucky", "hacker"],
+    "durationTurns": 3,
+    "targetKind": "location"
+  },
+  {
+    "id": "black_bag_op",
+    "name": "Black-bag op",
+    "description": "Quiet entry, quieter exit. Leave no optics, only absence.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["spy", "sneaky"],
+    "durationTurns": 2,
+    "targetKind": "location"
+  },
+  {
+    "id": "burn_safehouse",
+    "name": "Burn the safehouse",
+    "description": "Thermite where the wiring diagrams sleep. Alibis are someone else's problem.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["engineer", "tactician"],
+    "durationTurns": 1,
+    "targetKind": "location"
+  },
+  {
+    "id": "ghost_the_principals",
+    "name": "Ghost the principals",
+    "description": "Be where the calendar says they aren't. Memorize faces, then forget them on purpose.",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["politician", "persuasive"],
+    "durationTurns": 2,
+    "targetKind": "location"
+  },
+  {
+    "id": "intercept_courier",
+    "name": "Intercept the courier",
+    "description": "Hard-shell case, soft schedule. Take the package before the route updates.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["thief", "fast"],
+    "durationTurns": 1,
+    "targetKind": "location"
+  },
+  {
+    "id": "lab_heist_sample",
+    "name": "Lift the lab sample",
+    "description": "Cold chain, hot lights. One vial and you're already overexposed.",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["scientist", "clever"],
+    "durationTurns": 2,
+    "targetKind": "none"
+  },
+  {
+    "id": "riot_cover_story",
+    "name": "Riot cover story",
+    "description": "Street noise buys minutes. Loyal crews hold the line while you walk out the side door.",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["soldier", "loyal"],
+    "durationTurns": 3,
+    "targetKind": "location"
+  },
+  {
+    "id": "scrub_deniability",
+    "name": "Scrub deniability",
+    "description": "Retcon the paper trail from orbit. No map pin—just permissions and panic.",
+    "startCommandPoints": 1,
+    "requiredTraitIds": ["hacker", "charismatic"],
+    "durationTurns": 1,
+    "targetKind": "none"
+  },
+  {
+    "id": "seize_ledger_cold",
+    "name": "Seize the ledger cold",
+    "description": "One drive, many names. Snatch the physical proof before it goes warm.",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["thief", "intelligent"],
+    "durationTurns": 2,
+    "targetKind": "location_asset"
+  },
+  {
+    "id": "wedge_turncoat",
+    "name": "Wedge the turncoat",
+    "description": "Pressure on a roster asset until they cough coordinates. Personal, not public.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["spy", "persuasive"],
+    "durationTurns": 2,
+    "targetKind": "minion"
+  },
+  {
+    "id": "weapons_cache_lift",
+    "name": "Weapons cache lift",
+    "description": "Crates stamped agricultural. Count rounds, not questions.",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["soldier", "strong"],
+    "durationTurns": 3,
+    "targetKind": "location"
+  },
+  {
+    "id": "paymaster_lean",
+    "name": "Lean on the paymaster",
+    "description": "Follow the slush. A quiet word where budgets bend.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["politician", "tactician"],
+    "durationTurns": 2,
+    "targetKind": "location"
+  },
+  {
+    "id": "signals_vanish",
+    "name": "Signals vanish",
+    "description": "Kill the handshake, not the hardware. Let them argue with static.",
+    "startCommandPoints": 1,
+    "requiredTraitIds": ["hacker", "sneaky"],
+    "durationTurns": 1,
+    "targetKind": "none"
+  },
+  {
+    "id": "vault_distraction",
+    "name": "Vault distraction",
+    "description": "Front door chaos, back door inches. Luck is a schedule you rigged.",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["thief", "lucky"],
+    "durationTurns": 2,
+    "targetKind": "location"
+  },
+  {
+    "id": "containment_breach_play",
+    "name": "Containment breach play",
+    "description": "Trip the alarm you wrote. Walk out while they rehearse the wrong disaster.",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["engineer", "resilient"],
+    "durationTurns": 2,
+    "targetKind": "location"
+  },
+  {
+    "id": "motorcade_shadow",
+    "name": "Motorcade shadow",
+    "description": "Three cars, two decoys, one window. Bodywork is policy.",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["bodyguard", "tactician"],
+    "durationTurns": 3,
+    "targetKind": "location"
+  },
+  {
+    "id": "shell_company_spike",
+    "name": "Shell company spike",
+    "description": "Boardroom theater for auditors who never leave the building. Spike the narrative, not the stock—yet.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["politician", "clever"],
+    "durationTurns": 2,
+    "targetKind": "none"
+  },
+  {
+    "id": "dead_hand_drop",
+    "name": "Dead-hand drop",
+    "description": "If you don't check in, the packet walks itself to the press. Retrieve before the timer wins.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["spy", "tactician"],
+    "durationTurns": 1,
+    "targetKind": "location"
+  },
+  {
+    "id": "honeytrap_debrief",
+    "name": "Honeytrap debrief",
+    "description": "They talked too much over dinner. You need names while the charm still stings.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["charismatic", "clever"],
+    "durationTurns": 2,
+    "targetKind": "location"
+  },
+  {
+    "id": "perimeter_cut",
+    "name": "Perimeter cut",
+    "description": "Fence, sensors, dogs—someone drew a line. You redraw it with wire cutters and patience.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["soldier", "agile"],
+    "durationTurns": 2,
+    "targetKind": "location"
+  },
+  {
+    "id": "blueprint_smuggle",
+    "name": "Blueprint smuggle",
+    "description": "Rolls too big for a briefcase, too hot for a courier app. Move the plans like contraband art.",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["engineer", "sneaky"],
+    "durationTurns": 3,
+    "targetKind": "location"
+  },
+  {
+    "id": "witness_shaping",
+    "name": "Witness shaping",
+    "description": "Memory is plastic. One friendly minion remembers the version we need on the stand.",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["persuasive", "loyal"],
+    "durationTurns": 2,
+    "targetKind": "minion"
   }
 ]

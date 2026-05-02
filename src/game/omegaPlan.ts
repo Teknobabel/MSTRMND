@@ -35,3 +35,12 @@ export function missionIdAt(
   }
   return plan.stages[stageIndex].missionIds[missionIndex];
 }
+
+/** Mission template id for one cell on the Omega grid (stage 0–2, slot 0–2). */
+export function omegaSlotMissionId(
+  plan: OmegaPlanTemplate,
+  stageIndex: number,
+  slotIndex: number,
+): string | undefined {
+  return missionIdAt(plan, stageIndex, slotIndex);
+}

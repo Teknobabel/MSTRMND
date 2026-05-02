@@ -74,6 +74,8 @@ function parseMinionsWithTraitRefs(
   return arr;
 }
 
+const missionTargetKindSchema = z.enum(["location", "location_asset", "minion", "none"]);
+
 const missionTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -81,6 +83,7 @@ const missionTemplateSchema = z.object({
   startCommandPoints: z.coerce.number().int().min(0),
   requiredTraitIds: z.array(z.string().min(1)).min(1),
   durationTurns: z.coerce.number().int().min(1),
+  targetKind: missionTargetKindSchema.default("location"),
 });
 
 function parseMissionsWithTraitRefs(
@@ -125,13 +128,9 @@ const locationTemplateSchema = z.object({
   description: z.string(),
   locationType: locationTypeSchema,
   locationLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-  availableMissionIds: z.array(z.string().min(1)),
 });
 
-function parseLocationsWithRefs(
-  locationsRaw: unknown,
-  missionIds: Set<string>,
-): LocationTemplate[] {
+function parseLocations(locationsRaw: unknown): LocationTemplate[] {
   const parsed = z.array(locationTemplateSchema).safeParse(locationsRaw);
   if (!parsed.success) {
     throw parsed.error;
@@ -144,20 +143,6 @@ function parseLocationsWithRefs(
       throw new Error(`Duplicate location id: ${loc.id} (index ${i})`);
     }
     seenLocationIds.add(loc.id);
-    const seenMission = new Set<string>();
-    for (const mid of loc.availableMissionIds) {
-      if (seenMission.has(mid)) {
-        throw new Error(
-          `Duplicate mission id "${mid}" in availableMissionIds for location "${loc.id}"`,
-        );
-      }
-      seenMission.add(mid);
-      if (!missionIds.has(mid)) {
-        throw new Error(
-          `Unknown mission id "${mid}" referenced by location "${loc.id}"`,
-        );
-      }
-    }
   }
   return arr;
 }
@@ -375,7 +360,7 @@ export function parseCatalog(
   }
   const assets: Asset[] = assetsResult.data;
   const assetIds = new Set(assets.map((a) => a.id));
-  const locations = parseLocationsWithRefs(locationsRaw, missionIds);
+  const locations = parseLocations(locationsRaw);
   const locationIds = new Set(locations.map((l) => l.id));
   const maps = parseMapsWithLocationRefs(mapsRaw, locationIds);
   const mapIds = new Set(maps.map((m) => m.id));

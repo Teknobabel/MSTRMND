@@ -6,13 +6,13 @@
     "mapId": "metro_night",
     "stages": [
       {
-        "missionIds": ["breach_server", "breach_server", "extract_asset"]
+        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
       },
       {
-        "missionIds": ["extract_asset", "breach_server", "extract_asset"]
+        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
       },
       {
-        "missionIds": ["breach_server", "extract_asset", "breach_server"]
+        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
       }
     ]
   },
@@ -23,13 +23,13 @@
     "mapId": "training_grid",
     "stages": [
       {
-        "missionIds": ["extract_asset", "extract_asset", "breach_server"]
+        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
       },
       {
-        "missionIds": ["breach_server", "extract_asset", "breach_server"]
+        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
       },
       {
-        "missionIds": ["extract_asset", "breach_server", "extract_asset"]
+        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
       }
     ]
   }

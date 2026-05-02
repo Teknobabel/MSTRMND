@@ -5,9 +5,12 @@ import type {
   LocationSecurityState,
   LocationTemplate,
   MinionInstance,
+  MissionSource,
+  MissionTarget,
+  MissionTargetKind,
   MissionTemplate,
 } from "./types";
-import { createMinionFromTemplate } from "./minion";
+import { awardMissionResolutionExperience, createMinionFromTemplate } from "./minion";
 import {
   activeLocationIds,
   initialLocationSecurityStatesForLocations,
@@ -17,8 +20,8 @@ import {
   canAssignParticipants,
   successChancePercent,
 } from "./mission";
-import { pickRandomOmegaPlanId } from "./omegaPlan";
-import { getLairById, LAIR_LOCATION_ID, pickRandomLairId } from "./lair";
+import { getOmegaPlanById, omegaSlotMissionId, pickRandomOmegaPlanId } from "./omegaPlan";
+import { getLairById, pickRandomLairId } from "./lair";
 
 export type TurnPhase = "main" | "resolve" | "summary";
 
@@ -41,7 +44,11 @@ export type PlayerState = {
 export type ActiveMission = {
   id: string;
   missionTemplateId: string;
-  locationId: string;
+  missionTarget: MissionTarget;
+  missionSource: MissionSource;
+  /** Set when `missionSource === "omega"` (grid cell). */
+  omegaStageIndex: number | null;
+  omegaSlotIndex: number | null;
   participantInstanceIds: string[];
   turnsRemaining: number;
   /** `GameState.turnNumber` when this mission was assigned (Main Phase). */
@@ -53,7 +60,7 @@ export type ActivityEventMissionCompleted = {
   activeMissionId: string;
   missionTemplateId: string;
   missionName: string;
-  locationId: string;
+  missionTarget: MissionTarget;
   success: boolean;
   /** Roll in [0, 100) compared to success chance */
   roll: number;
@@ -72,12 +79,23 @@ export type ActivityEvent =
   | {
       kind: "mission_started";
       missionTemplateId: string;
-      locationId: string;
+      missionTarget: MissionTarget;
+      missionSource: MissionSource;
+      omegaStageIndex: number | null;
+      omegaSlotIndex: number | null;
       participantInstanceIds: string[];
     }
-  | { kind: "mission_cancelled"; missionTemplateId: string; locationId: string }
+  | { kind: "mission_cancelled"; missionTemplateId: string; missionTarget: MissionTarget }
   | { kind: "asset_gained"; assetId: string; quantity: number }
-  | { kind: "asset_lost"; assetId: string; quantity: number };
+  | { kind: "asset_lost"; assetId: string; quantity: number }
+  | {
+      kind: "minion_leveled_up";
+      instanceId: string;
+      templateId: string;
+      newLevel: number;
+      /** Present when a trait from `levelUpTraitOrder` was unlocked. */
+      traitId?: string;
+    };
 
 /** @deprecated Use {@link ActivityEvent} */
 export type ResolveEvent = ActivityEventMissionCompleted;
@@ -118,6 +136,10 @@ export type GameState = {
   activeLairId: string | null;
   /** Mission template ids available from the lair (starts as copy of template; gameplay may append). */
   lairMissionIds: string[];
+  /** Current Omega plan phase row (0–2) used for which missions may be assigned from the plan. */
+  activeOmegaStageIndex: number;
+  /** Per-slot success flags for the current row (reset when the row completes and the stage advances). */
+  omegaRowProgress: [boolean, boolean, boolean];
 };
 
 export type GameError =
@@ -129,6 +151,10 @@ export type GameError =
   | { code: "unknown_location"; locationId: string }
   | { code: "unknown_mission"; missionId: string }
   | { code: "mission_not_at_location"; missionId: string; locationId: string }
+  | { code: "no_active_omega_plan" }
+  | { code: "omega_slot_mismatch"; missionId: string; slotMissionId: string }
+  | { code: "invalid_omega_stage"; expectedStage: number; got: number }
+  | { code: "invalid_mission_source_binding"; reason: string }
   | { code: "invalid_participants"; reason: string }
   | { code: "unknown_instance"; instanceId: string }
   | { code: "location_not_on_active_map"; locationId: string }
@@ -143,7 +169,15 @@ export type GameError =
   | { code: "max_concurrent_missions"; max: number; have: number }
   | { code: "no_active_lair" }
   | { code: "mission_not_on_lair"; missionId: string }
-  | { code: "lair_mission_already_in_pool"; missionId: string };
+  | { code: "lair_mission_already_in_pool"; missionId: string }
+  | {
+      code: "mission_target_kind_mismatch";
+      expected: MissionTargetKind;
+      actual: MissionTargetKind;
+    }
+  | { code: "invalid_asset_slot"; locationId: string; slotIndex: number }
+  | { code: "target_minion_busy"; instanceId: string }
+  | { code: "target_minion_is_participant"; instanceId: string };
 
 export type Ok<T> = { ok: true; value: T };
 export type Err<E> = { ok: false; error: E };
@@ -163,6 +197,114 @@ export const MINION_FIRE_REHIRE_COOLDOWN_TURNS = 3;
 
 export function clampInfamy(value: number): number {
   return Math.max(0, Math.min(100, value));
+}
+
+const MAX_LOCATION_SECURITY_LEVEL = 3;
+
+/** After a mission finishes at `locationId`, raise that location's security by 1 (cap 3). */
+function raiseSecurityAfterMissionAtLocation(
+  states: LocationSecurityState[],
+  locationId: string,
+): LocationSecurityState[] {
+  return states.map((s) => {
+    if (s.locationId !== locationId) {
+      return s;
+    }
+    const next = Math.min(MAX_LOCATION_SECURITY_LEVEL, s.securityLevel + 1);
+    return { ...s, securityLevel: next as 1 | 2 | 3 };
+  });
+}
+
+/** Location whose security rises when this mission resolves; null → no bump. */
+export function locationIdForMissionSecurity(missionTarget: MissionTarget): string | null {
+  if (missionTarget.kind === "location") {
+    return missionTarget.locationId;
+  }
+  if (missionTarget.kind === "location_asset") {
+    return missionTarget.locationId;
+  }
+  return null;
+}
+
+function validateMissionTargetForAssignment(
+  template: MissionTemplate,
+  missionTarget: MissionTarget,
+  state: GameState,
+  catalog: ContentCatalog,
+  participantInstanceIds: string[],
+): GameError | null {
+  if (missionTarget.kind !== template.targetKind) {
+    return {
+      code: "mission_target_kind_mismatch",
+      expected: template.targetKind,
+      actual: missionTarget.kind,
+    };
+  }
+  const playableLocationIds = activeLocationIds(catalog, state.activeOmegaPlanId);
+  switch (missionTarget.kind) {
+    case "location": {
+      const loc = locationById(catalog, missionTarget.locationId);
+      if (!loc) {
+        return { code: "unknown_location", locationId: missionTarget.locationId };
+      }
+      if (!playableLocationIds.has(missionTarget.locationId)) {
+        return { code: "location_not_on_active_map", locationId: missionTarget.locationId };
+      }
+      return null;
+    }
+    case "location_asset": {
+      const loc = locationById(catalog, missionTarget.locationId);
+      if (!loc) {
+        return { code: "unknown_location", locationId: missionTarget.locationId };
+      }
+      if (!playableLocationIds.has(missionTarget.locationId)) {
+        return { code: "location_not_on_active_map", locationId: missionTarget.locationId };
+      }
+      const placement = state.locationAssetSlots.find((p) => p.locationId === missionTarget.locationId);
+      if (
+        !placement ||
+        missionTarget.slotIndex < 0 ||
+        missionTarget.slotIndex >= placement.slots.length
+      ) {
+        return {
+          code: "invalid_asset_slot",
+          locationId: missionTarget.locationId,
+          slotIndex: missionTarget.slotIndex,
+        };
+      }
+      const slot = placement.slots[missionTarget.slotIndex];
+      if (!slot?.assetId) {
+        return {
+          code: "invalid_asset_slot",
+          locationId: missionTarget.locationId,
+          slotIndex: missionTarget.slotIndex,
+        };
+      }
+      return null;
+    }
+    case "minion": {
+      const inst = state.player.minions.find((m) => m.instanceId === missionTarget.instanceId);
+      if (!inst) {
+        return { code: "unknown_instance", instanceId: missionTarget.instanceId };
+      }
+      if (participantInstanceIds.includes(missionTarget.instanceId)) {
+        return {
+          code: "target_minion_is_participant",
+          instanceId: missionTarget.instanceId,
+        };
+      }
+      const busy = busyInstanceIds(state.activeMissions);
+      if (busy.has(missionTarget.instanceId)) {
+        return {
+          code: "target_minion_busy",
+          instanceId: missionTarget.instanceId,
+        };
+      }
+      return null;
+    }
+    case "none":
+      return null;
+  }
 }
 
 export type Rng = () => number;
@@ -307,6 +449,8 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     locationAssetSlots: initializeLocationAssetPlacements(catalog, rng, runLocations),
     activeLairId,
     lairMissionIds,
+    activeOmegaStageIndex: 0,
+    omegaRowProgress: [false, false, false],
   };
 
   const assetEvents: ActivityEvent[] = [];
@@ -359,12 +503,12 @@ function appendActivityEvent(state: GameState, event: ActivityEvent): GameState 
   };
 }
 
-function mergeMissionEventsIntoActivityLog(
+function mergeResolveActivityEventsIntoActivityLog(
   activityLog: TurnActivityEntry[],
   turnNumber: number,
-  missionEvents: ActivityEventMissionCompleted[],
+  resolveEvents: ActivityEvent[],
 ): TurnActivityEntry[] {
-  const copied = missionEvents.map((e) => ({ ...e }));
+  const copied = resolveEvents.map((e) => ({ ...e }) as ActivityEvent);
   const idx = activityLog.findIndex((e) => e.turnNumber === turnNumber);
   if (idx === -1) {
     return [{ turnNumber, events: copied }, ...activityLog];
@@ -577,8 +721,11 @@ export function assignMission(
   state: GameState,
   catalog: ContentCatalog,
   activeMissionId: string,
-  locationId: string,
   missionTemplateId: string,
+  missionTarget: MissionTarget,
+  missionSource: MissionSource,
+  omegaStageIndex: number | null,
+  omegaSlotIndex: number | null,
   participantInstanceIds: string[],
 ): Result<GameState, GameError> {
   if (state.phase !== "main") {
@@ -600,7 +747,24 @@ export function assignMission(
     return { ok: false, error: { code: "unknown_mission", missionId: missionTemplateId } };
   }
 
-  if (locationId === LAIR_LOCATION_ID) {
+  const targetErr = validateMissionTargetForAssignment(
+    missionTemplate,
+    missionTarget,
+    state,
+    catalog,
+    participantInstanceIds,
+  );
+  if (targetErr) {
+    return { ok: false, error: targetErr };
+  }
+
+  if (missionSource === "lair") {
+    if (omegaStageIndex !== null || omegaSlotIndex !== null) {
+      return {
+        ok: false,
+        error: { code: "invalid_mission_source_binding", reason: "Lair missions do not use omega slots" },
+      };
+    }
     if (state.activeLairId === null) {
       return { ok: false, error: { code: "no_active_lair" } };
     }
@@ -611,26 +775,43 @@ export function assignMission(
       };
     }
   } else {
-    const location = locationById(catalog, locationId);
-    if (!location) {
-      return { ok: false, error: { code: "unknown_location", locationId } };
+    if (state.activeOmegaPlanId === null) {
+      return { ok: false, error: { code: "no_active_omega_plan" } };
     }
-    if (
-      state.activeOmegaPlanId !== null &&
-      !activeLocationIds(catalog, state.activeOmegaPlanId).has(locationId)
-    ) {
+    const plan = getOmegaPlanById(catalog, state.activeOmegaPlanId);
+    if (!plan) {
+      return { ok: false, error: { code: "no_active_omega_plan" } };
+    }
+    if (omegaStageIndex === null || omegaSlotIndex === null) {
       return {
         ok: false,
-        error: { code: "location_not_on_active_map", locationId },
+        error: { code: "invalid_mission_source_binding", reason: "Omega missions require stage and slot" },
       };
     }
-    if (!location.availableMissionIds.includes(missionTemplateId)) {
+    if (omegaStageIndex !== state.activeOmegaStageIndex) {
       return {
         ok: false,
         error: {
-          code: "mission_not_at_location",
+          code: "invalid_omega_stage",
+          expectedStage: state.activeOmegaStageIndex,
+          got: omegaStageIndex,
+        },
+      };
+    }
+    if (omegaSlotIndex < 0 || omegaSlotIndex > 2) {
+      return {
+        ok: false,
+        error: { code: "invalid_mission_source_binding", reason: "omegaSlotIndex must be 0–2" },
+      };
+    }
+    const slotMissionId = omegaSlotMissionId(plan, omegaStageIndex, omegaSlotIndex);
+    if (slotMissionId !== missionTemplateId) {
+      return {
+        ok: false,
+        error: {
+          code: "omega_slot_mismatch",
           missionId: missionTemplateId,
-          locationId,
+          slotMissionId: slotMissionId ?? "",
         },
       };
     }
@@ -680,7 +861,10 @@ export function assignMission(
   const activeMission: ActiveMission = {
     id: activeMissionId,
     missionTemplateId,
-    locationId,
+    missionTarget,
+    missionSource,
+    omegaStageIndex: missionSource === "omega" ? omegaStageIndex : null,
+    omegaSlotIndex: missionSource === "omega" ? omegaSlotIndex : null,
     participantInstanceIds: [...participantInstanceIds],
     turnsRemaining: missionTemplate.durationTurns,
     startedOnTurn: state.turnNumber,
@@ -699,7 +883,10 @@ export function assignMission(
     value: appendActivityEvent(next, {
       kind: "mission_started",
       missionTemplateId,
-      locationId,
+      missionTarget,
+      missionSource,
+      omegaStageIndex: missionSource === "omega" ? omegaStageIndex : null,
+      omegaSlotIndex: missionSource === "omega" ? omegaSlotIndex : null,
       participantInstanceIds: [...participantInstanceIds],
     }),
   };
@@ -741,7 +928,7 @@ export function cancelMission(
     value: appendActivityEvent(next, {
       kind: "mission_cancelled",
       missionTemplateId: am.missionTemplateId,
-      locationId: am.locationId,
+      missionTarget: am.missionTarget,
     }),
   };
 }
@@ -803,8 +990,9 @@ export function executePlan(
   }
 
   let player = state.player;
-  const events: ActivityEventMissionCompleted[] = [];
+  const resolveEvents: ActivityEvent[] = [];
   const remaining: ActiveMission[] = [];
+  let locationSecurityStates = state.locationSecurityStates;
 
   const instanceById = new Map(state.player.minions.map((m) => [m.instanceId, m]));
 
@@ -812,6 +1000,13 @@ export function executePlan(
     ...am,
     turnsRemaining: am.turnsRemaining - 1,
   }));
+
+  const stageAtExecute = state.activeOmegaStageIndex;
+  let omegaRowProgress: [boolean, boolean, boolean] = [
+    state.omegaRowProgress[0],
+    state.omegaRowProgress[1],
+    state.omegaRowProgress[2],
+  ];
 
   for (const am of updated) {
     if (am.turnsRemaining > 0) {
@@ -847,18 +1042,71 @@ export function executePlan(
       infamy: clampInfamy(player.infamy + infamyDelta),
     };
 
-    events.push({
+    resolveEvents.push({
       kind: "mission_completed",
       activeMissionId: am.id,
       missionTemplateId: template.id,
       missionName: template.name,
-      locationId: am.locationId,
+      missionTarget: am.missionTarget,
       success,
       roll,
       successChancePercent: pct,
       infamyDelta,
     });
+
+    const securityLoc = locationIdForMissionSecurity(am.missionTarget);
+    if (securityLoc !== null) {
+      locationSecurityStates = raiseSecurityAfterMissionAtLocation(
+        locationSecurityStates,
+        securityLoc,
+      );
+    }
+
+    for (const iid of am.participantInstanceIds) {
+      const inst = instanceById.get(iid);
+      if (!inst) {
+        continue;
+      }
+      const minionTpl = minionTemplateById(catalog, inst.templateId);
+      if (!minionTpl) {
+        continue;
+      }
+      const { instance: nextInst, leveledUp, traitUnlockedId } =
+        awardMissionResolutionExperience(inst, minionTpl);
+      instanceById.set(iid, nextInst);
+      if (leveledUp) {
+        resolveEvents.push({
+          kind: "minion_leveled_up",
+          instanceId: iid,
+          templateId: inst.templateId,
+          newLevel: nextInst.currentLevel,
+          traitId: traitUnlockedId,
+        });
+      }
+    }
+
+    if (
+      success &&
+      am.missionSource === "omega" &&
+      am.omegaStageIndex === stageAtExecute &&
+      am.omegaSlotIndex !== null &&
+      am.omegaSlotIndex >= 0 &&
+      am.omegaSlotIndex <= 2
+    ) {
+      omegaRowProgress[am.omegaSlotIndex] = true;
+    }
   }
+
+  let activeOmegaStageIndex = state.activeOmegaStageIndex;
+  if (omegaRowProgress[0] && omegaRowProgress[1] && omegaRowProgress[2]) {
+    activeOmegaStageIndex = Math.min(2, stageAtExecute + 1);
+    omegaRowProgress = [false, false, false];
+  }
+
+  player = {
+    ...player,
+    minions: state.player.minions.map((m) => instanceById.get(m.instanceId) ?? m),
+  };
 
   const ownedIds = ownedMinionTemplateIds(player);
   const availableMinionTemplateIds = pickRandomMinionTemplateIds(
@@ -868,10 +1116,10 @@ export function executePlan(
     ownedIds,
   );
 
-  const activityLog = mergeMissionEventsIntoActivityLog(
+  const activityLog = mergeResolveActivityEventsIntoActivityLog(
     state.activityLog,
     state.turnNumber,
-    events,
+    resolveEvents,
   );
 
   return {
@@ -883,6 +1131,9 @@ export function executePlan(
       activeMissions: remaining,
       availableMinionTemplateIds,
       activityLog,
+      activeOmegaStageIndex,
+      omegaRowProgress,
+      locationSecurityStates,
     },
   };
 }

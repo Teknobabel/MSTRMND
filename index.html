@@ -36,16 +36,25 @@
             <div id="game-stats" class="game-stats"></div>
             <div class="game-controls">
               <div class="game-controls-section">
-                <h3 class="game-controls-heading">Assign mission</h3>
-                <label class="game-field">
-                  <span class="game-field-label">Location</span>
-                  <select id="assign-location" class="game-select"></select>
-                </label>
+                <h3 class="game-controls-heading">Plan mission</h3>
                 <label class="game-field">
                   <span class="game-field-label">Mission</span>
-                  <select id="assign-mission" class="game-select"></select>
+                  <div
+                    id="assign-mission-slot"
+                    class="assign-pick-slot"
+                    data-assign-pick="mission"
+                    aria-label="Mission slot, drag a mission card here"
+                  ></div>
                 </label>
-                <div id="mission-details" class="mission-details" aria-label="Selected mission details"></div>
+                <label class="game-field" id="assign-target-field">
+                  <span class="game-field-label">Target</span>
+                  <div
+                    id="assign-target-slot"
+                    class="assign-pick-slot"
+                    data-assign-pick="target"
+                    aria-label="Target location, drag a location card here"
+                  ></div>
+                </label>
                 <fieldset id="assign-minions" class="game-fieldset">
                   <legend class="game-field-label">Minions (drag up to 3 from roster)</legend>
                   <div id="assign-minions-list"></div>

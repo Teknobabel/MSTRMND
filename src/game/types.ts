@@ -25,6 +25,19 @@ export type MinionInstance = {
   traitIds: string[];
 };
 
+/** Designer-authored mission target; drives assign UI and validation. */
+export type MissionTargetKind = "location" | "location_asset" | "minion" | "none";
+
+/**
+ * Runtime mission target (persisted on active missions and activity events).
+ * `kind` must match the mission template’s `targetKind` at assign time.
+ */
+export type MissionTarget =
+  | { kind: "location"; locationId: string }
+  | { kind: "location_asset"; locationId: string; slotIndex: number }
+  | { kind: "minion"; instanceId: string }
+  | { kind: "none" };
+
 export type MissionTemplate = {
   id: string;
   name: string;
@@ -33,6 +46,8 @@ export type MissionTemplate = {
   startCommandPoints: number;
   requiredTraitIds: string[];
   durationTurns: number;
+  /** What the player must pick in the Target slot (default: location). */
+  targetKind: MissionTargetKind;
 };
 
 /** Visibility of an asset at a location for the player (kind known only when revealed). */
@@ -64,8 +79,10 @@ export type LocationTemplate = {
   locationType: LocationType;
   /** Designer difficulty or importance tier, 1–3. */
   locationLevel: 1 | 2 | 3;
-  availableMissionIds: string[];
 };
+
+/** Where an active mission was started from (lair pool vs current Omega row). */
+export type MissionSource = "lair" | "omega";
 
 /**
  * Per-run security at a location (not in catalog JSON). Updated by gameplay systems.

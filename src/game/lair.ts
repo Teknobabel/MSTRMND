@@ -1,8 +1,5 @@
 import type { ContentCatalog, LairTemplate } from "./types";
 
-/** Synthetic `ActiveMission.locationId` when the mission was started from the lair (not a map location). */
-export const LAIR_LOCATION_ID = "__lair";
-
 export function getLairById(
   catalog: ContentCatalog,
   id: string,
