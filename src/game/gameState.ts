@@ -10,6 +10,7 @@ import type {
   MissionTargetType,
   MissionTemplate,
 } from "./types";
+import { isOccupiedAssetSlot } from "./types";
 import { awardMissionResolutionExperience, createMinionFromTemplate } from "./minion";
 import {
   activeLocationIds,
@@ -24,6 +25,7 @@ import {
   successChancePercent,
   type MissionSuccessOptions,
 } from "./mission";
+import { applyMissionEffects } from "./missionEffects";
 import { getOmegaPlanById, omegaSlotMissionId, pickRandomOmegaPlanId } from "./omegaPlan";
 import { getLairById, pickRandomLairId } from "./lair";
 
@@ -43,6 +45,8 @@ export type PlayerState = {
   maxHireOffers: number;
   /** Max active missions at once (assign blocked at cap; can rise during a run). */
   maxConcurrentMissions: number;
+  /** Max minions assignable to a single mission (default 3). */
+  maxParticipantsPerMission: number;
 };
 
 export type ActiveMission = {
@@ -187,6 +191,7 @@ export type GameError =
   | { code: "lair_mission_already_in_pool"; missionId: string }
   | { code: "wrong_target_kind"; expected: MissionTargetType; actual: string }
   | { code: "unknown_asset_slot"; locationId: string; slotIndex: number }
+  | { code: "empty_asset_slot"; locationId: string; slotIndex: number }
   | { code: "asset_visibility_mismatch"; locationId: string; slotIndex: number }
   | { code: "minion_target_in_participants"; instanceId: string }
   | { code: "unknown_target_minion"; instanceId: string };
@@ -270,6 +275,7 @@ const INFAMY_FAILURE_DELTA = 5;
 const DEFAULT_MAX_ROSTER_SIZE = 5;
 const DEFAULT_MAX_HIRE_OFFERS = 3;
 const DEFAULT_MAX_CONCURRENT_MISSIONS = 2;
+const DEFAULT_MAX_PARTICIPANTS_PER_MISSION = 3;
 /** CP spent to reroll the hire offer pool during Main Phase */
 export const REROLL_HIRE_OFFERS_CP = 1;
 
@@ -361,6 +367,7 @@ function initializeLocationAssetPlacements(
         rng,
       );
       slots = ids.map((assetId) => ({
+        kind: "occupied" as const,
         assetId,
         visibility: "hidden" as const,
       }));
@@ -380,7 +387,10 @@ function initializeLocationAssetPlacements(
     shuffleInPlace(flat, rng);
     for (let i = 0; i < k; i += 1) {
       const ref = flat[i]!;
-      placements[ref.pi]!.slots[ref.si]!.visibility = "revealed";
+      const cell = placements[ref.pi]!.slots[ref.si]!;
+      if (isOccupiedAssetSlot(cell)) {
+        placements[ref.pi]!.slots[ref.si] = { ...cell, visibility: "revealed" };
+      }
     }
   }
   return placements;
@@ -437,6 +447,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     maxRosterSize: DEFAULT_MAX_ROSTER_SIZE,
     maxHireOffers: DEFAULT_MAX_HIRE_OFFERS,
     maxConcurrentMissions: DEFAULT_MAX_CONCURRENT_MISSIONS,
+    maxParticipantsPerMission: DEFAULT_MAX_PARTICIPANTS_PER_MISSION,
   };
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
   const locationRequiredTraits = rollLocationRequiredTraits(catalog, runLocations, rng);
@@ -859,6 +870,16 @@ export function assignMission(
         },
       };
     }
+    if (!isOccupiedAssetSlot(slot)) {
+      return {
+        ok: false,
+        error: {
+          code: "empty_asset_slot",
+          locationId: target.locationId,
+          slotIndex: target.slotIndex,
+        },
+      };
+    }
     if (slot.visibility !== target.visibilityAtAssign) {
       return {
         ok: false,
@@ -905,12 +926,12 @@ export function assignMission(
     participants.push(m);
   }
 
-  if (!canAssignParticipants(participants)) {
+  if (!canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
     return {
       ok: false,
       error: {
         code: "invalid_participants",
-        reason: "Assign 1–3 minions",
+        reason: `Assign 1–${state.player.maxParticipantsPerMission} minions`,
       },
     };
   }
@@ -1062,6 +1083,7 @@ export function executePlan(
   const resolveEvents: ActivityEvent[] = [];
   const remaining: ActiveMission[] = [];
   let locationSecurityStates = state.locationSecurityStates;
+  let locationAssetSlots = state.locationAssetSlots;
 
   const instanceById = new Map(state.player.minions.map((m) => [m.instanceId, m]));
 
@@ -1098,7 +1120,7 @@ export function executePlan(
       }
       participants.push(inst);
     }
-    if (missing || !canAssignParticipants(participants)) {
+    if (missing || !canAssignParticipants(participants, player.maxParticipantsPerMission)) {
       continue;
     }
 
@@ -1112,11 +1134,26 @@ export function executePlan(
     );
     const roll = Math.floor(rng() * 100);
     const success = roll < pct;
-    const infamyDelta = success ? INFAMY_SUCCESS_DELTA : INFAMY_FAILURE_DELTA;
+    const infamyBefore = player.infamy;
+    const baselineInfamy = success ? INFAMY_SUCCESS_DELTA : INFAMY_FAILURE_DELTA;
     player = {
       ...player,
-      infamy: clampInfamy(player.infamy + infamyDelta),
+      infamy: player.infamy + baselineInfamy,
     };
+
+    const effectList = success
+      ? (template.onSuccessEffects ?? [])
+      : (template.onFailureEffects ?? []);
+    const effectState: GameState = {
+      ...state,
+      player,
+      locationAssetSlots,
+    };
+    const applied = applyMissionEffects(effectState, effectList, am);
+    player = applied.player;
+    locationAssetSlots = applied.locationAssetSlots;
+
+    const infamyDeltaTotal = player.infamy - infamyBefore;
 
     resolveEvents.push({
       kind: "mission_completed",
@@ -1127,8 +1164,9 @@ export function executePlan(
       success,
       roll,
       successChancePercent: pct,
-      infamyDelta,
+      infamyDelta: infamyDeltaTotal,
     });
+    resolveEvents.push(...applied.events);
 
     const secLoc = getMissionTargetLocationId(am.target);
     if (secLoc !== null) {
@@ -1211,6 +1249,7 @@ export function executePlan(
       activeOmegaStageIndex,
       omegaRowProgress,
       locationSecurityStates,
+      locationAssetSlots,
     },
   };
 }

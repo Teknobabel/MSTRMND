@@ -21,10 +21,14 @@ export function unionParticipantTraitIds(participants: MinionInstance[]): Set<st
 }
 
 /**
- * True when the player can start a mission with this roster (1–3 minions).
+ * True when the player can start a mission with this roster (1–max participants).
  */
-export function canAssignParticipants(participants: MinionInstance[]): boolean {
-  return participants.length >= 1 && participants.length <= 3;
+export function canAssignParticipants(
+  participants: MinionInstance[],
+  maxParticipantsPerMission: number,
+): boolean {
+  const cap = Math.max(1, maxParticipantsPerMission);
+  return participants.length >= 1 && participants.length <= cap;
 }
 
 function mergeRequiredTraitSet(

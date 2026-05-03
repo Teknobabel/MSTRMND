@@ -48,6 +48,17 @@ export type MissionTarget =
   | { kind: "minion"; instanceId: string }
   | { kind: "none" };
 
+/** Single designer-authored outcome when a mission finishes. */
+export type MissionEffect =
+  | { kind: "reveal_target_asset" }
+  | { kind: "steal_target_asset" }
+  | { kind: "infamy_delta"; amount: number }
+  | { kind: "max_concurrent_missions_delta"; delta: number }
+  | { kind: "max_roster_size_delta"; delta: number }
+  | { kind: "max_hire_offers_delta"; delta: number }
+  | { kind: "max_participants_per_mission_delta"; delta: number }
+  | { kind: "max_command_points_per_turn_delta"; delta: number };
+
 export type MissionTemplate = {
   id: string;
   name: string;
@@ -63,6 +74,10 @@ export type MissionTemplate = {
   durationTurns: number;
   /** What the player must pick in the target planning slot (if any). */
   targetType: MissionTargetType;
+  /** Applied in order when the mission resolves successfully (after baseline infamy). */
+  onSuccessEffects?: MissionEffect[];
+  /** Applied in order when the mission resolves as a failure (after baseline infamy). */
+  onFailureEffects?: MissionEffect[];
 };
 
 /** Visibility of an asset at a location for the player (kind known only when revealed). */
@@ -70,12 +85,17 @@ export type LocationAssetVisibility = "hidden" | "revealed";
 
 /**
  * One asset slot at a location at runtime (not authored in `locations.json`).
- * Assigned when a run starts; `assetId` references the asset catalog.
+ * `occupied` holds a catalog asset; `empty` is left after a steal (same index kept).
  */
-export type LocationAssetSlot = {
-  assetId: string;
-  visibility: LocationAssetVisibility;
-};
+export type LocationAssetSlot =
+  | { kind: "empty" }
+  | { kind: "occupied"; assetId: string; visibility: LocationAssetVisibility };
+
+export function isOccupiedAssetSlot(
+  slot: LocationAssetSlot,
+): slot is Extract<LocationAssetSlot, { kind: "occupied" }> {
+  return slot.kind === "occupied";
+}
 
 /** Per-location asset slots for the current run (from `createInitialGameState`). */
 export type LocationAssetPlacement = {

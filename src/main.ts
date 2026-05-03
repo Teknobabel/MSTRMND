@@ -15,7 +15,13 @@ import {
   REROLL_HIRE_OFFERS_CP,
   type GameState,
 } from "./game/gameState";
-import type { MissionSource, MissionTarget, MissionTargetType } from "./game/types";
+import type {
+  LocationAssetSlot,
+  MissionSource,
+  MissionTarget,
+  MissionTargetType,
+} from "./game/types";
+import { isOccupiedAssetSlot } from "./game/types";
 import {
   canAssignParticipants,
   mergedRequiredTraitIdsSorted,
@@ -189,7 +195,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   const rng = (): number => Math.random();
 
-  const assignSlotInstanceIds: (string | null)[] = [null, null, null];
+  /** Upper bound for participant assign UI; must be >= any runtime `maxParticipantsPerMission`. */
+  const ASSIGN_PARTICIPANT_SLOT_CAPACITY = 12;
+  const assignSlotInstanceIds: (string | null)[] = Array.from(
+    { length: ASSIGN_PARTICIPANT_SLOT_CAPACITY },
+    (): string | null => null,
+  );
   let assignMissionTemplateId: string | null = null;
   let assignMissionSource: MissionSource | null = null;
   let assignOmegaStageIndex: number | null = null;
@@ -203,18 +214,22 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     | null = null;
 
   function getAssignParticipantIds(): string[] {
-    return assignSlotInstanceIds.filter((id): id is string => id !== null);
+    const max = state.player.maxParticipantsPerMission;
+    return assignSlotInstanceIds
+      .slice(0, max)
+      .filter((id): id is string => id !== null);
   }
 
   function reconcileAssignSlots(): void {
     const busy = busyInstanceIds(state.activeMissions);
     const valid = new Set(state.player.minions.map((m) => m.instanceId));
-    for (let i = 0; i < 3; i += 1) {
+    const max = state.player.maxParticipantsPerMission;
+    for (let i = 0; i < assignSlotInstanceIds.length; i += 1) {
       const id = assignSlotInstanceIds[i];
       if (id === null) {
         continue;
       }
-      if (!valid.has(id) || busy.has(id)) {
+      if (i >= max || !valid.has(id) || busy.has(id)) {
         assignSlotInstanceIds[i] = null;
       }
     }
@@ -239,14 +254,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   }
 
   function clearAllAssignSlots(): void {
-    assignSlotInstanceIds[0] = null;
-    assignSlotInstanceIds[1] = null;
-    assignSlotInstanceIds[2] = null;
+    for (let i = 0; i < assignSlotInstanceIds.length; i += 1) {
+      assignSlotInstanceIds[i] = null;
+    }
     clearAssignMissionTarget();
   }
 
   function placeInstanceInSlot(instanceId: string, slotIndex: number): void {
-    for (let i = 0; i < 3; i += 1) {
+    for (let i = 0; i < assignSlotInstanceIds.length; i += 1) {
       if (assignSlotInstanceIds[i] === instanceId) {
         assignSlotInstanceIds[i] = null;
       }
@@ -258,7 +273,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   }
 
   function removeInstanceFromAllAssignSlots(instanceId: string): void {
-    for (let i = 0; i < 3; i += 1) {
+    for (let i = 0; i < assignSlotInstanceIds.length; i += 1) {
       if (assignSlotInstanceIds[i] === instanceId) {
         assignSlotInstanceIds[i] = null;
       }
@@ -557,7 +572,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         if (mt.kind === "asset") {
           const placement = state.locationAssetSlots.find((p) => p.locationId === mt.locationId);
           const slot = placement?.slots[mt.slotIndex];
-          if (!slot || slot.visibility !== mt.visibilityAtAssign) {
+          if (
+            !slot ||
+            !isOccupiedAssetSlot(slot) ||
+            slot.visibility !== mt.visibilityAtAssign
+          ) {
             return;
           }
         }
@@ -596,7 +615,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const participants = slotIds
       .map((id) => instanceById.get(id))
       .filter((x): x is NonNullable<typeof x> => x !== undefined);
-    if (canAssignParticipants(participants)) {
+    if (canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
       const baseOpts =
         assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : {};
       const opts = { ...baseOpts, playerAssets: state.player.assets };
@@ -605,7 +624,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (slotIds.length === 0) {
       return "—";
     }
-    return "Pick 1–3 minions";
+    return "Pick 1–" + String(state.player.maxParticipantsPerMission) + " minions";
   }
 
   function renderAssignPickSlots(): void {
@@ -794,10 +813,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const dl = document.createElement("dl");
       dl.className = "location-card-stats";
       const visLabel = targetPick.visibilityAtAssign === "hidden" ? "Hidden" : "Revealed";
-      const assetLabel =
-        slot && slot.visibility === "revealed"
-          ? (content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId)
-          : "Asset";
+      let assetLabel = "Asset";
+      if (slot?.kind === "empty") {
+        assetLabel = "—";
+      } else if (slot && isOccupiedAssetSlot(slot) && slot.visibility === "revealed") {
+        assetLabel =
+          content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId;
+      }
       const siteIds = state.locationRequiredTraits[targetPick.locationId] ?? [];
       const siteTraitsLabel =
         siteIds.length === 0
@@ -911,9 +933,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       return;
     }
     const parts = getAssignParticipantIds();
-    if (parts.length < 1 || parts.length > 3) {
+    const maxP = state.player.maxParticipantsPerMission;
+    if (parts.length < 1 || parts.length > maxP) {
       btnAssign.disabled = true;
-      btnAssign.title = "Assign 1–3 minions";
+      btnAssign.title = `Assign 1–${maxP} minions`;
       return;
     }
     const instanceById = new Map(
@@ -922,9 +945,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const participants = parts
       .map((id) => instanceById.get(id))
       .filter((x): x is NonNullable<typeof x> => x !== undefined);
-    if (!canAssignParticipants(participants)) {
+    if (!canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
       btnAssign.disabled = true;
-      btnAssign.title = "Assign 1–3 minions";
+      btnAssign.title = `Assign 1–${state.player.maxParticipantsPerMission} minions`;
       return;
     }
     const cost = missionTemplate.startCommandPoints;
@@ -943,7 +966,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const busy = busyInstanceIds(state.activeMissions);
     const mainOnly = state.phase === "main";
 
-    for (let slotIndex = 0; slotIndex < 3; slotIndex += 1) {
+    for (let slotIndex = 0; slotIndex < state.player.maxParticipantsPerMission; slotIndex += 1) {
       const slot = document.createElement("div");
       slot.className = "assign-minion-slot";
       slot.dataset.slotIndex = String(slotIndex);
@@ -1132,7 +1155,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   function buildLocationCardArticle(
     loc: (typeof content.locations)[number],
     securityLevel: number | undefined,
-    assetSlots: { assetId: string; visibility: string }[],
+    assetSlots: LocationAssetSlot[],
     assetNameById: Map<string, string>,
     enableAssignDrag: boolean,
     siteRequiredTraitIds: string[],
@@ -1186,13 +1209,28 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     for (let si = 0; si < assetSlots.length; si += 1) {
       const slot = assetSlots[si]!;
+      const dt = document.createElement("dt");
+      dt.textContent = "Asset";
+      const dd = document.createElement("dd");
+      if (slot.kind === "empty") {
+        if (enableAssignDrag) {
+          const chip = document.createElement("span");
+          chip.className = "location-asset-drag-chip location-asset-drag-chip--empty";
+          chip.draggable = false;
+          chip.textContent = "—";
+          chip.title = "Empty slot";
+          dd.appendChild(chip);
+        } else {
+          dd.textContent = "—";
+        }
+        dl.appendChild(dt);
+        dl.appendChild(dd);
+        continue;
+      }
       const displayValue =
         slot.visibility === "revealed"
           ? (assetNameById.get(slot.assetId) ?? slot.assetId)
           : "Asset";
-      const dt = document.createElement("dt");
-      dt.textContent = "Asset";
-      const dd = document.createElement("dd");
       if (enableAssignDrag) {
         const chip = document.createElement("span");
         chip.className = "location-asset-drag-chip";
@@ -1641,10 +1679,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         const placement = state.locationAssetSlots.find((p) => p.locationId === target.locationId);
         const slot = placement?.slots[target.slotIndex];
         const vis = target.visibilityAtAssign === "hidden" ? "Hidden" : "Revealed";
-        const an =
-          slot && slot.visibility === "revealed"
-            ? (content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId)
-            : "Asset";
+        let an = "Asset";
+        if (slot?.kind === "empty") {
+          an = "—";
+        } else if (slot && isOccupiedAssetSlot(slot) && slot.visibility === "revealed") {
+          an = content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId;
+        }
         return `${vis} (${an}) @ ${locName}`;
       }
       case "minion": {
@@ -1752,7 +1792,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           },
         );
         let successValue: string;
-        if (canAssignParticipants(participants)) {
+        if (canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
           successValue = `${successChancePercent(mission, participants, successOpts)}%`;
         } else {
           successValue = "—";

@@ -6,6 +6,7 @@ import type {
   LocationTemplate,
   MapTemplate,
   MinionTemplate,
+  MissionEffect,
   MissionTemplate,
   OmegaPlanStage,
   OmegaPlanTemplate,
@@ -82,6 +83,37 @@ const missionTargetTypeSchema = z.enum([
   "none",
 ]);
 
+const deltaSchema = z.number().int().min(-50).max(50);
+
+const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("reveal_target_asset") }),
+  z.object({ kind: z.literal("steal_target_asset") }),
+  z.object({
+    kind: z.literal("infamy_delta"),
+    amount: z.number().int().min(-100).max(100),
+  }),
+  z.object({
+    kind: z.literal("max_concurrent_missions_delta"),
+    delta: deltaSchema,
+  }),
+  z.object({
+    kind: z.literal("max_roster_size_delta"),
+    delta: deltaSchema,
+  }),
+  z.object({
+    kind: z.literal("max_hire_offers_delta"),
+    delta: deltaSchema,
+  }),
+  z.object({
+    kind: z.literal("max_participants_per_mission_delta"),
+    delta: deltaSchema,
+  }),
+  z.object({
+    kind: z.literal("max_command_points_per_turn_delta"),
+    delta: deltaSchema,
+  }),
+]);
+
 const missionTemplateSchema = z
   .object({
     id: z.string().min(1),
@@ -92,6 +124,8 @@ const missionTemplateSchema = z
     requiredTraitIds: z.array(z.string().min(1)).default([]),
     requiredAssetIds: z.array(z.string().min(1)).default([]),
     durationTurns: z.coerce.number().int().min(1),
+    onSuccessEffects: z.array(missionEffectSchema).optional(),
+    onFailureEffects: z.array(missionEffectSchema).optional(),
   })
   .superRefine((m, ctx) => {
     if (m.requiredTraitIds.length + m.requiredAssetIds.length < 1) {
@@ -141,17 +175,37 @@ function parseMissionsWithRefs(
         );
       }
     }
+    const assetOnlyKinds = new Set<MissionEffect["kind"]>(["reveal_target_asset", "steal_target_asset"]);
+    const targetIsNotAssetSlot =
+      m.targetType !== "asset_hidden" && m.targetType !== "asset_revealed";
+    const allEffects = [...(m.onSuccessEffects ?? []), ...(m.onFailureEffects ?? [])];
+    for (const eff of allEffects) {
+      if (targetIsNotAssetSlot && assetOnlyKinds.has(eff.kind)) {
+        throw new Error(
+          `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires asset_hidden or asset_revealed)`,
+        );
+      }
+    }
   }
-  return arr.map((m) => ({
-    id: m.id,
-    name: m.name,
-    description: m.description,
-    targetType: m.targetType,
-    startCommandPoints: m.startCommandPoints,
-    requiredTraitIds: [...m.requiredTraitIds],
-    requiredAssetIds: [...m.requiredAssetIds],
-    durationTurns: m.durationTurns,
-  }));
+  return arr.map((m) => {
+    const base: MissionTemplate = {
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      targetType: m.targetType,
+      startCommandPoints: m.startCommandPoints,
+      requiredTraitIds: [...m.requiredTraitIds],
+      requiredAssetIds: [...m.requiredAssetIds],
+      durationTurns: m.durationTurns,
+    };
+    if (m.onSuccessEffects !== undefined && m.onSuccessEffects.length > 0) {
+      base.onSuccessEffects = [...m.onSuccessEffects];
+    }
+    if (m.onFailureEffects !== undefined && m.onFailureEffects.length > 0) {
+      base.onFailureEffects = [...m.onFailureEffects];
+    }
+    return base;
+  });
 }
 
 const locationTypeSchema = z.enum(["political", "military", "economic"]);
