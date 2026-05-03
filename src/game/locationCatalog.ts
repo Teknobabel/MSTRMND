@@ -13,6 +13,15 @@ export function getLocationById(
   return catalog.locations.find((l) => l.id === id);
 }
 
+/** Max security level (0..N) for a site; N equals authored `locationLevel` (1–3). */
+export function maxSecurityLevelForLocation(
+  catalog: ContentCatalog,
+  locationId: string,
+): number {
+  const loc = getLocationById(catalog, locationId);
+  return loc !== undefined ? loc.locationLevel : 3;
+}
+
 /**
  * Locations playable this run: full catalog when no omega plan; otherwise the chosen plan's map order.
  */
@@ -114,6 +123,26 @@ export function rollLocationRequiredTraits(
   for (const loc of runLocations) {
     const n = loc.locationLevel === 1 ? 0 : loc.locationLevel === 2 ? 1 : 2;
     out[loc.id] = pickDistinctTraitIds(eligible, n, rng);
+  }
+  return out;
+}
+
+/**
+ * Per-run security trait stack per location (reveal order = array order).
+ * Length equals `locationLevel` (1–3); first `securityLevel` entries apply to missions.
+ * Same eligible pool as {@link rollLocationRequiredTraits} (primary + secondary, not status).
+ */
+export function rollLocationSecurityTraits(
+  catalog: ContentCatalog,
+  runLocations: LocationTemplate[],
+  rng: () => number,
+): Record<string, string[]> {
+  const eligible = catalog.traits
+    .filter((t) => t.type !== "status")
+    .map((t) => t.id);
+  const out: Record<string, string[]> = {};
+  for (const loc of runLocations) {
+    out[loc.id] = pickDistinctTraitIds(eligible, loc.locationLevel, rng);
   }
   return out;
 }

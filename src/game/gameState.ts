@@ -15,7 +15,9 @@ import {
   activeLocationIds,
   initialLocationSecurityStatesForLocations,
   locationTemplatesForOmegaPlan,
+  maxSecurityLevelForLocation,
   rollLocationRequiredTraits,
+  rollLocationSecurityTraits,
 } from "./locationCatalog";
 import {
   canAssignParticipants,
@@ -140,6 +142,11 @@ export type GameState = {
    * `locationLevel`). Merged into mission requirements when that location is the mission target.
    */
   locationRequiredTraits: Record<string, string[]>;
+  /**
+   * Per-run security trait stack (length = location `level`). Reveal order = array order;
+   * first `securityLevel` entries merge into missions at that location.
+   */
+  locationSecurityTraits: Record<string, string[]>;
   /** Chosen lair template id for this run, or null if `catalog.lairs` is empty. */
   activeLairId: string | null;
   /** Mission template ids available from the lair (starts as copy of template; gameplay may append). */
@@ -220,7 +227,18 @@ export function getMissionTargetLocationId(target: MissionTarget): string | null
   return null;
 }
 
-/** Extra required traits from the target location’s run roll (for {@link successChancePercent}). */
+/** Trait ids from the security stack that are currently revealed for `locationId`. */
+export function revealedSecurityTraitIds(
+  state: GameState,
+  locationId: string,
+): string[] {
+  const sec = state.locationSecurityStates.find((s) => s.locationId === locationId);
+  const k = sec?.securityLevel ?? 0;
+  const list = state.locationSecurityTraits[locationId] ?? [];
+  return list.slice(0, Math.min(k, list.length));
+}
+
+/** Extra required traits from the target location’s site roll + revealed security stack. */
 export function missionSuccessOptionsForTarget(
   state: GameState,
   target: MissionTarget,
@@ -229,11 +247,21 @@ export function missionSuccessOptionsForTarget(
   if (lid === null) {
     return {};
   }
-  const extra = state.locationRequiredTraits[lid];
-  if (extra === undefined || extra.length === 0) {
+  const merged = new Set<string>();
+  for (const id of state.locationRequiredTraits[lid] ?? []) {
+    if (id.length > 0) {
+      merged.add(id);
+    }
+  }
+  for (const id of revealedSecurityTraitIds(state, lid)) {
+    if (id.length > 0) {
+      merged.add(id);
+    }
+  }
+  if (merged.size === 0) {
     return {};
   }
-  return { additionalRequiredTraitIds: [...extra] };
+  return { additionalRequiredTraitIds: [...merged] };
 }
 
 const INFAMY_SUCCESS_DELTA = -3;
@@ -252,20 +280,41 @@ export function clampInfamy(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-const MAX_LOCATION_SECURITY_LEVEL = 3;
-
-/** After a mission finishes at `locationId`, raise that location's security by 1 (cap 3). */
+/** After a mission finishes at `locationId`, raise that location's security by 1 (cap = location level). */
 function raiseSecurityAfterMissionAtLocation(
   states: LocationSecurityState[],
+  catalog: ContentCatalog,
   locationId: string,
 ): LocationSecurityState[] {
+  const cap = maxSecurityLevelForLocation(catalog, locationId);
   return states.map((s) => {
     if (s.locationId !== locationId) {
       return s;
     }
-    const next = Math.min(MAX_LOCATION_SECURITY_LEVEL, s.securityLevel + 1);
+    const next = Math.min(cap, s.securityLevel + 1);
     return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
   });
+}
+
+/**
+ * Set a location's security level (e.g. future events that lower heat). Clamped to
+ * `[0, locationLevel]`. Re-hides security traits above the new level automatically via
+ * {@link revealedSecurityTraitIds}.
+ */
+export function setLocationSecurityLevel(
+  state: GameState,
+  catalog: ContentCatalog,
+  locationId: string,
+  level: number,
+): GameState {
+  const cap = maxSecurityLevelForLocation(catalog, locationId);
+  const clamped = Math.max(0, Math.min(cap, Math.floor(level))) as 0 | 1 | 2 | 3;
+  return {
+    ...state,
+    locationSecurityStates: state.locationSecurityStates.map((s) =>
+      s.locationId === locationId ? { ...s, securityLevel: clamped } : s,
+    ),
+  };
 }
 
 export type Rng = () => number;
@@ -391,6 +440,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
   };
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
   const locationRequiredTraits = rollLocationRequiredTraits(catalog, runLocations, rng);
+  const locationSecurityTraits = rollLocationSecurityTraits(catalog, runLocations, rng);
   const lairMissionIds = lairTemplate ? [...lairTemplate.availableMissionIds] : [];
   const base: GameState = {
     phase: "main",
@@ -410,6 +460,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     locationSecurityStates: initialLocationSecurityStatesForLocations(runLocations),
     locationAssetSlots: initializeLocationAssetPlacements(catalog, rng, runLocations),
     locationRequiredTraits,
+    locationSecurityTraits,
     activeLairId,
     lairMissionIds,
     activeOmegaStageIndex: 0,
@@ -1080,6 +1131,7 @@ export function executePlan(
     if (secLoc !== null) {
       locationSecurityStates = raiseSecurityAfterMissionAtLocation(
         locationSecurityStates,
+        catalog,
         secLoc,
       );
     }

@@ -110,6 +110,30 @@ function traitDisplayNames(
     .join(", ");
 }
 
+/** Revealed vs hidden security stack for UI (order preserved for revealed slice). */
+function formatLocationSecurityTraitsDisplay(
+  catalog: ReturnType<typeof loadContent>,
+  securityTraitIds: string[],
+  securityLevel: number | undefined,
+): string {
+  const k = securityLevel ?? 0;
+  const list = securityTraitIds;
+  if (list.length === 0) {
+    return "None";
+  }
+  const revealed = list.slice(0, Math.min(k, list.length));
+  const hiddenCount = list.length - revealed.length;
+  const revealedLabel =
+    revealed.length === 0 ? "" : traitDisplayNames(catalog, revealed);
+  if (hiddenCount === 0) {
+    return revealedLabel;
+  }
+  if (revealed.length === 0) {
+    return `Hidden (${hiddenCount})`;
+  }
+  return `${revealedLabel} · Hidden (${hiddenCount})`;
+}
+
 function formatLocationTypeLabel(locationType: string): string {
   return locationType.charAt(0).toUpperCase() + locationType.slice(1);
 }
@@ -731,6 +755,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           assetNameById,
           false,
           state.locationRequiredTraits[loc.id] ?? [],
+          state.locationSecurityTraits[loc.id] ?? [],
         );
         article.classList.add("assign-pick-embedded-card");
         article.draggable = mainOnly;
@@ -765,10 +790,20 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         siteIds.length === 0
           ? "None"
           : traitDisplayNames(content, [...siteIds].sort((a, b) => a.localeCompare(b)));
+      const secLevel = state.locationSecurityStates.find(
+        (s) => s.locationId === targetPick.locationId,
+      )?.securityLevel;
+      const securityTraitIds = state.locationSecurityTraits[targetPick.locationId] ?? [];
+      const securityTraitsLabel = formatLocationSecurityTraitsDisplay(
+        content,
+        securityTraitIds,
+        secLevel,
+      );
       appendMinionStatRows(dl, [
         { label: "Asset", value: `${visLabel} (${assetLabel})` },
         { label: "Slot", value: String(targetPick.slotIndex + 1) },
         { label: "Site traits", value: siteTraitsLabel },
+        { label: "Security traits", value: securityTraitsLabel },
       ]);
       article.appendChild(dl);
       wrap.appendChild(article);
@@ -1084,6 +1119,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     assetNameById: Map<string, string>,
     enableAssignDrag: boolean,
     siteRequiredTraitIds: string[],
+    locationSecurityTraitIds: string[],
   ): HTMLElement {
     const article = document.createElement("article");
     article.className = "location-card";
@@ -1119,6 +1155,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
                 content,
                 [...siteRequiredTraitIds].sort((a, b) => a.localeCompare(b)),
               ),
+      },
+      {
+        label: "Security traits",
+        value: formatLocationSecurityTraitsDisplay(
+          content,
+          locationSecurityTraitIds,
+          securityLevel,
+        ),
       },
     ];
     appendMinionStatRows(dl, baseRows);
@@ -1740,7 +1784,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     for (const loc of runLocations()) {
       const sec = securityByLocationId.get(loc.id);
       const slots = assetSlotsByLocationId.get(loc.id) ?? [];
-      const article = buildLocationCardArticle(loc, sec, slots, assetNameById, mainOnly, state.locationRequiredTraits[loc.id] ?? []);
+      const article = buildLocationCardArticle(
+        loc,
+        sec,
+        slots,
+        assetNameById,
+        mainOnly,
+        state.locationRequiredTraits[loc.id] ?? [],
+        state.locationSecurityTraits[loc.id] ?? [],
+      );
       locationsPanelEl.appendChild(article);
     }
   }
