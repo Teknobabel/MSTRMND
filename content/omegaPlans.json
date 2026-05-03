@@ -2,34 +2,34 @@
   {
     "id": "operation_nightfall",
     "name": "Operation Nightfall",
-    "description": "A three-stage escalation ending in extraction.",
+    "description": "Digital breach, logistics hardening, then a timed lift from a hostile annex.",
     "mapId": "metro_night",
     "stages": [
       {
-        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
+        "missionIds": ["breach_server", "vector_null_infil", "cold_storage_placement"]
       },
       {
-        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
+        "missionIds": ["kestrel_black_relay", "extract_asset", "phantom_reach_cartography"]
       },
       {
-        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
+        "missionIds": ["helix_sample_lift", "sigma_seven_exfil_window", "archive_seal_breach"]
       }
     ]
   },
   {
     "id": "operation_sunrise",
     "name": "Operation Sunrise",
-    "description": "Alternate path with heavier extraction focus.",
+    "description": "Social entry, corridor control, and a public distraction masking the real cut.",
     "mapId": "training_grid",
     "stages": [
       {
-        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
+        "missionIds": ["iron_veil_meet", "hollow_crown_social", "third_rail_distraction"]
       },
       {
-        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
+        "missionIds": ["viper_hand_corridor", "apex_contingency_overwatch", "nocturne_route_harden"]
       },
       {
-        "missionIds": ["lab_heist_sample", "lab_heist_sample", "lab_heist_sample"]
+        "missionIds": ["black_ledger_sweep", "extract_asset", "directive_null_intercept"]
       }
     ]
   }

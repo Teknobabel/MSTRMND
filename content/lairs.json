@@ -6,15 +6,14 @@
     "availableMissionIds": [
       "breach_server",
       "extract_asset",
-      "black_bag_op",
-      "burn_safehouse",
-      "ghost_the_principals",
-      "intercept_courier",
-      "scrub_deniability",
-      "signals_vanish",
-      "vault_distraction",
-      "dead_hand_drop",
-      "blueprint_smuggle"
+      "vector_null_infil",
+      "black_ledger_sweep",
+      "cold_storage_placement",
+      "glass_dagger_pickup",
+      "kestrel_black_relay",
+      "vanta_cell_sanitize",
+      "redline_directive_cut",
+      "counterweight_diversion"
     ],
     "startingAssets": {
       "burner_network": 1,
@@ -27,11 +26,12 @@
     "description": "Glass walls, better optics, faster exits.",
     "availableMissionIds": [
       "breach_server",
-      "shell_company_spike",
-      "paymaster_lean",
-      "honeytrap_debrief",
-      "ghost_the_principals",
-      "wedge_turncoat"
+      "iron_veil_meet",
+      "hollow_crown_social",
+      "grey_commission_witness",
+      "third_rail_distraction",
+      "phantom_reach_cartography",
+      "ninth_circle_cutout"
     ]
   }
 ]

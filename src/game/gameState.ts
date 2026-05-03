@@ -7,7 +7,7 @@ import type {
   MinionInstance,
   MissionSource,
   MissionTarget,
-  MissionTargetKind,
+  MissionTargetType,
   MissionTemplate,
 } from "./types";
 import { awardMissionResolutionExperience, createMinionFromTemplate } from "./minion";
@@ -44,7 +44,8 @@ export type PlayerState = {
 export type ActiveMission = {
   id: string;
   missionTemplateId: string;
-  missionTarget: MissionTarget;
+  /** What this mission is aimed at (location, asset slot, minion, or none). */
+  target: MissionTarget;
   missionSource: MissionSource;
   /** Set when `missionSource === "omega"` (grid cell). */
   omegaStageIndex: number | null;
@@ -60,7 +61,7 @@ export type ActivityEventMissionCompleted = {
   activeMissionId: string;
   missionTemplateId: string;
   missionName: string;
-  missionTarget: MissionTarget;
+  target: MissionTarget;
   success: boolean;
   /** Roll in [0, 100) compared to success chance */
   roll: number;
@@ -79,13 +80,13 @@ export type ActivityEvent =
   | {
       kind: "mission_started";
       missionTemplateId: string;
-      missionTarget: MissionTarget;
+      target: MissionTarget;
       missionSource: MissionSource;
       omegaStageIndex: number | null;
       omegaSlotIndex: number | null;
       participantInstanceIds: string[];
     }
-  | { kind: "mission_cancelled"; missionTemplateId: string; missionTarget: MissionTarget }
+  | { kind: "mission_cancelled"; missionTemplateId: string; target: MissionTarget }
   | { kind: "asset_gained"; assetId: string; quantity: number }
   | { kind: "asset_lost"; assetId: string; quantity: number }
   | {
@@ -170,18 +171,47 @@ export type GameError =
   | { code: "no_active_lair" }
   | { code: "mission_not_on_lair"; missionId: string }
   | { code: "lair_mission_already_in_pool"; missionId: string }
-  | {
-      code: "mission_target_kind_mismatch";
-      expected: MissionTargetKind;
-      actual: MissionTargetKind;
-    }
-  | { code: "invalid_asset_slot"; locationId: string; slotIndex: number }
-  | { code: "target_minion_busy"; instanceId: string }
-  | { code: "target_minion_is_participant"; instanceId: string };
+  | { code: "wrong_target_kind"; expected: MissionTargetType; actual: string }
+  | { code: "unknown_asset_slot"; locationId: string; slotIndex: number }
+  | { code: "asset_visibility_mismatch"; locationId: string; slotIndex: number }
+  | { code: "minion_target_in_participants"; instanceId: string }
+  | { code: "unknown_target_minion"; instanceId: string };
 
 export type Ok<T> = { ok: true; value: T };
 export type Err<E> = { ok: false; error: E };
 export type Result<T, E> = Ok<T> | Err<E>;
+
+/** Whether `target` matches the mission template’s `targetType`. */
+export function missionTargetMatchesTemplate(
+  templateType: MissionTargetType,
+  target: MissionTarget,
+): boolean {
+  switch (templateType) {
+    case "none":
+      return target.kind === "none";
+    case "location":
+      return target.kind === "location";
+    case "asset_hidden":
+      return target.kind === "asset" && target.visibilityAtAssign === "hidden";
+    case "asset_revealed":
+      return target.kind === "asset" && target.visibilityAtAssign === "revealed";
+    case "minion":
+      return target.kind === "minion";
+    default:
+      return false;
+  }
+}
+
+/** Location whose security may rise when a mission resolves (location- or asset-targeted). */
+export function getMissionTargetLocationId(target: MissionTarget): string | null {
+  if (target.kind === "location") {
+    return target.locationId;
+  }
+  if (target.kind === "asset") {
+    return target.locationId;
+  }
+  return null;
+}
 
 const INFAMY_SUCCESS_DELTA = -3;
 const INFAMY_FAILURE_DELTA = 5;
@@ -213,98 +243,6 @@ function raiseSecurityAfterMissionAtLocation(
     const next = Math.min(MAX_LOCATION_SECURITY_LEVEL, s.securityLevel + 1);
     return { ...s, securityLevel: next as 1 | 2 | 3 };
   });
-}
-
-/** Location whose security rises when this mission resolves; null → no bump. */
-export function locationIdForMissionSecurity(missionTarget: MissionTarget): string | null {
-  if (missionTarget.kind === "location") {
-    return missionTarget.locationId;
-  }
-  if (missionTarget.kind === "location_asset") {
-    return missionTarget.locationId;
-  }
-  return null;
-}
-
-function validateMissionTargetForAssignment(
-  template: MissionTemplate,
-  missionTarget: MissionTarget,
-  state: GameState,
-  catalog: ContentCatalog,
-  participantInstanceIds: string[],
-): GameError | null {
-  if (missionTarget.kind !== template.targetKind) {
-    return {
-      code: "mission_target_kind_mismatch",
-      expected: template.targetKind,
-      actual: missionTarget.kind,
-    };
-  }
-  const playableLocationIds = activeLocationIds(catalog, state.activeOmegaPlanId);
-  switch (missionTarget.kind) {
-    case "location": {
-      const loc = locationById(catalog, missionTarget.locationId);
-      if (!loc) {
-        return { code: "unknown_location", locationId: missionTarget.locationId };
-      }
-      if (!playableLocationIds.has(missionTarget.locationId)) {
-        return { code: "location_not_on_active_map", locationId: missionTarget.locationId };
-      }
-      return null;
-    }
-    case "location_asset": {
-      const loc = locationById(catalog, missionTarget.locationId);
-      if (!loc) {
-        return { code: "unknown_location", locationId: missionTarget.locationId };
-      }
-      if (!playableLocationIds.has(missionTarget.locationId)) {
-        return { code: "location_not_on_active_map", locationId: missionTarget.locationId };
-      }
-      const placement = state.locationAssetSlots.find((p) => p.locationId === missionTarget.locationId);
-      if (
-        !placement ||
-        missionTarget.slotIndex < 0 ||
-        missionTarget.slotIndex >= placement.slots.length
-      ) {
-        return {
-          code: "invalid_asset_slot",
-          locationId: missionTarget.locationId,
-          slotIndex: missionTarget.slotIndex,
-        };
-      }
-      const slot = placement.slots[missionTarget.slotIndex];
-      if (!slot?.assetId) {
-        return {
-          code: "invalid_asset_slot",
-          locationId: missionTarget.locationId,
-          slotIndex: missionTarget.slotIndex,
-        };
-      }
-      return null;
-    }
-    case "minion": {
-      const inst = state.player.minions.find((m) => m.instanceId === missionTarget.instanceId);
-      if (!inst) {
-        return { code: "unknown_instance", instanceId: missionTarget.instanceId };
-      }
-      if (participantInstanceIds.includes(missionTarget.instanceId)) {
-        return {
-          code: "target_minion_is_participant",
-          instanceId: missionTarget.instanceId,
-        };
-      }
-      const busy = busyInstanceIds(state.activeMissions);
-      if (busy.has(missionTarget.instanceId)) {
-        return {
-          code: "target_minion_busy",
-          instanceId: missionTarget.instanceId,
-        };
-      }
-      return null;
-    }
-    case "none":
-      return null;
-  }
 }
 
 export type Rng = () => number;
@@ -722,7 +660,7 @@ export function assignMission(
   catalog: ContentCatalog,
   activeMissionId: string,
   missionTemplateId: string,
-  missionTarget: MissionTarget,
+  target: MissionTarget,
   missionSource: MissionSource,
   omegaStageIndex: number | null,
   omegaSlotIndex: number | null,
@@ -747,15 +685,15 @@ export function assignMission(
     return { ok: false, error: { code: "unknown_mission", missionId: missionTemplateId } };
   }
 
-  const targetErr = validateMissionTargetForAssignment(
-    missionTemplate,
-    missionTarget,
-    state,
-    catalog,
-    participantInstanceIds,
-  );
-  if (targetErr) {
-    return { ok: false, error: targetErr };
+  if (!missionTargetMatchesTemplate(missionTemplate.targetType, target)) {
+    return {
+      ok: false,
+      error: {
+        code: "wrong_target_kind",
+        expected: missionTemplate.targetType,
+        actual: target.kind,
+      },
+    };
   }
 
   if (missionSource === "lair") {
@@ -818,6 +756,61 @@ export function assignMission(
   }
 
   const busy = busyInstanceIds(state.activeMissions);
+
+  if (target.kind === "location" || target.kind === "asset") {
+    const lid = target.locationId;
+    if (!locationById(catalog, lid)) {
+      return { ok: false, error: { code: "unknown_location", locationId: lid } };
+    }
+    if (!activeLocationIds(catalog, state.activeOmegaPlanId).has(lid)) {
+      return {
+        ok: false,
+        error: { code: "location_not_on_active_map", locationId: lid },
+      };
+    }
+  }
+
+  if (target.kind === "asset") {
+    const placement = state.locationAssetSlots.find((p) => p.locationId === target.locationId);
+    const slot = placement?.slots[target.slotIndex];
+    if (!slot) {
+      return {
+        ok: false,
+        error: {
+          code: "unknown_asset_slot",
+          locationId: target.locationId,
+          slotIndex: target.slotIndex,
+        },
+      };
+    }
+    if (slot.visibility !== target.visibilityAtAssign) {
+      return {
+        ok: false,
+        error: {
+          code: "asset_visibility_mismatch",
+          locationId: target.locationId,
+          slotIndex: target.slotIndex,
+        },
+      };
+    }
+  }
+
+  if (target.kind === "minion") {
+    const tm = state.player.minions.find((x) => x.instanceId === target.instanceId);
+    if (!tm) {
+      return { ok: false, error: { code: "unknown_target_minion", instanceId: target.instanceId } };
+    }
+    if (busy.has(target.instanceId)) {
+      return { ok: false, error: { code: "minion_on_mission", instanceId: target.instanceId } };
+    }
+    if (participantInstanceIds.includes(target.instanceId)) {
+      return {
+        ok: false,
+        error: { code: "minion_target_in_participants", instanceId: target.instanceId },
+      };
+    }
+  }
+
   const participants: MinionInstance[] = [];
   for (const iid of participantInstanceIds) {
     const m = state.player.minions.find((x) => x.instanceId === iid);
@@ -861,7 +854,7 @@ export function assignMission(
   const activeMission: ActiveMission = {
     id: activeMissionId,
     missionTemplateId,
-    missionTarget,
+    target,
     missionSource,
     omegaStageIndex: missionSource === "omega" ? omegaStageIndex : null,
     omegaSlotIndex: missionSource === "omega" ? omegaSlotIndex : null,
@@ -883,7 +876,7 @@ export function assignMission(
     value: appendActivityEvent(next, {
       kind: "mission_started",
       missionTemplateId,
-      missionTarget,
+      target,
       missionSource,
       omegaStageIndex: missionSource === "omega" ? omegaStageIndex : null,
       omegaSlotIndex: missionSource === "omega" ? omegaSlotIndex : null,
@@ -928,7 +921,7 @@ export function cancelMission(
     value: appendActivityEvent(next, {
       kind: "mission_cancelled",
       missionTemplateId: am.missionTemplateId,
-      missionTarget: am.missionTarget,
+      target: am.target,
     }),
   };
 }
@@ -1047,18 +1040,18 @@ export function executePlan(
       activeMissionId: am.id,
       missionTemplateId: template.id,
       missionName: template.name,
-      missionTarget: am.missionTarget,
+      target: am.target,
       success,
       roll,
       successChancePercent: pct,
       infamyDelta,
     });
 
-    const securityLoc = locationIdForMissionSecurity(am.missionTarget);
-    if (securityLoc !== null) {
+    const secLoc = getMissionTargetLocationId(am.target);
+    if (secLoc !== null) {
       locationSecurityStates = raiseSecurityAfterMissionAtLocation(
         locationSecurityStates,
-        securityLoc,
+        secLoc,
       );
     }
 

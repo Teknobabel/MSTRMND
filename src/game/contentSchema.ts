@@ -74,16 +74,22 @@ function parseMinionsWithTraitRefs(
   return arr;
 }
 
-const missionTargetKindSchema = z.enum(["location", "location_asset", "minion", "none"]);
+const missionTargetTypeSchema = z.enum([
+  "location",
+  "asset_hidden",
+  "asset_revealed",
+  "minion",
+  "none",
+]);
 
 const missionTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
+  targetType: missionTargetTypeSchema,
   startCommandPoints: z.coerce.number().int().min(0),
   requiredTraitIds: z.array(z.string().min(1)).min(1),
   durationTurns: z.coerce.number().int().min(1),
-  targetKind: missionTargetKindSchema.default("location"),
 });
 
 function parseMissionsWithTraitRefs(

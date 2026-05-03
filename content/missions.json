@@ -3,207 +3,342 @@
     "id": "breach_server",
     "name": "Breach the server",
     "description": "Gain access before the trace completes.",
+    "targetType": "none",
     "startCommandPoints": 2,
     "requiredTraitIds": ["hacker", "tactician"],
-    "durationTurns": 1,
-    "targetKind": "location"
+    "durationTurns": 1
   },
   {
     "id": "extract_asset",
     "name": "Extract the asset",
     "description": "Escort the contact out under pressure.",
+    "targetType": "none",
     "startCommandPoints": 3,
-    "requiredTraitIds": ["loyal", "lucky", "hacker"],
-    "durationTurns": 3,
-    "targetKind": "location"
+    "requiredTraitIds": ["loyal", "hacker", "fast"],
+    "durationTurns": 3
   },
   {
-    "id": "black_bag_op",
-    "name": "Black-bag op",
-    "description": "Quiet entry, quieter exit. Leave no optics, only absence.",
+    "id": "vector_null_infil",
+    "name": "Vector Null infiltration",
+    "description": "Slip the perimeter before the shift change; leave no badge trail.",
+    "targetType": "none",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["spy", "sneaky", "hacker"],
+    "durationTurns": 2
+  },
+  {
+    "id": "black_ledger_sweep",
+    "name": "Black Ledger sweep",
+    "description": "Sanitize the node before the syndicate reconciles the float.",
+    "targetType": "none",
     "startCommandPoints": 2,
-    "requiredTraitIds": ["spy", "sneaky"],
-    "durationTurns": 2,
-    "targetKind": "location"
+    "requiredTraitIds": ["thief", "clever", "hacker"],
+    "durationTurns": 2
   },
   {
-    "id": "burn_safehouse",
-    "name": "Burn the safehouse",
-    "description": "Thermite where the wiring diagrams sleep. Alibis are someone else's problem.",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["engineer", "tactician"],
-    "durationTurns": 1,
-    "targetKind": "location"
-  },
-  {
-    "id": "ghost_the_principals",
-    "name": "Ghost the principals",
-    "description": "Be where the calendar says they aren't. Memorize faces, then forget them on purpose.",
+    "id": "cold_storage_placement",
+    "name": "Cold Storage placement",
+    "description": "Stage the payload where audits look benign and cameras look away.",
+    "targetType": "none",
     "startCommandPoints": 3,
-    "requiredTraitIds": ["politician", "persuasive"],
-    "durationTurns": 2,
-    "targetKind": "location"
+    "requiredTraitIds": ["engineer", "tactician", "sneaky"],
+    "durationTurns": 3
   },
   {
-    "id": "intercept_courier",
-    "name": "Intercept the courier",
-    "description": "Hard-shell case, soft schedule. Take the package before the route updates.",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["thief", "fast"],
-    "durationTurns": 1,
-    "targetKind": "location"
-  },
-  {
-    "id": "lab_heist_sample",
-    "name": "Lift the lab sample",
-    "description": "Cold chain, hot lights. One vial and you're already overexposed.",
-    "startCommandPoints": 3,
-    "requiredTraitIds": ["scientist", "clever"],
-    "durationTurns": 2,
-    "targetKind": "none"
-  },
-  {
-    "id": "riot_cover_story",
-    "name": "Riot cover story",
-    "description": "Street noise buys minutes. Loyal crews hold the line while you walk out the side door.",
-    "startCommandPoints": 3,
-    "requiredTraitIds": ["soldier", "loyal"],
-    "durationTurns": 3,
-    "targetKind": "location"
-  },
-  {
-    "id": "scrub_deniability",
-    "name": "Scrub deniability",
-    "description": "Retcon the paper trail from orbit. No map pin—just permissions and panic.",
-    "startCommandPoints": 1,
-    "requiredTraitIds": ["hacker", "charismatic"],
-    "durationTurns": 1,
-    "targetKind": "none"
-  },
-  {
-    "id": "seize_ledger_cold",
-    "name": "Seize the ledger cold",
-    "description": "One drive, many names. Snatch the physical proof before it goes warm.",
-    "startCommandPoints": 3,
-    "requiredTraitIds": ["thief", "intelligent"],
-    "durationTurns": 2,
-    "targetKind": "location_asset"
-  },
-  {
-    "id": "wedge_turncoat",
-    "name": "Wedge the turncoat",
-    "description": "Pressure on a roster asset until they cough coordinates. Personal, not public.",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["spy", "persuasive"],
-    "durationTurns": 2,
-    "targetKind": "minion"
-  },
-  {
-    "id": "weapons_cache_lift",
-    "name": "Weapons cache lift",
-    "description": "Crates stamped agricultural. Count rounds, not questions.",
+    "id": "apex_contingency_overwatch",
+    "name": "Apex Contingency overwatch",
+    "description": "Hold the corridor until the package clears the mezzanine choke.",
+    "targetType": "none",
     "startCommandPoints": 4,
-    "requiredTraitIds": ["soldier", "strong"],
-    "durationTurns": 3,
-    "targetKind": "location"
+    "requiredTraitIds": ["soldier", "tactician", "resilient"],
+    "durationTurns": 2
   },
   {
-    "id": "paymaster_lean",
-    "name": "Lean on the paymaster",
-    "description": "Follow the slush. A quiet word where budgets bend.",
+    "id": "ninth_circle_cutout",
+    "name": "Ninth Circle cutout burn",
+    "description": "Retire a cutout identity while the cell still believes the cover holds.",
+    "targetType": "location",
     "startCommandPoints": 2,
-    "requiredTraitIds": ["politician", "tactician"],
-    "durationTurns": 2,
-    "targetKind": "location"
+    "requiredTraitIds": ["hacker", "tactician", "loyal"],
+    "durationTurns": 1
   },
   {
-    "id": "signals_vanish",
-    "name": "Signals vanish",
-    "description": "Kill the handshake, not the hardware. Let them argue with static.",
-    "startCommandPoints": 1,
-    "requiredTraitIds": ["hacker", "sneaky"],
-    "durationTurns": 1,
-    "targetKind": "none"
-  },
-  {
-    "id": "vault_distraction",
-    "name": "Vault distraction",
-    "description": "Front door chaos, back door inches. Luck is a schedule you rigged.",
+    "id": "phantom_reach_cartography",
+    "name": "Phantom Reach cartography",
+    "description": "Map ingress vectors the consortium forgot to classify.",
+    "targetType": "none",
     "startCommandPoints": 3,
-    "requiredTraitIds": ["thief", "lucky"],
-    "durationTurns": 2,
-    "targetKind": "location"
+    "requiredTraitIds": ["spy", "tactician", "intelligent"],
+    "durationTurns": 2
   },
   {
-    "id": "containment_breach_play",
-    "name": "Containment breach play",
-    "description": "Trip the alarm you wrote. Walk out while they rehearse the wrong disaster.",
+    "id": "iron_veil_meet",
+    "name": "Iron Veil meet",
+    "description": "A smile, a folder, and a lie that buys twelve minutes at the desk.",
+    "targetType": "none",
     "startCommandPoints": 3,
-    "requiredTraitIds": ["engineer", "resilient"],
-    "durationTurns": 2,
-    "targetKind": "location"
+    "requiredTraitIds": ["politician", "charismatic", "persuasive"],
+    "durationTurns": 2
   },
   {
-    "id": "motorcade_shadow",
-    "name": "Motorcade shadow",
-    "description": "Three cars, two decoys, one window. Bodywork is policy.",
+    "id": "sigma_seven_exfil_window",
+    "name": "Sigma-7 exfil window",
+    "description": "Beat the rotating cordon; the window is measured in elevator cycles.",
+    "targetType": "none",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["soldier", "fast", "tactician"],
+    "durationTurns": 3
+  },
+  {
+    "id": "midnight_annex_survey",
+    "name": "Midnight Annex survey",
+    "description": "Quiet measurements on a site the annex pretends is dormant.",
+    "targetType": "location",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["thief", "agile", "clever"],
+    "durationTurns": 2
+  },
+  {
+    "id": "cascade_failure_deny",
+    "name": "Cascade Failure denial",
+    "description": "Trip safeguards so the failure reads like incompetence, not intent.",
+    "targetType": "location",
     "startCommandPoints": 3,
-    "requiredTraitIds": ["bodyguard", "tactician"],
-    "durationTurns": 3,
-    "targetKind": "location"
+    "requiredTraitIds": ["engineer", "hacker", "scientist"],
+    "durationTurns": 3
   },
   {
-    "id": "shell_company_spike",
-    "name": "Shell company spike",
-    "description": "Boardroom theater for auditors who never leave the building. Spike the narrative, not the stock—yet.",
+    "id": "glass_dagger_pickup",
+    "name": "Glass Dagger pickup",
+    "description": "Retrieve the dead drop before the initiative rotates the blind.",
+    "targetType": "location",
     "startCommandPoints": 2,
-    "requiredTraitIds": ["politician", "clever"],
-    "durationTurns": 2,
-    "targetKind": "none"
+    "requiredTraitIds": ["thief", "loyal", "sneaky"],
+    "durationTurns": 1
   },
   {
-    "id": "dead_hand_drop",
-    "name": "Dead-hand drop",
-    "description": "If you don't check in, the packet walks itself to the press. Retrieve before the timer wins.",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["spy", "tactician"],
-    "durationTurns": 1,
-    "targetKind": "location"
+    "id": "helix_sample_lift",
+    "name": "Helix Ascendant sample lift",
+    "description": "Lift the sample from the lab edge while compliance tours the clean room.",
+    "targetType": "none",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["scientist", "sneaky", "engineer"],
+    "durationTurns": 3
   },
   {
-    "id": "honeytrap_debrief",
-    "name": "Honeytrap debrief",
-    "description": "They talked too much over dinner. You need names while the charm still stings.",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["charismatic", "clever"],
-    "durationTurns": 2,
-    "targetKind": "location"
-  },
-  {
-    "id": "perimeter_cut",
-    "name": "Perimeter cut",
-    "description": "Fence, sensors, dogs—someone drew a line. You redraw it with wire cutters and patience.",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["soldier", "agile"],
-    "durationTurns": 2,
-    "targetKind": "location"
-  },
-  {
-    "id": "blueprint_smuggle",
-    "name": "Blueprint smuggle",
-    "description": "Rolls too big for a briefcase, too hot for a courier app. Move the plans like contraband art.",
+    "id": "kestrel_black_relay",
+    "name": "Kestrel Black relay",
+    "description": "Stand up a relay the wetworks annex can trust for one broadcast only.",
+    "targetType": "none",
     "startCommandPoints": 3,
-    "requiredTraitIds": ["engineer", "sneaky"],
-    "durationTurns": 3,
-    "targetKind": "location"
+    "requiredTraitIds": ["hacker", "tactician", "resilient"],
+    "durationTurns": 2
   },
   {
-    "id": "witness_shaping",
-    "name": "Witness shaping",
-    "description": "Memory is plastic. One friendly minion remembers the version we need on the stand.",
+    "id": "third_rail_distraction",
+    "name": "Third Rail distraction",
+    "description": "Crowd physics as cover while the real move happens three blocks east.",
+    "targetType": "none",
     "startCommandPoints": 2,
-    "requiredTraitIds": ["persuasive", "loyal"],
-    "durationTurns": 2,
-    "targetKind": "minion"
+    "requiredTraitIds": ["politician", "charismatic", "fast"],
+    "durationTurns": 1
+  },
+  {
+    "id": "archive_seal_breach",
+    "name": "Archive of Last Resorts breach",
+    "description": "Crack the seal without tripping the quiet board's audit ping.",
+    "targetType": "none",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["thief", "hacker", "intelligent"],
+    "durationTurns": 3
+  },
+  {
+    "id": "viper_hand_corridor",
+    "name": "Viper's Hand corridor lock",
+    "description": "Own the choke long enough for the syndicate to move the principal.",
+    "targetType": "none",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["bodyguard", "strong", "tactician"],
+    "durationTurns": 2
+  },
+  {
+    "id": "hollow_crown_social",
+    "name": "Hollow Crown social pass",
+    "description": "Engineer a plausible reason to be exactly where the crown forbids.",
+    "targetType": "none",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["spy", "persuasive", "clever"],
+    "durationTurns": 2
+  },
+  {
+    "id": "nocturne_route_harden",
+    "name": "Nocturne Logistics hardening",
+    "description": "Harden the route against spot checks; logistics hates surprises.",
+    "targetType": "none",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["soldier", "resilient", "tactician"],
+    "durationTurns": 2
+  },
+  {
+    "id": "directive_null_intercept",
+    "name": "Directive Null-Three intercept",
+    "description": "Intercept the briefing packet before oversight routes the rewrite.",
+    "targetType": "none",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["hacker", "spy", "intelligent"],
+    "durationTurns": 2
+  },
+  {
+    "id": "obsidian_reach_deadzone",
+    "name": "Obsidian Reach dead zone",
+    "description": "Carve a comms dead zone so the reach hears static, not footsteps.",
+    "targetType": "location",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["engineer", "hacker", "scientist"],
+    "durationTurns": 3
+  },
+  {
+    "id": "redline_directive_cut",
+    "name": "Redline Directive cut",
+    "description": "Cut the directive chain at the node that still thinks it's redundant.",
+    "targetType": "location",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["hacker", "clever", "lucky"],
+    "durationTurns": 1
+  },
+  {
+    "id": "omega_protocol_mirror",
+    "name": "Omega Protocol mirror",
+    "description": "Mirror legitimate traffic until the protocol group signs off on the forgery.",
+    "targetType": "location",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["hacker", "tactician", "intelligent"],
+    "durationTurns": 2
+  },
+  {
+    "id": "shadow_directorate_plant",
+    "name": "Shadow Directorate plant",
+    "description": "Plant the narrative asset where the directorate's own analysts will find it.",
+    "targetType": "location",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["spy", "politician", "persuasive"],
+    "durationTurns": 3
+  },
+  {
+    "id": "vanta_cell_sanitize",
+    "name": "Vanta Operations sanitize",
+    "description": "Scrub prints and fibers before the cell's morning sweep hits the floor.",
+    "targetType": "location",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["thief", "sneaky", "agile"],
+    "durationTurns": 1
+  },
+  {
+    "id": "cipher_key_rotation",
+    "name": "Cipher Key rotation",
+    "description": "Rotate keys under the directorate's nose; they must believe it's maintenance.",
+    "targetType": "location",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["hacker", "engineer", "tactician"],
+    "durationTurns": 2
+  },
+  {
+    "id": "grey_commission_witness",
+    "name": "Grey Commission witness",
+    "description": "Become the witness the commission cannot dismiss without admitting the leak.",
+    "targetType": "location",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["politician", "charismatic", "intelligent"],
+    "durationTurns": 3
+  },
+  {
+    "id": "burner_doctrine_purge",
+    "name": "Burner Doctrine purge",
+    "description": "Purge the doctrine cache while the collective still argues jurisdiction.",
+    "targetType": "location",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["soldier", "hacker", "resilient"],
+    "durationTurns": 2
+  },
+  {
+    "id": "threshold_crossing_hold",
+    "name": "Threshold Crossing hold",
+    "description": "Hold the crossing until the bureau's convoy commits past the point of return.",
+    "targetType": "location",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["bodyguard", "tactician", "resilient"],
+    "durationTurns": 3
+  },
+  {
+    "id": "rook_bishop_feint",
+    "name": "Rook & Bishop feint",
+    "description": "A visible feint so strategic misses the piece sliding along the diagonal.",
+    "targetType": "location",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["tactician", "clever", "lucky"],
+    "durationTurns": 1
+  },
+  {
+    "id": "project_eclipse_blind",
+    "name": "Project ECLIPSE blind",
+    "description": "Blind oversight sensors for one orbit; oversight blames weather.",
+    "targetType": "location",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["scientist", "engineer", "hacker"],
+    "durationTurns": 3
+  },
+  {
+    "id": "subversion_protocol_lock",
+    "name": "Subversion Protocol Seven lock",
+    "description": "Lock the protocol floor while seven still thinks the alarm is a drill.",
+    "targetType": "location",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["soldier", "engineer", "tactician"],
+    "durationTurns": 2
+  },
+  {
+    "id": "quiet_board_minutes",
+    "name": "Quiet Board minutes lift",
+    "description": "Lift minutes that never made the deck—only the board's quiet copy.",
+    "targetType": "location",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["thief", "spy", "intelligent"],
+    "durationTurns": 2
+  },
+  {
+    "id": "argent_serpent_handshake",
+    "name": "Argent Serpent handshake",
+    "description": "Seal the handshake the collective will deny if pressed by daylight.",
+    "targetType": "location",
+    "startCommandPoints": 3,
+    "requiredTraitIds": ["politician", "persuasive", "loyal"],
+    "durationTurns": 2
+  },
+  {
+    "id": "deep_cover_cartography_seed",
+    "name": "Deep Cover Cartography seed",
+    "description": "Seed falsified charts so cartography sells the wrong story upstream.",
+    "targetType": "location",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["spy", "hacker", "clever"],
+    "durationTurns": 2
+  },
+  {
+    "id": "counterweight_diversion",
+    "name": "Counterweight diversion",
+    "description": "Tip the counterweight; let the initiative chase balance while you move.",
+    "targetType": "location",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["engineer", "lucky", "fast"],
+    "durationTurns": 1
+  },
+  {
+    "id": "last_light_strategic_cut",
+    "name": "Last Light strategic cut",
+    "description": "Cut the strategic uplink before last light reroutes through the backup mesh.",
+    "targetType": "location",
+    "startCommandPoints": 4,
+    "requiredTraitIds": ["hacker", "scientist", "tactician"],
+    "durationTurns": 3
   }
 ]

@@ -25,16 +25,26 @@ export type MinionInstance = {
   traitIds: string[];
 };
 
-/** Designer-authored mission target; drives assign UI and validation. */
-export type MissionTargetKind = "location" | "location_asset" | "minion" | "none";
+/** Designer-authored mission target; drives planning UI and validation. */
+export type MissionTargetType =
+  | "location"
+  | "asset_hidden"
+  | "asset_revealed"
+  | "minion"
+  | "none";
 
 /**
- * Runtime mission target (persisted on active missions and activity events).
- * `kind` must match the mission template’s `targetKind` at assign time.
+ * Runtime target for an active mission (assign + resolve).
+ * - `asset`: `visibilityAtAssign` must match the slot’s visibility when assigned.
  */
 export type MissionTarget =
   | { kind: "location"; locationId: string }
-  | { kind: "location_asset"; locationId: string; slotIndex: number }
+  | {
+      kind: "asset";
+      locationId: string;
+      slotIndex: number;
+      visibilityAtAssign: LocationAssetVisibility;
+    }
   | { kind: "minion"; instanceId: string }
   | { kind: "none" };
 
@@ -46,8 +56,8 @@ export type MissionTemplate = {
   startCommandPoints: number;
   requiredTraitIds: string[];
   durationTurns: number;
-  /** What the player must pick in the Target slot (default: location). */
-  targetKind: MissionTargetKind;
+  /** What the player must pick in the target planning slot (if any). */
+  targetType: MissionTargetType;
 };
 
 /** Visibility of an asset at a location for the player (kind known only when revealed). */

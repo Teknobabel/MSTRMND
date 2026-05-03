@@ -8,12 +8,13 @@ import {
   executePlan,
   fireMinion,
   hireMinion,
+  missionTargetMatchesTemplate,
   rehireMinion,
   rerollHireOffers,
   REROLL_HIRE_OFFERS_CP,
   type GameState,
 } from "./game/gameState";
-import type { MissionSource, MissionTarget, MissionTargetKind } from "./game/types";
+import type { MissionSource, MissionTarget, MissionTargetType } from "./game/types";
 import {
   canAssignParticipants,
   successChancePercent,
@@ -111,6 +112,17 @@ function formatLocationTypeLabel(locationType: string): string {
   return locationType.charAt(0).toUpperCase() + locationType.slice(1);
 }
 
+function formatMissionTargetTypeLabel(tt: MissionTargetType): string {
+  const map: Record<MissionTargetType, string> = {
+    location: "Location",
+    asset_hidden: "Hidden asset",
+    asset_revealed: "Revealed asset",
+    minion: "Minion",
+    none: "None",
+  };
+  return map[tt];
+}
+
 function initGameController(content: ReturnType<typeof loadContent>): void {
   let state: GameState = createInitialGameState(content);
 
@@ -124,6 +136,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const assignMissionSlotEl = req<HTMLElement>("assign-mission-slot");
   const assignTargetSlotEl = req<HTMLElement>("assign-target-slot");
   const assignTargetFieldEl = req<HTMLElement>("assign-target-field");
+  const assignTargetLabelEl = req<HTMLElement>("assign-target-label");
   const minionsList = req<HTMLElement>("assign-minions-list");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
   const btnExec = req<HTMLButtonElement>("btn-execute-plan");
@@ -143,12 +156,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   let assignMissionSource: MissionSource | null = null;
   let assignOmegaStageIndex: number | null = null;
   let assignOmegaSlotIndex: number | null = null;
-  let assignMissionTarget: MissionTarget | null = null;
+  let assignTarget: MissionTarget | null = null;
   let dndDragSource:
     | { kind: "roster" }
     | { kind: "slot"; slotIndex: number }
     | { kind: "mission-slot" }
-    | { kind: "target-slot" }
+    | { kind: "assign-target" }
     | null = null;
 
   function getAssignParticipantIds(): string[] {
@@ -178,11 +191,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     assignMissionSource = null;
     assignOmegaStageIndex = null;
     assignOmegaSlotIndex = null;
-    assignMissionTarget = null;
+    updateAssignTargetFieldVisibility();
+    updateAssignTargetLabelText();
   }
 
   function clearAssignMissionTarget(): void {
     clearAssignMissionSlotOnly();
+    assignTarget = null;
   }
 
   function clearAllAssignSlots(): void {
@@ -199,6 +214,66 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       }
     }
     assignSlotInstanceIds[slotIndex] = instanceId;
+    if (assignTarget?.kind === "minion" && assignTarget.instanceId === instanceId) {
+      assignTarget = null;
+    }
+  }
+
+  function removeInstanceFromAllAssignSlots(instanceId: string): void {
+    for (let i = 0; i < 3; i += 1) {
+      if (assignSlotInstanceIds[i] === instanceId) {
+        assignSlotInstanceIds[i] = null;
+      }
+    }
+  }
+
+  function selectedMissionTemplate():
+    | (typeof content.missions)[number]
+    | undefined {
+    if (!assignMissionTemplateId) {
+      return undefined;
+    }
+    return content.missions.find((m) => m.id === assignMissionTemplateId);
+  }
+
+  function reconcileTargetWithMission(): void {
+    const m = selectedMissionTemplate();
+    if (!m) {
+      return;
+    }
+    if (m.targetType === "none") {
+      assignTarget = null;
+      return;
+    }
+    if (!assignTarget) {
+      return;
+    }
+    if (!missionTargetMatchesTemplate(m.targetType, assignTarget)) {
+      assignTarget = null;
+    }
+  }
+
+  function updateAssignTargetFieldVisibility(): void {
+    const m = selectedMissionTemplate();
+    const hide = m?.targetType === "none";
+    assignTargetFieldEl.classList.toggle("assign-target-field--hidden", hide);
+    assignTargetFieldEl.toggleAttribute("hidden", hide);
+  }
+
+  function updateAssignTargetLabelText(): void {
+    const m = selectedMissionTemplate();
+    if (!m || m.targetType === "none") {
+      assignTargetLabelEl.textContent = "Target";
+      return;
+    }
+    const labels: Record<MissionTargetType, string> = {
+      location: "Target Location",
+      asset_hidden: "Target Hidden Asset",
+      asset_revealed: "Target Revealed Asset",
+      minion: "Target Minion",
+      none: "Target",
+    };
+    assignTargetLabelEl.textContent = labels[m.targetType];
   }
 
   function onAssignSlotsChanged(): void {
@@ -218,14 +293,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   type LocationDragPayload = { kind: "mastermind-location"; locationId: string };
 
   type AssetDragPayload = {
-    kind: "mastermind-location-asset";
+    kind: "mastermind-asset";
     locationId: string;
-    assetSlotIndex: number;
+    slotIndex: number;
+    visibility: "hidden" | "revealed";
   };
 
-  function parseDragPayload(
-    raw: string,
-  ): MissionDragPayload | LocationDragPayload | AssetDragPayload | null {
+  type MinionDragPayload = { kind: "mastermind-minion"; instanceId: string };
+
+  type AnyDragPayload =
+    | MissionDragPayload
+    | LocationDragPayload
+    | AssetDragPayload
+    | MinionDragPayload;
+
+  function parseDragPayload(raw: string): AnyDragPayload | null {
     const t = raw.trim();
     if (!t.startsWith("{")) {
       return null;
@@ -238,7 +320,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         stageIndex?: number;
         slotIndex?: number;
         locationId?: string;
-        assetSlotIndex?: number;
+        visibility?: string;
+        instanceId?: string;
       };
       if (o.kind === "mastermind-mission" && o.source === "lair" && typeof o.missionTemplateId === "string") {
         return { kind: "mastermind-mission", source: "lair", missionTemplateId: o.missionTemplateId };
@@ -258,20 +341,72 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           slotIndex: o.slotIndex,
         };
       }
-      if (o.kind === "mastermind-location-asset" && typeof o.locationId === "string" && typeof o.assetSlotIndex === "number") {
-        return {
-          kind: "mastermind-location-asset",
-          locationId: o.locationId,
-          assetSlotIndex: o.assetSlotIndex,
-        };
-      }
       if (o.kind === "mastermind-location" && typeof o.locationId === "string") {
         return { kind: "mastermind-location", locationId: o.locationId };
+      }
+      if (
+        o.kind === "mastermind-asset" &&
+        typeof o.locationId === "string" &&
+        typeof o.slotIndex === "number" &&
+        (o.visibility === "hidden" || o.visibility === "revealed")
+      ) {
+        return {
+          kind: "mastermind-asset",
+          locationId: o.locationId,
+          slotIndex: o.slotIndex,
+          visibility: o.visibility,
+        };
+      }
+      if (o.kind === "mastermind-minion" && typeof o.instanceId === "string") {
+        return { kind: "mastermind-minion", instanceId: o.instanceId };
       }
     } catch {
       return null;
     }
     return null;
+  }
+
+  function payloadToMissionTarget(payload: Exclude<AnyDragPayload, MissionDragPayload>): MissionTarget | null {
+    if (payload.kind === "mastermind-location") {
+      return { kind: "location", locationId: payload.locationId };
+    }
+    if (payload.kind === "mastermind-asset") {
+      return {
+        kind: "asset",
+        locationId: payload.locationId,
+        slotIndex: payload.slotIndex,
+        visibilityAtAssign: payload.visibility,
+      };
+    }
+    if (payload.kind === "mastermind-minion") {
+      return { kind: "minion", instanceId: payload.instanceId };
+    }
+    return null;
+  }
+
+  function targetPayloadMatchesPlannedMission(
+    payload: Exclude<AnyDragPayload, MissionDragPayload>,
+  ): boolean {
+    const m = selectedMissionTemplate();
+    if (!m) {
+      return true;
+    }
+    if (m.targetType === "none") {
+      return false;
+    }
+    if (m.targetType === "location") {
+      return payload.kind === "mastermind-location";
+    }
+    if (m.targetType === "asset_hidden") {
+      return payload.kind === "mastermind-asset" && payload.visibility === "hidden";
+    }
+    if (m.targetType === "asset_revealed") {
+      return payload.kind === "mastermind-asset" && payload.visibility === "revealed";
+    }
+    if (m.targetType === "minion") {
+      return payload.kind === "mastermind-minion";
+    }
+    return false;
   }
 
   function missionDragJson(
@@ -296,35 +431,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     return JSON.stringify({ kind: "mastermind-location", locationId });
   }
 
-  function assetDragJson(locationId: string, assetSlotIndex: number): string {
+  function assetDragJson(
+    locationId: string,
+    slotIndex: number,
+    visibility: "hidden" | "revealed",
+  ): string {
     return JSON.stringify({
-      kind: "mastermind-location-asset",
+      kind: "mastermind-asset",
       locationId,
-      assetSlotIndex,
+      slotIndex,
+      visibility,
     });
   }
 
-  function selectedAssignMissionTemplate(): (typeof content.missions)[number] | undefined {
-    if (!assignMissionTemplateId) {
-      return undefined;
-    }
-    return content.missions.find((m) => m.id === assignMissionTemplateId);
-  }
-
-  function applyMissionDragFromPayload(payload: MissionDragPayload): void {
-    assignMissionTarget = null;
-    assignMissionTemplateId = payload.missionTemplateId;
-    assignMissionSource = payload.source;
-    if (payload.source === "omega") {
-      assignOmegaStageIndex = payload.stageIndex;
-      assignOmegaSlotIndex = payload.slotIndex;
-    } else {
-      assignOmegaStageIndex = null;
-      assignOmegaSlotIndex = null;
-    }
-    renderAssignPickSlots();
-    renderAssignMinionSlots();
-    onAssignSlotsChanged();
+  function minionDragJson(instanceId: string): string {
+    return JSON.stringify({ kind: "mastermind-minion", instanceId });
   }
 
   function wireAssignPickSlot(
@@ -353,69 +474,70 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         return;
       }
       const payload = parseDragPayload(raw);
-      if (kind === "mission") {
-        if (!payload || payload.kind !== "mastermind-mission") {
-          return;
+      if (!payload) {
+        return;
+      }
+      if (kind === "mission" && payload.kind === "mastermind-mission") {
+        assignMissionTemplateId = payload.missionTemplateId;
+        assignMissionSource = payload.source;
+        if (payload.source === "omega") {
+          assignOmegaStageIndex = payload.stageIndex;
+          assignOmegaSlotIndex = payload.slotIndex;
+        } else {
+          assignOmegaStageIndex = null;
+          assignOmegaSlotIndex = null;
         }
-        applyMissionDragFromPayload(payload);
-        return;
-      }
-      if (kind !== "target") {
-        return;
-      }
-      if (payload?.kind === "mastermind-mission") {
-        applyMissionDragFromPayload(payload);
-        return;
-      }
-      const tpl = selectedAssignMissionTemplate();
-      const targetKind: MissionTargetKind = tpl?.targetKind ?? "location";
-      if (targetKind === "none") {
-        return;
-      }
-      const playable = new Set(runLocations().map((l) => l.id));
-      if (targetKind === "location") {
-        if (!payload || payload.kind !== "mastermind-location") {
-          return;
-        }
-        if (!playable.has(payload.locationId)) {
-          return;
-        }
-        assignMissionTarget = { kind: "location", locationId: payload.locationId };
+        reconcileTargetWithMission();
+        updateAssignTargetFieldVisibility();
+        updateAssignTargetLabelText();
         renderAssignPickSlots();
         renderAssignMinionSlots();
         onAssignSlotsChanged();
         return;
       }
-      if (targetKind === "location_asset") {
-        if (!payload || payload.kind !== "mastermind-location-asset") {
+      if (kind === "target") {
+        if (payload.kind === "mastermind-mission") {
           return;
         }
-        if (!playable.has(payload.locationId)) {
+        const m = selectedMissionTemplate();
+        if (m?.targetType === "none") {
           return;
         }
-        assignMissionTarget = {
-          kind: "location_asset",
-          locationId: payload.locationId,
-          slotIndex: payload.assetSlotIndex,
-        };
+        if (!targetPayloadMatchesPlannedMission(payload)) {
+          return;
+        }
+        const mt = payloadToMissionTarget(payload);
+        if (!mt) {
+          return;
+        }
+        if (mt.kind === "location" || mt.kind === "asset") {
+          const playable = new Set(runLocations().map((l) => l.id));
+          if (!playable.has(mt.locationId)) {
+            return;
+          }
+        }
+        if (mt.kind === "asset") {
+          const placement = state.locationAssetSlots.find((p) => p.locationId === mt.locationId);
+          const slot = placement?.slots[mt.slotIndex];
+          if (!slot || slot.visibility !== mt.visibilityAtAssign) {
+            return;
+          }
+        }
+        if (mt.kind === "minion") {
+          const busy = busyInstanceIds(state.activeMissions);
+          const inst = state.player.minions.find((x) => x.instanceId === mt.instanceId);
+          if (!inst || busy.has(mt.instanceId)) {
+            return;
+          }
+          if (getAssignParticipantIds().includes(mt.instanceId)) {
+            return;
+          }
+          removeInstanceFromAllAssignSlots(mt.instanceId);
+        }
+        assignTarget = mt;
         renderAssignPickSlots();
         renderAssignMinionSlots();
         onAssignSlotsChanged();
-        return;
-      }
-      if (targetKind === "minion") {
-        if (payload?.kind === "mastermind-location" || payload?.kind === "mastermind-location-asset") {
-          return;
-        }
-        const id = raw.trim();
-        const inst = state.player.minions.find((m) => m.instanceId === id);
-        const busy = busyInstanceIds(state.activeMissions);
-        if (inst && !busy.has(id)) {
-          assignMissionTarget = { kind: "minion", instanceId: id };
-          renderAssignPickSlots();
-          renderAssignMinionSlots();
-          onAssignSlotsChanged();
-        }
       }
     });
   }
@@ -448,7 +570,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   function renderAssignPickSlots(): void {
     assignMissionSlotEl.innerHTML = "";
     assignTargetSlotEl.innerHTML = "";
+    updateAssignTargetFieldVisibility();
+    updateAssignTargetLabelText();
     const mainOnly = state.phase === "main";
+    const mTpl = selectedMissionTemplate();
+    const hideTargetField = mTpl?.targetType === "none";
 
     const missionSlot = document.createElement("div");
     missionSlot.className = "assign-pick-slot-inner";
@@ -509,49 +635,62 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
     assignMissionSlotEl.appendChild(missionSlot);
 
-    const tpl = selectedAssignMissionTemplate();
-    const targetKind: MissionTargetKind = tpl?.targetKind ?? "location";
-    assignTargetFieldEl.hidden = false;
-    if (targetKind === "none") {
-      assignTargetFieldEl.classList.add("assign-target-field--disabled");
-      assignTargetFieldEl.title = "This mission does not use a map target.";
-    } else {
-      assignTargetFieldEl.classList.remove("assign-target-field--disabled");
-      assignTargetFieldEl.removeAttribute("title");
+    if (hideTargetField) {
+      return;
     }
 
     const targetSlot = document.createElement("div");
     targetSlot.className = "assign-pick-slot-inner";
-    if (targetKind === "none") {
-      assignTargetSlotEl.setAttribute("aria-disabled", "true");
-      assignTargetSlotEl.setAttribute(
-        "aria-label",
-        "Target not used; drag missions onto the Mission slot or here.",
-      );
+
+    function setDragDataForTarget(e: DragEvent): void {
+      const t = assignTarget;
+      if (!mainOnly || !t) {
+        e.preventDefault();
+        return;
+      }
+      dndDragSource = { kind: "assign-target" };
+      if (t.kind === "location") {
+        e.dataTransfer?.setData("text/plain", locationDragJson(t.locationId));
+      } else if (t.kind === "asset") {
+        e.dataTransfer?.setData(
+          "text/plain",
+          assetDragJson(t.locationId, t.slotIndex, t.visibilityAtAssign),
+        );
+      } else if (t.kind === "minion") {
+        e.dataTransfer?.setData("text/plain", minionDragJson(t.instanceId));
+      }
+      e.dataTransfer!.effectAllowed = "move";
+    }
+
+    function appendClearTarget(wrap: HTMLElement): void {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "assign-pick-slot-clear";
+      removeBtn.setAttribute("aria-label", "Clear target");
+      removeBtn.textContent = "×";
+      removeBtn.disabled = !mainOnly;
+      removeBtn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        assignTarget = null;
+        renderAssignPickSlots();
+        renderAssignMinionSlots();
+        onAssignSlotsChanged();
+      });
+      removeBtn.addEventListener("mousedown", (ev) => {
+        ev.stopPropagation();
+      });
+      wrap.appendChild(removeBtn);
+    }
+
+    const targetPick = assignTarget;
+    if (targetPick === null) {
       const ph = document.createElement("span");
       ph.className = "assign-minion-slot-placeholder";
-      ph.textContent = "No target for this mission";
+      ph.textContent = "Drag location, asset slot, or minion";
       targetSlot.appendChild(ph);
-    } else {
-      assignTargetSlotEl.setAttribute("aria-disabled", "false");
-      assignTargetSlotEl.setAttribute(
-        "aria-label",
-        "Mission target: drag a location, asset row, or minion here when required.",
-      );
-      if (assignMissionTarget === null) {
-        const ph = document.createElement("span");
-        ph.className = "assign-minion-slot-placeholder";
-        if (targetKind === "location") {
-          ph.textContent = "Drag a location from Locations";
-        } else if (targetKind === "location_asset") {
-          ph.textContent = "Drag an asset row from a location card";
-        } else {
-          ph.textContent = "Drag a minion from your roster";
-        }
-        targetSlot.appendChild(ph);
-      } else if (assignMissionTarget.kind === "location") {
-      const mtLoc = assignMissionTarget;
-      const loc = content.locations.find((l) => l.id === mtLoc.locationId);
+    } else if (targetPick.kind === "location") {
+      const loc = content.locations.find((l) => l.id === targetPick.locationId);
       if (!loc) {
         const ph = document.createElement("span");
         ph.className = "assign-minion-slot-placeholder";
@@ -566,143 +705,86 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         );
         const assetNameById = new Map(content.assets.map((a) => [a.id, a.name]));
         const slots = assetSlotsByLocationId.get(loc.id) ?? [];
+
         const wrap = document.createElement("div");
         wrap.className = "assign-pick-slot-card-wrap";
-        const article = buildLocationCardArticle(loc, securityByLocationId.get(loc.id), slots, assetNameById, {
-          location: false,
-          asset: false,
-        });
+        const article = buildLocationCardArticle(
+          loc,
+          securityByLocationId.get(loc.id),
+          slots,
+          assetNameById,
+          false,
+        );
         article.classList.add("assign-pick-embedded-card");
         article.draggable = mainOnly;
-        article.addEventListener("dragstart", (e) => {
-          if (!mainOnly) {
-            e.preventDefault();
-            return;
-          }
-          dndDragSource = { kind: "target-slot" };
-          e.dataTransfer?.setData("text/plain", locationDragJson(mtLoc.locationId));
-          e.dataTransfer!.effectAllowed = "move";
-        });
+        article.addEventListener("dragstart", setDragDataForTarget);
         wrap.appendChild(article);
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = "assign-pick-slot-clear";
-        removeBtn.setAttribute("aria-label", "Clear target");
-        removeBtn.textContent = "×";
-        removeBtn.disabled = !mainOnly;
-        removeBtn.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          assignMissionTarget = null;
-          renderAssignPickSlots();
-          renderAssignMinionSlots();
-          onAssignSlotsChanged();
-        });
-        removeBtn.addEventListener("mousedown", (ev) => {
-          ev.stopPropagation();
-        });
-        wrap.appendChild(removeBtn);
+        appendClearTarget(wrap);
         targetSlot.appendChild(wrap);
       }
-    } else if (assignMissionTarget.kind === "location_asset") {
-      const mtAsset = assignMissionTarget;
-      const loc = content.locations.find((l) => l.id === mtAsset.locationId);
-      const placement = state.locationAssetSlots.find((p) => p.locationId === mtAsset.locationId);
-      const slot = placement?.slots[mtAsset.slotIndex];
-      const assetName = slot
-        ? content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId
-        : "—";
+    } else if (targetPick.kind === "asset") {
+      const loc = content.locations.find((l) => l.id === targetPick.locationId);
+      const placement = state.locationAssetSlots.find((p) => p.locationId === targetPick.locationId);
+      const slot = placement?.slots[targetPick.slotIndex];
       const wrap = document.createElement("div");
       wrap.className = "assign-pick-slot-card-wrap";
       const article = document.createElement("article");
-      article.className = "asset-card assign-pick-embedded-card";
-      const title = document.createElement("h4");
-      title.className = "asset-card-title";
-      title.textContent = assetName;
-      article.appendChild(title);
-      const p = document.createElement("p");
-      p.className = "asset-card-description";
-      p.textContent = loc ? `At ${loc.name}` : mtAsset.locationId;
-      article.appendChild(p);
+      article.className = "assign-pick-embedded-card location-card assign-target-asset-card";
       article.draggable = mainOnly;
-      article.addEventListener("dragstart", (e) => {
-        if (!mainOnly) {
-          e.preventDefault();
-          return;
-        }
-        dndDragSource = { kind: "target-slot" };
-        e.dataTransfer?.setData(
-          "text/plain",
-          assetDragJson(mtAsset.locationId, mtAsset.slotIndex),
-        );
-        e.dataTransfer!.effectAllowed = "move";
-      });
+      article.addEventListener("dragstart", setDragDataForTarget);
+      const title = document.createElement("h4");
+      title.className = "location-card-title";
+      title.textContent = loc?.name ?? targetPick.locationId;
+      article.appendChild(title);
+      const dl = document.createElement("dl");
+      dl.className = "location-card-stats";
+      const visLabel = targetPick.visibilityAtAssign === "hidden" ? "Hidden" : "Revealed";
+      const assetLabel =
+        slot && slot.visibility === "revealed"
+          ? (content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId)
+          : "Asset";
+      appendMinionStatRows(dl, [
+        { label: "Asset", value: `${visLabel} (${assetLabel})` },
+        { label: "Slot", value: String(targetPick.slotIndex + 1) },
+      ]);
+      article.appendChild(dl);
       wrap.appendChild(article);
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "assign-pick-slot-clear";
-      removeBtn.setAttribute("aria-label", "Clear target");
-      removeBtn.textContent = "×";
-      removeBtn.disabled = !mainOnly;
-      removeBtn.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        assignMissionTarget = null;
-        renderAssignPickSlots();
-        renderAssignMinionSlots();
-        onAssignSlotsChanged();
-      });
-      removeBtn.addEventListener("mousedown", (ev) => {
-        ev.stopPropagation();
-      });
-      wrap.appendChild(removeBtn);
+      appendClearTarget(wrap);
       targetSlot.appendChild(wrap);
-    } else if (assignMissionTarget.kind === "minion") {
-      const mtMin = assignMissionTarget;
-      const inst = state.player.minions.find((m) => m.instanceId === mtMin.instanceId);
-      const minTpl = inst
+    } else if (targetPick.kind === "minion") {
+      const inst = state.player.minions.find((x) => x.instanceId === targetPick.instanceId);
+      const tpl = inst
         ? content.minions.find((t) => t.id === inst.templateId)
         : undefined;
       const wrap = document.createElement("div");
       wrap.className = "assign-pick-slot-card-wrap";
-      const article = document.createElement("article");
-      article.className = "minions-card assign-pick-embedded-card";
-      const title = document.createElement("h4");
-      title.className = "minions-card-title";
-      title.textContent = minTpl?.name ?? mtMin.instanceId;
-      article.appendChild(title);
-      article.draggable = mainOnly;
-      article.addEventListener("dragstart", (e) => {
-        if (!mainOnly) {
-          e.preventDefault();
-          return;
+      const chip = document.createElement("div");
+      chip.className = "assign-minion-chip assign-target-minion-chip";
+      chip.draggable = mainOnly;
+      chip.addEventListener("dragstart", setDragDataForTarget);
+      const chipMain = document.createElement("div");
+      chipMain.className = "assign-minion-chip-main";
+      const chipLabel = document.createElement("span");
+      chipLabel.className = "assign-minion-chip-label";
+      chipLabel.textContent = tpl?.name ?? targetPick.instanceId;
+      chipMain.appendChild(chipLabel);
+      if (inst && inst.traitIds.length > 0) {
+        const traitsEl = document.createElement("div");
+        traitsEl.className = "assign-minion-chip-traits";
+        for (const tid of inst.traitIds) {
+          const span = document.createElement("span");
+          span.className = "assign-minion-chip-trait";
+          span.textContent = content.traits.find((t) => t.id === tid)?.name ?? tid;
+          traitsEl.appendChild(span);
         }
-        dndDragSource = { kind: "target-slot" };
-        e.dataTransfer?.setData("text/plain", mtMin.instanceId);
-        e.dataTransfer!.effectAllowed = "move";
-      });
-      wrap.appendChild(article);
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "assign-pick-slot-clear";
-      removeBtn.setAttribute("aria-label", "Clear target");
-      removeBtn.textContent = "×";
-      removeBtn.disabled = !mainOnly;
-      removeBtn.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        assignMissionTarget = null;
-        renderAssignPickSlots();
-        renderAssignMinionSlots();
-        onAssignSlotsChanged();
-      });
-      removeBtn.addEventListener("mousedown", (ev) => {
-        ev.stopPropagation();
-      });
-      wrap.appendChild(removeBtn);
+        chipMain.appendChild(traitsEl);
+      }
+      chip.appendChild(chipMain);
+      wrap.appendChild(chip);
+      appendClearTarget(wrap);
       targetSlot.appendChild(wrap);
     }
-    }
+
     assignTargetSlotEl.appendChild(targetSlot);
   }
 
@@ -738,14 +820,17 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       btnAssign.title = "Choose a mission";
       return;
     }
-    const tk = missionTemplate.targetKind;
-    const targetOk =
-      tk === "none" ||
-      (assignMissionTarget !== null && assignMissionTarget.kind === tk);
-    if (!targetOk) {
-      btnAssign.disabled = true;
-      btnAssign.title = "Choose a mission target";
-      return;
+    if (missionTemplate.targetType !== "none") {
+      if (!assignTarget) {
+        btnAssign.disabled = true;
+        btnAssign.title = "Choose a mission target";
+        return;
+      }
+      if (!missionTargetMatchesTemplate(missionTemplate.targetType, assignTarget)) {
+        btnAssign.disabled = true;
+        btnAssign.title = "Target does not match mission type";
+        return;
+      }
     }
     const atMissionCap =
       state.activeMissions.length >= state.player.maxConcurrentMissions;
@@ -813,11 +898,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         if (!raw) {
           return;
         }
-        const inst = state.player.minions.find((m) => m.instanceId === raw);
-        if (!inst || busy.has(raw)) {
+        let resolvedId: string | null = null;
+        const parsed = parseDragPayload(raw);
+        if (parsed?.kind === "mastermind-minion") {
+          resolvedId = parsed.instanceId;
+        } else if (state.player.minions.some((m) => m.instanceId === raw)) {
+          resolvedId = raw;
+        }
+        if (!resolvedId) {
           return;
         }
-        placeInstanceInSlot(raw, slotIndex);
+        const inst = state.player.minions.find((m) => m.instanceId === resolvedId);
+        if (!inst || busy.has(resolvedId)) {
+          return;
+        }
+        placeInstanceInSlot(resolvedId, slotIndex);
         renderAssignMinionSlots();
         onAssignSlotsChanged();
       });
@@ -930,6 +1025,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const rows: Array<{ label: string; value: string }> = [];
     if (mission) {
       rows.push(
+        { label: "Mission target type", value: formatMissionTargetTypeLabel(mission.targetType) },
         { label: "Start cost", value: `${mission.startCommandPoints} CP` },
         {
           label: "Duration",
@@ -939,7 +1035,6 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           label: "Required traits",
           value: traitDisplayNames(content, mission.requiredTraitIds),
         },
-        { label: "Target type", value: mission.targetKind },
         { label: "Success chance", value: successChanceDisplay },
       );
     } else {
@@ -955,11 +1050,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     securityLevel: number | undefined,
     assetSlots: { assetId: string; visibility: string }[],
     assetNameById: Map<string, string>,
-    assignDrag: { location: boolean; asset: boolean },
+    enableAssignDrag: boolean,
   ): HTMLElement {
     const article = document.createElement("article");
     article.className = "location-card";
-    if (assignDrag.location) {
+    if (enableAssignDrag) {
       article.draggable = true;
       article.classList.add("assign-draggable-location");
       article.addEventListener("dragstart", (e) => {
@@ -985,8 +1080,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     ];
     appendMinionStatRows(dl, baseRows);
 
-    for (let slotIndex = 0; slotIndex < assetSlots.length; slotIndex += 1) {
-      const slot = assetSlots[slotIndex]!;
+    for (let si = 0; si < assetSlots.length; si += 1) {
+      const slot = assetSlots[si]!;
       const displayValue =
         slot.visibility === "revealed"
           ? (assetNameById.get(slot.assetId) ?? slot.assetId)
@@ -994,16 +1089,25 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const dt = document.createElement("dt");
       dt.textContent = "Asset";
       const dd = document.createElement("dd");
-      if (assignDrag.asset && slot.assetId) {
-        dd.draggable = true;
-        dd.classList.add("assign-draggable-location-asset");
-        dd.textContent = displayValue;
-        dd.title = "Drag to mission Target";
-        dd.addEventListener("dragstart", (e) => {
+      if (enableAssignDrag) {
+        const chip = document.createElement("span");
+        chip.className = "location-asset-drag-chip";
+        chip.draggable = true;
+        chip.textContent = displayValue;
+        chip.title = `Drag to Plan mission target (slot ${si + 1})`;
+        chip.addEventListener("dragstart", (e) => {
           e.stopPropagation();
-          e.dataTransfer?.setData("text/plain", assetDragJson(loc.id, slotIndex));
+          e.dataTransfer?.setData(
+            "text/plain",
+            assetDragJson(
+              loc.id,
+              si,
+              slot.visibility === "hidden" ? "hidden" : "revealed",
+            ),
+          );
           e.dataTransfer!.effectAllowed = "copy";
         });
+        dd.appendChild(chip);
       } else {
         dd.textContent = displayValue;
       }
@@ -1419,43 +1523,34 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
-  function missionTargetSummary(mt: MissionTarget): string {
-    switch (mt.kind) {
+  function formatMissionTargetSummary(target: MissionTarget): string {
+    switch (target.kind) {
       case "none":
-        return "None";
+        return "—";
       case "location": {
-        return content.locations.find((l) => l.id === mt.locationId)?.name ?? mt.locationId;
+        const loc = content.locations.find((l) => l.id === target.locationId);
+        return loc?.name ?? target.locationId;
       }
-      case "location_asset": {
-        const loc = content.locations.find((l) => l.id === mt.locationId);
-        const placement = state.locationAssetSlots.find((p) => p.locationId === mt.locationId);
-        const slot = placement?.slots[mt.slotIndex];
-        const assetLabel = slot
-          ? content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId
-          : "—";
-        return `${assetLabel} @ ${loc?.name ?? mt.locationId}`;
+      case "asset": {
+        const loc = content.locations.find((l) => l.id === target.locationId);
+        const locName = loc?.name ?? target.locationId;
+        const placement = state.locationAssetSlots.find((p) => p.locationId === target.locationId);
+        const slot = placement?.slots[target.slotIndex];
+        const vis = target.visibilityAtAssign === "hidden" ? "Hidden" : "Revealed";
+        const an =
+          slot && slot.visibility === "revealed"
+            ? (content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId)
+            : "Asset";
+        return `${vis} (${an}) @ ${locName}`;
       }
       case "minion": {
-        const inst = state.player.minions.find((m) => m.instanceId === mt.instanceId);
-        return inst
-          ? content.minions.find((t) => t.id === inst.templateId)?.name ?? mt.instanceId
-          : mt.instanceId;
-      }
-      default: {
-        const _x: never = mt;
-        return String(_x);
+        const inst = state.player.minions.find((m) => m.instanceId === target.instanceId);
+        const tpl = inst
+          ? content.minions.find((t) => t.id === inst.templateId)
+          : undefined;
+        return tpl?.name ?? target.instanceId;
       }
     }
-  }
-
-  function primaryLocationForMissionTarget(mt: MissionTarget): (typeof content.locations)[number] | undefined {
-    if (mt.kind === "location") {
-      return content.locations.find((l) => l.id === mt.locationId);
-    }
-    if (mt.kind === "location_asset") {
-      return content.locations.find((l) => l.id === mt.locationId);
-    }
-    return undefined;
   }
 
   function renderActiveMissionsPanel(): void {
@@ -1475,7 +1570,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     for (const am of state.activeMissions) {
       const mission = content.missions.find((x) => x.id === am.missionTemplateId);
-      const targetLoc = primaryLocationForMissionTarget(am.missionTarget);
+      const targetLocId =
+        am.target.kind === "location" || am.target.kind === "asset"
+          ? am.target.locationId
+          : null;
+      const targetLoc = targetLocId
+        ? content.locations.find((l) => l.id === targetLocId)
+        : undefined;
       const sourceLabel =
         am.missionSource === "lair"
           ? "Lair"
@@ -1510,7 +1611,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
       const rows: Array<{ label: string; value: string }> = [
         { label: "Source", value: sourceLabel },
-        { label: "Target", value: missionTargetSummary(am.missionTarget) },
+        { label: "Target", value: formatMissionTargetSummary(am.target) },
       ];
       if (targetLoc) {
         rows.push(
@@ -1591,19 +1692,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const assetNameById = new Map(content.assets.map((a) => [a.id, a.name]));
 
     const mainOnly = state.phase === "main";
-    const selTpl = assignMissionTemplateId
-      ? content.missions.find((m) => m.id === assignMissionTemplateId)
-      : undefined;
-    const enableLocationDrag = mainOnly && selTpl?.targetKind === "location";
-    const enableAssetDrag = mainOnly && selTpl?.targetKind === "location_asset";
-
     for (const loc of runLocations()) {
       const sec = securityByLocationId.get(loc.id);
       const slots = assetSlotsByLocationId.get(loc.id) ?? [];
-      const article = buildLocationCardArticle(loc, sec, slots, assetNameById, {
-        location: enableLocationDrag,
-        asset: enableAssetDrag,
-      });
+      const article = buildLocationCardArticle(loc, sec, slots, assetNameById, mainOnly);
       locationsPanelEl.appendChild(article);
     }
   }
@@ -1700,8 +1792,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         case "mission_completed": {
           const inf =
             ev.infamyDelta >= 0 ? `+${ev.infamyDelta}` : String(ev.infamyDelta);
-          const targetLabel = missionTargetSummary(ev.missionTarget);
-          return `${ev.missionName} (${targetLabel}): ${
+          const whereLabel = formatMissionTargetSummary(ev.target);
+          return `${ev.missionName} @ ${whereLabel}: ${
             ev.success ? "Success" : "Failure"
           } (roll ${ev.roll} vs ${ev.successChancePercent}%). Infamy ${inf}.`;
         }
@@ -1716,14 +1808,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         }
         case "mission_started": {
           const m = missionName(ev.missionTemplateId);
-          const targetLabel = missionTargetSummary(ev.missionTarget);
+          const place = formatMissionTargetSummary(ev.target);
           const who = participantNames(ev.participantInstanceIds);
-          return `${m} started — target: ${targetLabel} (${who}).`;
+          return `${m} started at ${place} (${who}).`;
         }
         case "mission_cancelled": {
           const m = missionName(ev.missionTemplateId);
-          const targetLabel = missionTargetSummary(ev.missionTarget);
-          return `${m} cancelled — target: ${targetLabel}.`;
+          const place = formatMissionTargetSummary(ev.target);
+          return `${m} cancelled at ${place}.`;
         }
         case "asset_gained": {
           const a = assetDisplayName(ev.assetId);
@@ -1826,24 +1918,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (state.phase !== "main") {
       return;
     }
-    if (
-      !assignMissionTemplateId ||
-      assignMissionSource === null
-    ) {
+    if (!assignMissionTemplateId || assignMissionSource === null) {
       return;
     }
-    const missionTemplate = content.missions.find((x) => x.id === assignMissionTemplateId);
-    if (!missionTemplate) {
+    const mt = content.missions.find((m) => m.id === assignMissionTemplateId);
+    if (!mt) {
       return;
     }
-    let missionTarget: MissionTarget;
-    if (missionTemplate.targetKind === "none") {
-      missionTarget = { kind: "none" };
+    let targetPayload: MissionTarget;
+    if (mt.targetType === "none") {
+      targetPayload = { kind: "none" };
     } else {
-      if (!assignMissionTarget || assignMissionTarget.kind !== missionTemplate.targetKind) {
+      if (!assignTarget) {
         return;
       }
-      missionTarget = assignMissionTarget;
+      targetPayload = assignTarget;
     }
     const checked = getAssignParticipantIds();
     const result = assignMission(
@@ -1851,7 +1940,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       content,
       crypto.randomUUID(),
       assignMissionTemplateId,
-      missionTarget,
+      targetPayload,
       assignMissionSource,
       assignMissionSource === "omega" ? assignOmegaStageIndex : null,
       assignMissionSource === "omega" ? assignOmegaSlotIndex : null,
@@ -1899,7 +1988,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       return;
     }
     const id = card.dataset.assignInstanceId;
-    e.dataTransfer?.setData("text/plain", id);
+    e.dataTransfer?.setData("text/plain", minionDragJson(id));
     e.dataTransfer!.effectAllowed = "copy";
     dndDragSource = { kind: "roster" };
   });
@@ -1930,9 +2019,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       }
       return;
     }
-    if (src?.kind === "target-slot") {
+    if (src?.kind === "assign-target") {
       if (e.dataTransfer?.dropEffect === "none") {
-        assignMissionTarget = null;
+        assignTarget = null;
         renderAssignPickSlots();
         renderAssignMinionSlots();
         onAssignSlotsChanged();
