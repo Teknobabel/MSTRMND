@@ -58,7 +58,7 @@ export function initialLocationSecurityStatesForLocations(
 ): LocationSecurityState[] {
   return locations.map((l) => ({
     locationId: l.id,
-    securityLevel: 1,
+    securityLevel: 0,
   }));
 }
 
@@ -73,4 +73,47 @@ export function initialLocationSecurityStates(
 
 export function getMapById(catalog: ContentCatalog, id: string): MapTemplate | undefined {
   return catalog.maps.find((m) => m.id === id);
+}
+
+/**
+ * Pick up to `count` distinct trait ids from `pool` (without replacement). If the pool is
+ * smaller than `count`, returns as many distinct ids as exist.
+ */
+function pickDistinctTraitIds(
+  pool: string[],
+  count: number,
+  rng: () => number,
+): string[] {
+  if (count <= 0 || pool.length === 0) {
+    return [];
+  }
+  const copy = [...pool];
+  const take = Math.min(count, copy.length);
+  const out: string[] = [];
+  for (let i = 0; i < take; i += 1) {
+    const j = Math.floor(rng() * copy.length);
+    out.push(copy[j]!);
+    copy.splice(j, 1);
+  }
+  return out;
+}
+
+/**
+ * Per-run required traits for each map location (not in JSON).
+ * Level 1 → 0 traits; level 2 → 1; level 3 → 2 distinct picks from primary + secondary only.
+ */
+export function rollLocationRequiredTraits(
+  catalog: ContentCatalog,
+  runLocations: LocationTemplate[],
+  rng: () => number,
+): Record<string, string[]> {
+  const eligible = catalog.traits
+    .filter((t) => t.type !== "status")
+    .map((t) => t.id);
+  const out: Record<string, string[]> = {};
+  for (const loc of runLocations) {
+    const n = loc.locationLevel === 1 ? 0 : loc.locationLevel === 2 ? 1 : 2;
+    out[loc.id] = pickDistinctTraitIds(eligible, n, rng);
+  }
+  return out;
 }

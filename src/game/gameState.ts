@@ -15,10 +15,12 @@ import {
   activeLocationIds,
   initialLocationSecurityStatesForLocations,
   locationTemplatesForOmegaPlan,
+  rollLocationRequiredTraits,
 } from "./locationCatalog";
 import {
   canAssignParticipants,
   successChancePercent,
+  type MissionSuccessOptions,
 } from "./mission";
 import { getOmegaPlanById, omegaSlotMissionId, pickRandomOmegaPlanId } from "./omegaPlan";
 import { getLairById, pickRandomLairId } from "./lair";
@@ -133,6 +135,11 @@ export type GameState = {
   locationSecurityStates: LocationSecurityState[];
   /** Random catalog assets per location; 1–3 slots each, exactly three slots revealed globally when possible. */
   locationAssetSlots: LocationAssetPlacement[];
+  /**
+   * Per-run rolled required traits per location id (primary + secondary only; count by
+   * `locationLevel`). Merged into mission requirements when that location is the mission target.
+   */
+  locationRequiredTraits: Record<string, string[]>;
   /** Chosen lair template id for this run, or null if `catalog.lairs` is empty. */
   activeLairId: string | null;
   /** Mission template ids available from the lair (starts as copy of template; gameplay may append). */
@@ -213,6 +220,22 @@ export function getMissionTargetLocationId(target: MissionTarget): string | null
   return null;
 }
 
+/** Extra required traits from the target location’s run roll (for {@link successChancePercent}). */
+export function missionSuccessOptionsForTarget(
+  state: GameState,
+  target: MissionTarget,
+): MissionSuccessOptions {
+  const lid = getMissionTargetLocationId(target);
+  if (lid === null) {
+    return {};
+  }
+  const extra = state.locationRequiredTraits[lid];
+  if (extra === undefined || extra.length === 0) {
+    return {};
+  }
+  return { additionalRequiredTraitIds: [...extra] };
+}
+
 const INFAMY_SUCCESS_DELTA = -3;
 const INFAMY_FAILURE_DELTA = 5;
 
@@ -241,7 +264,7 @@ function raiseSecurityAfterMissionAtLocation(
       return s;
     }
     const next = Math.min(MAX_LOCATION_SECURITY_LEVEL, s.securityLevel + 1);
-    return { ...s, securityLevel: next as 1 | 2 | 3 };
+    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
   });
 }
 
@@ -367,6 +390,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     maxConcurrentMissions: DEFAULT_MAX_CONCURRENT_MISSIONS,
   };
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
+  const locationRequiredTraits = rollLocationRequiredTraits(catalog, runLocations, rng);
   const lairMissionIds = lairTemplate ? [...lairTemplate.availableMissionIds] : [];
   const base: GameState = {
     phase: "main",
@@ -385,6 +409,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     activeOmegaPlanId,
     locationSecurityStates: initialLocationSecurityStatesForLocations(runLocations),
     locationAssetSlots: initializeLocationAssetPlacements(catalog, rng, runLocations),
+    locationRequiredTraits,
     activeLairId,
     lairMissionIds,
     activeOmegaStageIndex: 0,
@@ -1026,7 +1051,11 @@ export function executePlan(
       continue;
     }
 
-    const pct = successChancePercent(template, participants);
+    const pct = successChancePercent(
+      template,
+      participants,
+      missionSuccessOptionsForTarget(state, am.target),
+    );
     const roll = Math.floor(rng() * 100);
     const success = roll < pct;
     const infamyDelta = success ? INFAMY_SUCCESS_DELTA : INFAMY_FAILURE_DELTA;

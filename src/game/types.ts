@@ -99,7 +99,8 @@ export type MissionSource = "lair" | "omega";
  */
 export type LocationSecurityState = {
   locationId: string;
-  securityLevel: 1 | 2 | 3;
+  /** Rises after missions resolve at this site; new runs start at 0, capped at 3. */
+  securityLevel: 0 | 1 | 2 | 3;
 };
 
 export type MapTemplate = {

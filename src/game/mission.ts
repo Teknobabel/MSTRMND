@@ -25,17 +25,25 @@ export function canAssignParticipants(participants: MinionInstance[]): boolean {
   return participants.length >= 1 && participants.length <= 3;
 }
 
-function mergedRequiredTraitIds(
+function mergeRequiredTraitSet(
   template: MissionTemplate,
   options?: MissionSuccessOptions,
-): string[] {
+): Set<string> {
   const merged = new Set<string>(template.requiredTraitIds);
   for (const id of options?.additionalRequiredTraitIds ?? []) {
     if (id.length > 0) {
       merged.add(id);
     }
   }
-  return [...merged];
+  return merged;
+}
+
+/** All required trait ids (mission + extras), stable alphabetical order for UI. */
+export function mergedRequiredTraitIdsSorted(
+  template: MissionTemplate,
+  options?: MissionSuccessOptions,
+): string[] {
+  return [...mergeRequiredTraitSet(template, options)].sort((a, b) => a.localeCompare(b));
 }
 
 /**
@@ -48,7 +56,7 @@ export function successChancePercent(
   participants: MinionInstance[],
   options?: MissionSuccessOptions,
 ): number {
-  const required = mergedRequiredTraitIds(template, options);
+  const required = [...mergeRequiredTraitSet(template, options)];
   if (required.length === 0) {
     return 100;
   }

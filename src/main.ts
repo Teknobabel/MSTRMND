@@ -8,6 +8,7 @@ import {
   executePlan,
   fireMinion,
   hireMinion,
+  missionSuccessOptionsForTarget,
   missionTargetMatchesTemplate,
   rehireMinion,
   rerollHireOffers,
@@ -17,6 +18,7 @@ import {
 import type { MissionSource, MissionTarget, MissionTargetType } from "./game/types";
 import {
   canAssignParticipants,
+  mergedRequiredTraitIdsSorted,
   successChancePercent,
 } from "./game/mission";
 import { loadContent } from "./game/loadContent";
@@ -559,7 +561,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       .map((id) => instanceById.get(id))
       .filter((x): x is NonNullable<typeof x> => x !== undefined);
     if (canAssignParticipants(participants)) {
-      return `${successChancePercent(m, participants)}%`;
+      const opts =
+        assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : undefined;
+      return `${successChancePercent(m, participants, opts)}%`;
     }
     if (slotIds.length === 0) {
       return "—";
@@ -587,9 +591,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const wrap = document.createElement("div");
       wrap.className = "assign-pick-slot-card-wrap";
 
+      const missionTpl = content.missions.find((x) => x.id === assignMissionTemplateId);
+      const mergedForAssign =
+        missionTpl !== undefined
+          ? mergedRequiredTraitIdsSorted(
+              missionTpl,
+              assignTarget !== null
+                ? missionSuccessOptionsForTarget(state, assignTarget)
+                : {},
+            )
+          : undefined;
+
       const article = buildMissionCatalogArticle(
         assignMissionTemplateId,
         assignMissionSuccessChanceLabel(),
+        mergedForAssign,
       );
       article.classList.add("assign-pick-embedded-card");
       article.draggable = mainOnly;
@@ -714,6 +730,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           slots,
           assetNameById,
           false,
+          state.locationRequiredTraits[loc.id] ?? [],
         );
         article.classList.add("assign-pick-embedded-card");
         article.draggable = mainOnly;
@@ -743,9 +760,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         slot && slot.visibility === "revealed"
           ? (content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId)
           : "Asset";
+      const siteIds = state.locationRequiredTraits[targetPick.locationId] ?? [];
+      const siteTraitsLabel =
+        siteIds.length === 0
+          ? "None"
+          : traitDisplayNames(content, [...siteIds].sort((a, b) => a.localeCompare(b)));
       appendMinionStatRows(dl, [
         { label: "Asset", value: `${visLabel} (${assetLabel})` },
         { label: "Slot", value: String(targetPick.slotIndex + 1) },
+        { label: "Site traits", value: siteTraitsLabel },
       ]);
       article.appendChild(dl);
       wrap.appendChild(article);
@@ -931,7 +954,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         const mission = assignMissionTemplateId
           ? content.missions.find((x) => x.id === assignMissionTemplateId)
           : undefined;
-        const requiredTraitSet = new Set(mission?.requiredTraitIds ?? []);
+        const assignOpts =
+          assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : {};
+        const requiredTraitSet = new Set(
+          mission !== undefined ? mergedRequiredTraitIdsSorted(mission, assignOpts) : [],
+        );
 
         const chip = document.createElement("div");
         chip.className = "assign-minion-chip";
@@ -1003,6 +1030,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   function buildMissionCatalogArticle(
     missionId: string,
     successChanceDisplay = "—",
+    mergedRequiredTraitIdsForDisplay?: string[],
   ): HTMLElement {
     const mission = content.missions.find((m) => m.id === missionId);
     const article = document.createElement("article");
@@ -1024,6 +1052,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     dl.className = "asset-card-stats";
     const rows: Array<{ label: string; value: string }> = [];
     if (mission) {
+      const traitIdsForDisplay =
+        mergedRequiredTraitIdsForDisplay !== undefined
+          ? mergedRequiredTraitIdsForDisplay
+          : mission.requiredTraitIds;
       rows.push(
         { label: "Mission target type", value: formatMissionTargetTypeLabel(mission.targetType) },
         { label: "Start cost", value: `${mission.startCommandPoints} CP` },
@@ -1033,7 +1065,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         },
         {
           label: "Required traits",
-          value: traitDisplayNames(content, mission.requiredTraitIds),
+          value: traitDisplayNames(content, traitIdsForDisplay),
         },
         { label: "Success chance", value: successChanceDisplay },
       );
@@ -1051,6 +1083,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     assetSlots: { assetId: string; visibility: string }[],
     assetNameById: Map<string, string>,
     enableAssignDrag: boolean,
+    siteRequiredTraitIds: string[],
   ): HTMLElement {
     const article = document.createElement("article");
     article.className = "location-card";
@@ -1076,6 +1109,16 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       {
         label: "Security level",
         value: securityLevel !== undefined ? String(securityLevel) : "—",
+      },
+      {
+        label: "Site traits",
+        value:
+          siteRequiredTraitIds.length === 0
+            ? "None"
+            : traitDisplayNames(
+                content,
+                [...siteRequiredTraitIds].sort((a, b) => a.localeCompare(b)),
+              ),
       },
     ];
     appendMinionStatRows(dl, baseRows);
@@ -1625,6 +1668,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       });
 
       if (mission) {
+        const successOpts = missionSuccessOptionsForTarget(state, am.target);
+        const mergedDisplay = mergedRequiredTraitIdsSorted(mission, successOpts);
         rows.push(
           { label: "Start cost", value: `${mission.startCommandPoints} CP (paid)` },
           {
@@ -1635,12 +1680,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           },
           {
             label: "Required traits",
-            value: traitDisplayNames(content, mission.requiredTraitIds),
+            value: traitDisplayNames(content, mergedDisplay),
           },
         );
         let successValue: string;
         if (canAssignParticipants(participants)) {
-          successValue = `${successChancePercent(mission, participants)}%`;
+          successValue = `${successChancePercent(mission, participants, successOpts)}%`;
         } else {
           successValue = "—";
         }
@@ -1695,7 +1740,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     for (const loc of runLocations()) {
       const sec = securityByLocationId.get(loc.id);
       const slots = assetSlotsByLocationId.get(loc.id) ?? [];
-      const article = buildLocationCardArticle(loc, sec, slots, assetNameById, mainOnly);
+      const article = buildLocationCardArticle(loc, sec, slots, assetNameById, mainOnly, state.locationRequiredTraits[loc.id] ?? []);
       locationsPanelEl.appendChild(article);
     }
   }
