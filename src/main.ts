@@ -110,6 +110,18 @@ function traitDisplayNames(
     .join(", ");
 }
 
+function assetDisplayNames(
+  catalog: ReturnType<typeof loadContent>,
+  assetIds: string[],
+): string {
+  if (assetIds.length === 0) {
+    return "—";
+  }
+  return assetIds
+    .map((id) => catalog.assets.find((a) => a.id === id)?.name ?? id)
+    .join(", ");
+}
+
 /** Revealed vs hidden security stack for UI (order preserved for revealed slice). */
 function formatLocationSecurityTraitsDisplay(
   catalog: ReturnType<typeof loadContent>,
@@ -585,8 +597,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       .map((id) => instanceById.get(id))
       .filter((x): x is NonNullable<typeof x> => x !== undefined);
     if (canAssignParticipants(participants)) {
-      const opts =
-        assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : undefined;
+      const baseOpts =
+        assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : {};
+      const opts = { ...baseOpts, playerAssets: state.player.assets };
       return `${successChancePercent(m, participants, opts)}%`;
     }
     if (slotIds.length === 0) {
@@ -1101,6 +1114,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         {
           label: "Required traits",
           value: traitDisplayNames(content, traitIdsForDisplay),
+        },
+        {
+          label: "Required assets",
+          value: assetDisplayNames(content, mission.requiredAssetIds),
         },
         { label: "Success chance", value: successChanceDisplay },
       );
@@ -1712,7 +1729,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       });
 
       if (mission) {
-        const successOpts = missionSuccessOptionsForTarget(state, am.target);
+        const successOpts = {
+          ...missionSuccessOptionsForTarget(state, am.target),
+          playerAssets: state.player.assets,
+        };
         const mergedDisplay = mergedRequiredTraitIdsSorted(mission, successOpts);
         rows.push(
           { label: "Start cost", value: `${mission.startCommandPoints} CP (paid)` },
@@ -1725,6 +1745,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           {
             label: "Required traits",
             value: traitDisplayNames(content, mergedDisplay),
+          },
+          {
+            label: "Required assets",
+            value: assetDisplayNames(content, mission.requiredAssetIds),
           },
         );
         let successValue: string;

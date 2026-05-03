@@ -1105,7 +1105,10 @@ export function executePlan(
     const pct = successChancePercent(
       template,
       participants,
-      missionSuccessOptionsForTarget(state, am.target),
+      {
+        ...missionSuccessOptionsForTarget(state, am.target),
+        playerAssets: player.assets,
+      },
     );
     const roll = Math.floor(rng() * 100);
     const success = roll < pct;

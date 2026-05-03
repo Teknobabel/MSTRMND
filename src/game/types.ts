@@ -55,6 +55,11 @@ export type MissionTemplate = {
   /** CP spent when starting this mission (Main Phase). */
   startCommandPoints: number;
   requiredTraitIds: string[];
+  /**
+   * Catalog asset ids required for full success; duplicates mean multiple units needed.
+   * At least one of `requiredTraitIds` or `requiredAssetIds` must be non-empty.
+   */
+  requiredAssetIds: string[];
   durationTurns: number;
   /** What the player must pick in the target planning slot (if any). */
   targetType: MissionTargetType;

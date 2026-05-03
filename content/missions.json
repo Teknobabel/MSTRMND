@@ -5,7 +5,8 @@
     "description": "Gain access before the trace completes.",
     "targetType": "none",
     "startCommandPoints": 2,
-    "requiredTraitIds": ["hacker", "tactician"],
+    "requiredTraitIds": ["hacker"],
+    "requiredAssetIds": ["classified_documents"],
     "durationTurns": 1
   },
   {

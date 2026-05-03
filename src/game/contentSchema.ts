@@ -82,19 +82,31 @@ const missionTargetTypeSchema = z.enum([
   "none",
 ]);
 
-const missionTemplateSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  description: z.string(),
-  targetType: missionTargetTypeSchema,
-  startCommandPoints: z.coerce.number().int().min(0),
-  requiredTraitIds: z.array(z.string().min(1)).min(1),
-  durationTurns: z.coerce.number().int().min(1),
-});
+const missionTemplateSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    description: z.string(),
+    targetType: missionTargetTypeSchema,
+    startCommandPoints: z.coerce.number().int().min(0),
+    requiredTraitIds: z.array(z.string().min(1)).default([]),
+    requiredAssetIds: z.array(z.string().min(1)).default([]),
+    durationTurns: z.coerce.number().int().min(1),
+  })
+  .superRefine((m, ctx) => {
+    if (m.requiredTraitIds.length + m.requiredAssetIds.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Mission "${m.id}" must have at least one required trait or required asset`,
+        path: ["requiredTraitIds"],
+      });
+    }
+  });
 
-function parseMissionsWithTraitRefs(
+function parseMissionsWithRefs(
   missionsRaw: unknown,
   traitIds: Set<string>,
+  assetIds: Set<string>,
 ): MissionTemplate[] {
   const parsed = z.array(missionTemplateSchema).safeParse(missionsRaw);
   if (!parsed.success) {
@@ -108,22 +120,38 @@ function parseMissionsWithTraitRefs(
       throw new Error(`Duplicate mission id: ${m.id} (index ${i})`);
     }
     seenMissionIds.add(m.id);
-    const seenRequired = new Set<string>();
+    const seenRequiredTraits = new Set<string>();
     for (const tid of m.requiredTraitIds) {
-      if (seenRequired.has(tid)) {
+      if (seenRequiredTraits.has(tid)) {
         throw new Error(
           `Duplicate required trait id "${tid}" in mission "${m.id}"`,
         );
       }
-      seenRequired.add(tid);
+      seenRequiredTraits.add(tid);
       if (!traitIds.has(tid)) {
         throw new Error(
           `Unknown trait id "${tid}" referenced by mission "${m.id}"`,
         );
       }
     }
+    for (const aid of m.requiredAssetIds) {
+      if (!assetIds.has(aid)) {
+        throw new Error(
+          `Unknown asset id "${aid}" referenced by mission "${m.id}"`,
+        );
+      }
+    }
   }
-  return arr;
+  return arr.map((m) => ({
+    id: m.id,
+    name: m.name,
+    description: m.description,
+    targetType: m.targetType,
+    startCommandPoints: m.startCommandPoints,
+    requiredTraitIds: [...m.requiredTraitIds],
+    requiredAssetIds: [...m.requiredAssetIds],
+    durationTurns: m.durationTurns,
+  }));
 }
 
 const locationTypeSchema = z.enum(["political", "military", "economic"]);
@@ -358,14 +386,14 @@ export function parseCatalog(
   const traits: Trait[] = traitsResult.data;
   const traitIds = new Set(traits.map((t) => t.id));
   const minions = parseMinionsWithTraitRefs(minionsRaw, traitIds);
-  const missions = parseMissionsWithTraitRefs(missionsRaw, traitIds);
-  const missionIds = new Set(missions.map((m) => m.id));
   const assetsResult = assetsArraySchema.safeParse(assetsRaw);
   if (!assetsResult.success) {
     throw assetsResult.error;
   }
   const assets: Asset[] = assetsResult.data;
   const assetIds = new Set(assets.map((a) => a.id));
+  const missions = parseMissionsWithRefs(missionsRaw, traitIds, assetIds);
+  const missionIds = new Set(missions.map((m) => m.id));
   const locations = parseLocations(locationsRaw);
   const locationIds = new Set(locations.map((l) => l.id));
   const maps = parseMapsWithLocationRefs(mapsRaw, locationIds);
