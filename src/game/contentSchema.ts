@@ -87,6 +87,7 @@ const deltaSchema = z.number().int().min(-50).max(50);
 
 const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("reveal_target_asset") }),
+  z.object({ kind: z.literal("reveal_all_hidden_assets_at_location") }),
   z.object({ kind: z.literal("steal_target_asset") }),
   z.object({
     kind: z.literal("infamy_delta"),
@@ -176,13 +177,25 @@ function parseMissionsWithRefs(
       }
     }
     const assetOnlyKinds = new Set<MissionEffect["kind"]>(["reveal_target_asset", "steal_target_asset"]);
+    const revealAllAtLocationKinds = new Set<MissionEffect["kind"]>([
+      "reveal_all_hidden_assets_at_location",
+    ]);
     const targetIsNotAssetSlot =
       m.targetType !== "asset_hidden" && m.targetType !== "asset_revealed";
+    const targetHasMissionLocation =
+      m.targetType === "location" ||
+      m.targetType === "asset_hidden" ||
+      m.targetType === "asset_revealed";
     const allEffects = [...(m.onSuccessEffects ?? []), ...(m.onFailureEffects ?? [])];
     for (const eff of allEffects) {
       if (targetIsNotAssetSlot && assetOnlyKinds.has(eff.kind)) {
         throw new Error(
           `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires asset_hidden or asset_revealed)`,
+        );
+      }
+      if (!targetHasMissionLocation && revealAllAtLocationKinds.has(eff.kind)) {
+        throw new Error(
+          `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires location, asset_hidden, or asset_revealed)`,
         );
       }
     }

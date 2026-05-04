@@ -6,17 +6,18 @@
     "targetType": "none",
     "startCommandPoints": 2,
     "requiredTraitIds": ["hacker"],
-    "requiredAssetIds": ["classified_documents"],
-    "durationTurns": 1
+    "durationTurns": 1,
+    "onSuccessEffects": [{ "kind": "max_command_points_per_turn_delta", "delta": 1 }]
   },
   {
     "id": "extract_asset",
     "name": "Extract the asset",
     "description": "Escort the contact out under pressure.",
-    "targetType": "none",
-    "startCommandPoints": 3,
-    "requiredTraitIds": ["loyal", "hacker", "fast"],
-    "durationTurns": 3
+    "targetType": "asset_revealed",
+    "startCommandPoints": 1,
+    "requiredTraitIds": ["hacker"],
+    "durationTurns": 1,
+    "onSuccessEffects": [{ "kind": "steal_target_asset" }]
   },
   {
     "id": "vector_null_infil",

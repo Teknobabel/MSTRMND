@@ -25,7 +25,7 @@ import {
   successChancePercent,
   type MissionSuccessOptions,
 } from "./mission";
-import { applyMissionEffects } from "./missionEffects";
+import { applyMissionEffects, describeMissionTemplateEffects } from "./missionEffects";
 import { getOmegaPlanById, omegaSlotMissionId, pickRandomOmegaPlanId } from "./omegaPlan";
 import { getLairById, pickRandomLairId } from "./lair";
 
@@ -75,6 +75,10 @@ export type ActivityEventMissionCompleted = {
   roll: number;
   successChancePercent: number;
   infamyDelta: number;
+  /** Baseline infamy from success/failure before template effects. */
+  baselineInfamyDelta: number;
+  /** Template effect lines in resolution order (reveal/steal first, then the rest). */
+  templateEffectDescriptions: string[];
 };
 
 /** @deprecated Use {@link ActivityEventMissionCompleted} */
@@ -1155,6 +1159,8 @@ export function executePlan(
 
     const infamyDeltaTotal = player.infamy - infamyBefore;
 
+    const templateEffectDescriptions = describeMissionTemplateEffects(effectList);
+
     resolveEvents.push({
       kind: "mission_completed",
       activeMissionId: am.id,
@@ -1165,6 +1171,8 @@ export function executePlan(
       roll,
       successChancePercent: pct,
       infamyDelta: infamyDeltaTotal,
+      baselineInfamyDelta: baselineInfamy,
+      templateEffectDescriptions,
     });
     resolveEvents.push(...applied.events);
 

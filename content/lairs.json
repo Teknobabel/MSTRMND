@@ -26,6 +26,7 @@
     "description": "Glass walls, better optics, faster exits.",
     "availableMissionIds": [
       "breach_server",
+      "extract_asset",
       "iron_veil_meet",
       "hollow_crown_social",
       "grey_commission_witness",

@@ -7,6 +7,37 @@ import type {
 } from "./types";
 import { isOccupiedAssetSlot } from "./types";
 
+function signedInt(n: number): string {
+  return n >= 0 ? `+${n}` : String(n);
+}
+
+function describeMissionEffect(effect: MissionEffect): string {
+  switch (effect.kind) {
+    case "reveal_target_asset":
+      return "Revealed the targeted asset";
+    case "reveal_all_hidden_assets_at_location":
+      return "Revealed all hidden assets at the target location";
+    case "steal_target_asset":
+      return "Stole the targeted asset into inventory";
+    case "infamy_delta":
+      return `Infamy ${signedInt(effect.amount)} (mission effect)`;
+    case "max_concurrent_missions_delta":
+      return `Max concurrent missions ${signedInt(effect.delta)}`;
+    case "max_roster_size_delta":
+      return `Max roster size ${signedInt(effect.delta)}`;
+    case "max_hire_offers_delta":
+      return `Max hire offers ${signedInt(effect.delta)}`;
+    case "max_participants_per_mission_delta":
+      return `Max participants per mission ${signedInt(effect.delta)}`;
+    case "max_command_points_per_turn_delta":
+      return `Max command points per turn ${signedInt(effect.delta)}`;
+    default: {
+      const _exhaustive: never = effect;
+      return String(_exhaustive);
+    }
+  }
+}
+
 function clampInfamy(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
@@ -14,16 +45,29 @@ function clampInfamy(value: number): number {
 const MIN_STAT_CAP = 1;
 
 /**
- * Run all `reveal_target_asset` effects before `steal_target_asset`, then other kinds in
- * their original relative order (designers may still order non-asset effects freely).
+ * Run all reveal effects (`reveal_target_asset`, `reveal_all_hidden_assets_at_location`)
+ * before `steal_target_asset`, then other kinds in their original relative order (designers
+ * may still order non-asset effects freely).
  */
 export function orderedMissionEffects(effects: readonly MissionEffect[]): MissionEffect[] {
-  const reveals = effects.filter((e) => e.kind === "reveal_target_asset");
+  const reveals = effects.filter(
+    (e) =>
+      e.kind === "reveal_target_asset" ||
+      e.kind === "reveal_all_hidden_assets_at_location",
+  );
   const steals = effects.filter((e) => e.kind === "steal_target_asset");
   const rest = effects.filter(
-    (e) => e.kind !== "reveal_target_asset" && e.kind !== "steal_target_asset",
+    (e) =>
+      e.kind !== "reveal_target_asset" &&
+      e.kind !== "reveal_all_hidden_assets_at_location" &&
+      e.kind !== "steal_target_asset",
   );
   return [...reveals, ...steals, ...rest];
+}
+
+/** Human-readable lines for template mission effects, in {@link orderedMissionEffects} order. */
+export function describeMissionTemplateEffects(effects: readonly MissionEffect[]): string[] {
+  return orderedMissionEffects([...effects]).map(describeMissionEffect);
 }
 
 function mapSlotAt(
@@ -43,6 +87,17 @@ function mapSlotAt(
   });
 }
 
+/** Same location resolution as `getMissionTargetLocationId` in `gameState` (avoid import cycle). */
+function missionTargetLocationId(target: MissionTarget): string | null {
+  if (target.kind === "location") {
+    return target.locationId;
+  }
+  if (target.kind === "asset") {
+    return target.locationId;
+  }
+  return null;
+}
+
 function applyRevealTargetAsset(
   placements: LocationAssetPlacement[],
   target: MissionTarget,
@@ -58,6 +113,33 @@ function applyRevealTargetAsset(
       return slot;
     }
     return { kind: "occupied", assetId: slot.assetId, visibility: "revealed" };
+  });
+}
+
+function applyRevealAllHiddenAtLocation(
+  placements: LocationAssetPlacement[],
+  target: MissionTarget,
+): LocationAssetPlacement[] {
+  const locationId = missionTargetLocationId(target);
+  if (locationId === null) {
+    return placements;
+  }
+  return placements.map((p) => {
+    if (p.locationId !== locationId) {
+      return p;
+    }
+    return {
+      ...p,
+      slots: p.slots.map((slot) => {
+        if (!isOccupiedAssetSlot(slot)) {
+          return slot;
+        }
+        if (slot.visibility === "revealed") {
+          return slot;
+        }
+        return { kind: "occupied", assetId: slot.assetId, visibility: "revealed" };
+      }),
+    };
   });
 }
 
@@ -149,6 +231,8 @@ export function applyMissionEffects(
   for (const effect of ordered) {
     if (effect.kind === "reveal_target_asset") {
       locationAssetSlots = applyRevealTargetAsset(locationAssetSlots, target);
+    } else if (effect.kind === "reveal_all_hidden_assets_at_location") {
+      locationAssetSlots = applyRevealAllHiddenAtLocation(locationAssetSlots, target);
     } else if (effect.kind === "steal_target_asset") {
       const r = applyStealTargetAsset(locationAssetSlots, target, player);
       locationAssetSlots = r.placements;

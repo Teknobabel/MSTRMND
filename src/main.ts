@@ -184,7 +184,6 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const minionsList = req<HTMLElement>("assign-minions-list");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
   const btnExec = req<HTMLButtonElement>("btn-execute-plan");
-  const btnNext = req<HTMLButtonElement>("btn-next-turn");
   const btnRerollHire = req<HTMLButtonElement>("btn-reroll-hire");
   const hudShort = req<HTMLElement>("game-hud-short");
   const omegaPlanPanelEl = req<HTMLElement>("omega-plan-panel");
@@ -1954,9 +1953,17 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           const inf =
             ev.infamyDelta >= 0 ? `+${ev.infamyDelta}` : String(ev.infamyDelta);
           const whereLabel = formatMissionTargetSummary(ev.target);
+          const baseline =
+            ev.baselineInfamyDelta >= 0
+              ? `+${ev.baselineInfamyDelta}`
+              : String(ev.baselineInfamyDelta);
+          const templateFx =
+            ev.templateEffectDescriptions.length > 0
+              ? ev.templateEffectDescriptions.join("; ")
+              : "none";
           return `${ev.missionName} @ ${whereLabel}: ${
             ev.success ? "Success" : "Failure"
-          } (roll ${ev.roll} vs ${ev.successChancePercent}%). Infamy ${inf}.`;
+          } (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}. Outcome: baseline infamy ${baseline}. Mission effects: ${templateFx}.`;
         }
         case "minion_hired":
         case "minion_rehired": {
@@ -2049,8 +2056,6 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const mainOnly = state.phase === "main";
     btnExec.hidden = !mainOnly;
     btnExec.disabled = !mainOnly;
-    btnNext.hidden = mainOnly;
-    btnNext.disabled = state.phase !== "summary";
 
     ensureAssignPickSlotsWired();
     renderMinionsPanel();
@@ -2118,14 +2123,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const result = executePlan(state, content, rng);
     if (result.ok) {
       state = result.value;
-    }
-    refresh();
-  });
-
-  btnNext.addEventListener("click", () => {
-    const result = advanceToNextTurn(state);
-    if (result.ok) {
-      state = result.value;
+      const next = advanceToNextTurn(state);
+      if (next.ok) {
+        state = next.value;
+      }
     }
     refresh();
   });

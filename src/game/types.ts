@@ -51,6 +51,7 @@ export type MissionTarget =
 /** Single designer-authored outcome when a mission finishes. */
 export type MissionEffect =
   | { kind: "reveal_target_asset" }
+  | { kind: "reveal_all_hidden_assets_at_location" }
   | { kind: "steal_target_asset" }
   | { kind: "infamy_delta"; amount: number }
   | { kind: "max_concurrent_missions_delta"; delta: number }
