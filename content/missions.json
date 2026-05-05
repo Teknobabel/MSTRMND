@@ -10,6 +10,19 @@
     "onSuccessEffects": [{ "kind": "max_command_points_per_turn_delta", "delta": 1 }]
   },
   {
+    "id": "hub_rig_upgrade",
+    "name": "Rig the dead hub",
+    "description": "Lay trunk lines so buried ops can surface in the mission roster.",
+    "targetType": "none",
+    "startCommandPoints": 2,
+    "requiredTraitIds": ["hacker"],
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      { "kind": "unlock_lair_mission", "missionId": "archive_seal_breach" },
+      { "kind": "max_concurrent_missions_delta", "delta": 1 }
+    ]
+  },
+  {
     "id": "extract_asset",
     "name": "Extract the asset",
     "description": "Escort the contact out under pressure.",

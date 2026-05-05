@@ -19,6 +19,8 @@ function describeMissionEffect(effect: MissionEffect): string {
       return "Revealed all hidden assets at the target location";
     case "steal_target_asset":
       return "Stole the targeted asset into inventory";
+    case "unlock_lair_mission":
+      return `Unlocked lair mission: ${effect.missionId}`;
     case "infamy_delta":
       return `Infamy ${signedInt(effect.amount)} (mission effect)`;
     case "max_concurrent_missions_delta":
@@ -238,6 +240,8 @@ export function applyMissionEffects(
       locationAssetSlots = r.placements;
       player = r.player;
       events.push(...r.events);
+    } else if (effect.kind === "unlock_lair_mission") {
+      /* Lair pool update runs in executePlan after this pass. */
     } else {
       player = applyPlayerStatDeltas(player, effect);
     }

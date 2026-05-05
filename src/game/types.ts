@@ -53,6 +53,7 @@ export type MissionEffect =
   | { kind: "reveal_target_asset" }
   | { kind: "reveal_all_hidden_assets_at_location" }
   | { kind: "steal_target_asset" }
+  | { kind: "unlock_lair_mission"; missionId: string }
   | { kind: "infamy_delta"; amount: number }
   | { kind: "max_concurrent_missions_delta"; delta: number }
   | { kind: "max_roster_size_delta"; delta: number }
@@ -162,6 +163,11 @@ export type LairTemplate = {
   description?: string;
   /** Mission templates the player may assign while at the lair (runtime pool starts as a copy). */
   availableMissionIds: string[];
+  /**
+   * One-time upgrade missions (disjoint from `availableMissionIds`). Shown in Lair Upgrades tab
+   * until completed successfully once this run.
+   */
+  upgradeMissionIds: string[];
   /** Optional starting `Asset.id` quantities merged into `player.assets` at run start. */
   startingAssets?: Record<string, number>;
 };

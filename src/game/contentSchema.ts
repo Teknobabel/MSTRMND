@@ -90,6 +90,10 @@ const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnion("kind
   z.object({ kind: z.literal("reveal_all_hidden_assets_at_location") }),
   z.object({ kind: z.literal("steal_target_asset") }),
   z.object({
+    kind: z.literal("unlock_lair_mission"),
+    missionId: z.string().min(1),
+  }),
+  z.object({
     kind: z.literal("infamy_delta"),
     amount: z.number().int().min(-100).max(100),
   }),
@@ -148,6 +152,7 @@ function parseMissionsWithRefs(
     throw parsed.error;
   }
   const arr = parsed.data;
+  const catalogMissionIdSet = new Set(arr.map((x) => x.id));
   const seenMissionIds = new Set<string>();
   for (let i = 0; i < arr.length; i += 1) {
     const m = arr[i];
@@ -188,6 +193,11 @@ function parseMissionsWithRefs(
       m.targetType === "asset_revealed";
     const allEffects = [...(m.onSuccessEffects ?? []), ...(m.onFailureEffects ?? [])];
     for (const eff of allEffects) {
+      if (eff.kind === "unlock_lair_mission" && !catalogMissionIdSet.has(eff.missionId)) {
+        throw new Error(
+          `Unknown mission id "${eff.missionId}" in unlock_lair_mission for mission "${m.id}"`,
+        );
+      }
       if (targetIsNotAssetSlot && assetOnlyKinds.has(eff.kind)) {
         throw new Error(
           `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires asset_hidden or asset_revealed)`,
@@ -196,6 +206,13 @@ function parseMissionsWithRefs(
       if (!targetHasMissionLocation && revealAllAtLocationKinds.has(eff.kind)) {
         throw new Error(
           `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires location, asset_hidden, or asset_revealed)`,
+        );
+      }
+    }
+    for (const eff of m.onFailureEffects ?? []) {
+      if (eff.kind === "unlock_lair_mission") {
+        throw new Error(
+          `Mission "${m.id}" must not use unlock_lair_mission in onFailureEffects (success only)`,
         );
       }
     }
@@ -382,6 +399,7 @@ const lairTemplateSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1).optional(),
   availableMissionIds: z.array(z.string().min(1)),
+  upgradeMissionIds: z.array(z.string().min(1)).default([]),
   startingAssets: z.record(z.string().min(1), z.number().int().min(1)).optional(),
 });
 
@@ -416,6 +434,25 @@ function parseLairsWithRefs(
         );
       }
     }
+    const seenUpgrade = new Set<string>();
+    for (const mid of lair.upgradeMissionIds) {
+      if (seenUpgrade.has(mid)) {
+        throw new Error(
+          `Duplicate mission id "${mid}" in upgradeMissionIds for lair "${lair.id}"`,
+        );
+      }
+      seenUpgrade.add(mid);
+      if (!missionIds.has(mid)) {
+        throw new Error(
+          `Unknown mission id "${mid}" in upgradeMissionIds for lair "${lair.id}"`,
+        );
+      }
+      if (seenMission.has(mid)) {
+        throw new Error(
+          `Mission id "${mid}" cannot appear in both availableMissionIds and upgradeMissionIds for lair "${lair.id}"`,
+        );
+      }
+    }
     if (lair.startingAssets) {
       for (const aid of Object.keys(lair.startingAssets)) {
         if (!assetIds.has(aid)) {
@@ -429,6 +466,7 @@ function parseLairsWithRefs(
     name: l.name,
     ...(l.description !== undefined ? { description: l.description } : {}),
     availableMissionIds: [...l.availableMissionIds],
+    upgradeMissionIds: [...l.upgradeMissionIds],
     ...(l.startingAssets !== undefined
       ? { startingAssets: { ...l.startingAssets } }
       : {}),

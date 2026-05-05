@@ -25,9 +25,13 @@ import {
   successChancePercent,
   type MissionSuccessOptions,
 } from "./mission";
-import { applyMissionEffects, describeMissionTemplateEffects } from "./missionEffects";
+import {
+  applyMissionEffects,
+  describeMissionTemplateEffects,
+  orderedMissionEffects,
+} from "./missionEffects";
 import { getOmegaPlanById, omegaSlotMissionId, pickRandomOmegaPlanId } from "./omegaPlan";
-import { getLairById, pickRandomLairId } from "./lair";
+import { getLairById, pendingLairUpgradeMissionIds, pickRandomLairId } from "./lair";
 
 export type TurnPhase = "main" | "resolve" | "summary";
 
@@ -159,6 +163,11 @@ export type GameState = {
   activeLairId: string | null;
   /** Mission template ids available from the lair (starts as copy of template; gameplay may append). */
   lairMissionIds: string[];
+  /**
+   * Upgrade missions from the active lair template that have completed successfully this run
+   * (removed from the Upgrades tab).
+   */
+  completedLairUpgradeMissionIds: string[];
   /** Current Omega plan phase row (0–2) used for which missions may be assigned from the plan. */
   activeOmegaStageIndex: number;
   /** Per-slot success flags for the current row (reset when the row completes and the stage advances). */
@@ -478,6 +487,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     locationSecurityTraits,
     activeLairId,
     lairMissionIds,
+    completedLairUpgradeMissionIds: [],
     activeOmegaStageIndex: 0,
     omegaRowProgress: [false, false, false],
   };
@@ -797,7 +807,13 @@ export function assignMission(
     if (state.activeLairId === null) {
       return { ok: false, error: { code: "no_active_lair" } };
     }
-    if (!state.lairMissionIds.includes(missionTemplateId)) {
+    const fromPool = state.lairMissionIds.includes(missionTemplateId);
+    const fromUpgrade = pendingLairUpgradeMissionIds(
+      state.activeLairId,
+      state.completedLairUpgradeMissionIds,
+      catalog,
+    ).includes(missionTemplateId);
+    if (!fromPool && !fromUpgrade) {
       return {
         ok: false,
         error: { code: "mission_not_on_lair", missionId: missionTemplateId },
@@ -1088,6 +1104,8 @@ export function executePlan(
   const remaining: ActiveMission[] = [];
   let locationSecurityStates = state.locationSecurityStates;
   let locationAssetSlots = state.locationAssetSlots;
+  let lairMissionIds = [...state.lairMissionIds];
+  let completedLairUpgradeMissionIds = [...state.completedLairUpgradeMissionIds];
 
   const instanceById = new Map(state.player.minions.map((m) => [m.instanceId, m]));
 
@@ -1176,6 +1194,29 @@ export function executePlan(
     });
     resolveEvents.push(...applied.events);
 
+    if (success) {
+      for (const eff of orderedMissionEffects(template.onSuccessEffects ?? [])) {
+        if (eff.kind !== "unlock_lair_mission") {
+          continue;
+        }
+        if (
+          missionTemplateById(catalog, eff.missionId) &&
+          !lairMissionIds.includes(eff.missionId)
+        ) {
+          lairMissionIds = [...lairMissionIds, eff.missionId];
+        }
+      }
+      if (state.activeLairId !== null) {
+        const lair = getLairById(catalog, state.activeLairId);
+        if (
+          lair?.upgradeMissionIds.includes(template.id) &&
+          !completedLairUpgradeMissionIds.includes(template.id)
+        ) {
+          completedLairUpgradeMissionIds = [...completedLairUpgradeMissionIds, template.id];
+        }
+      }
+    }
+
     const secLoc = getMissionTargetLocationId(am.target);
     if (secLoc !== null) {
       locationSecurityStates = raiseSecurityAfterMissionAtLocation(
@@ -1258,6 +1299,8 @@ export function executePlan(
       omegaRowProgress,
       locationSecurityStates,
       locationAssetSlots,
+      lairMissionIds,
+      completedLairUpgradeMissionIds,
     },
   };
 }

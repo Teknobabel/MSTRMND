@@ -1,5 +1,23 @@
 import type { ContentCatalog, LairTemplate } from "./types";
 
+/** Upgrade missions not yet completed successfully this run (for UI / assignment). */
+export function pendingLairUpgradeMissionIds(
+  activeLairId: string | null,
+  completedLairUpgradeMissionIds: readonly string[],
+  catalog: ContentCatalog,
+): string[] {
+  if (activeLairId === null) {
+    return [];
+  }
+  const lair = getLairById(catalog, activeLairId);
+  if (!lair) {
+    return [];
+  }
+  return lair.upgradeMissionIds.filter(
+    (id) => !completedLairUpgradeMissionIds.includes(id),
+  );
+}
+
 export function getLairById(
   catalog: ContentCatalog,
   id: string,

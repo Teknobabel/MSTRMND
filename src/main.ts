@@ -17,6 +17,7 @@ import {
 } from "./game/gameState";
 import type {
   LocationAssetSlot,
+  LocationType,
   MissionSource,
   MissionTarget,
   MissionTargetType,
@@ -31,9 +32,22 @@ import { loadContent } from "./game/loadContent";
 import {
   locationTemplatesForOmegaPlan,
 } from "./game/locationCatalog";
-import { getLairById } from "./game/lair";
+import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
 import { getOmegaPlanById } from "./game/omegaPlan";
 import { initNavigation } from "./navigation";
+
+/** Tabs left-to-right; locations filtered and sorted by name within each. */
+const LOCATION_CATEGORY_TAB_ORDER: readonly LocationType[] = [
+  "economic",
+  "political",
+  "military",
+] as const;
+
+const LOCATION_CATEGORY_LABEL: Record<LocationType, string> = {
+  economic: "Economic",
+  political: "Political",
+  military: "Military",
+};
 
 const catalog = loadContent();
 console.info(
@@ -211,6 +225,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     | { kind: "mission-slot" }
     | { kind: "assign-target" }
     | null = null;
+
+  let locationsCategoryTab: LocationType = "economic";
+  let lairPanelTab: "missions" | "upgrades" = "missions";
 
   function getAssignParticipantIds(): string[] {
     const max = state.player.maxParticipantsPerMission;
@@ -1843,21 +1860,66 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     );
     const assetNameById = new Map(content.assets.map((a) => [a.id, a.name]));
 
-    const mainOnly = state.phase === "main";
-    for (const loc of runLocations()) {
-      const sec = securityByLocationId.get(loc.id);
-      const slots = assetSlotsByLocationId.get(loc.id) ?? [];
-      const article = buildLocationCardArticle(
-        loc,
-        sec,
-        slots,
-        assetNameById,
-        mainOnly,
-        state.locationRequiredTraits[loc.id] ?? [],
-        state.locationSecurityTraits[loc.id] ?? [],
-      );
-      locationsPanelEl.appendChild(article);
+    const tablist = document.createElement("div");
+    tablist.className = "locations-category-tabs";
+    tablist.setAttribute("role", "tablist");
+    tablist.setAttribute("aria-label", "Location category");
+
+    for (const tabType of LOCATION_CATEGORY_TAB_ORDER) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "locations-category-tab";
+      if (tabType === locationsCategoryTab) {
+        tab.classList.add("locations-category-tab--active");
+      }
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", tabType === locationsCategoryTab ? "true" : "false");
+      tab.id = `locations-tab-${tabType}`;
+      tab.textContent = LOCATION_CATEGORY_LABEL[tabType];
+      tab.addEventListener("click", () => {
+        if (locationsCategoryTab === tabType) {
+          return;
+        }
+        locationsCategoryTab = tabType;
+        renderLocationsPanel();
+      });
+      tablist.appendChild(tab);
     }
+    locationsPanelEl.appendChild(tablist);
+
+    const listEl = document.createElement("div");
+    listEl.className = "locations-panel-list";
+    listEl.id = "locations-panel-list";
+    listEl.setAttribute("role", "tabpanel");
+    listEl.setAttribute("aria-labelledby", `locations-tab-${locationsCategoryTab}`);
+
+    const sortedForTab = runLocations()
+      .filter((loc) => loc.locationType === locationsCategoryTab)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
+    const mainOnly = state.phase === "main";
+    if (sortedForTab.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "locations-panel-empty";
+      empty.textContent = `No ${LOCATION_CATEGORY_LABEL[locationsCategoryTab].toLowerCase()} locations on this map.`;
+      listEl.appendChild(empty);
+    } else {
+      for (const loc of sortedForTab) {
+        const sec = securityByLocationId.get(loc.id);
+        const slots = assetSlotsByLocationId.get(loc.id) ?? [];
+        const article = buildLocationCardArticle(
+          loc,
+          sec,
+          slots,
+          assetNameById,
+          mainOnly,
+          state.locationRequiredTraits[loc.id] ?? [],
+          state.locationSecurityTraits[loc.id] ?? [],
+        );
+        listEl.appendChild(article);
+      }
+    }
+    locationsPanelEl.appendChild(listEl);
   }
 
   function renderLairPanel(): void {
@@ -1887,23 +1949,96 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       desc.textContent = lair.description;
       lairPanelEl.appendChild(desc);
     }
+
+    function missionNameForSort(mid: string): string {
+      return content.missions.find((m) => m.id === mid)?.name ?? mid;
+    }
+    function sortMissionIds(ids: readonly string[]): string[] {
+      return [...ids].sort((a, b) =>
+        missionNameForSort(a).localeCompare(missionNameForSort(b), undefined, {
+          sensitivity: "base",
+        }),
+      );
+    }
+
+    const tablist = document.createElement("div");
+    tablist.className = "lair-panel-tabs";
+    tablist.setAttribute("role", "tablist");
+    tablist.setAttribute("aria-label", "Lair sections");
+
+    const tabDefs: { id: "missions" | "upgrades"; label: string }[] = [
+      { id: "missions", label: "Missions" },
+      { id: "upgrades", label: "Upgrades" },
+    ];
+    for (const def of tabDefs) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "lair-panel-tab";
+      if (def.id === lairPanelTab) {
+        tab.classList.add("lair-panel-tab--active");
+      }
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", def.id === lairPanelTab ? "true" : "false");
+      tab.id = `lair-panel-tab-${def.id}`;
+      tab.textContent = def.label;
+      tab.addEventListener("click", () => {
+        if (lairPanelTab === def.id) {
+          return;
+        }
+        lairPanelTab = def.id;
+        renderLairPanel();
+      });
+      tablist.appendChild(tab);
+    }
+    lairPanelEl.appendChild(tablist);
+
     const list = document.createElement("div");
     list.className = "lair-panel-missions";
-    if (state.lairMissionIds.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "assets-panel-empty";
-      empty.textContent = "No missions at this lair.";
-      list.appendChild(empty);
+    list.setAttribute("role", "tabpanel");
+    list.setAttribute("aria-labelledby", `lair-panel-tab-${lairPanelTab}`);
+
+    if (lairPanelTab === "missions") {
+      if (state.lairMissionIds.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "assets-panel-empty";
+        empty.textContent = "No missions at this lair.";
+        list.appendChild(empty);
+      } else {
+        for (const mid of sortMissionIds(state.lairMissionIds)) {
+          list.appendChild(
+            omegaPlanMissionCard(
+              mid,
+              state.phase === "main"
+                ? { draggable: true, source: "lair", missionTemplateId: mid }
+                : undefined,
+            ),
+          );
+        }
+      }
     } else {
-      for (const mid of state.lairMissionIds) {
-        list.appendChild(
-          omegaPlanMissionCard(
-            mid,
-            state.phase === "main"
-              ? { draggable: true, source: "lair", missionTemplateId: mid }
-              : undefined,
-          ),
-        );
+      const pending = sortMissionIds(
+        pendingLairUpgradeMissionIds(
+          state.activeLairId,
+          state.completedLairUpgradeMissionIds,
+          content,
+        ),
+      );
+      if (pending.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "assets-panel-empty";
+        empty.textContent = "No pending upgrades.";
+        list.appendChild(empty);
+      } else {
+        for (const mid of pending) {
+          list.appendChild(
+            omegaPlanMissionCard(
+              mid,
+              state.phase === "main"
+                ? { draggable: true, source: "lair", missionTemplateId: mid }
+                : undefined,
+            ),
+          );
+        }
       }
     }
     lairPanelEl.appendChild(list);
