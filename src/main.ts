@@ -1414,8 +1414,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const startingIds = tpl.startingTraitIds ?? [];
       appendMinionStatRows(dl, [
         { label: "CP cost", value: String(tpl.hireCommandPoints) },
-        { label: "Level", value: "—" },
-        { label: "XP", value: "—" },
+        { label: "Level", value: String(tpl.startingLevel ?? 1) },
+        { label: "XP", value: "0" },
         {
           label: "Traits",
           value: traitDisplayNames(content, startingIds),

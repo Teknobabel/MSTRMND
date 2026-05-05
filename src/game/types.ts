@@ -14,6 +14,11 @@ export type MinionTemplate = {
   hireCommandPoints: number;
   startingTraitIds?: string[];
   levelUpTraitOrder: string[];
+  /**
+   * Level at hire (`currentLevel`). Defaults to **1** when omitted in JSON.
+   * Traits from `levelUpTraitOrder` are granted by applying level-ups until this level is reached.
+   */
+  startingLevel?: number;
 };
 
 export type MinionInstance = {

@@ -12,6 +12,7 @@
     "name": "Asset Beta",
     "description": "A local contact; fragile but insightful.",
     "hireCommandPoints": 2,
+    "startingLevel": 2,
     "startingTraitIds": ["injured"],
     "levelUpTraitOrder": ["hacker", "loyal", "tactician"]
   },

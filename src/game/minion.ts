@@ -12,13 +12,21 @@ export function createMinionFromTemplate(
   const starting = template.startingTraitIds ?? [];
   const traitIds =
     overrides?.traitIds !== undefined ? [...overrides.traitIds] : [...starting];
-  return {
+  let instance: MinionInstance = {
     instanceId,
     templateId: template.id,
-    currentLevel: overrides?.currentLevel ?? 1,
+    currentLevel: 1,
     currentExperience: overrides?.currentExperience ?? 0,
     traitIds,
   };
+  const targetLevel = Math.max(
+    1,
+    overrides?.currentLevel ?? template.startingLevel ?? 1,
+  );
+  while (instance.currentLevel < targetLevel) {
+    instance = applyLevelUp(instance, template);
+  }
+  return instance;
 }
 
 /**

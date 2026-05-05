@@ -45,6 +45,7 @@ const minionTemplateSchema = z.object({
   hireCommandPoints: z.number().int().min(0),
   startingTraitIds: z.array(z.string().min(1)).optional(),
   levelUpTraitOrder: z.array(z.string().min(1)),
+  startingLevel: z.coerce.number().int().min(1).max(99).optional(),
 });
 
 function parseMinionsWithTraitRefs(
@@ -72,7 +73,20 @@ function parseMinionsWithTraitRefs(
       }
     }
   }
-  return arr;
+  return arr.map((m) => {
+    const base: MinionTemplate = {
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      hireCommandPoints: m.hireCommandPoints,
+      levelUpTraitOrder: [...m.levelUpTraitOrder],
+      startingLevel: m.startingLevel ?? 1,
+    };
+    if (m.startingTraitIds !== undefined && m.startingTraitIds.length > 0) {
+      base.startingTraitIds = [...m.startingTraitIds];
+    }
+    return base;
+  });
 }
 
 const missionTargetTypeSchema = z.enum([

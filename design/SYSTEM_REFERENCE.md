@@ -55,7 +55,7 @@ Enums in JSON are generally **lowercase** strings (e.g. trait `type`, location `
 
 ### Minions (`content/minions.json`)
 
-- **MinionTemplate**: `id`, `name`, `description`, **`hireCommandPoints`** (integer ≥ 0; CP spent when hiring in the Main Phase), optional `startingTraitIds`, `levelUpTraitOrder` (ordered trait ids for level-ups).
+- **MinionTemplate**: `id`, `name`, `description`, **`hireCommandPoints`** (integer ≥ 0; CP spent when hiring in the Main Phase), optional `startingTraitIds`, optional **`startingLevel`** (integer ≥ 1, default **1**; grants sequential traits from **`levelUpTraitOrder`** via the same rules as automatic level-ups until **`currentLevel`** reaches this value), `levelUpTraitOrder` (ordered trait ids for further level-ups).
 - **MinionInstance** (runtime, not in JSON): **`instanceId`** (stable id for roster and missions), `templateId`, `currentLevel`, `currentExperience`, `traitIds`.
 - **Creation** (`minion.ts`): `createMinionFromTemplate(template, instanceId, overrides?)` — callers supply `instanceId` (e.g. `crypto.randomUUID()`).
 - **Mission XP & leveling** (`minion.ts` + **`executePlan`** in `gameState.ts`): when a mission **resolves** (duration reaches 0 with valid template and participants), **each participant** gains **`MINION_XP_PER_MISSION`** (**1**) XP. When **`currentExperience`** reaches **`MINION_XP_TO_LEVEL`** (**3**), the minion **levels up** (`currentLevel` +1), **`currentExperience` resets to 0**, and **`applyLevelUp`** runs: grant the **first** trait in `levelUpTraitOrder` the instance does **not** already have (if none left, level still increases but **no** new trait). A **`minion_leveled_up`** activity event is recorded for that turn (see **Activity log** below).
