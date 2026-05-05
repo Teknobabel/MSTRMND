@@ -58,7 +58,22 @@ export type MissionEffect =
   | { kind: "reveal_target_asset" }
   | { kind: "reveal_all_hidden_assets_at_location" }
   | { kind: "steal_target_asset" }
+  /** Reveals every hidden asset at the mission location, then moves all location assets into inventory. */
+  | { kind: "steal_all_assets_at_location" }
+  /** Moves every revealed (not hidden) asset at the mission location into inventory. */
+  | { kind: "steal_all_revealed_assets_at_location" }
   | { kind: "unlock_lair_mission"; missionId: string }
+  /**
+   * Grants catalog assets to inventory (not taken from locations). Duplicate ids grant multiple units.
+   */
+  | { kind: "gain_assets"; assetIds: string[] }
+  /**
+   * Removes up to the listed quantities from the player's inventory (shortfall skipped), then adds the gained ids.
+   * Both fields are multisets; at least one list must be non-empty.
+   */
+  | { kind: "exchange_assets"; removeAssetIds: string[]; gainAssetIds: string[] }
+  /** Adds delta to security at the mission location (negative reduces); clamped to [0, locationLevel]. */
+  | { kind: "security_level_delta"; delta: number }
   | { kind: "infamy_delta"; amount: number }
   | { kind: "max_concurrent_missions_delta"; delta: number }
   | { kind: "max_roster_size_delta"; delta: number }

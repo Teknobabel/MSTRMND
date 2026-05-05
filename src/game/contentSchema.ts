@@ -103,9 +103,24 @@ const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnion("kind
   z.object({ kind: z.literal("reveal_target_asset") }),
   z.object({ kind: z.literal("reveal_all_hidden_assets_at_location") }),
   z.object({ kind: z.literal("steal_target_asset") }),
+  z.object({ kind: z.literal("steal_all_assets_at_location") }),
+  z.object({ kind: z.literal("steal_all_revealed_assets_at_location") }),
   z.object({
     kind: z.literal("unlock_lair_mission"),
     missionId: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal("gain_assets"),
+    assetIds: z.array(z.string().min(1)).min(1),
+  }),
+  z.object({
+    kind: z.literal("exchange_assets"),
+    removeAssetIds: z.array(z.string().min(1)),
+    gainAssetIds: z.array(z.string().min(1)),
+  }),
+  z.object({
+    kind: z.literal("security_level_delta"),
+    delta: deltaSchema,
   }),
   z.object({
     kind: z.literal("infamy_delta"),
@@ -198,6 +213,9 @@ function parseMissionsWithRefs(
     const assetOnlyKinds = new Set<MissionEffect["kind"]>(["reveal_target_asset", "steal_target_asset"]);
     const revealAllAtLocationKinds = new Set<MissionEffect["kind"]>([
       "reveal_all_hidden_assets_at_location",
+      "steal_all_assets_at_location",
+      "steal_all_revealed_assets_at_location",
+      "security_level_delta",
     ]);
     const targetIsNotAssetSlot =
       m.targetType !== "asset_hidden" && m.targetType !== "asset_revealed";
@@ -221,6 +239,36 @@ function parseMissionsWithRefs(
         throw new Error(
           `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires location, asset_hidden, or asset_revealed)`,
         );
+      }
+      if (eff.kind === "gain_assets") {
+        for (const aid of eff.assetIds) {
+          if (!assetIds.has(aid)) {
+            throw new Error(
+              `Unknown asset id "${aid}" in gain_assets for mission "${m.id}"`,
+            );
+          }
+        }
+      }
+      if (eff.kind === "exchange_assets") {
+        if (eff.removeAssetIds.length === 0 && eff.gainAssetIds.length === 0) {
+          throw new Error(
+            `Mission "${m.id}" exchange_assets must list at least one removeAssetIds or gainAssetIds entry`,
+          );
+        }
+        for (const aid of eff.removeAssetIds) {
+          if (!assetIds.has(aid)) {
+            throw new Error(
+              `Unknown asset id "${aid}" in exchange_assets.removeAssetIds for mission "${m.id}"`,
+            );
+          }
+        }
+        for (const aid of eff.gainAssetIds) {
+          if (!assetIds.has(aid)) {
+            throw new Error(
+              `Unknown asset id "${aid}" in exchange_assets.gainAssetIds for mission "${m.id}"`,
+            );
+          }
+        }
       }
     }
     for (const eff of m.onFailureEffects ?? []) {

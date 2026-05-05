@@ -1,7 +1,10 @@
 import type { ActiveMission, ActivityEvent, GameState, PlayerState } from "./gameState";
+import { maxSecurityLevelForLocation } from "./locationCatalog";
 import type {
+  ContentCatalog,
   LocationAssetPlacement,
   LocationAssetSlot,
+  LocationSecurityState,
   MissionEffect,
   MissionTarget,
 } from "./types";
@@ -19,8 +22,18 @@ function describeMissionEffect(effect: MissionEffect): string {
       return "Revealed all hidden assets at the target location";
     case "steal_target_asset":
       return "Stole the targeted asset into inventory";
+    case "steal_all_assets_at_location":
+      return "Revealed hidden assets at the target location, then stole all assets there into inventory";
+    case "steal_all_revealed_assets_at_location":
+      return "Stole all revealed assets at the target location into inventory";
     case "unlock_lair_mission":
       return `Unlocked lair mission: ${effect.missionId}`;
+    case "gain_assets":
+      return `Gained ${effect.assetIds.length} asset unit(s) into inventory`;
+    case "exchange_assets":
+      return `Removed up to ${effect.removeAssetIds.length} asset unit(s) from inventory (capped by holdings), then gained ${effect.gainAssetIds.length} unit(s)`;
+    case "security_level_delta":
+      return `Security level at target location ${signedInt(effect.delta)}`;
     case "infamy_delta":
       return `Infamy ${signedInt(effect.amount)} (mission effect)`;
     case "max_concurrent_missions_delta":
@@ -48,8 +61,9 @@ const MIN_STAT_CAP = 1;
 
 /**
  * Run all reveal effects (`reveal_target_asset`, `reveal_all_hidden_assets_at_location`)
- * before `steal_target_asset`, then other kinds in their original relative order (designers
- * may still order non-asset effects freely).
+ * before steal effects (`steal_target_asset`, `steal_all_assets_at_location`,
+ * `steal_all_revealed_assets_at_location`), then other kinds in their original relative order
+ * (designers may still order non-asset effects freely).
  */
 export function orderedMissionEffects(effects: readonly MissionEffect[]): MissionEffect[] {
   const reveals = effects.filter(
@@ -57,12 +71,19 @@ export function orderedMissionEffects(effects: readonly MissionEffect[]): Missio
       e.kind === "reveal_target_asset" ||
       e.kind === "reveal_all_hidden_assets_at_location",
   );
-  const steals = effects.filter((e) => e.kind === "steal_target_asset");
+  const steals = effects.filter(
+    (e) =>
+      e.kind === "steal_target_asset" ||
+      e.kind === "steal_all_assets_at_location" ||
+      e.kind === "steal_all_revealed_assets_at_location",
+  );
   const rest = effects.filter(
     (e) =>
       e.kind !== "reveal_target_asset" &&
       e.kind !== "reveal_all_hidden_assets_at_location" &&
-      e.kind !== "steal_target_asset",
+      e.kind !== "steal_target_asset" &&
+      e.kind !== "steal_all_assets_at_location" &&
+      e.kind !== "steal_all_revealed_assets_at_location",
   );
   return [...reveals, ...steals, ...rest];
 }
@@ -98,6 +119,26 @@ function missionTargetLocationId(target: MissionTarget): string | null {
     return target.locationId;
   }
   return null;
+}
+
+function applySecurityLevelDelta(
+  catalog: ContentCatalog,
+  states: LocationSecurityState[],
+  target: MissionTarget,
+  delta: number,
+): LocationSecurityState[] {
+  const locationId = missionTargetLocationId(target);
+  if (locationId === null) {
+    return states;
+  }
+  const cap = maxSecurityLevelForLocation(catalog, locationId);
+  return states.map((s) => {
+    if (s.locationId !== locationId) {
+      return s;
+    }
+    const next = Math.max(0, Math.min(cap, s.securityLevel + delta));
+    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
+  });
 }
 
 function applyRevealTargetAsset(
@@ -143,6 +184,144 @@ function applyRevealAllHiddenAtLocation(
       }),
     };
   });
+}
+
+function applyStealAllAssetsAtLocation(
+  placements: LocationAssetPlacement[],
+  target: MissionTarget,
+  player: PlayerState,
+): { placements: LocationAssetPlacement[]; player: PlayerState; events: ActivityEvent[] } {
+  const events: ActivityEvent[] = [];
+  const locationId = missionTargetLocationId(target);
+  if (locationId === null) {
+    return { placements, player, events };
+  }
+  let nextPlacements = applyRevealAllHiddenAtLocation(placements, target);
+  const pIdx = nextPlacements.findIndex((p) => p.locationId === locationId);
+  if (pIdx === -1) {
+    return { placements: nextPlacements, player, events };
+  }
+  const placement = nextPlacements[pIdx];
+  const gained = new Map<string, number>();
+  const nextSlots = placement.slots.map((slot) => {
+    if (!isOccupiedAssetSlot(slot)) {
+      return slot;
+    }
+    gained.set(slot.assetId, (gained.get(slot.assetId) ?? 0) + 1);
+    return { kind: "empty" as const };
+  });
+  if (gained.size === 0) {
+    return { placements: nextPlacements, player, events };
+  }
+  const nextAssets = { ...player.assets };
+  for (const [assetId, qty] of gained) {
+    nextAssets[assetId] = (nextAssets[assetId] ?? 0) + qty;
+    events.push({ kind: "asset_gained", assetId, quantity: qty });
+  }
+  nextPlacements = nextPlacements.map((p, i) =>
+    i === pIdx ? { ...p, slots: nextSlots } : p,
+  );
+  return {
+    placements: nextPlacements,
+    player: { ...player, assets: nextAssets },
+    events,
+  };
+}
+
+function applyStealAllRevealedAssetsAtLocation(
+  placements: LocationAssetPlacement[],
+  target: MissionTarget,
+  player: PlayerState,
+): { placements: LocationAssetPlacement[]; player: PlayerState; events: ActivityEvent[] } {
+  const events: ActivityEvent[] = [];
+  const locationId = missionTargetLocationId(target);
+  if (locationId === null) {
+    return { placements, player, events };
+  }
+  const pIdx = placements.findIndex((p) => p.locationId === locationId);
+  if (pIdx === -1) {
+    return { placements, player, events };
+  }
+  const placement = placements[pIdx];
+  const gained = new Map<string, number>();
+  const nextSlots = placement.slots.map((slot) => {
+    if (!isOccupiedAssetSlot(slot) || slot.visibility !== "revealed") {
+      return slot;
+    }
+    gained.set(slot.assetId, (gained.get(slot.assetId) ?? 0) + 1);
+    return { kind: "empty" as const };
+  });
+  if (gained.size === 0) {
+    return { placements, player, events };
+  }
+  const nextAssets = { ...player.assets };
+  for (const [assetId, qty] of gained) {
+    nextAssets[assetId] = (nextAssets[assetId] ?? 0) + qty;
+    events.push({ kind: "asset_gained", assetId, quantity: qty });
+  }
+  const nextPlacements = placements.map((p, i) =>
+    i === pIdx ? { ...p, slots: nextSlots } : p,
+  );
+  return {
+    placements: nextPlacements,
+    player: { ...player, assets: nextAssets },
+    events,
+  };
+}
+
+function applyGainAssets(
+  player: PlayerState,
+  effect: Extract<MissionEffect, { kind: "gain_assets" }>,
+): { player: PlayerState; events: ActivityEvent[] } {
+  const events: ActivityEvent[] = [];
+  const counts = new Map<string, number>();
+  for (const id of effect.assetIds) {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  const nextAssets = { ...player.assets };
+  for (const [assetId, qty] of counts) {
+    nextAssets[assetId] = (nextAssets[assetId] ?? 0) + qty;
+    events.push({ kind: "asset_gained", assetId, quantity: qty });
+  }
+  return { player: { ...player, assets: nextAssets }, events };
+}
+
+function applyExchangeAssets(
+  player: PlayerState,
+  effect: Extract<MissionEffect, { kind: "exchange_assets" }>,
+): { player: PlayerState; events: ActivityEvent[] } {
+  const events: ActivityEvent[] = [];
+  let nextAssets = { ...player.assets };
+
+  const removeCounts = new Map<string, number>();
+  for (const id of effect.removeAssetIds) {
+    removeCounts.set(id, (removeCounts.get(id) ?? 0) + 1);
+  }
+  for (const [assetId, qty] of removeCounts) {
+    const have = nextAssets[assetId] ?? 0;
+    const remove = Math.min(qty, have);
+    if (remove <= 0) {
+      continue;
+    }
+    const left = have - remove;
+    if (left <= 0) {
+      delete nextAssets[assetId];
+    } else {
+      nextAssets[assetId] = left;
+    }
+    events.push({ kind: "asset_lost", assetId, quantity: remove });
+  }
+
+  const gainCounts = new Map<string, number>();
+  for (const id of effect.gainAssetIds) {
+    gainCounts.set(id, (gainCounts.get(id) ?? 0) + 1);
+  }
+  for (const [assetId, qty] of gainCounts) {
+    nextAssets[assetId] = (nextAssets[assetId] ?? 0) + qty;
+    events.push({ kind: "asset_gained", assetId, quantity: qty });
+  }
+
+  return { player: { ...player, assets: nextAssets }, events };
 }
 
 function applyStealTargetAsset(
@@ -214,13 +393,19 @@ function applyPlayerStatDeltas(player: PlayerState, effect: MissionEffect): Play
 /**
  * Applies completion effects after baseline infamy has been added to `state.player.infamy`
  * (uncapped). Mutates infamy further for `infamy_delta` entries, then clamps infamy once at
- * the end. Returns updated player, placements, and activity rows (e.g. `asset_gained`).
+ * the end. Returns updated player, placements, security states, and activity rows (e.g. `asset_gained`).
  */
 export function applyMissionEffects(
   state: GameState,
   effects: readonly MissionEffect[],
   activeMission: ActiveMission,
-): { player: PlayerState; locationAssetSlots: LocationAssetPlacement[]; events: ActivityEvent[] } {
+  catalog: ContentCatalog,
+): {
+  player: PlayerState;
+  locationAssetSlots: LocationAssetPlacement[];
+  locationSecurityStates: LocationSecurityState[];
+  events: ActivityEvent[];
+} {
   const target = activeMission.target;
   const ordered = orderedMissionEffects(effects);
   let player = { ...state.player };
@@ -228,6 +413,7 @@ export function applyMissionEffects(
     ...p,
     slots: [...p.slots],
   }));
+  let locationSecurityStates = state.locationSecurityStates.map((s) => ({ ...s }));
   const events: ActivityEvent[] = [];
 
   for (const effect of ordered) {
@@ -240,6 +426,31 @@ export function applyMissionEffects(
       locationAssetSlots = r.placements;
       player = r.player;
       events.push(...r.events);
+    } else if (effect.kind === "steal_all_assets_at_location") {
+      const r = applyStealAllAssetsAtLocation(locationAssetSlots, target, player);
+      locationAssetSlots = r.placements;
+      player = r.player;
+      events.push(...r.events);
+    } else if (effect.kind === "steal_all_revealed_assets_at_location") {
+      const r = applyStealAllRevealedAssetsAtLocation(locationAssetSlots, target, player);
+      locationAssetSlots = r.placements;
+      player = r.player;
+      events.push(...r.events);
+    } else if (effect.kind === "gain_assets") {
+      const r = applyGainAssets(player, effect);
+      player = r.player;
+      events.push(...r.events);
+    } else if (effect.kind === "exchange_assets") {
+      const r = applyExchangeAssets(player, effect);
+      player = r.player;
+      events.push(...r.events);
+    } else if (effect.kind === "security_level_delta") {
+      locationSecurityStates = applySecurityLevelDelta(
+        catalog,
+        locationSecurityStates,
+        target,
+        effect.delta,
+      );
     } else if (effect.kind === "unlock_lair_mission") {
       /* Lair pool update runs in executePlan after this pass. */
     } else {
@@ -248,5 +459,5 @@ export function applyMissionEffects(
   }
 
   player = { ...player, infamy: clampInfamy(player.infamy) };
-  return { player, locationAssetSlots, events };
+  return { player, locationAssetSlots, locationSecurityStates, events };
 }

@@ -1170,10 +1170,12 @@ export function executePlan(
       ...state,
       player,
       locationAssetSlots,
+      locationSecurityStates,
     };
-    const applied = applyMissionEffects(effectState, effectList, am);
+    const applied = applyMissionEffects(effectState, effectList, am, catalog);
     player = applied.player;
     locationAssetSlots = applied.locationAssetSlots;
+    locationSecurityStates = applied.locationSecurityStates;
 
     const infamyDeltaTotal = player.infamy - infamyBefore;
 
