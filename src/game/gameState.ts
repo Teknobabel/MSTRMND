@@ -1176,6 +1176,11 @@ export function executePlan(
     player = applied.player;
     locationAssetSlots = applied.locationAssetSlots;
     locationSecurityStates = applied.locationSecurityStates;
+    /* Sync the lookup with any minion mutations from applyMissionEffects
+     * (e.g. add_target_minion_traits) so the XP pass and final merge below see them. */
+    for (const m of player.minions) {
+      instanceById.set(m.instanceId, m);
+    }
 
     const infamyDeltaTotal = player.infamy - infamyBefore;
 

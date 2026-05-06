@@ -34,6 +34,8 @@ function describeMissionEffect(effect: MissionEffect): string {
       return `Removed up to ${effect.removeAssetIds.length} asset unit(s) from inventory (capped by holdings), then gained ${effect.gainAssetIds.length} unit(s)`;
     case "security_level_delta":
       return `Security level at target location ${signedInt(effect.delta)}`;
+    case "add_target_minion_traits":
+      return `Granted ${effect.traitIds.length} trait(s) to the target minion`;
     case "infamy_delta":
       return `Infamy ${signedInt(effect.amount)} (mission effect)`;
     case "max_concurrent_missions_delta":
@@ -324,6 +326,40 @@ function applyExchangeAssets(
   return { player: { ...player, assets: nextAssets }, events };
 }
 
+function applyAddTargetMinionTraits(
+  player: PlayerState,
+  target: MissionTarget,
+  effect: Extract<MissionEffect, { kind: "add_target_minion_traits" }>,
+): PlayerState {
+  if (target.kind !== "minion") {
+    return player;
+  }
+  const { instanceId } = target;
+  let mutated = false;
+  const minions = player.minions.map((m) => {
+    if (m.instanceId !== instanceId) {
+      return m;
+    }
+    const existing = new Set(m.traitIds);
+    const next = [...m.traitIds];
+    for (const tid of effect.traitIds) {
+      if (!existing.has(tid)) {
+        existing.add(tid);
+        next.push(tid);
+      }
+    }
+    if (next.length === m.traitIds.length) {
+      return m;
+    }
+    mutated = true;
+    return { ...m, traitIds: next };
+  });
+  if (!mutated) {
+    return player;
+  }
+  return { ...player, minions };
+}
+
 function applyStealTargetAsset(
   placements: LocationAssetPlacement[],
   target: MissionTarget,
@@ -451,6 +487,8 @@ export function applyMissionEffects(
         target,
         effect.delta,
       );
+    } else if (effect.kind === "add_target_minion_traits") {
+      player = applyAddTargetMinionTraits(player, target, effect);
     } else if (effect.kind === "unlock_lair_mission") {
       /* Lair pool update runs in executePlan after this pass. */
     } else {

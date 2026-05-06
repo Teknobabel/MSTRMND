@@ -123,6 +123,10 @@ const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnion("kind
     delta: deltaSchema,
   }),
   z.object({
+    kind: z.literal("add_target_minion_traits"),
+    traitIds: z.array(z.string().min(1)).min(1),
+  }),
+  z.object({
     kind: z.literal("infamy_delta"),
     amount: z.number().int().min(-100).max(100),
   }),
@@ -217,6 +221,7 @@ function parseMissionsWithRefs(
       "steal_all_revealed_assets_at_location",
       "security_level_delta",
     ]);
+    const minionOnlyKinds = new Set<MissionEffect["kind"]>(["add_target_minion_traits"]);
     const targetIsNotAssetSlot =
       m.targetType !== "asset_hidden" && m.targetType !== "asset_revealed";
     const targetHasMissionLocation =
@@ -239,6 +244,27 @@ function parseMissionsWithRefs(
         throw new Error(
           `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires location, asset_hidden, or asset_revealed)`,
         );
+      }
+      if (m.targetType !== "minion" && minionOnlyKinds.has(eff.kind)) {
+        throw new Error(
+          `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires minion)`,
+        );
+      }
+      if (eff.kind === "add_target_minion_traits") {
+        const seenTrait = new Set<string>();
+        for (const tid of eff.traitIds) {
+          if (seenTrait.has(tid)) {
+            throw new Error(
+              `Duplicate trait id "${tid}" in add_target_minion_traits for mission "${m.id}"`,
+            );
+          }
+          seenTrait.add(tid);
+          if (!traitIds.has(tid)) {
+            throw new Error(
+              `Unknown trait id "${tid}" in add_target_minion_traits for mission "${m.id}"`,
+            );
+          }
+        }
       }
       if (eff.kind === "gain_assets") {
         for (const aid of eff.assetIds) {

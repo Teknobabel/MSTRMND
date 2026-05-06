@@ -74,6 +74,12 @@ export type MissionEffect =
   | { kind: "exchange_assets"; removeAssetIds: string[]; gainAssetIds: string[] }
   /** Adds delta to security at the mission location (negative reduces); clamped to [0, locationLevel]. */
   | { kind: "security_level_delta"; delta: number }
+  /**
+   * Grants the listed trait ids to the minion identified by the active mission's `target`
+   * (which must be `kind: "minion"`). Existing traits on that minion are not duplicated.
+   * Requires mission `targetType: "minion"`.
+   */
+  | { kind: "add_target_minion_traits"; traitIds: string[] }
   | { kind: "infamy_delta"; amount: number }
   | { kind: "max_concurrent_missions_delta"; delta: number }
   | { kind: "max_roster_size_delta"; delta: number }
