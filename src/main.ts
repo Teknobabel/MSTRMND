@@ -34,6 +34,7 @@ import {
 } from "./game/locationCatalog";
 import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
 import { getOmegaPlanById } from "./game/omegaPlan";
+import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation } from "./navigation";
 
 /** Tabs left-to-right; locations filtered and sorted by name within each. */
@@ -69,7 +70,9 @@ console.info(
   catalog.omegaPlans.length,
   "omega plans,",
   catalog.organizationNames.length,
-  "organization names",
+  "organization names,",
+  catalog.wantedLevels.length,
+  "wanted levels",
 );
 
 const canvas = document.getElementById("game-canvas");
@@ -2187,6 +2190,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     statsEl.innerHTML = `
       <div><strong>CP:</strong> ${p.commandPoints} / ${p.maxCommandPoints}</div>
       <div><strong>Infamy:</strong> ${p.infamy}</div>
+      <div><strong>Wanted:</strong> ${wantedTierAtIndex(catalog, state.wantedLevelTierIndex)?.name ?? "—"}</div>
     `;
     hudShort.textContent = `T${state.turnNumber} · ${state.phase}`;
 

@@ -35,6 +35,7 @@ import {
 } from "./missionEffects";
 import { getOmegaPlanById, omegaSlotMissionId, pickRandomOmegaPlanId } from "./omegaPlan";
 import { getLairById, pendingLairUpgradeMissionIds, pickRandomLairId } from "./lair";
+import { nextMonotonicWantedTierIndex } from "./wantedLevel";
 
 export type TurnPhase = "main" | "resolve" | "summary";
 
@@ -185,6 +186,11 @@ export type GameState = {
   activeOmegaStageIndex: number;
   /** Per-slot success flags for the current row (reset when the row completes and the stage advances). */
   omegaRowProgress: [boolean, boolean, boolean];
+  /**
+   * Index into `ContentCatalog.wantedLevels`; only increases (monotonic with infamy exposure).
+   * Recomputed at end of each `executePlan` from final `player.infamy`.
+   */
+  wantedLevelTierIndex: number;
 };
 
 export type GameError =
@@ -505,6 +511,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     completedLairUpgradeMissionIds: [],
     activeOmegaStageIndex: 0,
     omegaRowProgress: [false, false, false],
+    wantedLevelTierIndex: 0,
   };
 
   const assetEvents: ActivityEvent[] = [];
@@ -1187,12 +1194,12 @@ export function executePlan(
       locationAssetSlots,
       locationSecurityStates,
     };
-    const applied = applyMissionEffects(effectState, effectList, am, catalog);
+    const applied = applyMissionEffects(effectState, effectList, am, catalog, rng);
     player = applied.player;
     locationAssetSlots = applied.locationAssetSlots;
     locationSecurityStates = applied.locationSecurityStates;
     /* Sync the lookup with any minion mutations from applyMissionEffects
-     * (e.g. add_target_minion_traits) so the XP pass and final merge below see them. */
+     * (e.g. add_target_minion_traits, add_random_participant_traits, add_all_participant_traits) so the XP pass and final merge below see them. */
     for (const m of player.minions) {
       instanceById.set(m.instanceId, m);
     }
@@ -1302,6 +1309,12 @@ export function executePlan(
     ownedIds,
   );
 
+  const wantedLevelTierIndex = nextMonotonicWantedTierIndex(
+    state.wantedLevelTierIndex,
+    player.infamy,
+    catalog.wantedLevels,
+  );
+
   const activityLog = mergeResolveActivityEventsIntoActivityLog(
     state.activityLog,
     state.turnNumber,
@@ -1323,6 +1336,7 @@ export function executePlan(
       locationAssetSlots,
       lairMissionIds,
       completedLairUpgradeMissionIds,
+      wantedLevelTierIndex,
     },
   };
 }

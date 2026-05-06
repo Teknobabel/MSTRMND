@@ -1,0 +1,8 @@
+[
+  { "minInfamy": 0, "name": "Unknown", "maxAgents": 0 },
+  { "minInfamy": 20, "name": "Nuisance", "maxAgents": 1 },
+  { "minInfamy": 40, "name": "Menace", "maxAgents": 2 },
+  { "minInfamy": 60, "name": "Wanted", "maxAgents": 3 },
+  { "minInfamy": 80, "name": "Villain", "maxAgents": 4 },
+  { "minInfamy": 99, "name": "Mastermind", "maxAgents": 5 }
+]

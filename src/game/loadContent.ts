@@ -8,6 +8,7 @@ import missionsJson from "../../content/missions.json";
 import organizationNamesJson from "../../content/organizationNames.json";
 import omegaPlansJson from "../../content/omegaPlans.json";
 import traitsJson from "../../content/traits.json";
+import wantedLevelsJson from "../../content/wantedLevels.json";
 import { parseCatalog } from "./contentSchema";
 import type { ContentCatalog } from "./types";
 
@@ -23,5 +24,6 @@ export function loadContent(): ContentCatalog {
     omegaPlansJson,
     lairsJson,
     organizationNamesJson,
+    wantedLevelsJson,
   );
 }

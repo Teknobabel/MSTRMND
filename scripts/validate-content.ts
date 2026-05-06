@@ -18,6 +18,7 @@ try {
   const assets = JSON.parse(readFileSync(join(root, "content/assets.json"), "utf8"));
   const omegaPlans = JSON.parse(readFileSync(join(root, "content/omegaPlans.json"), "utf8"));
   const lairs = JSON.parse(readFileSync(join(root, "content/lairs.json"), "utf8"));
+  const wantedLevels = JSON.parse(readFileSync(join(root, "content/wantedLevels.json"), "utf8"));
   const catalog = parseCatalog(
     traits,
     minions,
@@ -29,9 +30,10 @@ try {
     omegaPlans,
     lairs,
     organizationNames,
+    wantedLevels,
   );
   console.log(
-    `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.agents.length} agent templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.organizationNames.length} organization names`,
+    `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.agents.length} agent templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.organizationNames.length} organization names, ${catalog.wantedLevels.length} wanted levels`,
   );
 } catch (e) {
   console.error(e);

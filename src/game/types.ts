@@ -89,6 +89,16 @@ export type MissionEffect =
    * Requires mission `targetType: "minion"`.
    */
   | { kind: "add_target_minion_traits"; traitIds: string[] }
+  /**
+   * Grants traits to one randomly chosen mission participant (from `participantInstanceIds`).
+   * Requires at least one participant when the mission resolves (otherwise no-op).
+   */
+  | { kind: "add_random_participant_traits"; traitIds: string[] }
+  /**
+   * Grants traits to every mission participant listed in `participantInstanceIds`.
+   * No-op if that list is empty.
+   */
+  | { kind: "add_all_participant_traits"; traitIds: string[] }
   | { kind: "infamy_delta"; amount: number }
   | { kind: "max_concurrent_missions_delta"; delta: number }
   | { kind: "max_roster_size_delta"; delta: number }
@@ -201,6 +211,15 @@ export type OmegaPlanTemplate = {
   stages: [OmegaPlanStage, OmegaPlanStage, OmegaPlanStage];
 };
 
+/** Infamy tier for wanted level (designer-authored); monotonic escalation at runtime. */
+export type WantedLevelTier = {
+  /** Inclusive minimum infamy for this tier (0–100). */
+  minInfamy: number;
+  name: string;
+  /** Max opposing agents allowed in play when this tier applies (spawn logic uses this later). */
+  maxAgents: number;
+};
+
 /** Designer-authored home base; one chosen per run. */
 export type LairTemplate = {
   id: string;
@@ -230,4 +249,6 @@ export type ContentCatalog = {
   lairs: LairTemplate[];
   /** Display names for the player's evil organization; one chosen per run. */
   organizationNames: string[];
+  /** Ordered wanted tiers (ascending `minInfamy`); drives max opposing agents cap. */
+  wantedLevels: WantedLevelTier[];
 };

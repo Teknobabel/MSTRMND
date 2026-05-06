@@ -12,6 +12,7 @@ import type {
   OmegaPlanStage,
   OmegaPlanTemplate,
   Trait,
+  WantedLevelTier,
 } from "./types";
 
 const traitTypeSchema = z.enum(["status", "primary", "secondary"]);
@@ -154,6 +155,14 @@ const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnion("kind
     traitIds: z.array(z.string().min(1)).min(1),
   }),
   z.object({
+    kind: z.literal("add_random_participant_traits"),
+    traitIds: z.array(z.string().min(1)).min(1),
+  }),
+  z.object({
+    kind: z.literal("add_all_participant_traits"),
+    traitIds: z.array(z.string().min(1)).min(1),
+  }),
+  z.object({
     kind: z.literal("infamy_delta"),
     amount: z.number().int().min(-100).max(100),
   }),
@@ -289,6 +298,38 @@ function parseMissionsWithRefs(
           if (!traitIds.has(tid)) {
             throw new Error(
               `Unknown trait id "${tid}" in add_target_minion_traits for mission "${m.id}"`,
+            );
+          }
+        }
+      }
+      if (eff.kind === "add_random_participant_traits") {
+        const seenTrait = new Set<string>();
+        for (const tid of eff.traitIds) {
+          if (seenTrait.has(tid)) {
+            throw new Error(
+              `Duplicate trait id "${tid}" in add_random_participant_traits for mission "${m.id}"`,
+            );
+          }
+          seenTrait.add(tid);
+          if (!traitIds.has(tid)) {
+            throw new Error(
+              `Unknown trait id "${tid}" in add_random_participant_traits for mission "${m.id}"`,
+            );
+          }
+        }
+      }
+      if (eff.kind === "add_all_participant_traits") {
+        const seenTrait = new Set<string>();
+        for (const tid of eff.traitIds) {
+          if (seenTrait.has(tid)) {
+            throw new Error(
+              `Duplicate trait id "${tid}" in add_all_participant_traits for mission "${m.id}"`,
+            );
+          }
+          seenTrait.add(tid);
+          if (!traitIds.has(tid)) {
+            throw new Error(
+              `Unknown trait id "${tid}" in add_all_participant_traits for mission "${m.id}"`,
             );
           }
         }
@@ -509,6 +550,42 @@ const assetsArraySchema = z
 
 const organizationNamesArraySchema = z.array(z.string().min(1)).min(1);
 
+const wantedLevelTierSchema = z.object({
+  minInfamy: z.number().int().min(0).max(100),
+  name: z.string().min(1),
+  maxAgents: z.number().int().min(0),
+});
+
+function parseWantedLevels(wantedLevelsRaw: unknown): WantedLevelTier[] {
+  const parsed = z.array(wantedLevelTierSchema).min(1).safeParse(wantedLevelsRaw);
+  if (!parsed.success) {
+    throw parsed.error;
+  }
+  const arr = parsed.data;
+  if (arr[0]!.minInfamy !== 0) {
+    throw new Error(
+      `Wanted levels: first tier must have minInfamy 0 (got ${arr[0]!.minInfamy})`,
+    );
+  }
+  for (let i = 0; i < arr.length; i += 1) {
+    if (i > 0 && arr[i]!.minInfamy <= arr[i - 1]!.minInfamy) {
+      throw new Error(
+        `Wanted levels: minInfamy must be strictly ascending at index ${i} (${arr[i]!.minInfamy} vs prior ${arr[i - 1]!.minInfamy})`,
+      );
+    }
+    if (i > 0 && arr[i]!.maxAgents < arr[i - 1]!.maxAgents) {
+      throw new Error(
+        `Wanted levels: maxAgents must be non-decreasing at index ${i} (${arr[i]!.maxAgents} < ${arr[i - 1]!.maxAgents})`,
+      );
+    }
+  }
+  return arr.map((t) => ({
+    minInfamy: t.minInfamy,
+    name: t.name,
+    maxAgents: t.maxAgents,
+  }));
+}
+
 const lairTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -599,6 +676,7 @@ export function parseCatalog(
   omegaPlansRaw: unknown,
   lairsRaw: unknown,
   organizationNamesRaw: unknown,
+  wantedLevelsRaw: unknown,
 ): ContentCatalog {
   const traitsResult = traitsArraySchema.safeParse(traitsRaw);
   if (!traitsResult.success) {
@@ -633,6 +711,7 @@ export function parseCatalog(
     throw organizationNamesResult.error;
   }
   const organizationNames = organizationNamesResult.data;
+  const wantedLevels = parseWantedLevels(wantedLevelsRaw);
   return {
     traits,
     minions,
@@ -644,5 +723,6 @@ export function parseCatalog(
     omegaPlans,
     lairs,
     organizationNames,
+    wantedLevels,
   };
 }

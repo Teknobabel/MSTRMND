@@ -3,11 +3,11 @@
     "id": "breach_server",
     "name": "Breach the server",
     "description": "Gain access before the trace completes.",
-    "targetType": "minion",
+    "targetType": "location",
     "startCommandPoints": 2,
     "requiredTraitIds": ["hacker"],
     "durationTurns": 1,
-    "onSuccessEffects": [{ "kind": "add_target_minion_traits", "traitIds": ["hacker"] }]
+    "onFailureEffects": [{ "kind": "add_all_participant_traits", "traitIds": ["injured"] }]
   },
   {
     "id": "hub_rig_upgrade",

@@ -1,4 +1,10 @@
-import type { ActiveMission, ActivityEvent, GameState, PlayerState } from "./gameState";
+import type {
+  ActiveMission,
+  ActivityEvent,
+  GameState,
+  PlayerState,
+  Rng,
+} from "./gameState";
 import { maxSecurityLevelForLocation } from "./locationCatalog";
 import type {
   ContentCatalog,
@@ -36,6 +42,10 @@ function describeMissionEffect(effect: MissionEffect): string {
       return `Security level at target location ${signedInt(effect.delta)}`;
     case "add_target_minion_traits":
       return `Granted ${effect.traitIds.length} trait(s) to the target minion`;
+    case "add_random_participant_traits":
+      return `Granted ${effect.traitIds.length} trait(s) to a random participant`;
+    case "add_all_participant_traits":
+      return `Granted ${effect.traitIds.length} trait(s) to all participants`;
     case "infamy_delta":
       return `Infamy ${signedInt(effect.amount)} (mission effect)`;
     case "max_concurrent_missions_delta":
@@ -360,6 +370,76 @@ function applyAddTargetMinionTraits(
   return { ...player, minions };
 }
 
+function applyAddRandomParticipantTraits(
+  player: PlayerState,
+  activeMission: ActiveMission,
+  effect: Extract<MissionEffect, { kind: "add_random_participant_traits" }>,
+  rng: Rng,
+): PlayerState {
+  const ids = activeMission.participantInstanceIds;
+  if (ids.length === 0) {
+    return player;
+  }
+  const pick = ids[Math.floor(rng() * ids.length)]!;
+  let mutated = false;
+  const minions = player.minions.map((m) => {
+    if (m.instanceId !== pick) {
+      return m;
+    }
+    const existing = new Set(m.traitIds);
+    const next = [...m.traitIds];
+    for (const tid of effect.traitIds) {
+      if (!existing.has(tid)) {
+        existing.add(tid);
+        next.push(tid);
+      }
+    }
+    if (next.length === m.traitIds.length) {
+      return m;
+    }
+    mutated = true;
+    return { ...m, traitIds: next };
+  });
+  if (!mutated) {
+    return player;
+  }
+  return { ...player, minions };
+}
+
+function applyAddAllParticipantTraits(
+  player: PlayerState,
+  activeMission: ActiveMission,
+  effect: Extract<MissionEffect, { kind: "add_all_participant_traits" }>,
+): PlayerState {
+  const idSet = new Set(activeMission.participantInstanceIds);
+  if (idSet.size === 0) {
+    return player;
+  }
+  let mutated = false;
+  const minions = player.minions.map((m) => {
+    if (!idSet.has(m.instanceId)) {
+      return m;
+    }
+    const existing = new Set(m.traitIds);
+    const next = [...m.traitIds];
+    for (const tid of effect.traitIds) {
+      if (!existing.has(tid)) {
+        existing.add(tid);
+        next.push(tid);
+      }
+    }
+    if (next.length === m.traitIds.length) {
+      return m;
+    }
+    mutated = true;
+    return { ...m, traitIds: next };
+  });
+  if (!mutated) {
+    return player;
+  }
+  return { ...player, minions };
+}
+
 function applyStealTargetAsset(
   placements: LocationAssetPlacement[],
   target: MissionTarget,
@@ -430,12 +510,15 @@ function applyPlayerStatDeltas(player: PlayerState, effect: MissionEffect): Play
  * Applies completion effects after baseline infamy has been added to `state.player.infamy`
  * (uncapped). Mutates infamy further for `infamy_delta` entries, then clamps infamy once at
  * the end. Returns updated player, placements, security states, and activity rows (e.g. `asset_gained`).
+ * `rng` is used for {@link MissionEffect} kinds that pick randomly (e.g. `add_random_participant_traits`).
+ * Non-random participant trait effects (e.g. `add_all_participant_traits`) ignore `rng`.
  */
 export function applyMissionEffects(
   state: GameState,
   effects: readonly MissionEffect[],
   activeMission: ActiveMission,
   catalog: ContentCatalog,
+  rng: Rng,
 ): {
   player: PlayerState;
   locationAssetSlots: LocationAssetPlacement[];
@@ -489,6 +572,10 @@ export function applyMissionEffects(
       );
     } else if (effect.kind === "add_target_minion_traits") {
       player = applyAddTargetMinionTraits(player, target, effect);
+    } else if (effect.kind === "add_random_participant_traits") {
+      player = applyAddRandomParticipantTraits(player, activeMission, effect, rng);
+    } else if (effect.kind === "add_all_participant_traits") {
+      player = applyAddAllParticipantTraits(player, activeMission, effect);
     } else if (effect.kind === "unlock_lair_mission") {
       /* Lair pool update runs in executePlan after this pass. */
     } else {
