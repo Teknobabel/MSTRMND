@@ -1,5 +1,6 @@
 import type {
   ContentCatalog,
+  LocationAgentPresence,
   LocationSecurityState,
   LocationTemplate,
   MapTemplate,
@@ -68,6 +69,16 @@ export function initialLocationSecurityStatesForLocations(
   return locations.map((l) => ({
     locationId: l.id,
     securityLevel: 0,
+  }));
+}
+
+/** One row per playable location; agents are added during play, not at catalog author time. */
+export function initialLocationAgentPresenceForLocations(
+  locations: LocationTemplate[],
+): LocationAgentPresence[] {
+  return locations.map((l) => ({
+    locationId: l.id,
+    agentInstanceIds: [],
   }));
 }
 

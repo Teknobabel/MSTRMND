@@ -1,4 +1,4 @@
-# Mastermind — system reference for agents
+# Mastermind — system reference
 
 This document describes the **current** architecture, data flow, and content model as of the repo state. Use it to stay consistent when adding features or content.
 
@@ -13,15 +13,16 @@ This document describes the **current** architecture, data flow, and content mod
 
 | Path | Role |
 |------|------|
-| `content/*.json` | Designer-authored catalogs (traits, minions, missions, locations, maps, assets, omega plans, **lairs**, organization names). |
+| `content/*.json` | Designer-authored catalogs (traits, minions, **agents**, missions, locations, maps, assets, omega plans, **lairs**, organization names). |
 | `src/game/types.ts` | Canonical TypeScript types for templates, catalog shape, and some runtime-only types. |
 | `src/game/contentSchema.ts` | Zod schemas, cross-reference checks, **`parseCatalog(...)`** entry point. |
-| `src/game/loadContent.ts` | Imports all JSON modules and returns `parseCatalog(...)`. |
+| `src/game/loadContent.ts` | Imports all JSON modules and returns **`parseCatalog(...)`**. |
+| `src/game/agent.ts` | **`createAgentFromTemplate`**, **`getAgentTemplateById`** — agents use the same template/instance shapes as minions (`types.ts`); opposition runtime not wired yet. |
 | `src/game/minion.ts` | Runtime: create minion from template; **mission XP → level-up** (`awardMissionResolutionExperience`, constants `MINION_XP_PER_MISSION` / `MINION_XP_TO_LEVEL`); ordered trait grant on level (`applyLevelUp` / `nextLevelUpTraitId`); add/remove trait. |
 | `src/game/mission.ts` | Runtime: participant trait union, **`MissionSuccessOptions`** (extra traits + **`playerAssets`**), linear **success %** from matched **traits** + matched **asset units** vs total slots; **`mergedRequiredTraitIdsSorted`**, **`countMultiset`**, **`matchedAssetUnits`**; roster size 1–**`player.maxParticipantsPerMission`** (default 3) via **`canAssignParticipants`**. |
 | `src/game/missionEffects.ts` | **`orderedMissionEffects`**, **`applyMissionEffects`** (returns updated **`player`** — including roster trait changes — plus **`locationSecurityStates`** when effects touch security), **`describeMissionTemplateEffects`**: mission completion effects after baseline infamy in **`executePlan`** (reveal/steal/**`security_level_delta`**/**`gain_assets`**/**`exchange_assets`**/**`add_target_minion_traits`**, unlock lair mission template ids at resolve time, infamy, stat caps). **`unlock_lair_mission`** is described here but **applied** in **`executePlan`** (updates **`lairMissionIds`**). |
 | `src/game/lair.ts` | **`getLairById`**, **`pickRandomLairId`**, **`pendingLairUpgradeMissionIds`** (upgrade missions not yet completed successfully this run). |
-| `src/game/locationCatalog.ts` | **getLocationById**, **getMapById**, **`locationTemplatesForOmegaPlan`**, **`activeLocationIds`**, **`initialLocationSecurityStatesForLocations`**, **`maxSecurityLevelForLocation`**, **`rollLocationRequiredTraits`**, **`rollLocationSecurityTraits`**. |
+| `src/game/locationCatalog.ts` | **getLocationById**, **getMapById**, **`locationTemplatesForOmegaPlan`**, **`activeLocationIds`**, **`initialLocationSecurityStatesForLocations`**, **`initialLocationAgentPresenceForLocations`**, **`maxSecurityLevelForLocation`**, **`rollLocationRequiredTraits`**, **`rollLocationSecurityTraits`**. |
 | `src/game/omegaPlan.ts` | Lookups: omega plan by id, **`pickRandomOmegaPlanId`** for new-run selection, mission id at stage/slot indices. |
 | `src/game/gameState.ts` | Runtime turn loop: **Execute Plan** runs **`executePlan`** (resolve missions), then **`advanceToNextTurn`** in the UI so the player returns to **Main** with CP refilled on the next tick — no separate **Next Turn** button. CP/infamy/minions/assets, hire, mission assignment, resolve rolls vs **`mission.ts`**; **`missionSuccessOptionsForTarget`**, **`revealedSecurityTraitIds`**, **`setLocationSecurityLevel`**; on each finished mission: **baseline + effect infamy**, **`applyMissionEffects`** (results synced into the in-loop participant lookup so roster trait changes flow into the XP pass and final merge), **lair unlock effects** + **completed upgrade tracking**, **participant XP/level-ups**, **+1 security** at resolved target (**cap = that location’s `locationLevel`**) via **`getMissionTargetLocationId`**; **`activityLog`**; **`organizationName`** at run start. |
 | `src/navigation.ts` | Menu state machine (main / settings / game / pause overlay). |
@@ -30,12 +31,13 @@ This document describes the **current** architecture, data flow, and content mod
 ## Content catalog pipeline
 
 1. **Authoring**: Edit JSON under `content/`. Use stable string **`id`** fields for cross-references (lowercase slugs are typical).
-2. **Loading (app)**: `loadContent()` in `loadContent.ts` imports JSON and calls **`parseCatalog(traits, minions, missions, locations, maps, assets, omegaPlans, lairs, organizationNames)`** (**nine** arguments, fixed order).
-3. **Parsing order inside `parseCatalog`**: The function is invoked with the same argument order as **`loadContent`**. **Logical parse / validation order** is: **Traits** (defines `traitIds`) → **minions** (trait refs) → **assets** (defines `assetIds`) → **missions** (trait + asset refs + mission-effect placement rules) → **locations** → **maps** (location refs) → **omega plans** (mission refs + **`mapId`**) → **lairs** (mission refs + optional `startingAssets` asset refs; **`upgradeMissionIds`** disjoint from **`availableMissionIds`**) → **organization names** (standalone array). Returned object is a **`ContentCatalog`** (`types.ts`).
+2. **Loading (app)**: `loadContent()` in `loadContent.ts` imports JSON and calls **`parseCatalog(traits, minions, agents, missions, locations, maps, assets, omegaPlans, lairs, organizationNames)`** (**ten** arguments, fixed order).
+3. **Parsing order inside `parseCatalog`**: The function is invoked with the same argument order as **`loadContent`**. **Logical parse / validation order** is: **Traits** (defines `traitIds`) → **minions** (trait refs) → **agents** (same shape + trait refs; ids **disjoint** from minion template ids) → **assets** (defines `assetIds`) → **missions** (trait + asset refs + mission-effect placement rules) → **locations** → **maps** (location refs) → **omega plans** (mission refs + **`mapId`**) → **lairs** (mission refs + optional `startingAssets` asset refs; **`upgradeMissionIds`** disjoint from **`availableMissionIds`**) → **organization names** (standalone array). Returned object is a **`ContentCatalog`** (`types.ts`).
 
 **Cross-reference rules** (enforced in `contentSchema.ts`):
 
 - Minion `startingTraitIds` / `levelUpTraitOrder` → existing trait ids.
+- Agent templates (`content/agents.json`): same trait-reference rules as minions; **`id`** must not collide with any **minion** template **`id`**.
 - Mission **`requiredTraitIds`** → traits; **unique** per mission. Mission **`requiredAssetIds`** → assets; **duplicates allowed** (each occurrence needs one inventory unit). **`gain_assets`** **`assetIds`** and **`exchange_assets`** **`removeAssetIds`** / **`gainAssetIds`** → assets; **duplicates allowed** (multiset). **`exchange_assets`** must have at least one id across the two lists. **At least one** of `requiredTraitIds` or `requiredAssetIds` must be non-empty per mission. Missions with **`reveal_target_asset`** or **`steal_target_asset`** in **`onSuccessEffects`** / **`onFailureEffects`** must use **`targetType`** `asset_hidden` or `asset_revealed`. **`reveal_all_hidden_assets_at_location`**, **`steal_all_assets_at_location`**, **`steal_all_revealed_assets_at_location`**, and **`security_level_delta`** require **`targetType`** `location`, `asset_hidden`, or `asset_revealed`. **`add_target_minion_traits`** requires **`targetType`** `minion`; **`traitIds`** must reference existing traits and be **unique** within the effect (≥ 1 entry). **`unlock_lair_mission`** may appear only in **`onSuccessEffects`** (not **`onFailureEffects`**); **`missionId`** must reference an existing mission template.
 - Omega plan **`mapId`** → **`MapTemplate.id`**; omega plans parsed **after** maps.
 - Omega plan stage `missionIds` (3×3 grid) → missions; **same mission id may repeat** within a plan.
@@ -51,7 +53,7 @@ Enums in JSON are generally **lowercase** strings (e.g. trait `type`, location `
 ### Traits (`content/traits.json`)
 
 - **Trait**: `id`, `name`, `type`: `status` | `primary` | `secondary`.
-- Passive definitions; minions and missions reference trait ids.
+- Passive definitions; minions, agents, and missions reference trait ids.
 
 ### Minions (`content/minions.json`)
 
@@ -60,6 +62,13 @@ Enums in JSON are generally **lowercase** strings (e.g. trait `type`, location `
 - **Creation** (`minion.ts`): `createMinionFromTemplate(template, instanceId, overrides?)` — callers supply `instanceId` (e.g. `crypto.randomUUID()`).
 - **Mission XP & leveling** (`minion.ts` + **`executePlan`** in `gameState.ts`): when a mission **resolves** (duration reaches 0 with valid template and participants), **each participant** gains **`MINION_XP_PER_MISSION`** (**1**) XP. When **`currentExperience`** reaches **`MINION_XP_TO_LEVEL`** (**3**), the minion **levels up** (`currentLevel` +1), **`currentExperience` resets to 0**, and **`applyLevelUp`** runs: grant the **first** trait in `levelUpTraitOrder` the instance does **not** already have (if none left, level still increases but **no** new trait). A **`minion_leveled_up`** activity event is recorded for that turn (see **Activity log** below).
 - **Manual / catalog level-up helpers** (`minion.ts`): `nextLevelUpTraitId`, `applyLevelUp`, `addTrait`, `removeTrait` — same ordered trait rule as automatic level-ups.
+
+### Agents (`content/agents.json`)
+
+- **AgentTemplate**: Same fields as **MinionTemplate** (`types.ts` aliases `AgentTemplate` to `MinionTemplate`). **`hireCommandPoints`** is validated like minions (often **`0`** for non-hirable opposition). Trait rules match minions.
+- **`AgentInstance`**: Same fields as **MinionInstance** (`AgentInstance` is an alias). Not stored on **`PlayerState`**. Spawned instances used as opposition live on **`GameState.opposingAgentInstances`**; which location each belongs to is tracked in **`GameState.locationAgentPresence`** (see **Locations**).
+- **Creation** (`agent.ts`): **`createAgentFromTemplate`** delegates to **`createMinionFromTemplate`** so leveling helpers in **`minion.ts`** apply unchanged when you spawn runtime agents later.
+- **Lookup**: **`getAgentTemplateById(catalog, id)`**, **`getOpposingAgentByInstanceId(state, id)`**, **`getOpposingAgentsAtLocation(state, locationId)`** in **`agent.ts`**.
 
 ### Missions (`content/missions.json`)
 
@@ -78,6 +87,7 @@ Enums in JSON are generally **lowercase** strings (e.g. trait `type`, location `
 - **LocationTemplate**: `id`, `name`, `description`, `locationType` (`political` | `military` | `economic`), **`locationLevel`** (1 | 2 | 3). Per-location **asset placement** is **not** in this JSON; at run start **`createInitialGameState`** assigns **1–3** random catalog assets per **playable** location on the active map (`LocationAssetSlot`: **`kind`** `occupied` with **`assetId`** + **`visibility`** `hidden` | `revealed`, or **`kind`** `empty` after a steal), then reveals **`min(3, total slots)`** slots globally at random.
 - **LocationSecurityState** (runtime): `locationId`, **`securityLevel`** (`0` | `1` | `2` | `3`). New runs start at **`0`** via **`initialLocationSecurityStatesForLocations`**. Effective maximum per site is the location’s **`locationLevel`** (enforced when raising security). **During play**, each resolved mission at that site (via **`getMissionTargetLocationId`**) increments security by **1** up to that cap.
 - **Per-run site traits** (runtime, `GameState`): **`locationRequiredTraits`**: rolled at run start from non-status traits — level **1** → 0 traits, level **2** → 1, level **3** → 2. **`locationSecurityTraits`**: rolled stack of length **`locationLevel`** (reveal order = array order); only the first **`securityLevel`** entries merge into mission requirements (hidden entries do not). Both merge into **`missionSuccessOptionsForTarget`** for **location**/**asset** targets (see **`revealedSecurityTraitIds`**).
+- **Opposing agents at sites** (runtime, `GameState`): **`locationAgentPresence`** lists **`AgentInstance.instanceId`** values per playable **`locationId`** (starts empty). Full **`AgentInstance`** rows live in **`opposingAgentInstances`**. Not authored in **`locations.json`**; placement will be driven by future gameplay (see **`getOpposingAgentsAtLocation`** in **`agent.ts`**).
 
 ### Maps (`content/maps.json`)
 
@@ -111,6 +121,7 @@ Not persisted in JSON; created per session via **`createInitialGameState(catalog
 - **`GameState.locationSecurityStates`**: one **`LocationSecurityState`** per **playable** location this run, initialized at security **`0`**. Shown in the **Locations** panel; **increments on mission resolution** when the resolved mission’s target maps to that location, capped by **`locationLevel`** (see **Locations**).
 - **`GameState.locationRequiredTraits`** / **`locationSecurityTraits`**: `Record<locationId, string[]>` — rolled in **`createInitialGameState`** for playable locations only; merged into **`missionSuccessOptionsForTarget`** for mission success and UI when the target has a location id (**`revealedSecurityTraitIds`** applies the security stack slice).
 - **`GameState.locationAssetSlots`**: **`LocationAssetPlacement[]`** (each **`locationId`** + **`slots`** of **`LocationAssetSlot`**). Initialized in **`createInitialGameState`** only for playable locations: each gets **1–3** distinct random **`catalog.assets`** ids (none if the asset catalog is empty); all slots start **occupied** and **hidden**, then **`min(3, total slots)`** slots are set **revealed**. The Locations panel shows label **Asset** with value **"Asset"** when hidden, catalog **name** when **occupied** and **revealed**, or **"—"** when **`empty`**; in **Main Phase**, **occupied** rows are **draggable chips** for targeting (`main.ts`).
+- **`GameState.opposingAgentInstances`** / **`locationAgentPresence`**: **`AgentInstance[]`** for all spawned opposing agents this run, plus one **`LocationAgentPresence`** row per playable location (**`agentInstanceIds`** empty at start). Designers do not author agent placement; future systems will spawn agents and update both structures together.
 - **`GameState.availableMinionTemplateIds`**: template ids currently offered for hire. Initialized randomly at game start (excluding templates **already on the roster**) and **rerolled at the end of each `executePlan`** with the same exclusion plus **`pickRandomMinionTemplateIds`**. During **Main Phase**, the player may spend **1 CP** (**`rerollHireOffers`**) to redraw the pool immediately. Hiring removes that template id from the list for the rest of the phase until the next reroll. **`hireMinion`** only accepts ids in this list.
 - **`ActiveMission`**: `id`, `missionTemplateId`, **`target`** (**`MissionTarget`**), **`missionSource`** (`lair` | `omega`), **`omegaStageIndex`** / **`omegaSlotIndex`** (set when source is omega), `participantInstanceIds` (1–**`maxParticipantsPerMission`**), `turnsRemaining` (starts at `MissionTemplate.durationTurns`), **`startedOnTurn`**. Missions tick **only** when the player executes the plan: each active mission decrements `turnsRemaining`; at **0**, success is rolled vs **`successChancePercent`** with **`missionSuccessOptionsForTarget(state, target)`** plus **`playerAssets: player.assets`** (`mission.ts` + **`executePlan`** in **`gameState.ts`**); baseline infamy (−3 success / +5 failure) is applied, then **`onSuccessEffects`** or **`onFailureEffects`** from the template via **`applyMissionEffects`** (**`missionEffects.ts`**). On **success**, **`executePlan`** also applies **`unlock_lair_mission`** entries (append to **`lairMissionIds`**) and, if the resolved mission id is in the active lair’s **`upgradeMissionIds`**, appends it to **`completedLairUpgradeMissionIds`**. **`mission_completed`** logs **`infamyDelta`** = total infamy change (baseline + effect **`infamy_delta`** entries, clamped) plus **`baselineInfamyDelta`** and **`templateEffectDescriptions`** for the activity feed. The same tick applies **participant XP** (and possible **level-ups** + **`minion_leveled_up`** events), **+1 security** at the resolved target location when **`getMissionTargetLocationId(am.target)`** is set (per-location cap), **`asset_gained`** when a steal effect fires, and **`mission_completed`** logging.
 - **`GameState.activityLog`**: **`TurnActivityEntry[]`** (each **`turnNumber`** + **`events`**). Main-phase actions append via **`appendActivityEvent`**; **`executePlan`** batches resolve outcomes with **`mergeResolveActivityEventsIntoActivityLog`**: **`mission_completed`** rows (with **`target: MissionTarget`**) plus any **`minion_leveled_up`** rows (and other **`ActivityEvent`** kinds as features grow). New turn buckets are **prepended** so the **Activity** panel shows **newest turn first**; the log is **not** cleared when the turn advances (session-only persistence until save/load exists). **`ActivityEvent`** union includes at least: `mission_completed`, `mission_started`, `mission_cancelled` (each carries **`target`**), `minion_hired`, `minion_rehired`, `minion_fired`, `minion_leveled_up` (`instanceId`, `templateId`, `newLevel`, optional `traitId`), `asset_gained`, `asset_lost`.
@@ -124,15 +135,16 @@ Assignment rules: enforced in **`assignMission`** — **`missionTemplate.targetT
 - `navigation.ts` wires visibility and **starts/stops** the canvas RAF loop when the game screen is visible and not paused.
 - Canvas draws a placeholder “Game” label; rules and economy are driven from the DOM panel, not the canvas.
 
-## Conventions for agents
+## Conventions
 
 - Prefer extending **`parseCatalog`** and **`ContentCatalog`** when adding new catalog slices; keep **reference validation** next to Zod shape parsing.
-- Keep **designer data** in `content/*.json` and **runtime/progression** in **`gameState.ts`** and related TS modules (`types.ts`, `minion.ts`, `mission.ts`).
+- Keep **designer data** in `content/*.json` and **runtime/progression** in **`gameState.ts`** and related TS modules (`types.ts`, `minion.ts`, `agent.ts`, `mission.ts`).
 - After editing JSON, run **`npm run content:validate`** (or `npm run build`) before assuming content is valid.
 
 ## Not implemented yet (non-exhaustive)
 
 - Save/load persistence.
+- **Spawning / moving opposing agents** onto **`locationAgentPresence`** (structure exists; no gameplay writes yet).
 - **Consuming** or automatically **deducting** assets when missions resolve (inventory is only checked for success % today), except steal effects that move **location** asset(s) into **`player.assets`**, **`gain_assets`** / **`exchange_assets`** **`gainAssetIds`** that grant catalog assets into **`player.assets`**, and **`exchange_assets`** **`removeAssetIds`** that remove from **`player.assets`** up to available quantity.
 - Omega plan activation/progress/win (beyond per-row success and stage index in **`executePlan`**).
 - Rich gameplay on canvas beyond placeholder label.

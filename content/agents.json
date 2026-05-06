@@ -1,0 +1,90 @@
+[
+  {
+    "id": "fed_case_officer_vernon",
+    "name": "Case Officer Vernon",
+    "description": "Task-force lead; paperwork first, warrants when the net is already up.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["tactician", "intelligent"],
+    "levelUpTraitOrder": ["hacker", "spy", "resilient", "loyal"]
+  },
+  {
+    "id": "interceptor_singh",
+    "name": "Wire Interceptor Singh",
+    "description": "SIGINT chaser; lives in metadata and hates dead drops.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["hacker"],
+    "levelUpTraitOrder": ["spy", "tactician", "fast", "lucky"]
+  },
+  {
+    "id": "tactical_lead_morales",
+    "name": "Tactical Lead Morales",
+    "description": "Door-kicker when the quiet phase ends; coordinates local assets.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["soldier", "resilient"],
+    "levelUpTraitOrder": ["tactician", "bodyguard", "fast", "clever"]
+  },
+  {
+    "id": "station_chief_ashcroft",
+    "name": "Station Chief Ashcroft",
+    "description": "Runs the residency like a chess clock—quiet cables, loud consequences.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["spy", "tactician"],
+    "levelUpTraitOrder": ["intelligent", "persuasive", "hacker", "loyal"]
+  },
+  {
+    "id": "silvia_cross",
+    "name": "Silvia Cross",
+    "description": "Embassy circuits and charity boards; her smile files better reports than microphones.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["spy", "charismatic"],
+    "levelUpTraitOrder": ["persuasive", "politician", "sneaky", "lucky"]
+  },
+  {
+    "id": "dr_aldric_frost",
+    "name": "Dr. Aldric Frost",
+    "description": "Prototype labs under plausible patents; the blast radius is always someone else's problem.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["scientist", "engineer"],
+    "levelUpTraitOrder": ["intelligent", "hacker", "tactician", "clever"]
+  },
+  {
+    "id": "marksman_orlov",
+    "name": "Marksman Orlov",
+    "description": "Long corridors, longer sightlines; prefers one shot and a clean exit visa.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["soldier", "fast"],
+    "levelUpTraitOrder": ["sneaky", "agile", "resilient", "lucky"]
+  },
+  {
+    "id": "ghost_thief_valente",
+    "name": "Ghost Thief Valente",
+    "description": "Slips past seals and stories; when the painting moves, the alarm thinks it's dust.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["thief", "sneaky"],
+    "levelUpTraitOrder": ["agile", "clever", "spy", "fast"]
+  },
+  {
+    "id": "ministerial_aide_holloway",
+    "name": "Ministerial Aide Holloway",
+    "description": "Drafts policy until the ink smells like leverage; never leaves fingerprints on the brief.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["politician", "persuasive"],
+    "levelUpTraitOrder": ["intelligent", "charismatic", "tactician", "loyal"]
+  },
+  {
+    "id": "armorer_beck",
+    "name": "Armorer Beck",
+    "description": "Quartermaster energy—catalog numbers for toys that were never supposed to exist.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["engineer", "hacker"],
+    "levelUpTraitOrder": ["scientist", "tactician", "clever", "lucky"]
+  },
+  {
+    "id": "casino_fixer_lombard",
+    "name": "Casino Fixer Lombard",
+    "description": "Monte Carlo carpet and velvet rope leverage; the house always texts him first.",
+    "hireCommandPoints": 0,
+    "startingTraitIds": ["charismatic", "lucky"],
+    "levelUpTraitOrder": ["persuasive", "spy", "thief", "fast"]
+  }
+]

@@ -56,6 +56,8 @@ console.info(
   "traits,",
   catalog.minions.length,
   "minion templates,",
+  catalog.agents.length,
+  "agent templates,",
   catalog.missions.length,
   "missions,",
   catalog.locations.length,

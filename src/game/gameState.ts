@@ -1,7 +1,9 @@
 import type {
+  AgentInstance,
   ContentCatalog,
   LocationAssetPlacement,
   LocationAssetSlot,
+  LocationAgentPresence,
   LocationSecurityState,
   LocationTemplate,
   MinionInstance,
@@ -14,6 +16,7 @@ import { isOccupiedAssetSlot } from "./types";
 import { awardMissionResolutionExperience, createMinionFromTemplate } from "./minion";
 import {
   activeLocationIds,
+  initialLocationAgentPresenceForLocations,
   initialLocationSecurityStatesForLocations,
   locationTemplatesForOmegaPlan,
   maxSecurityLevelForLocation,
@@ -159,6 +162,16 @@ export type GameState = {
    * first `securityLevel` entries merge into missions at that location.
    */
   locationSecurityTraits: Record<string, string[]>;
+  /**
+   * Opposing agent instances in play (catalog templates from `ContentCatalog.agents`).
+   * Which site each agent occupies is in {@link locationAgentPresence} (populated by future gameplay).
+   */
+  opposingAgentInstances: AgentInstance[];
+  /**
+   * One row per playable location: instance ids of agents at that site (subset of
+   * {@link opposingAgentInstances}). Empty at run start.
+   */
+  locationAgentPresence: LocationAgentPresence[];
   /** Chosen lair template id for this run, or null if `catalog.lairs` is empty. */
   activeLairId: string | null;
   /** Mission template ids available from the lair (starts as copy of template; gameplay may append). */
@@ -485,6 +498,8 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     locationAssetSlots: initializeLocationAssetPlacements(catalog, rng, runLocations),
     locationRequiredTraits,
     locationSecurityTraits,
+    opposingAgentInstances: [],
+    locationAgentPresence: initialLocationAgentPresenceForLocations(runLocations),
     activeLairId,
     lairMissionIds,
     completedLairUpgradeMissionIds: [],

@@ -8,6 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 try {
   const traits = JSON.parse(readFileSync(join(root, "content/traits.json"), "utf8"));
   const minions = JSON.parse(readFileSync(join(root, "content/minions.json"), "utf8"));
+  const agents = JSON.parse(readFileSync(join(root, "content/agents.json"), "utf8"));
   const missions = JSON.parse(readFileSync(join(root, "content/missions.json"), "utf8"));
   const organizationNames = JSON.parse(
     readFileSync(join(root, "content/organizationNames.json"), "utf8"),
@@ -20,6 +21,7 @@ try {
   const catalog = parseCatalog(
     traits,
     minions,
+    agents,
     missions,
     locations,
     maps,
@@ -29,7 +31,7 @@ try {
     organizationNames,
   );
   console.log(
-    `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.organizationNames.length} organization names`,
+    `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.agents.length} agent templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.organizationNames.length} organization names`,
   );
 } catch (e) {
   console.error(e);

@@ -30,6 +30,15 @@ export type MinionInstance = {
   traitIds: string[];
 };
 
+/**
+ * Designer-authored opposing operative. Same JSON shape as {@link MinionTemplate}; meant for
+ * non-player opposition (behavior arrives in later systems).
+ */
+export type AgentTemplate = MinionTemplate;
+
+/** Runtime opposing operative instance; same fields as {@link MinionInstance}. */
+export type AgentInstance = MinionInstance;
+
 /** Designer-authored mission target; drives planning UI and validation. */
 export type MissionTargetType =
   | "location"
@@ -131,6 +140,16 @@ export type LocationAssetPlacement = {
   slots: LocationAssetSlot[];
 };
 
+/**
+ * Runtime only: which opposing agent instances are present at a playable location.
+ * Population is gameplay-driven (not authored in `locations.json`).
+ */
+export type LocationAgentPresence = {
+  locationId: string;
+  /** {@link AgentInstance.instanceId} values; order preserved for display / rules. */
+  agentInstanceIds: string[];
+};
+
 /** Designer-authored category for a location. */
 export type LocationType = "political" | "military" | "economic";
 
@@ -201,6 +220,8 @@ export type LairTemplate = {
 export type ContentCatalog = {
   traits: Trait[];
   minions: MinionTemplate[];
+  /** Opposing operatives (catalog only until opposition gameplay exists). */
+  agents: AgentTemplate[];
   missions: MissionTemplate[];
   locations: LocationTemplate[];
   maps: MapTemplate[];

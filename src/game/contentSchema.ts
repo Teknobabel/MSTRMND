@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type {
+  AgentTemplate,
   Asset,
   ContentCatalog,
   LairTemplate,
@@ -48,27 +49,30 @@ const minionTemplateSchema = z.object({
   startingLevel: z.coerce.number().int().min(1).max(99).optional(),
 });
 
-function parseMinionsWithTraitRefs(
-  minionsRaw: unknown,
+type MinionLikeKind = "minion" | "agent";
+
+function parseMinionLikeTemplatesWithTraitRefs(
+  raw: unknown,
   traitIds: Set<string>,
+  kind: MinionLikeKind,
 ): MinionTemplate[] {
-  const parsed = z.array(minionTemplateSchema).safeParse(minionsRaw);
+  const parsed = z.array(minionTemplateSchema).safeParse(raw);
   if (!parsed.success) {
     throw parsed.error;
   }
   const arr = parsed.data;
-  const seenMinionIds = new Set<string>();
+  const seenIds = new Set<string>();
   for (let i = 0; i < arr.length; i += 1) {
     const m = arr[i];
-    if (seenMinionIds.has(m.id)) {
-      throw new Error(`Duplicate minion id: ${m.id} (index ${i})`);
+    if (seenIds.has(m.id)) {
+      throw new Error(`Duplicate ${kind} id: ${m.id} (index ${i})`);
     }
-    seenMinionIds.add(m.id);
+    seenIds.add(m.id);
     const refs = [...(m.startingTraitIds ?? []), ...m.levelUpTraitOrder];
     for (const tid of refs) {
       if (!traitIds.has(tid)) {
         throw new Error(
-          `Unknown trait id "${tid}" referenced by minion "${m.id}"`,
+          `Unknown trait id "${tid}" referenced by ${kind} "${m.id}"`,
         );
       }
     }
@@ -87,6 +91,29 @@ function parseMinionsWithTraitRefs(
     }
     return base;
   });
+}
+
+function parseMinionsWithTraitRefs(
+  minionsRaw: unknown,
+  traitIds: Set<string>,
+): MinionTemplate[] {
+  return parseMinionLikeTemplatesWithTraitRefs(minionsRaw, traitIds, "minion");
+}
+
+function parseAgentsWithTraitRefs(
+  agentsRaw: unknown,
+  traitIds: Set<string>,
+  minionTemplateIds: Set<string>,
+): AgentTemplate[] {
+  const agents = parseMinionLikeTemplatesWithTraitRefs(agentsRaw, traitIds, "agent");
+  for (const a of agents) {
+    if (minionTemplateIds.has(a.id)) {
+      throw new Error(
+        `Agent id "${a.id}" conflicts with a minion template id (minion and agent ids must be disjoint)`,
+      );
+    }
+  }
+  return agents;
 }
 
 const missionTargetTypeSchema = z.enum([
@@ -564,6 +591,7 @@ function parseLairsWithRefs(
 export function parseCatalog(
   traitsRaw: unknown,
   minionsRaw: unknown,
+  agentsRaw: unknown,
   missionsRaw: unknown,
   locationsRaw: unknown,
   mapsRaw: unknown,
@@ -579,6 +607,8 @@ export function parseCatalog(
   const traits: Trait[] = traitsResult.data;
   const traitIds = new Set(traits.map((t) => t.id));
   const minions = parseMinionsWithTraitRefs(minionsRaw, traitIds);
+  const minionTemplateIds = new Set(minions.map((m) => m.id));
+  const agents = parseAgentsWithTraitRefs(agentsRaw, traitIds, minionTemplateIds);
   const assetsResult = assetsArraySchema.safeParse(assetsRaw);
   if (!assetsResult.success) {
     throw assetsResult.error;
@@ -606,6 +636,7 @@ export function parseCatalog(
   return {
     traits,
     minions,
+    agents,
     missions,
     locations,
     maps,

@@ -1,3 +1,4 @@
+import agentsJson from "../../content/agents.json";
 import assetsJson from "../../content/assets.json";
 import lairsJson from "../../content/lairs.json";
 import locationsJson from "../../content/locations.json";
@@ -14,6 +15,7 @@ export function loadContent(): ContentCatalog {
   return parseCatalog(
     traitsJson,
     minionsJson,
+    agentsJson,
     missionsJson,
     locationsJson,
     mapsJson,
