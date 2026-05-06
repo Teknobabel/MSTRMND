@@ -1,10 +1,12 @@
-import type { MinionInstance, MissionTemplate } from "./types";
+import type { MinionInstance, MissionTemplate, Trait } from "./types";
 
 export type MissionSuccessOptions = {
   /** Extra required trait ids from situational modifiers; merged with template (deduped). */
   additionalRequiredTraitIds?: string[];
   /** Current player inventory (`Asset.id` → quantity) for required-asset checks. */
   playerAssets?: Record<string, number>;
+  /** When set, status_positive / status_negative traits on participants adjust success %. */
+  traitsCatalog?: readonly Trait[];
 };
 
 /**
@@ -81,10 +83,41 @@ export function matchedAssetUnits(
   return matched;
 }
 
+const STATUS_POSITIVE_BONUS = 10;
+const STATUS_NEGATIVE_PENALTY = 20;
+
+function participantStatusModifierDelta(
+  participants: MinionInstance[],
+  traitsCatalog: readonly Trait[] | undefined,
+): number {
+  if (traitsCatalog === undefined || traitsCatalog.length === 0) {
+    return 0;
+  }
+  const byId = new Map(traitsCatalog.map((t) => [t.id, t] as const));
+  let positive = 0;
+  let negative = 0;
+  for (const p of participants) {
+    for (const tid of p.traitIds) {
+      const t = byId.get(tid);
+      if (t === undefined) {
+        continue;
+      }
+      if (t.type === "status_positive") {
+        positive += 1;
+      } else if (t.type === "status_negative") {
+        negative += 1;
+      }
+    }
+  }
+  return STATUS_POSITIVE_BONUS * positive - STATUS_NEGATIVE_PENALTY * negative;
+}
+
 /**
  * Linear success: (matched distinct traits + matched asset units) /
  * (required trait count + required asset occurrence count). Uses current `playerAssets`
- * when provided; missing inventory counts as no assets.
+ * when provided; missing inventory counts as no assets. Then applies flat +10% per
+ * participating `status_positive` trait occurrence and −20% per `status_negative`,
+ * clamped to [0, 100].
  */
 export function successChancePercent(
   template: MissionTemplate,
@@ -96,9 +129,6 @@ export function successChancePercent(
   const totalTraits = traitRequired.length;
   const totalAssets = assetRequired.length;
   const total = totalTraits + totalAssets;
-  if (total === 0) {
-    return 100;
-  }
   const union = unionParticipantTraitIds(participants);
   let matchedTraits = 0;
   for (const id of traitRequired) {
@@ -107,5 +137,8 @@ export function successChancePercent(
     }
   }
   const matchedAssets = matchedAssetUnits(assetRequired, options?.playerAssets);
-  return Math.round((100 * (matchedTraits + matchedAssets)) / total);
+  const base =
+    total === 0 ? 100 : Math.round((100 * (matchedTraits + matchedAssets)) / total);
+  const statusDelta = participantStatusModifierDelta(participants, options?.traitsCatalog);
+  return Math.min(100, Math.max(0, base + statusDelta));
 }

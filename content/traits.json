@@ -42,7 +42,7 @@
   {
     "id": "injured",
     "name": "Injured",
-    "type": "status"
+    "type": "status_negative"
   },
   {
     "id": "loyal",
@@ -52,7 +52,7 @@
   {
     "id": "burnout",
     "name": "Burnout",
-    "type": "status"
+    "type": "status_negative"
   },
   {
     "id": "tactician",
@@ -107,6 +107,6 @@
   {
     "id": "lucky",
     "name": "Lucky",
-    "type": "secondary"
+    "type": "status_positive"
   }
 ]

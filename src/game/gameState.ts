@@ -1174,6 +1174,7 @@ export function executePlan(
       {
         ...missionSuccessOptionsForTarget(state, am.target),
         playerAssets: player.assets,
+        traitsCatalog: catalog.traits,
       },
     );
     const roll = Math.floor(rng() * 100);

@@ -1,4 +1,4 @@
-export type TraitType = "status" | "primary" | "secondary";
+export type TraitType = "status_positive" | "status_negative" | "primary" | "secondary";
 
 export type Trait = {
   id: string;

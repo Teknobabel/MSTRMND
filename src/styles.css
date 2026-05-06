@@ -737,6 +737,43 @@ body {
   word-break: break-word;
 }
 
+.minions-card-traits-dd {
+  line-height: 1.5;
+}
+
+.minions-card-traits-wrap {
+  display: inline;
+}
+
+.minions-card-traits-sep {
+  color: #71717a;
+}
+
+.minions-trait-pill {
+  display: inline-block;
+  padding: 0.08rem 0.3rem;
+  margin: 0.1rem 0.05rem 0 0;
+  border-radius: 4px;
+  font-weight: 500;
+  background: rgba(63, 63, 70, 0.45);
+  border: 1px solid #52525b;
+  color: #d4d4d8;
+}
+
+.minions-trait-pill--status-positive {
+  color: #86efac;
+  border-color: #14532d;
+  background: rgba(20, 83, 45, 0.45);
+  font-weight: 600;
+}
+
+.minions-trait-pill--status-negative {
+  color: #fca5a5;
+  border-color: #7f1d1d;
+  background: rgba(127, 29, 29, 0.4);
+  font-weight: 600;
+}
+
 .minions-card-actions {
   margin-top: 0.5rem;
   display: flex;
@@ -1061,6 +1098,32 @@ body {
   border-color: #166534;
   background: rgba(22, 101, 52, 0.35);
   font-weight: 600;
+}
+
+.assign-minion-chip-trait--status-positive {
+  color: #86efac;
+  border-color: #14532d;
+  background: rgba(20, 83, 45, 0.45);
+  font-weight: 600;
+}
+
+.assign-minion-chip-trait--status-negative {
+  color: #fca5a5;
+  border-color: #7f1d1d;
+  background: rgba(127, 29, 29, 0.4);
+  font-weight: 600;
+}
+
+.assign-minion-chip-trait--match.assign-minion-chip-trait--status-positive {
+  color: #bbf7d0;
+  border-color: #166534;
+  background: rgba(22, 101, 52, 0.45);
+}
+
+.assign-minion-chip-trait--match.assign-minion-chip-trait--status-negative {
+  color: #fecaca;
+  border-color: #991b1b;
+  background: rgba(153, 27, 27, 0.45);
 }
 
 .assign-minion-chip-remove {

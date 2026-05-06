@@ -21,6 +21,7 @@ import type {
   MissionSource,
   MissionTarget,
   MissionTargetType,
+  Trait,
 } from "./game/types";
 import { isOccupiedAssetSlot } from "./game/types";
 import {
@@ -121,6 +122,76 @@ function req<T extends HTMLElement>(id: string): T {
     throw new Error(`Missing #${id}`);
   }
   return el as T;
+}
+
+function traitStatusModifierClass(trait: Trait | undefined): string {
+  if (trait === undefined) {
+    return "";
+  }
+  if (trait.type === "status_negative") {
+    return "assign-minion-chip-trait--status-negative";
+  }
+  if (trait.type === "status_positive") {
+    return "assign-minion-chip-trait--status-positive";
+  }
+  return "";
+}
+
+function appendMinionTraitsRow(
+  dl: HTMLElement,
+  catalog: ReturnType<typeof loadContent>,
+  traitIds: string[],
+): void {
+  const dt = document.createElement("dt");
+  dt.textContent = "Traits";
+  const dd = document.createElement("dd");
+  dd.className = "minions-card-traits-dd";
+  if (traitIds.length === 0) {
+    dd.textContent = "—";
+  } else {
+    const wrap = document.createElement("span");
+    wrap.className = "minions-card-traits-wrap";
+    for (let i = 0; i < traitIds.length; i += 1) {
+      if (i > 0) {
+        const sep = document.createElement("span");
+        sep.className = "minions-card-traits-sep";
+        sep.textContent = ", ";
+        wrap.appendChild(sep);
+      }
+      const tid = traitIds[i]!;
+      const trait = catalog.traits.find((t) => t.id === tid);
+      const span = document.createElement("span");
+      span.className = "minions-trait-pill";
+      span.textContent = trait?.name ?? tid;
+      if (trait?.type === "status_negative") {
+        span.classList.add("minions-trait-pill--status-negative");
+      } else if (trait?.type === "status_positive") {
+        span.classList.add("minions-trait-pill--status-positive");
+      }
+      wrap.appendChild(span);
+    }
+    dd.appendChild(wrap);
+  }
+  dl.appendChild(dt);
+  dl.appendChild(dd);
+}
+
+function styleAssignChipTraitSpan(
+  span: HTMLElement,
+  catalog: ReturnType<typeof loadContent>,
+  traitId: string,
+  requiredTraitSet: Set<string>,
+): void {
+  span.className = "assign-minion-chip-trait";
+  if (requiredTraitSet.has(traitId)) {
+    span.classList.add("assign-minion-chip-trait--match");
+  }
+  const trait = catalog.traits.find((t) => t.id === traitId);
+  const mod = traitStatusModifierClass(trait);
+  if (mod !== "") {
+    span.classList.add(mod);
+  }
+  span.textContent = trait?.name ?? traitId;
 }
 
 function traitDisplayNames(
@@ -639,7 +710,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
       const baseOpts =
         assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : {};
-      const opts = { ...baseOpts, playerAssets: state.player.assets };
+      const opts = { ...baseOpts, playerAssets: state.player.assets, traitsCatalog: content.traits };
       return `${successChancePercent(m, participants, opts)}%`;
     }
     if (slotIds.length === 0) {
@@ -887,8 +958,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         traitsEl.className = "assign-minion-chip-traits";
         for (const tid of inst.traitIds) {
           const span = document.createElement("span");
-          span.className = "assign-minion-chip-trait";
-          span.textContent = content.traits.find((t) => t.id === tid)?.name ?? tid;
+          styleAssignChipTraitSpan(span, content, tid, new Set<string>());
           traitsEl.appendChild(span);
         }
         chipMain.appendChild(traitsEl);
@@ -1070,11 +1140,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           traitsEl.className = "assign-minion-chip-traits";
           for (const tid of inst.traitIds) {
             const span = document.createElement("span");
-            span.className = "assign-minion-chip-trait";
-            if (requiredTraitSet.has(tid)) {
-              span.classList.add("assign-minion-chip-trait--match");
-            }
-            span.textContent = content.traits.find((t) => t.id === tid)?.name ?? tid;
+            styleAssignChipTraitSpan(span, content, tid, requiredTraitSet);
             traitsEl.appendChild(span);
           }
           chipMain.appendChild(traitsEl);
@@ -1347,8 +1413,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           { label: "CP cost", value: String(tpl?.hireCommandPoints ?? "—") },
           { label: "Level", value: String(inst.currentLevel) },
           { label: "XP", value: String(inst.currentExperience) },
-          { label: "Traits", value: traitDisplayNames(content, inst.traitIds) },
         ]);
+        appendMinionTraitsRow(dl, content, inst.traitIds);
         card.appendChild(dl);
 
         const fireBtn = document.createElement("button");
@@ -1421,11 +1487,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         { label: "CP cost", value: String(tpl.hireCommandPoints) },
         { label: "Level", value: String(tpl.startingLevel ?? 1) },
         { label: "XP", value: "0" },
-        {
-          label: "Traits",
-          value: traitDisplayNames(content, startingIds),
-        },
       ]);
+      appendMinionTraitsRow(dl, content, startingIds);
       card.appendChild(dl);
 
       const actions = document.createElement("div");
@@ -1480,8 +1543,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         { label: "CP cost", value: String(tpl?.hireCommandPoints ?? "—") },
         { label: "Level", value: String(rehireInst.currentLevel) },
         { label: "XP", value: String(rehireInst.currentExperience) },
-        { label: "Traits", value: traitDisplayNames(content, rehireInst.traitIds) },
       ]);
+      appendMinionTraitsRow(dl, content, rehireInst.traitIds);
       card.appendChild(dl);
 
       const actions = document.createElement("div");
@@ -1793,6 +1856,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         const successOpts = {
           ...missionSuccessOptionsForTarget(state, am.target),
           playerAssets: state.player.assets,
+          traitsCatalog: content.traits,
         };
         const mergedDisplay = mergedRequiredTraitIdsSorted(mission, successOpts);
         rows.push(

@@ -15,7 +15,7 @@ import type {
   WantedLevelTier,
 } from "./types";
 
-const traitTypeSchema = z.enum(["status", "primary", "secondary"]);
+const traitTypeSchema = z.enum(["status_positive", "status_negative", "primary", "secondary"]);
 
 const traitSchema = z.object({
   id: z.string().min(1),
