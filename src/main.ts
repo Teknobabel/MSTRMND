@@ -35,6 +35,11 @@ import {
 } from "./game/locationCatalog";
 import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
 import { getOmegaPlanById } from "./game/omegaPlan";
+import {
+  getAgentTemplateById,
+  getOpposingAgentsAtLocation,
+  totalOpposingAgentsAcrossLocations,
+} from "./game/agent";
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation } from "./navigation";
 
@@ -1293,6 +1298,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       },
     ];
     appendMinionStatRows(dl, baseRows);
+    const agentsHere = getOpposingAgentsAtLocation(state, loc.id);
+    const agentsValue =
+      agentsHere.length === 0
+        ? "None"
+        : agentsHere
+            .map((a) => getAgentTemplateById(content, a.templateId)?.name ?? a.templateId)
+            .join(", ");
+    appendMinionStatRows(dl, [{ label: "Agents", value: agentsValue }]);
 
     for (let si = 0; si < assetSlots.length; si += 1) {
       const slot = assetSlots[si]!;
@@ -2255,6 +2268,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       <div><strong>CP:</strong> ${p.commandPoints} / ${p.maxCommandPoints}</div>
       <div><strong>Infamy:</strong> ${p.infamy}</div>
       <div><strong>Wanted:</strong> ${wantedTierAtIndex(catalog, state.wantedLevelTierIndex)?.name ?? "—"}</div>
+      <div><strong>Agents:</strong> ${totalOpposingAgentsAcrossLocations(state)}</div>
     `;
     hudShort.textContent = `T${state.turnNumber} · ${state.phase}`;
 

@@ -7,6 +7,7 @@
     "startCommandPoints": 2,
     "requiredTraitIds": ["hacker"],
     "durationTurns": 1,
+    "onSuccessEffects": [{ "kind": "infamy_delta", "amount": 100 }],
     "onFailureEffects": [{ "kind": "add_all_participant_traits", "traitIds": ["injured"] }]
   },
   {

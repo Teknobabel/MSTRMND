@@ -14,6 +14,7 @@ import type {
 } from "./types";
 import { isOccupiedAssetSlot } from "./types";
 import { awardMissionResolutionExperience, createMinionFromTemplate } from "./minion";
+import { spawnOpposingAgentsAfterWantedEscalation } from "./agent";
 import {
   activeLocationIds,
   initialLocationAgentPresenceForLocations,
@@ -1316,6 +1317,26 @@ export function executePlan(
     catalog.wantedLevels,
   );
 
+  const tierIncreased = wantedLevelTierIndex > state.wantedLevelTierIndex;
+  let opposingAgentInstances = state.opposingAgentInstances;
+  let locationAgentPresence = state.locationAgentPresence;
+  if (tierIncreased) {
+    const playableIds = locationTemplatesForOmegaPlan(catalog, state.activeOmegaPlanId).map(
+      (l) => l.id,
+    );
+    const spawned = spawnOpposingAgentsAfterWantedEscalation(
+      state.opposingAgentInstances,
+      state.locationAgentPresence,
+      catalog,
+      playableIds,
+      state.wantedLevelTierIndex,
+      wantedLevelTierIndex,
+      rng,
+    );
+    opposingAgentInstances = spawned.opposingAgentInstances;
+    locationAgentPresence = spawned.locationAgentPresence;
+  }
+
   const activityLog = mergeResolveActivityEventsIntoActivityLog(
     state.activityLog,
     state.turnNumber,
@@ -1338,6 +1359,7 @@ export function executePlan(
       lairMissionIds,
       completedLairUpgradeMissionIds,
       wantedLevelTierIndex,
+      ...(tierIncreased ? { opposingAgentInstances, locationAgentPresence } : {}),
     },
   };
 }
