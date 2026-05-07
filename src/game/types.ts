@@ -36,8 +36,13 @@ export type MinionInstance = {
  */
 export type AgentTemplate = MinionTemplate;
 
-/** Runtime opposing operative instance; same fields as {@link MinionInstance}. */
-export type AgentInstance = MinionInstance;
+export type AgentCatalogVisibility = "hidden" | "revealed";
+
+/** Runtime opposing operative instance; extends {@link MinionInstance} with catalog visibility. */
+export type AgentInstance = MinionInstance & {
+  /** Player-facing visibility on location UI; spawned agents default to hidden. */
+  catalogVisibility: AgentCatalogVisibility;
+};
 
 /** Designer-authored mission target; drives planning UI and validation. */
 export type MissionTargetType =

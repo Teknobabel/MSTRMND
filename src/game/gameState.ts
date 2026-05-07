@@ -14,7 +14,11 @@ import type {
 } from "./types";
 import { isOccupiedAssetSlot } from "./types";
 import { awardMissionResolutionExperience, createMinionFromTemplate } from "./minion";
-import { spawnOpposingAgentsAfterWantedEscalation } from "./agent";
+import {
+  countOpposingAgentsAtLocationFromData,
+  revealAllOpposingAgentsAtLocation,
+  spawnOpposingAgentsAfterWantedEscalation,
+} from "./agent";
 import {
   activeLocationIds,
   initialLocationAgentPresenceForLocations,
@@ -1129,6 +1133,11 @@ export function executePlan(
   let locationAssetSlots = state.locationAssetSlots;
   let lairMissionIds = [...state.lairMissionIds];
   let completedLairUpgradeMissionIds = [...state.completedLairUpgradeMissionIds];
+  let opposingAgentInstances: AgentInstance[] = [...state.opposingAgentInstances];
+  let locationAgentPresence: LocationAgentPresence[] = state.locationAgentPresence.map((r) => ({
+    locationId: r.locationId,
+    agentInstanceIds: [...r.agentInstanceIds],
+  }));
 
   const instanceById = new Map(state.player.minions.map((m) => [m.instanceId, m]));
 
@@ -1169,6 +1178,17 @@ export function executePlan(
       continue;
     }
 
+    const missionLocId = getMissionTargetLocationId(am.target);
+    const opposingAgentPenaltyCount =
+      missionLocId === null
+        ? 0
+        : countOpposingAgentsAtLocationFromData(
+            opposingAgentInstances,
+            locationAgentPresence,
+            missionLocId,
+            "all",
+          );
+
     const pct = successChancePercent(
       template,
       participants,
@@ -1176,6 +1196,7 @@ export function executePlan(
         ...missionSuccessOptionsForTarget(state, am.target),
         playerAssets: player.assets,
         traitsCatalog: catalog.traits,
+        opposingAgentPenaltyCount,
       },
     );
     const roll = Math.floor(rng() * 100);
@@ -1255,6 +1276,19 @@ export function executePlan(
         catalog,
         secLoc,
       );
+      const agentsAtSite = countOpposingAgentsAtLocationFromData(
+        opposingAgentInstances,
+        locationAgentPresence,
+        secLoc,
+        "all",
+      );
+      if (agentsAtSite > 0) {
+        opposingAgentInstances = revealAllOpposingAgentsAtLocation(
+          opposingAgentInstances,
+          secLoc,
+          locationAgentPresence,
+        );
+      }
     }
 
     for (const iid of am.participantInstanceIds) {
@@ -1318,15 +1352,13 @@ export function executePlan(
   );
 
   const tierIncreased = wantedLevelTierIndex > state.wantedLevelTierIndex;
-  let opposingAgentInstances = state.opposingAgentInstances;
-  let locationAgentPresence = state.locationAgentPresence;
   if (tierIncreased) {
     const playableIds = locationTemplatesForOmegaPlan(catalog, state.activeOmegaPlanId).map(
       (l) => l.id,
     );
     const spawned = spawnOpposingAgentsAfterWantedEscalation(
-      state.opposingAgentInstances,
-      state.locationAgentPresence,
+      opposingAgentInstances,
+      locationAgentPresence,
       catalog,
       playableIds,
       state.wantedLevelTierIndex,
@@ -1359,7 +1391,8 @@ export function executePlan(
       lairMissionIds,
       completedLairUpgradeMissionIds,
       wantedLevelTierIndex,
-      ...(tierIncreased ? { opposingAgentInstances, locationAgentPresence } : {}),
+      opposingAgentInstances,
+      locationAgentPresence,
     },
   };
 }

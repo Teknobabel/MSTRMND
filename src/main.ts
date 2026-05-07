@@ -7,6 +7,7 @@ import {
   createInitialGameState,
   executePlan,
   fireMinion,
+  getMissionTargetLocationId,
   hireMinion,
   missionSuccessOptionsForTarget,
   missionTargetMatchesTemplate,
@@ -33,13 +34,14 @@ import { loadContent } from "./game/loadContent";
 import {
   locationTemplatesForOmegaPlan,
 } from "./game/locationCatalog";
-import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
-import { getOmegaPlanById } from "./game/omegaPlan";
 import {
+  countOpposingAgentsAtLocation,
   getAgentTemplateById,
   getOpposingAgentsAtLocation,
   totalOpposingAgentsAcrossLocations,
 } from "./game/agent";
+import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
+import { getOmegaPlanById } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation } from "./navigation";
 
@@ -715,7 +717,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
       const baseOpts =
         assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : {};
-      const opts = { ...baseOpts, playerAssets: state.player.assets, traitsCatalog: content.traits };
+      const lid = assignTarget !== null ? getMissionTargetLocationId(assignTarget) : null;
+      const opposingAgentPenaltyCount =
+        lid === null ? 0 : countOpposingAgentsAtLocation(state, lid, "revealed");
+      const opts = {
+        ...baseOpts,
+        playerAssets: state.player.assets,
+        traitsCatalog: content.traits,
+        opposingAgentPenaltyCount,
+      };
       return `${successChancePercent(m, participants, opts)}%`;
     }
     if (slotIds.length === 0) {
@@ -1299,13 +1309,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     ];
     appendMinionStatRows(dl, baseRows);
     const agentsHere = getOpposingAgentsAtLocation(state, loc.id);
-    const agentsValue =
-      agentsHere.length === 0
-        ? "None"
-        : agentsHere
-            .map((a) => getAgentTemplateById(content, a.templateId)?.name ?? a.templateId)
-            .join(", ");
-    appendMinionStatRows(dl, [{ label: "Agents", value: agentsValue }]);
+    if (agentsHere.length > 0) {
+      const agentsValue = agentsHere
+        .map((a) => {
+          const name = getAgentTemplateById(content, a.templateId)?.name ?? a.templateId;
+          return a.catalogVisibility === "hidden" ? `(${name})` : name;
+        })
+        .join(", ");
+      appendMinionStatRows(dl, [{ label: "Agents", value: agentsValue }]);
+    }
 
     for (let si = 0; si < assetSlots.length; si += 1) {
       const slot = assetSlots[si]!;
@@ -1866,10 +1878,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       });
 
       if (mission) {
+        const lid = getMissionTargetLocationId(am.target);
+        const opposingAgentPenaltyCount =
+          lid === null ? 0 : countOpposingAgentsAtLocation(state, lid, "revealed");
         const successOpts = {
           ...missionSuccessOptionsForTarget(state, am.target),
           playerAssets: state.player.assets,
           traitsCatalog: content.traits,
+          opposingAgentPenaltyCount,
         };
         const mergedDisplay = mergedRequiredTraitIdsSorted(mission, successOpts);
         rows.push(
@@ -1977,7 +1993,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     const sortedForTab = runLocations()
       .filter((loc) => loc.locationType === locationsCategoryTab)
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      .sort((a, b) => {
+        if (a.locationLevel !== b.locationLevel) {
+          return a.locationLevel - b.locationLevel;
+        }
+        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      });
 
     const mainOnly = state.phase === "main";
     if (sortedForTab.length === 0) {

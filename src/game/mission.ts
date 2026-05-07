@@ -7,6 +7,8 @@ export type MissionSuccessOptions = {
   playerAssets?: Record<string, number>;
   /** When set, status_positive / status_negative traits on participants adjust success %. */
   traitsCatalog?: readonly Trait[];
+  /** Opposing agents at the mission site: each applies a flat −20% to success chance (default 0). */
+  opposingAgentPenaltyCount?: number;
 };
 
 /**
@@ -85,6 +87,8 @@ export function matchedAssetUnits(
 
 const STATUS_POSITIVE_BONUS = 10;
 const STATUS_NEGATIVE_PENALTY = 20;
+/** Flat success % reduction per opposing agent at the mission's target site. */
+export const OPPOSING_AGENT_SUCCESS_PENALTY = 20;
 
 function participantStatusModifierDelta(
   participants: MinionInstance[],
@@ -117,7 +121,7 @@ function participantStatusModifierDelta(
  * (required trait count + required asset occurrence count). Uses current `playerAssets`
  * when provided; missing inventory counts as no assets. Then applies flat +10% per
  * participating `status_positive` trait occurrence and −20% per `status_negative`,
- * clamped to [0, 100].
+ * then −20% per `opposingAgentPenaltyCount`, clamped to [0, 100].
  */
 export function successChancePercent(
   template: MissionTemplate,
@@ -140,5 +144,7 @@ export function successChancePercent(
   const base =
     total === 0 ? 100 : Math.round((100 * (matchedTraits + matchedAssets)) / total);
   const statusDelta = participantStatusModifierDelta(participants, options?.traitsCatalog);
-  return Math.min(100, Math.max(0, base + statusDelta));
+  const agentPenalty =
+    OPPOSING_AGENT_SUCCESS_PENALTY * Math.max(0, options?.opposingAgentPenaltyCount ?? 0);
+  return Math.min(100, Math.max(0, base + statusDelta - agentPenalty));
 }
