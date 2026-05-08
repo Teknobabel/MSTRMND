@@ -37,7 +37,6 @@ import {
 import {
   countOpposingAgentsAtLocation,
   getAgentTemplateById,
-  getOpposingAgentsAtLocation,
   totalOpposingAgentsAcrossLocations,
 } from "./game/agent";
 import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
@@ -1308,10 +1307,18 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       },
     ];
     appendMinionStatRows(dl, baseRows);
-    const agentsHere = getOpposingAgentsAtLocation(state, loc.id);
-    if (agentsHere.length > 0) {
-      const agentsValue = agentsHere
-        .map((a) => {
+    const agentIdsAtSite =
+      state.locationAgentPresence.find((p) => p.locationId === loc.id)?.agentInstanceIds ?? [];
+    if (agentIdsAtSite.length > 0) {
+      const byInstanceId = new Map(
+        state.opposingAgentInstances.map((a) => [a.instanceId, a] as const),
+      );
+      const agentsValue = agentIdsAtSite
+        .map((id) => {
+          const a = byInstanceId.get(id);
+          if (a === undefined) {
+            return "(?)";
+          }
           const name = getAgentTemplateById(content, a.templateId)?.name ?? a.templateId;
           return a.catalogVisibility === "hidden" ? `(${name})` : name;
         })
@@ -2199,9 +2206,18 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
             ev.templateEffectDescriptions.length > 0
               ? ev.templateEffectDescriptions.join("; ")
               : "none";
-          return `${ev.missionName} @ ${whereLabel}: ${
-            ev.success ? "Success" : "Failure"
-          } (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}. Outcome: baseline infamy ${baseline}. Mission effects: ${templateFx}.`;
+          const outcomeLabel = ev.success ? "Success" : "Failure";
+          let line = `${ev.missionName} @ ${whereLabel}: ${outcomeLabel} (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}. Outcome: baseline infamy ${baseline}. Mission effects: ${templateFx}.`;
+          if (ev.criticalFailure && ev.criticalInjuryChancePercent !== undefined) {
+            const n = ev.criticalOpposingAgentCount ?? 0;
+            const injuredWho =
+              ev.criticalInjuryInstanceIds !== undefined &&
+              ev.criticalInjuryInstanceIds.length > 0
+                ? participantNames(ev.criticalInjuryInstanceIds)
+                : "none";
+            line += ` Critical failure (${n} opposing agent${n === 1 ? "" : "s"}): ${ev.criticalInjuryChancePercent}% injury chance per participant; injured from critical roll: ${injuredWho}.`;
+          }
+          return line;
         }
         case "minion_hired":
         case "minion_rehired": {

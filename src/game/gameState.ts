@@ -34,6 +34,7 @@ import {
   type MissionSuccessOptions,
 } from "./mission";
 import {
+  applyCriticalFailureInjuryRolls,
   applyMissionEffects,
   describeMissionTemplateEffects,
   orderedMissionEffects,
@@ -92,6 +93,17 @@ export type ActivityEventMissionCompleted = {
   baselineInfamyDelta: number;
   /** Template effect lines in resolution order (reveal/steal first, then the rest). */
   templateEffectDescriptions: string[];
+  /**
+   * True when the mission failed at a location-backed target with at least one opposing agent
+   * (critical injury rolls run after template failure effects).
+   */
+  criticalFailure: boolean;
+  /** Set when `criticalFailure` is true: count of opposing agents at the mission location. */
+  criticalOpposingAgentCount?: number;
+  /** Set when `criticalFailure` is true: per-participant injury chance percent (min(100, 20 × agent count)). */
+  criticalInjuryChancePercent?: number;
+  /** Participants who gained `injured` from the critical-failure roll pass only (may be empty). */
+  criticalInjuryInstanceIds?: string[];
 };
 
 /** @deprecated Use {@link ActivityEventMissionCompleted} */
@@ -1227,6 +1239,31 @@ export function executePlan(
       instanceById.set(m.instanceId, m);
     }
 
+    const isCriticalFailure =
+      !success &&
+      missionLocId !== null &&
+      opposingAgentPenaltyCount > 0;
+    let criticalInjuryInstanceIds: string[] | undefined;
+    let criticalOpposingAgentCount: number | undefined;
+    let criticalInjuryChancePercent: number | undefined;
+    if (isCriticalFailure) {
+      const chance = Math.min(100, 20 * opposingAgentPenaltyCount);
+      const injury = applyCriticalFailureInjuryRolls(
+        player,
+        am.participantInstanceIds,
+        chance,
+        "injured",
+        rng,
+      );
+      player = injury.player;
+      for (const m of player.minions) {
+        instanceById.set(m.instanceId, m);
+      }
+      criticalOpposingAgentCount = opposingAgentPenaltyCount;
+      criticalInjuryChancePercent = chance;
+      criticalInjuryInstanceIds = injury.newlyInjuredInstanceIds;
+    }
+
     const infamyDeltaTotal = player.infamy - infamyBefore;
 
     const templateEffectDescriptions = describeMissionTemplateEffects(effectList);
@@ -1243,6 +1280,14 @@ export function executePlan(
       infamyDelta: infamyDeltaTotal,
       baselineInfamyDelta: baselineInfamy,
       templateEffectDescriptions,
+      criticalFailure: isCriticalFailure,
+      ...(isCriticalFailure
+        ? {
+            criticalOpposingAgentCount,
+            criticalInjuryChancePercent,
+            criticalInjuryInstanceIds,
+          }
+        : {}),
     });
     resolveEvents.push(...applied.events);
 

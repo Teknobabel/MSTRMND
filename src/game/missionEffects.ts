@@ -440,6 +440,48 @@ function applyAddAllParticipantTraits(
   return { ...player, minions };
 }
 
+/** After template failure effects; each participant rolls once vs `injuryChancePercent` for `injuredTraitId` (deduped). */
+export function applyCriticalFailureInjuryRolls(
+  player: PlayerState,
+  participantInstanceIds: readonly string[],
+  injuryChancePercent: number,
+  injuredTraitId: string,
+  rng: Rng,
+): { player: PlayerState; newlyInjuredInstanceIds: string[] } {
+  const p = Math.min(100, Math.max(0, injuryChancePercent));
+  if (participantInstanceIds.length === 0 || p <= 0) {
+    return { player, newlyInjuredInstanceIds: [] };
+  }
+
+  const byId = new Map(player.minions.map((m) => [m.instanceId, m] as const));
+  const newlyInjuredInstanceIds: string[] = [];
+
+  for (const iid of participantInstanceIds) {
+    const roll = Math.floor(rng() * 100);
+    if (roll >= p) {
+      continue;
+    }
+    const m = byId.get(iid);
+    if (m === undefined || m.traitIds.includes(injuredTraitId)) {
+      continue;
+    }
+    const next = { ...m, traitIds: [...m.traitIds, injuredTraitId] };
+    byId.set(iid, next);
+    newlyInjuredInstanceIds.push(iid);
+  }
+
+  if (newlyInjuredInstanceIds.length === 0) {
+    return { player, newlyInjuredInstanceIds: [] };
+  }
+  return {
+    player: {
+      ...player,
+      minions: player.minions.map((m) => byId.get(m.instanceId) ?? m),
+    },
+    newlyInjuredInstanceIds,
+  };
+}
+
 function applyStealTargetAsset(
   placements: LocationAssetPlacement[],
   target: MissionTarget,
