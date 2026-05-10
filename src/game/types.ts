@@ -10,6 +10,8 @@ export type MinionTemplate = {
   id: string;
   name: string;
   description: string;
+  /** Optional card portrait URL (site root path under `public/`, e.g. `/assets/cards/custom/x.png`). */
+  cardArt?: string;
   /** CP cost to hire during the Main Phase. */
   hireCommandPoints: number;
   startingTraitIds?: string[];
@@ -115,6 +117,8 @@ export type MissionTemplate = {
   id: string;
   name: string;
   description: string;
+  /** Optional card art URL (site root path under `public/`). */
+  cardArt?: string;
   /** CP spent when starting this mission (Main Phase). */
   startCommandPoints: number;
   requiredTraitIds: string[];
@@ -172,6 +176,8 @@ export type LocationTemplate = {
   id: string;
   name: string;
   description: string;
+  /** Optional card art URL (site root path under `public/`). */
+  cardArt?: string;
   /** Political, Military, or Economic (designer). */
   locationType: LocationType;
   /** Designer difficulty or importance tier, 1–3. */
@@ -201,6 +207,8 @@ export type Asset = {
   id: string;
   name: string;
   description?: string;
+  /** Optional card art URL (site root path under `public/`). */
+  cardArt?: string;
 };
 
 export type OmegaPlanStage = {
@@ -230,6 +238,8 @@ export type LairTemplate = {
   id: string;
   name: string;
   description?: string;
+  /** Optional header/card art URL (site root path under `public/`). */
+  cardArt?: string;
   /** Mission templates the player may assign while at the lair (runtime pool starts as a copy). */
   availableMissionIds: string[];
   /**

@@ -568,6 +568,43 @@ body {
   color: #a1a1aa;
 }
 
+.card-with-art {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.card-with-art > .card-art {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid #3f3f46;
+  background: rgba(24, 24, 27, 0.65);
+}
+
+.card-with-art > .card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.assign-pick-embedded-card.card-with-art > .card-art {
+  width: 44px;
+  height: 44px;
+}
+
+.card-art--chip {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+}
+
+.lair-panel-header.card-with-art {
+  flex-shrink: 0;
+}
+
 .location-card {
   padding: 0.45rem 0.55rem;
   border-radius: 8px;
@@ -911,15 +948,26 @@ body {
   background: rgba(24, 24, 27, 0.5);
 }
 
-.assign-pick-slot.assign-minion-slot--dragover {
-  border-color: #71717a;
-  background: rgba(63, 63, 70, 0.45);
-}
-
 .assign-pick-slot:has(.assign-pick-embedded-card) {
   align-items: stretch;
   min-height: unset;
   padding: 0.45rem 0.5rem;
+  border: none;
+  background: transparent;
+}
+
+/* Minion target uses a chip (no .assign-pick-embedded-card); outer slot stays chrome-free */
+.assign-pick-slot:has(.assign-target-minion-chip) {
+  align-items: stretch;
+  min-height: unset;
+  padding: 0.45rem 0.5rem;
+  border: none;
+  background: transparent;
+}
+
+.assign-pick-slot.assign-minion-slot--dragover {
+  border: 1px dashed #71717a;
+  background: rgba(63, 63, 70, 0.45);
 }
 
 .assign-pick-slot-inner {
@@ -1025,7 +1073,16 @@ body {
   background: rgba(24, 24, 27, 0.5);
 }
 
-.assign-minion-slot--dragover {
+.assign-minion-slot:has(.assign-minion-chip) {
+  align-items: stretch;
+  min-height: unset;
+  padding: 0.45rem 0.55rem;
+  border-style: solid;
+  border-color: #3f3f46;
+  background: rgba(39, 39, 42, 0.85);
+}
+
+.assign-minion-slot.assign-minion-slot--dragover {
   border-color: #71717a;
   background: rgba(63, 63, 70, 0.45);
 }
@@ -1039,15 +1096,23 @@ body {
 .assign-minion-chip {
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.35rem;
   width: 100%;
   min-height: 2rem;
   padding: 0.15rem 1.75rem 0.25rem 0;
   font-size: 0.875rem;
   font-weight: 600;
   color: #e4e4e7;
+}
+
+.assign-minion-chip.assign-target-minion-chip {
+  padding: 0.45rem 1.85rem 0.45rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid #3f3f46;
+  background: rgba(39, 39, 42, 0.85);
+  box-sizing: border-box;
 }
 
 .assign-minion-chip-main {

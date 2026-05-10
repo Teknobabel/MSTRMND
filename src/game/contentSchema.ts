@@ -44,6 +44,7 @@ const minionTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
+  cardArt: z.string().min(1).optional(),
   hireCommandPoints: z.number().int().min(0),
   startingTraitIds: z.array(z.string().min(1)).optional(),
   levelUpTraitOrder: z.array(z.string().min(1)),
@@ -87,6 +88,9 @@ function parseMinionLikeTemplatesWithTraitRefs(
       levelUpTraitOrder: [...m.levelUpTraitOrder],
       startingLevel: m.startingLevel ?? 1,
     };
+    if (m.cardArt !== undefined) {
+      base.cardArt = m.cardArt;
+    }
     if (m.startingTraitIds !== undefined && m.startingTraitIds.length > 0) {
       base.startingTraitIds = [...m.startingTraitIds];
     }
@@ -193,6 +197,7 @@ const missionTemplateSchema = z
     id: z.string().min(1),
     name: z.string().min(1),
     description: z.string(),
+    cardArt: z.string().min(1).optional(),
     targetType: missionTargetTypeSchema,
     startCommandPoints: z.coerce.number().int().min(0),
     requiredTraitIds: z.array(z.string().min(1)).default([]),
@@ -384,6 +389,9 @@ function parseMissionsWithRefs(
       requiredAssetIds: [...m.requiredAssetIds],
       durationTurns: m.durationTurns,
     };
+    if (m.cardArt !== undefined) {
+      base.cardArt = m.cardArt;
+    }
     if (m.onSuccessEffects !== undefined && m.onSuccessEffects.length > 0) {
       base.onSuccessEffects = [...m.onSuccessEffects];
     }
@@ -400,6 +408,7 @@ const locationTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
+  cardArt: z.string().min(1).optional(),
   locationType: locationTypeSchema,
   locationLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]),
 });
@@ -529,6 +538,7 @@ const assetSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
+  cardArt: z.string().min(1).optional(),
 });
 
 const assetsArraySchema = z
@@ -590,6 +600,7 @@ const lairTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().min(1).optional(),
+  cardArt: z.string().min(1).optional(),
   availableMissionIds: z.array(z.string().min(1)),
   upgradeMissionIds: z.array(z.string().min(1)).default([]),
   startingAssets: z.record(z.string().min(1), z.number().int().min(1)).optional(),
@@ -657,6 +668,7 @@ function parseLairsWithRefs(
     id: l.id,
     name: l.name,
     ...(l.description !== undefined ? { description: l.description } : {}),
+    ...(l.cardArt !== undefined ? { cardArt: l.cardArt } : {}),
     availableMissionIds: [...l.availableMissionIds],
     upgradeMissionIds: [...l.upgradeMissionIds],
     ...(l.startingAssets !== undefined

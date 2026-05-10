@@ -43,6 +43,15 @@ import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
 import { getOmegaPlanById } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation } from "./navigation";
+import {
+  appendCardArtShell,
+  createCardArtImg,
+  resolveAssetCardArt,
+  resolveLairCardArt,
+  resolveLocationCardArt,
+  resolveMissionCardArt,
+  resolveMinionCardArt,
+} from "./ui/cardArt";
 
 /** Tabs left-to-right; locations filtered and sorted by name within each. */
 const LOCATION_CATEGORY_TAB_ORDER: readonly LocationType[] = [
@@ -912,10 +921,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       article.className = "assign-pick-embedded-card location-card assign-target-asset-card";
       article.draggable = mainOnly;
       article.addEventListener("dragstart", setDragDataForTarget);
+      const body = appendCardArtShell(article, resolveLocationCardArt(loc));
       const title = document.createElement("h4");
       title.className = "location-card-title";
       title.textContent = loc?.name ?? targetPick.locationId;
-      article.appendChild(title);
+      body.appendChild(title);
       const dl = document.createElement("dl");
       dl.className = "location-card-stats";
       const visLabel = targetPick.visibilityAtAssign === "hidden" ? "Hidden" : "Revealed";
@@ -946,7 +956,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         { label: "Site traits", value: siteTraitsLabel },
         { label: "Security traits", value: securityTraitsLabel },
       ]);
-      article.appendChild(dl);
+      body.appendChild(dl);
       wrap.appendChild(article);
       appendClearTarget(wrap);
       targetSlot.appendChild(wrap);
@@ -961,6 +971,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       chip.className = "assign-minion-chip assign-target-minion-chip";
       chip.draggable = mainOnly;
       chip.addEventListener("dragstart", setDragDataForTarget);
+      chip.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "card-art--chip"));
       const chipMain = document.createElement("div");
       chipMain.className = "assign-minion-chip-main";
       const chipLabel = document.createElement("span");
@@ -1141,6 +1152,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         chip.draggable = mainOnly && !busy.has(instanceId);
         chip.dataset.instanceId = instanceId;
 
+        chip.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "card-art--chip"));
+
         const chipMain = document.createElement("div");
         chipMain.className = "assign-minion-chip-main";
 
@@ -1208,16 +1221,18 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const article = document.createElement("article");
     article.className = "asset-card omega-plan-mission-card";
 
+    const body = appendCardArtShell(article, resolveMissionCardArt(mission));
+
     const title = document.createElement("h4");
     title.className = "asset-card-title";
     title.textContent = mission?.name ?? missionId;
-    article.appendChild(title);
+    body.appendChild(title);
 
     if (mission?.description) {
       const desc = document.createElement("p");
       desc.className = "asset-card-description";
       desc.textContent = mission.description;
-      article.appendChild(desc);
+      body.appendChild(desc);
     }
 
     const dl = document.createElement("dl");
@@ -1249,7 +1264,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       rows.push({ label: "Mission id", value: missionId });
     }
     appendMinionStatRows(dl, rows);
-    article.appendChild(dl);
+    body.appendChild(dl);
     return article;
   }
 
@@ -1273,6 +1288,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         e.dataTransfer!.effectAllowed = "copy";
       });
     }
+
+    const body = appendCardArtShell(article, resolveLocationCardArt(loc));
 
     const title = document.createElement("h4");
     title.className = "location-card-title";
@@ -1376,8 +1393,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       dl.appendChild(dd);
     }
 
-    article.appendChild(title);
-    article.appendChild(dl);
+    body.appendChild(title);
+    body.appendChild(dl);
     return article;
   }
 
@@ -1427,10 +1444,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         if (isBusy) {
           card.classList.add("minions-card--busy");
         }
+        const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
         const title = document.createElement("h4");
         title.className = "minions-card-title";
         title.textContent = tpl?.name ?? inst.templateId;
-        card.appendChild(title);
+        body.appendChild(title);
         const activeForMinion = state.activeMissions.find((am) =>
           am.participantInstanceIds.includes(inst.instanceId),
         );
@@ -1447,7 +1465,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           { label: "XP", value: String(inst.currentExperience) },
         ]);
         appendMinionTraitsRow(dl, content, inst.traitIds);
-        card.appendChild(dl);
+        body.appendChild(dl);
 
         const fireBtn = document.createElement("button");
         fireBtn.type = "button";
@@ -1508,10 +1526,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       }
       const card = document.createElement("article");
       card.className = "minions-card minions-card--available";
+      const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
       const title = document.createElement("h4");
       title.className = "minions-card-title";
       title.textContent = tpl.name;
-      card.appendChild(title);
+      body.appendChild(title);
       const dl = document.createElement("dl");
       dl.className = "minions-card-stats";
       const startingIds = tpl.startingTraitIds ?? [];
@@ -1521,7 +1540,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         { label: "XP", value: "0" },
       ]);
       appendMinionTraitsRow(dl, content, startingIds);
-      card.appendChild(dl);
+      body.appendChild(dl);
 
       const actions = document.createElement("div");
       actions.className = "minions-card-actions";
@@ -1556,7 +1575,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       });
 
       actions.appendChild(hireBtn);
-      card.appendChild(actions);
+      body.appendChild(actions);
 
       minionsAvailableEl.appendChild(card);
     }
@@ -1565,10 +1584,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const tpl = content.minions.find((m) => m.id === rehireInst.templateId);
       const card = document.createElement("article");
       card.className = "minions-card minions-card--available minions-card--rehire";
+      const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
       const title = document.createElement("h4");
       title.className = "minions-card-title";
       title.textContent = tpl?.name ?? rehireInst.templateId;
-      card.appendChild(title);
+      body.appendChild(title);
       const dl = document.createElement("dl");
       dl.className = "minions-card-stats";
       appendMinionStatRows(dl, [
@@ -1577,7 +1597,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         { label: "XP", value: String(rehireInst.currentExperience) },
       ]);
       appendMinionTraitsRow(dl, content, rehireInst.traitIds);
-      card.appendChild(dl);
+      body.appendChild(dl);
 
       const actions = document.createElement("div");
       actions.className = "minions-card-actions";
@@ -1615,7 +1635,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       });
 
       actions.appendChild(hireBtn);
-      card.appendChild(actions);
+      body.appendChild(actions);
       minionsAvailableEl.appendChild(card);
     }
   }
@@ -1759,22 +1779,23 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     for (const { assetId, quantity, template } of rows) {
       const article = document.createElement("article");
       article.className = "asset-card";
+      const body = appendCardArtShell(article, resolveAssetCardArt(template));
       const title = document.createElement("h4");
       title.className = "asset-card-title";
       title.textContent = template?.name ?? assetId;
-      article.appendChild(title);
+      body.appendChild(title);
 
       const dl = document.createElement("dl");
       dl.className = "asset-card-stats";
       appendMinionStatRows(dl, [{ label: "Quantity", value: String(quantity) }]);
-      article.appendChild(dl);
+      body.appendChild(dl);
 
       const descText = template?.description?.trim();
       if (descText) {
         const desc = document.createElement("p");
         desc.className = "asset-card-description";
         desc.textContent = descText;
-        article.appendChild(desc);
+        body.appendChild(desc);
       }
 
       assetsPanelEl.appendChild(article);
@@ -1845,16 +1866,18 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const article = document.createElement("article");
       article.className = "asset-card active-mission-card";
 
+      const body = appendCardArtShell(article, resolveMissionCardArt(mission));
+
       const title = document.createElement("h4");
       title.className = "asset-card-title";
       title.textContent = mission?.name ?? am.missionTemplateId;
-      article.appendChild(title);
+      body.appendChild(title);
 
       if (mission?.description) {
         const desc = document.createElement("p");
         desc.className = "asset-card-description";
         desc.textContent = mission.description;
-        article.appendChild(desc);
+        body.appendChild(desc);
       }
 
       const dl = document.createElement("dl");
@@ -1927,7 +1950,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       }
 
       appendMinionStatRows(dl, rows);
-      article.appendChild(dl);
+      body.appendChild(dl);
 
       const mainOnly = state.phase === "main";
       const actions = document.createElement("div");
@@ -1949,7 +1972,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         }
       });
       actions.appendChild(cancelBtn);
-      article.appendChild(actions);
+      body.appendChild(actions);
 
       activeMissionsPanelEl.appendChild(article);
     }
@@ -2049,16 +2072,20 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       lairPanelEl.appendChild(empty);
       return;
     }
+    const header = document.createElement("div");
+    header.className = "lair-panel-header";
+    const headerBody = appendCardArtShell(header, resolveLairCardArt(lair));
     const nameEl = document.createElement("p");
     nameEl.className = "lair-panel-name";
     nameEl.textContent = lair.name;
-    lairPanelEl.appendChild(nameEl);
+    headerBody.appendChild(nameEl);
     if (lair.description) {
       const desc = document.createElement("p");
       desc.className = "lair-panel-description";
       desc.textContent = lair.description;
-      lairPanelEl.appendChild(desc);
+      headerBody.appendChild(desc);
     }
+    lairPanelEl.appendChild(header);
 
     function missionNameForSort(mid: string): string {
       return content.missions.find((m) => m.id === mid)?.name ?? mid;
