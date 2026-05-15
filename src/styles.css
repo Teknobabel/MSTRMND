@@ -534,6 +534,23 @@ body {
   border: 1px solid #3f3f46;
 }
 
+.asset-card[draggable="true"] {
+  cursor: grab;
+}
+
+.asset-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.asset-card--unavailable {
+  opacity: 0.55;
+}
+
+.asset-card--unavailable .asset-card-title,
+.asset-card--unavailable .asset-card-stats {
+  color: #71717a;
+}
+
 .asset-card-title {
   margin: 0 0 0.3rem;
   font-size: 0.8125rem;
@@ -1111,6 +1128,14 @@ body {
   font-size: 0.8125rem;
   color: #71717a;
   font-style: italic;
+}
+
+.assign-asset-slots {
+  /* shares .assign-minion-slots layout */
+}
+
+.assign-asset-chip {
+  cursor: default;
 }
 
 .assign-minion-chip {

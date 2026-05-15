@@ -5,6 +5,12 @@ export type MissionSuccessOptions = {
   additionalRequiredTraitIds?: string[];
   /** Current player inventory (`Asset.id` → quantity) for required-asset checks. */
   playerAssets?: Record<string, number>;
+  /**
+   * When set and its length matches `template.requiredAssetIds`, each index is one required-asset
+   * slot: non-null must equal `requiredAssetIds[i]` to count as matched. Overrides `playerAssets`
+   * for the asset portion of the base success %.
+   */
+  assignedAssetIds?: (string | null)[];
   /** When set, status_positive / status_negative traits on participants adjust success %. */
   traitsCatalog?: readonly Trait[];
   /** Opposing agents at the mission site: each applies a flat −20% to success chance (default 0). */
@@ -85,6 +91,25 @@ export function matchedAssetUnits(
     matched += Math.min(count, inv[id] ?? 0);
   }
   return matched;
+}
+
+/** Count filled required-asset slots where the placed id matches that slot's required id. */
+export function countMatchedAssignedSlots(
+  requiredAssetIds: string[],
+  assignedAssetIds: (string | null)[],
+): number {
+  if (requiredAssetIds.length !== assignedAssetIds.length) {
+    return 0;
+  }
+  let n = 0;
+  for (let i = 0; i < requiredAssetIds.length; i += 1) {
+    const need = requiredAssetIds[i]!;
+    const got = assignedAssetIds[i];
+    if (got !== null && got === need) {
+      n += 1;
+    }
+  }
+  return n;
 }
 
 const STATUS_POSITIVE_BONUS = 10;
@@ -173,7 +198,11 @@ export function computeSuccessChanceBreakdown(
       missingTraitIds.push(id);
     }
   }
-  const matchedAssets = matchedAssetUnits(assetRequired, options?.playerAssets);
+  const assigned = options?.assignedAssetIds;
+  const matchedAssets =
+    assigned !== undefined && assigned.length === assetRequired.length
+      ? countMatchedAssignedSlots(assetRequired, assigned)
+      : matchedAssetUnits(assetRequired, options?.playerAssets);
   const base =
     total === 0 ? 100 : Math.round((100 * (matchedTraits + matchedAssets)) / total);
   const statusEntries = participantStatusModifierEntries(participants, options?.traitsCatalog);
@@ -202,10 +231,11 @@ export function computeSuccessChanceBreakdown(
 
 /**
  * Linear success: (matched distinct traits + matched asset units) /
- * (required trait count + required asset occurrence count). Uses current `playerAssets`
- * when provided; missing inventory counts as no assets. Then applies flat +10% per
- * participating `status_positive` trait occurrence and −20% per `status_negative`,
- * then `dynamicTraitDelta`, then −20% per `opposingAgentPenaltyCount`, clamped to [0, 100].
+ * (required trait count + required asset occurrence count). Uses `assignedAssetIds`
+ * when its length matches `template.requiredAssetIds`; otherwise uses current `playerAssets`
+ * with {@link matchedAssetUnits}. Then applies flat +10% per participating `status_positive`
+ * trait occurrence and −20% per `status_negative`, then `dynamicTraitDelta`, then −20% per
+ * `opposingAgentPenaltyCount`, clamped to [0, 100].
  */
 export function successChancePercent(
   template: MissionTemplate,

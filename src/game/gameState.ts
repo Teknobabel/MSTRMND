@@ -78,6 +78,11 @@ export type ActiveMission = {
   omegaStageIndex: number | null;
   omegaSlotIndex: number | null;
   participantInstanceIds: string[];
+  /**
+   * Per-slot committed inventory assets (aligned with mission template `requiredAssetIds`);
+   * `null` = that slot was left empty at assign. Deducted from `player.assets` when the mission starts.
+   */
+  plannedAssetIds: (string | null)[];
   turnsRemaining: number;
   /** `GameState.turnNumber` when this mission was assigned (Main Phase). */
   startedOnTurn: number;
@@ -250,7 +255,15 @@ export type GameError =
   | { code: "empty_asset_slot"; locationId: string; slotIndex: number }
   | { code: "asset_visibility_mismatch"; locationId: string; slotIndex: number }
   | { code: "minion_target_in_participants"; instanceId: string }
-  | { code: "unknown_target_minion"; instanceId: string };
+  | { code: "unknown_target_minion"; instanceId: string }
+  | { code: "asset_slot_length_mismatch"; expected: number; got: number }
+  | {
+      code: "asset_slot_id_mismatch";
+      slotIndex: number;
+      expectedAssetId: string;
+      actual: string;
+    }
+  | { code: "not_enough_assets"; assetId: string; need: number; have: number };
 
 export type Ok<T> = { ok: true; value: T };
 export type Err<E> = { ok: false; error: E };
@@ -812,6 +825,7 @@ export function assignMission(
   omegaStageIndex: number | null,
   omegaSlotIndex: number | null,
   participantInstanceIds: string[],
+  plannedAssetIds: (string | null)[],
 ): Result<GameState, GameError> {
   if (state.phase !== "main") {
     return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
@@ -1002,6 +1016,52 @@ export function assignMission(
     };
   }
 
+  const requiredAssetIds = missionTemplate.requiredAssetIds;
+  if (plannedAssetIds.length !== requiredAssetIds.length) {
+    return {
+      ok: false,
+      error: {
+        code: "asset_slot_length_mismatch",
+        expected: requiredAssetIds.length,
+        got: plannedAssetIds.length,
+      },
+    };
+  }
+  for (let i = 0; i < requiredAssetIds.length; i += 1) {
+    const slotVal = plannedAssetIds[i];
+    if (slotVal === null) {
+      continue;
+    }
+    const need = requiredAssetIds[i]!;
+    if (slotVal !== need) {
+      return {
+        ok: false,
+        error: {
+          code: "asset_slot_id_mismatch",
+          slotIndex: i,
+          expectedAssetId: need,
+          actual: slotVal,
+        },
+      };
+    }
+  }
+  const assetDeductionTally = new Map<string, number>();
+  for (let i = 0; i < requiredAssetIds.length; i += 1) {
+    if (plannedAssetIds[i] !== null) {
+      const id = requiredAssetIds[i]!;
+      assetDeductionTally.set(id, (assetDeductionTally.get(id) ?? 0) + 1);
+    }
+  }
+  for (const [assetId, needQty] of assetDeductionTally) {
+    const haveQty = state.player.assets[assetId] ?? 0;
+    if (haveQty < needQty) {
+      return {
+        ok: false,
+        error: { code: "not_enough_assets", assetId, need: needQty, have: haveQty },
+      };
+    }
+  }
+
   const cost = missionTemplate.startCommandPoints;
   if (state.player.commandPoints < cost) {
     return {
@@ -1014,6 +1074,16 @@ export function assignMission(
     };
   }
 
+  const nextAssets: Record<string, number> = { ...state.player.assets };
+  for (const [assetId, qty] of assetDeductionTally) {
+    const v = (nextAssets[assetId] ?? 0) - qty;
+    if (v <= 0) {
+      delete nextAssets[assetId];
+    } else {
+      nextAssets[assetId] = v;
+    }
+  }
+
   const activeMission: ActiveMission = {
     id: activeMissionId,
     missionTemplateId,
@@ -1022,6 +1092,7 @@ export function assignMission(
     omegaStageIndex: missionSource === "omega" ? omegaStageIndex : null,
     omegaSlotIndex: missionSource === "omega" ? omegaSlotIndex : null,
     participantInstanceIds: [...participantInstanceIds],
+    plannedAssetIds: [...plannedAssetIds],
     turnsRemaining: missionTemplate.durationTurns,
     startedOnTurn: state.turnNumber,
   };
@@ -1032,20 +1103,22 @@ export function assignMission(
     player: {
       ...state.player,
       commandPoints: state.player.commandPoints - cost,
+      assets: nextAssets,
     },
   };
-  return {
-    ok: true,
-    value: appendActivityEvent(next, {
-      kind: "mission_started",
-      missionTemplateId,
-      target,
-      missionSource,
-      omegaStageIndex: missionSource === "omega" ? omegaStageIndex : null,
-      omegaSlotIndex: missionSource === "omega" ? omegaSlotIndex : null,
-      participantInstanceIds: [...participantInstanceIds],
-    }),
-  };
+  let withEvents = appendActivityEvent(next, {
+    kind: "mission_started",
+    missionTemplateId,
+    target,
+    missionSource,
+    omegaStageIndex: missionSource === "omega" ? omegaStageIndex : null,
+    omegaSlotIndex: missionSource === "omega" ? omegaSlotIndex : null,
+    participantInstanceIds: [...participantInstanceIds],
+  });
+  for (const [assetId, quantity] of assetDeductionTally) {
+    withEvents = appendActivityEvent(withEvents, { kind: "asset_lost", assetId, quantity });
+  }
+  return { ok: true, value: withEvents };
 }
 
 export function cancelMission(
@@ -1071,22 +1144,34 @@ export function cancelMission(
     refundCp = template.startCommandPoints;
   }
   const nextMissions = state.activeMissions.filter((_, i) => i !== idx);
+  const refundAssets = new Map<string, number>();
+  for (const p of am.plannedAssetIds) {
+    if (p !== null) {
+      refundAssets.set(p, (refundAssets.get(p) ?? 0) + 1);
+    }
+  }
+  const refundedAssets: Record<string, number> = { ...state.player.assets };
+  for (const [assetId, qty] of refundAssets) {
+    refundedAssets[assetId] = (refundedAssets[assetId] ?? 0) + qty;
+  }
   const next: GameState = {
     ...state,
     activeMissions: nextMissions,
     player: {
       ...state.player,
       commandPoints: state.player.commandPoints + refundCp,
+      assets: refundedAssets,
     },
   };
-  return {
-    ok: true,
-    value: appendActivityEvent(next, {
-      kind: "mission_cancelled",
-      missionTemplateId: am.missionTemplateId,
-      target: am.target,
-    }),
-  };
+  let withEvents = appendActivityEvent(next, {
+    kind: "mission_cancelled",
+    missionTemplateId: am.missionTemplateId,
+    target: am.target,
+  });
+  for (const [assetId, quantity] of refundAssets) {
+    withEvents = appendActivityEvent(withEvents, { kind: "asset_gained", assetId, quantity });
+  }
+  return { ok: true, value: withEvents };
 }
 
 /**
@@ -1219,7 +1304,7 @@ export function executePlan(
       participants,
       {
         ...missionSuccessOptionsForTarget(state, am.target),
-        playerAssets: player.assets,
+        assignedAssetIds: am.plannedAssetIds,
         traitsCatalog: catalog.traits,
         opposingAgentPenaltyCount,
         dynamicTraitDelta,

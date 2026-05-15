@@ -6,6 +6,7 @@
     "targetType": "location",
     "startCommandPoints": 2,
     "requiredTraitIds": ["hacker"],
+    "requiredAssetIds": ["classified_documents"],
     "durationTurns": 1,
     "onSuccessEffects": [{ "kind": "infamy_delta", "amount": 100 }],
     "onFailureEffects": [{ "kind": "add_all_participant_traits", "traitIds": ["injured"] }]
@@ -121,6 +122,7 @@
     "targetType": "location",
     "startCommandPoints": 3,
     "requiredTraitIds": ["engineer", "hacker", "scientist"],
+    "requiredAssetIds": ["explosives", "signal_jammers"],
     "durationTurns": 3
   },
   {
@@ -319,6 +321,7 @@
     "targetType": "location",
     "startCommandPoints": 3,
     "requiredTraitIds": ["thief", "spy", "intelligent"],
+    "requiredAssetIds": ["counterfeit_passports"],
     "durationTurns": 2
   },
   {

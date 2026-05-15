@@ -14,6 +14,7 @@ import {
   rehireMinion,
   rerollHireOffers,
   REROLL_HIRE_OFFERS_CP,
+  type GameError,
   type GameState,
 } from "./game/gameState";
 import type {
@@ -305,6 +306,26 @@ function assetDisplayNames(
     .join(", ");
 }
 
+/** Per required-asset slot: filled name or "—" for empty. */
+function plannedAssetSlotsDisplay(
+  catalog: ReturnType<typeof loadContent>,
+  requiredAssetIds: string[],
+  plannedAssetIds: (string | null)[],
+): string {
+  if (requiredAssetIds.length === 0) {
+    return "—";
+  }
+  return requiredAssetIds
+    .map((_, i) => {
+      const p = plannedAssetIds[i] ?? null;
+      if (p === null) {
+        return "—";
+      }
+      return catalog.assets.find((a) => a.id === p)?.name ?? p;
+    })
+    .join(", ");
+}
+
 function minionNameByInstanceId(
   catalog: ReturnType<typeof loadContent>,
   roster: readonly MinionInstance[],
@@ -418,6 +439,56 @@ function formatMissionTargetTypeLabel(tt: MissionTargetType): string {
   return map[tt];
 }
 
+function formatAssignMissionError(err: GameError): string {
+  switch (err.code) {
+    case "wrong_phase":
+      return `Wrong phase (need Main, got ${err.actual}).`;
+    case "max_concurrent_missions":
+      return `Mission limit reached (${err.have}/${err.max}).`;
+    case "unknown_mission":
+      return `Unknown mission: ${err.missionId}.`;
+    case "wrong_target_kind":
+      return `Target type does not match mission (expected ${err.expected}).`;
+    case "no_active_lair":
+      return "No active lair.";
+    case "mission_not_on_lair":
+      return "That mission is not available from your lair.";
+    case "no_active_omega_plan":
+      return "No active Omega plan.";
+    case "invalid_omega_stage":
+      return `Omega phase mismatch (need phase ${err.expectedStage + 1}).`;
+    case "omega_slot_mismatch":
+      return "That mission is not in the active Omega row slot.";
+    case "invalid_mission_source_binding":
+      return `Mission source: ${err.reason}`;
+    case "unknown_location":
+      return `Unknown location: ${err.locationId}.`;
+    case "location_not_on_active_map":
+      return "Target location is not on the active map.";
+    case "unknown_asset_slot":
+    case "empty_asset_slot":
+    case "asset_visibility_mismatch":
+      return "Target asset slot is invalid or empty.";
+    case "unknown_target_minion":
+    case "minion_on_mission":
+    case "minion_target_in_participants":
+      return "Target minion cannot be used.";
+    case "unknown_instance":
+    case "invalid_participants":
+      return err.code === "invalid_participants" ? err.reason : `Unknown minion: ${err.instanceId}.`;
+    case "not_enough_cp":
+      return `Need ${err.need} CP (${err.have} available).`;
+    case "asset_slot_length_mismatch":
+      return `Required asset slots out of sync (need ${err.expected}, have ${err.got}). Try re-selecting the mission.`;
+    case "asset_slot_id_mismatch":
+      return `Wrong asset in slot ${err.slotIndex + 1} (expected ${err.expectedAssetId}).`;
+    case "not_enough_assets":
+      return `Not enough ${err.assetId} (need ${err.need}, have ${err.have}).`;
+    default:
+      return `Cannot assign (${(err as { code: string }).code}).`;
+  }
+}
+
 function initGameController(content: ReturnType<typeof loadContent>): void {
   let state: GameState = createInitialGameState(content);
 
@@ -433,6 +504,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const assignTargetFieldEl = req<HTMLElement>("assign-target-field");
   const assignTargetLabelEl = req<HTMLElement>("assign-target-label");
   const minionsList = req<HTMLElement>("assign-minions-list");
+  const assignAssetSlotsFieldset = req<HTMLFieldSetElement>("assign-asset-slots-fieldset");
+  const assignAssetSlotsList = req<HTMLElement>("assign-asset-slots-list");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
   const btnExec = req<HTMLButtonElement>("btn-execute-plan");
   const btnRerollHire = req<HTMLButtonElement>("btn-reroll-hire");
@@ -451,6 +524,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     { length: ASSIGN_PARTICIPANT_SLOT_CAPACITY },
     (): string | null => null,
   );
+  /** Parallel to planned mission's `requiredAssetIds` (rebuilt when mission pick changes). */
+  const assignAssetSlotAssetIds: (string | null)[] = [];
   let assignMissionTemplateId: string | null = null;
   let assignMissionSource: MissionSource | null = null;
   let assignOmegaStageIndex: number | null = null;
@@ -497,6 +572,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     assignMissionSource = null;
     assignOmegaStageIndex = null;
     assignOmegaSlotIndex = null;
+    rebuildAssignAssetSlots();
     updateAssignTargetFieldVisibility();
     updateAssignTargetLabelText();
   }
@@ -540,6 +616,33 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       return undefined;
     }
     return content.missions.find((m) => m.id === assignMissionTemplateId);
+  }
+
+  function rebuildAssignAssetSlots(): void {
+    assignAssetSlotAssetIds.length = 0;
+    const m = selectedMissionTemplate();
+    if (!m || assignMissionTemplateId === null) {
+      return;
+    }
+    for (let i = 0; i < m.requiredAssetIds.length; i += 1) {
+      assignAssetSlotAssetIds.push(null);
+    }
+  }
+
+  /** Keep slot array aligned with the selected mission (e.g. after refresh). Preserves filled indices. */
+  function syncAssignAssetSlotArrayWithMission(): void {
+    const m = selectedMissionTemplate();
+    if (!m || assignMissionTemplateId === null) {
+      assignAssetSlotAssetIds.length = 0;
+      return;
+    }
+    const n = m.requiredAssetIds.length;
+    while (assignAssetSlotAssetIds.length < n) {
+      assignAssetSlotAssetIds.push(null);
+    }
+    if (assignAssetSlotAssetIds.length > n) {
+      assignAssetSlotAssetIds.length = n;
+    }
   }
 
   function reconcileTargetWithMission(): void {
@@ -607,11 +710,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   type MinionDragPayload = { kind: "mastermind-minion"; instanceId: string };
 
+  type AssetCardDragPayload = { kind: "mastermind-asset-card"; assetId: string };
+
   type AnyDragPayload =
     | MissionDragPayload
     | LocationDragPayload
     | AssetDragPayload
-    | MinionDragPayload;
+    | MinionDragPayload
+    | AssetCardDragPayload;
 
   function parseDragPayload(raw: string): AnyDragPayload | null {
     const t = raw.trim();
@@ -628,6 +734,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         locationId?: string;
         visibility?: string;
         instanceId?: string;
+        assetId?: string;
       };
       if (o.kind === "mastermind-mission" && o.source === "lair" && typeof o.missionTemplateId === "string") {
         return { kind: "mastermind-mission", source: "lair", missionTemplateId: o.missionTemplateId };
@@ -665,6 +772,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       }
       if (o.kind === "mastermind-minion" && typeof o.instanceId === "string") {
         return { kind: "mastermind-minion", instanceId: o.instanceId };
+      }
+      if (o.kind === "mastermind-asset-card" && typeof o.assetId === "string") {
+        return { kind: "mastermind-asset-card", assetId: o.assetId };
       }
     } catch {
       return null;
@@ -754,6 +864,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     return JSON.stringify({ kind: "mastermind-minion", instanceId });
   }
 
+  function assetCardDragJson(assetId: string): string {
+    return JSON.stringify({ kind: "mastermind-asset-card", assetId });
+  }
+
   function wireAssignPickSlot(
     el: HTMLElement,
     kind: "mission" | "target",
@@ -794,6 +908,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           assignOmegaSlotIndex = null;
         }
         reconcileTargetWithMission();
+        rebuildAssignAssetSlots();
         updateAssignTargetFieldVisibility();
         updateAssignTargetLabelText();
         renderAssignPickSlots();
@@ -879,7 +994,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       }
       if (breakdown.requiredAssetSlotCount > 0) {
         lines.push(
-          `Assets: ${breakdown.matchedAssets}/${breakdown.requiredAssetSlotCount} required asset slots covered by inventory (per-id min of need vs owned, summed).`,
+          `Assets: ${breakdown.matchedAssets}/${breakdown.requiredAssetSlotCount} required asset slots satisfied.`,
         );
       }
     }
@@ -948,6 +1063,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         traitsCatalog: content.traits,
         opposingAgentPenaltyCount,
         dynamicTraitDelta,
+        ...(m.requiredAssetIds.length > 0
+          ? {
+              assignedAssetIds: Array.from(
+                { length: m.requiredAssetIds.length },
+                (_, i) => assignAssetSlotAssetIds[i] ?? null,
+              ),
+            }
+          : {}),
       };
       const breakdown = computeSuccessChanceBreakdown(m, participants, opts);
       const dynamicBreakdown = dynamicTraitSuccessModifierBreakdownFromFullRoster(
@@ -971,6 +1094,117 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     return {
       label: "Pick 1–" + String(state.player.maxParticipantsPerMission) + " minions",
     };
+  }
+
+  function renderAssignAssetSlots(): void {
+    assignAssetSlotsList.innerHTML = "";
+    const m = selectedMissionTemplate();
+    const req = m?.requiredAssetIds ?? [];
+    if (!assignMissionTemplateId || req.length === 0) {
+      assignAssetSlotsFieldset.hidden = true;
+      renderAssetsPanel();
+      return;
+    }
+    assignAssetSlotsFieldset.hidden = false;
+    const mainOnly = state.phase === "main";
+    const wrap = document.createElement("div");
+    wrap.className = "assign-minion-slots assign-asset-slots";
+
+    for (let slotIndex = 0; slotIndex < req.length; slotIndex += 1) {
+      const requiredId = req[slotIndex]!;
+      const slot = document.createElement("div");
+      slot.className = "assign-minion-slot assign-asset-slot";
+      slot.dataset.assetSlotIndex = String(slotIndex);
+      slot.dataset.requiredAssetId = requiredId;
+
+      slot.addEventListener("dragenter", (e) => {
+        e.preventDefault();
+        slot.classList.add("assign-minion-slot--dragover");
+      });
+      slot.addEventListener("dragleave", () => {
+        slot.classList.remove("assign-minion-slot--dragover");
+      });
+      slot.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        const dt = e.dataTransfer;
+        if (dt) {
+          dt.dropEffect = "copy";
+        }
+      });
+      slot.addEventListener("drop", (e) => {
+        e.preventDefault();
+        slot.classList.remove("assign-minion-slot--dragover");
+        const raw = e.dataTransfer?.getData("text/plain")?.trim();
+        if (!raw) {
+          return;
+        }
+        const parsed = parseDragPayload(raw);
+        if (parsed?.kind !== "mastermind-asset-card") {
+          return;
+        }
+        if (parsed.assetId !== requiredId) {
+          return;
+        }
+        const owned = state.player.assets[parsed.assetId] ?? 0;
+        let usedElsewhere = 0;
+        for (let j = 0; j < assignAssetSlotAssetIds.length; j += 1) {
+          if (j !== slotIndex && assignAssetSlotAssetIds[j] === parsed.assetId) {
+            usedElsewhere += 1;
+          }
+        }
+        if (owned - usedElsewhere < 1) {
+          return;
+        }
+        assignAssetSlotAssetIds[slotIndex] = parsed.assetId;
+        renderAssignMinionSlots();
+        onAssignSlotsChanged();
+      });
+
+      const placed = assignAssetSlotAssetIds[slotIndex] ?? null;
+      if (placed === null) {
+        const ph = document.createElement("span");
+        ph.className = "assign-minion-slot-placeholder";
+        const name = content.assets.find((a) => a.id === requiredId)?.name ?? requiredId;
+        ph.textContent = `Slot ${slotIndex + 1} · ${name}`;
+        slot.appendChild(ph);
+      } else {
+        const tpl = content.assets.find((a) => a.id === placed);
+        const chip = document.createElement("div");
+        chip.className = "assign-minion-chip assign-asset-chip";
+        chip.appendChild(createCardArtImg(resolveAssetCardArt(tpl), "card-art--chip"));
+        const chipMain = document.createElement("div");
+        chipMain.className = "assign-minion-chip-main";
+        const chipLabel = document.createElement("span");
+        chipLabel.className = "assign-minion-chip-label";
+        chipLabel.textContent = tpl?.name ?? placed;
+        chipMain.appendChild(chipLabel);
+        chip.appendChild(chipMain);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "assign-minion-chip-remove";
+        removeBtn.setAttribute("aria-label", `Remove ${tpl?.name ?? "asset"} from slot`);
+        removeBtn.textContent = "×";
+        removeBtn.disabled = !mainOnly;
+        removeBtn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          assignAssetSlotAssetIds[slotIndex] = null;
+          renderAssignMinionSlots();
+          onAssignSlotsChanged();
+        });
+        removeBtn.addEventListener("mousedown", (ev) => {
+          ev.stopPropagation();
+        });
+        chip.appendChild(removeBtn);
+        slot.appendChild(chip);
+      }
+
+      wrap.appendChild(slot);
+    }
+
+    assignAssetSlotsList.appendChild(wrap);
+    renderAssetsPanel();
   }
 
   function renderAssignPickSlots(): void {
@@ -1056,6 +1290,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     assignMissionSlotEl.appendChild(missionSlot);
 
     if (hideTargetField) {
+      renderAssignAssetSlots();
       return;
     }
 
@@ -1237,6 +1472,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
 
     assignTargetSlotEl.appendChild(targetSlot);
+    renderAssignAssetSlots();
   }
 
   let assignPickSlotsWired = false;
@@ -2051,8 +2287,30 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
 
     for (const { assetId, quantity, template } of rows) {
+      let usedInPlan = 0;
+      for (let j = 0; j < assignAssetSlotAssetIds.length; j += 1) {
+        if (assignAssetSlotAssetIds[j] === assetId) {
+          usedInPlan += 1;
+        }
+      }
+      const available = Math.max(0, quantity - usedInPlan);
+      const mainOnly = state.phase === "main";
+
       const article = document.createElement("article");
       article.className = "asset-card";
+      if (available <= 0) {
+        article.classList.add("asset-card--unavailable");
+      }
+      article.draggable = mainOnly && available > 0;
+      article.addEventListener("dragstart", (e) => {
+        if (!article.draggable) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer?.setData("text/plain", assetCardDragJson(assetId));
+        e.dataTransfer!.effectAllowed = "copy";
+      });
+
       const body = appendCardArtShell(article, resolveAssetCardArt(template));
       const title = document.createElement("h4");
       title.className = "asset-card-title";
@@ -2061,7 +2319,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
       const dl = document.createElement("dl");
       dl.className = "asset-card-stats";
-      appendMinionStatRows(dl, [{ label: "Quantity", value: String(quantity) }]);
+      appendMinionStatRows(dl, [
+        { label: "Available", value: String(available) },
+        { label: "Owned", value: String(quantity) },
+      ]);
       body.appendChild(dl);
 
       const descText = template?.description?.trim();
@@ -2192,10 +2453,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         );
         const successOpts = {
           ...missionSuccessOptionsForTarget(state, am.target),
-          playerAssets: state.player.assets,
           traitsCatalog: content.traits,
           opposingAgentPenaltyCount,
           dynamicTraitDelta,
+          ...(mission.requiredAssetIds.length > 0
+            ? { assignedAssetIds: am.plannedAssetIds }
+            : { playerAssets: state.player.assets }),
         };
         const mergedDisplay = mergedRequiredTraitIdsSorted(mission, successOpts);
         rows.push(
@@ -2214,6 +2477,18 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
             label: "Required assets",
             value: assetDisplayNames(content, mission.requiredAssetIds),
           },
+          ...(mission.requiredAssetIds.length > 0
+            ? [
+                {
+                  label: "Planned assets",
+                  value: plannedAssetSlotsDisplay(
+                    content,
+                    mission.requiredAssetIds,
+                    am.plannedAssetIds,
+                  ),
+                },
+              ]
+            : []),
         );
         let successValue: string;
         let successTooltip: readonly string[] | undefined;
@@ -2629,6 +2904,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   function refresh(): void {
     const p = state.player;
     reconcileAssignSlots();
+    syncAssignAssetSlotArrayWithMission();
 
     organizationNameEl.textContent = state.organizationName;
     statsEl.innerHTML = `
@@ -2675,6 +2951,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
     const mt = content.missions.find((m) => m.id === assignMissionTemplateId);
     if (!mt) {
+      btnAssign.title = "Unknown mission — pick another from Omega or Lair.";
       return;
     }
     let targetPayload: MissionTarget;
@@ -2686,7 +2963,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       }
       targetPayload = assignTarget;
     }
+    syncAssignAssetSlotArrayWithMission();
     const checked = getAssignParticipantIds();
+    const plannedAssetIds = Array.from(
+      { length: mt.requiredAssetIds.length },
+      (_, i) => assignAssetSlotAssetIds[i] ?? null,
+    );
     const result = assignMission(
       state,
       content,
@@ -2697,11 +2979,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       assignMissionSource === "omega" ? assignOmegaStageIndex : null,
       assignMissionSource === "omega" ? assignOmegaSlotIndex : null,
       checked,
+      plannedAssetIds,
     );
     if (result.ok) {
       state = result.value;
       clearAllAssignSlots();
       refresh();
+    } else {
+      console.warn("[Mastermind] assignMission failed:", result.error);
+      btnAssign.title = formatAssignMissionError(result.error);
     }
   });
 
