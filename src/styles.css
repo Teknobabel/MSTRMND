@@ -561,6 +561,12 @@ body {
   color: #d4d4d8;
 }
 
+.mission-success-chance-value {
+  cursor: help;
+  text-decoration: underline dotted rgba(212, 212, 216, 0.4);
+  text-underline-offset: 2px;
+}
+
 .asset-card-description {
   margin: 0.35rem 0 0;
   font-size: 0.6875rem;
@@ -808,6 +814,20 @@ body {
   color: #fca5a5;
   border-color: #7f1d1d;
   background: rgba(127, 29, 29, 0.4);
+  font-weight: 600;
+}
+
+.minions-trait-pill--dynamic-positive {
+  color: #7dd3fc;
+  border-color: #075985;
+  background: rgba(7, 89, 133, 0.35);
+  font-weight: 600;
+}
+
+.minions-trait-pill--dynamic-negative {
+  color: #e9d5ff;
+  border-color: #581c87;
+  background: rgba(88, 28, 135, 0.35);
   font-weight: 600;
 }
 
@@ -1176,6 +1196,20 @@ body {
   color: #fca5a5;
   border-color: #7f1d1d;
   background: rgba(127, 29, 29, 0.4);
+  font-weight: 600;
+}
+
+.assign-minion-chip-trait--dynamic-positive {
+  color: #7dd3fc;
+  border-color: #075985;
+  background: rgba(7, 89, 133, 0.35);
+  font-weight: 600;
+}
+
+.assign-minion-chip-trait--dynamic-negative {
+  color: #e9d5ff;
+  border-color: #581c87;
+  background: rgba(88, 28, 135, 0.35);
   font-weight: 600;
 }
 

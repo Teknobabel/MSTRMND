@@ -1,6 +1,7 @@
 import type {
   AgentInstance,
   ContentCatalog,
+  DynamicTraitActivityChange,
   LocationAssetPlacement,
   LocationAssetSlot,
   LocationAgentPresence,
@@ -28,6 +29,10 @@ import {
   rollLocationRequiredTraits,
   rollLocationSecurityTraits,
 } from "./locationCatalog";
+import {
+  dynamicTraitSuccessModifierFromFullRoster,
+  rollDynamicTraitsAfterMission,
+} from "./dynamicTrait";
 import {
   canAssignParticipants,
   successChancePercent,
@@ -104,6 +109,8 @@ export type ActivityEventMissionCompleted = {
   criticalInjuryChancePercent?: number;
   /** Participants who gained `injured` from the critical-failure roll pass only (may be empty). */
   criticalInjuryInstanceIds?: string[];
+  /** Dynamic trait adds/upgrades/replacements after this resolve (before XP). */
+  dynamicTraitChanges?: DynamicTraitActivityChange[];
 };
 
 /** @deprecated Use {@link ActivityEventMissionCompleted} */
@@ -1201,6 +1208,12 @@ export function executePlan(
             "all",
           );
 
+    const dynamicTraitDelta = dynamicTraitSuccessModifierFromFullRoster(
+      Array.from(instanceById.values()),
+      am.participantInstanceIds,
+      missionLocId,
+    );
+
     const pct = successChancePercent(
       template,
       participants,
@@ -1209,6 +1222,7 @@ export function executePlan(
         playerAssets: player.assets,
         traitsCatalog: catalog.traits,
         opposingAgentPenaltyCount,
+        dynamicTraitDelta,
       },
     );
     const roll = Math.floor(rng() * 100);
@@ -1238,6 +1252,24 @@ export function executePlan(
     for (const m of player.minions) {
       instanceById.set(m.instanceId, m);
     }
+
+    const rosterForDynamic = Array.from(instanceById.values());
+    const dynamicRoll = rollDynamicTraitsAfterMission(
+      rosterForDynamic,
+      am.participantInstanceIds,
+      success,
+      am.target,
+      rng,
+    );
+    for (const m of dynamicRoll.nextMinions) {
+      instanceById.set(m.instanceId, m);
+    }
+    player = {
+      ...player,
+      minions: player.minions.map((mm) => instanceById.get(mm.instanceId) ?? mm),
+    };
+    const dynamicTraitChanges =
+      dynamicRoll.changes.length > 0 ? dynamicRoll.changes : undefined;
 
     const isCriticalFailure =
       !success &&
@@ -1281,6 +1313,9 @@ export function executePlan(
       baselineInfamyDelta: baselineInfamy,
       templateEffectDescriptions,
       criticalFailure: isCriticalFailure,
+      ...(dynamicTraitChanges !== undefined
+        ? { dynamicTraitChanges }
+        : {}),
       ...(isCriticalFailure
         ? {
             criticalOpposingAgentCount,

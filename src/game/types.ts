@@ -6,6 +6,46 @@ export type Trait = {
   type: TraitType;
 };
 
+/** Runtime-only relationship traits (not catalog `Trait` ids). */
+export type DynamicTraitKind =
+  | "friend"
+  | "lover"
+  | "rival"
+  | "hatred"
+  | "hero"
+  | "wanted";
+
+export type DynamicTrait =
+  | {
+      kind: "friend" | "lover" | "rival" | "hatred";
+      targetMinionInstanceId: string;
+      /** Present until resolved against a roster instance of this template. */
+      pendingTargetTemplateId?: string;
+    }
+  | { kind: "hero" | "wanted"; locationId: string };
+
+export type DynamicTraitChangeType = "added" | "upgraded" | "replaced" | "removed";
+
+/** Logged on `mission_completed` when dynamic traits change after a resolve. */
+export type DynamicTraitActivityChange = {
+  ownerInstanceId: string;
+  ownerTemplateId: string;
+  changeType: DynamicTraitChangeType;
+  kind: DynamicTraitKind;
+  targetMinionInstanceId?: string;
+  targetMinionTemplateId?: string;
+  locationId?: string;
+  /** When `changeType` is `replaced`, the kind that was removed for the same target. */
+  removedKind?: DynamicTraitKind;
+};
+
+export type StartingDynamicTrait =
+  | {
+      kind: "friend" | "lover" | "rival" | "hatred";
+      targetMinionTemplateId: string;
+    }
+  | { kind: "hero" | "wanted"; locationId: string };
+
 export type MinionTemplate = {
   id: string;
   name: string;
@@ -21,6 +61,8 @@ export type MinionTemplate = {
    * Traits from `levelUpTraitOrder` are granted by applying level-ups until this level is reached.
    */
   startingLevel?: number;
+  /** Designer-authored dynamic traits at hire (minion-targeted use template id until resolved on roster). */
+  startingDynamicTraits?: StartingDynamicTrait[];
 };
 
 export type MinionInstance = {
@@ -30,6 +72,8 @@ export type MinionInstance = {
   currentLevel: number;
   currentExperience: number;
   traitIds: string[];
+  /** Relationship / location-linked modifiers; not catalog trait ids. */
+  dynamicTraits: DynamicTrait[];
 };
 
 /**

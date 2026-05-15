@@ -11,6 +11,7 @@ import type {
   MissionTemplate,
   OmegaPlanStage,
   OmegaPlanTemplate,
+  StartingDynamicTrait,
   Trait,
   WantedLevelTier,
 } from "./types";
@@ -40,6 +41,36 @@ const traitsArraySchema = z
     }
   });
 
+const startingDynamicTraitSchema: z.ZodType<StartingDynamicTrait> = z.discriminatedUnion(
+  "kind",
+  [
+    z.object({
+      kind: z.literal("friend"),
+      targetMinionTemplateId: z.string().min(1),
+    }),
+    z.object({
+      kind: z.literal("lover"),
+      targetMinionTemplateId: z.string().min(1),
+    }),
+    z.object({
+      kind: z.literal("rival"),
+      targetMinionTemplateId: z.string().min(1),
+    }),
+    z.object({
+      kind: z.literal("hatred"),
+      targetMinionTemplateId: z.string().min(1),
+    }),
+    z.object({
+      kind: z.literal("hero"),
+      locationId: z.string().min(1),
+    }),
+    z.object({
+      kind: z.literal("wanted"),
+      locationId: z.string().min(1),
+    }),
+  ],
+);
+
 const minionTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -49,6 +80,7 @@ const minionTemplateSchema = z.object({
   startingTraitIds: z.array(z.string().min(1)).optional(),
   levelUpTraitOrder: z.array(z.string().min(1)),
   startingLevel: z.coerce.number().int().min(1).max(99).optional(),
+  startingDynamicTraits: z.array(startingDynamicTraitSchema).optional(),
 });
 
 type MinionLikeKind = "minion" | "agent";
@@ -94,6 +126,9 @@ function parseMinionLikeTemplatesWithTraitRefs(
     if (m.startingTraitIds !== undefined && m.startingTraitIds.length > 0) {
       base.startingTraitIds = [...m.startingTraitIds];
     }
+    if (m.startingDynamicTraits !== undefined && m.startingDynamicTraits.length > 0) {
+      base.startingDynamicTraits = [...m.startingDynamicTraits];
+    }
     return base;
   });
 }
@@ -103,6 +138,102 @@ function parseMinionsWithTraitRefs(
   traitIds: Set<string>,
 ): MinionTemplate[] {
   return parseMinionLikeTemplatesWithTraitRefs(minionsRaw, traitIds, "minion");
+}
+
+function validateStartingDynamicTraitsForTemplates(
+  templates: readonly MinionTemplate[],
+  kindLabel: "minion" | "agent",
+  minionTemplateIds: Set<string>,
+  locationIds: Set<string>,
+): void {
+  for (const m of templates) {
+    const list = m.startingDynamicTraits;
+    if (list === undefined || list.length === 0) {
+      continue;
+    }
+    const seenKeys = new Set<string>();
+    const positiveMinionTargets = new Set<string>();
+    const negativeMinionTargets = new Set<string>();
+    const heroLocations = new Set<string>();
+    const wantedLocations = new Set<string>();
+
+    for (let i = 0; i < list.length; i += 1) {
+      const dt = list[i]!;
+      if ("targetMinionTemplateId" in dt) {
+        if (!minionTemplateIds.has(dt.targetMinionTemplateId)) {
+          throw new Error(
+            `Unknown minion template id "${dt.targetMinionTemplateId}" in startingDynamicTraits[${i}] for ${kindLabel} "${m.id}"`,
+          );
+        }
+        if (dt.targetMinionTemplateId === m.id) {
+          throw new Error(
+            `startingDynamicTraits cannot target self on ${kindLabel} "${m.id}" (entry ${i})`,
+          );
+        }
+        const key = `${dt.kind}:${dt.targetMinionTemplateId}`;
+        if (seenKeys.has(key)) {
+          throw new Error(
+            `Duplicate startingDynamicTraits entry "${key}" for ${kindLabel} "${m.id}"`,
+          );
+        }
+        seenKeys.add(key);
+        const t = dt.targetMinionTemplateId;
+        if (dt.kind === "friend" || dt.kind === "lover") {
+          if (negativeMinionTargets.has(t)) {
+            throw new Error(
+              `startingDynamicTraits on ${kindLabel} "${m.id}" conflict: positive and negative bond toward the same minion template "${t}"`,
+            );
+          }
+          if (positiveMinionTargets.has(t)) {
+            throw new Error(
+              `startingDynamicTraits on ${kindLabel} "${m.id}" has multiple positive bonds toward "${t}" (at most one friend or lover per target)`,
+            );
+          }
+          positiveMinionTargets.add(t);
+        } else {
+          if (positiveMinionTargets.has(t)) {
+            throw new Error(
+              `startingDynamicTraits on ${kindLabel} "${m.id}" conflict: positive and negative bond toward the same minion template "${t}"`,
+            );
+          }
+          if (negativeMinionTargets.has(t)) {
+            throw new Error(
+              `startingDynamicTraits on ${kindLabel} "${m.id}" has multiple negative bonds toward "${t}" (at most one rival or hatred per target)`,
+            );
+          }
+          negativeMinionTargets.add(t);
+        }
+      } else {
+        if (!locationIds.has(dt.locationId)) {
+          throw new Error(
+            `Unknown location id "${dt.locationId}" in startingDynamicTraits[${i}] for ${kindLabel} "${m.id}"`,
+          );
+        }
+        const key = `${dt.kind}:${dt.locationId}`;
+        if (seenKeys.has(key)) {
+          throw new Error(
+            `Duplicate startingDynamicTraits entry "${key}" for ${kindLabel} "${m.id}"`,
+          );
+        }
+        seenKeys.add(key);
+        if (dt.kind === "hero") {
+          if (wantedLocations.has(dt.locationId)) {
+            throw new Error(
+              `startingDynamicTraits on ${kindLabel} "${m.id}" conflict: both hero and wanted for location "${dt.locationId}"`,
+            );
+          }
+          heroLocations.add(dt.locationId);
+        } else {
+          if (heroLocations.has(dt.locationId)) {
+            throw new Error(
+              `startingDynamicTraits on ${kindLabel} "${m.id}" conflict: both hero and wanted for location "${dt.locationId}"`,
+            );
+          }
+          wantedLocations.add(dt.locationId);
+        }
+      }
+    }
+  }
 }
 
 function parseAgentsWithTraitRefs(
@@ -709,6 +840,8 @@ export function parseCatalog(
   const missionIds = new Set(missions.map((m) => m.id));
   const locations = parseLocations(locationsRaw);
   const locationIds = new Set(locations.map((l) => l.id));
+  validateStartingDynamicTraitsForTemplates(minions, "minion", minionTemplateIds, locationIds);
+  validateStartingDynamicTraitsForTemplates(agents, "agent", minionTemplateIds, locationIds);
   const maps = parseMapsWithLocationRefs(mapsRaw, locationIds);
   const mapIds = new Set(maps.map((m) => m.id));
   const omegaPlans = parseOmegaPlansWithMissionAndMapRefs(

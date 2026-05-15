@@ -17,8 +17,11 @@ import {
   type GameState,
 } from "./game/gameState";
 import type {
+  DynamicTrait,
+  DynamicTraitActivityChange,
   LocationAssetSlot,
   LocationType,
+  MinionInstance,
   MissionSource,
   MissionTarget,
   MissionTargetType,
@@ -27,9 +30,19 @@ import type {
 import { isOccupiedAssetSlot } from "./game/types";
 import {
   canAssignParticipants,
+  computeSuccessChanceBreakdown,
   mergedRequiredTraitIdsSorted,
-  successChancePercent,
+  OPPOSING_AGENT_SUCCESS_PENALTY,
+  type SuccessChanceBreakdown,
 } from "./game/mission";
+import {
+  dynamicTraitDisplayLabel,
+  dynamicTraitSuccessModifierBreakdownFromFullRoster,
+  dynamicTraitSuccessModifierFromFullRoster,
+  formatStartingDynamicTraitsPreview,
+  isPositiveDynamicTraitKind,
+  type DynamicTraitSuccessBreakdownEntry,
+} from "./game/dynamicTrait";
 import { loadContent } from "./game/loadContent";
 import {
   locationTemplatesForOmegaPlan,
@@ -152,41 +165,100 @@ function traitStatusModifierClass(trait: Trait | undefined): string {
   return "";
 }
 
+function minionsDynamicPillModifierClass(dt: DynamicTrait): string {
+  return isPositiveDynamicTraitKind(dt.kind)
+    ? "minions-trait-pill--dynamic-positive"
+    : "minions-trait-pill--dynamic-negative";
+}
+
+function assignChipDynamicPillModifierClass(dt: DynamicTrait): string {
+  return isPositiveDynamicTraitKind(dt.kind)
+    ? "assign-minion-chip-trait--dynamic-positive"
+    : "assign-minion-chip-trait--dynamic-negative";
+}
+
+function previewDynamicPillModifierClass(label: string): string {
+  if (
+    label.startsWith("Friend ") ||
+    label.startsWith("Lover ") ||
+    label.startsWith("Hero ")
+  ) {
+    return "minions-trait-pill--dynamic-positive";
+  }
+  return "minions-trait-pill--dynamic-negative";
+}
+
 function appendMinionTraitsRow(
   dl: HTMLElement,
   catalog: ReturnType<typeof loadContent>,
   traitIds: string[],
+  dynamic?:
+    | { roster: MinionInstance[]; traits: readonly DynamicTrait[] }
+    | { previewLabels: readonly string[] },
 ): void {
   const dt = document.createElement("dt");
   dt.textContent = "Traits";
   const dd = document.createElement("dd");
   dd.className = "minions-card-traits-dd";
-  if (traitIds.length === 0) {
+  const previewLabels =
+    dynamic !== undefined && "previewLabels" in dynamic ? dynamic.previewLabels : [];
+  const rosterTraits =
+    dynamic !== undefined && "roster" in dynamic ? dynamic.traits : [];
+  const roster =
+    dynamic !== undefined && "roster" in dynamic ? dynamic.roster : [];
+  const hasStatic = traitIds.length > 0;
+  const hasDynamic = rosterTraits.length > 0;
+  const hasPreview = previewLabels.length > 0;
+  if (!hasStatic && !hasDynamic && !hasPreview) {
     dd.textContent = "—";
-  } else {
-    const wrap = document.createElement("span");
-    wrap.className = "minions-card-traits-wrap";
-    for (let i = 0; i < traitIds.length; i += 1) {
-      if (i > 0) {
-        const sep = document.createElement("span");
-        sep.className = "minions-card-traits-sep";
-        sep.textContent = ", ";
-        wrap.appendChild(sep);
-      }
-      const tid = traitIds[i]!;
-      const trait = catalog.traits.find((t) => t.id === tid);
-      const span = document.createElement("span");
-      span.className = "minions-trait-pill";
-      span.textContent = trait?.name ?? tid;
-      if (trait?.type === "status_negative") {
-        span.classList.add("minions-trait-pill--status-negative");
-      } else if (trait?.type === "status_positive") {
-        span.classList.add("minions-trait-pill--status-positive");
-      }
-      wrap.appendChild(span);
-    }
-    dd.appendChild(wrap);
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+    return;
   }
+  const wrap = document.createElement("span");
+  wrap.className = "minions-card-traits-wrap";
+  const appendCommaSep = (): void => {
+    const sep = document.createElement("span");
+    sep.className = "minions-card-traits-sep";
+    sep.textContent = ", ";
+    wrap.appendChild(sep);
+  };
+  for (let i = 0; i < traitIds.length; i += 1) {
+    if (i > 0) {
+      appendCommaSep();
+    }
+    const tid = traitIds[i]!;
+    const trait = catalog.traits.find((t) => t.id === tid);
+    const span = document.createElement("span");
+    span.className = "minions-trait-pill";
+    span.textContent = trait?.name ?? tid;
+    if (trait?.type === "status_negative") {
+      span.classList.add("minions-trait-pill--status-negative");
+    } else if (trait?.type === "status_positive") {
+      span.classList.add("minions-trait-pill--status-positive");
+    }
+    wrap.appendChild(span);
+  }
+  for (let j = 0; j < rosterTraits.length; j += 1) {
+    if (wrap.childNodes.length > 0) {
+      appendCommaSep();
+    }
+    const dtrait = rosterTraits[j]!;
+    const span = document.createElement("span");
+    span.className = `minions-trait-pill ${minionsDynamicPillModifierClass(dtrait)}`;
+    span.textContent = dynamicTraitDisplayLabel(catalog, roster, dtrait);
+    wrap.appendChild(span);
+  }
+  for (let k = 0; k < previewLabels.length; k += 1) {
+    if (wrap.childNodes.length > 0) {
+      appendCommaSep();
+    }
+    const span = document.createElement("span");
+    span.className = `minions-trait-pill ${previewDynamicPillModifierClass(previewLabels[k]!)}`;
+    span.textContent = previewLabels[k]!;
+    wrap.appendChild(span);
+  }
+  dd.appendChild(wrap);
   dl.appendChild(dt);
   dl.appendChild(dd);
 }
@@ -231,6 +303,80 @@ function assetDisplayNames(
   return assetIds
     .map((id) => catalog.assets.find((a) => a.id === id)?.name ?? id)
     .join(", ");
+}
+
+function minionNameByInstanceId(
+  catalog: ReturnType<typeof loadContent>,
+  roster: readonly MinionInstance[],
+  instanceId: string,
+): string {
+  const inst = roster.find((m) => m.instanceId === instanceId);
+  return inst !== undefined
+    ? catalog.minions.find((t) => t.id === inst.templateId)?.name ?? inst.templateId
+    : instanceId;
+}
+
+function locationNameById(
+  catalog: ReturnType<typeof loadContent>,
+  locationId: string,
+): string {
+  return catalog.locations.find((l) => l.id === locationId)?.name ?? locationId;
+}
+
+function formatDynamicTraitActivityChange(
+  catalog: ReturnType<typeof loadContent>,
+  roster: readonly MinionInstance[],
+  ch: DynamicTraitActivityChange,
+): string {
+  const owner =
+    catalog.minions.find((t) => t.id === ch.ownerTemplateId)?.name ?? ch.ownerTemplateId;
+  if (ch.locationId !== undefined) {
+    const loc = locationNameById(catalog, ch.locationId);
+    if (ch.changeType === "added") {
+      return ch.kind === "hero"
+        ? `${owner} gained Hero of ${loc}.`
+        : `${owner} gained Wanted in ${loc}.`;
+    }
+    if (ch.changeType === "replaced" && ch.removedKind !== undefined) {
+      const was = ch.removedKind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
+      const now = ch.kind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
+      return `${owner} replaced ${was} with ${now}.`;
+    }
+    return `${owner}: ${ch.kind} at ${loc}.`;
+  }
+  const other = minionNameByInstanceId(catalog, roster, ch.targetMinionInstanceId ?? "");
+  if (ch.changeType === "added") {
+    if (ch.kind === "friend") {
+      return `${owner} gained Friend of ${other}.`;
+    }
+    if (ch.kind === "rival") {
+      return `${owner} gained Rival of ${other}.`;
+    }
+    return `${owner} gained ${ch.kind} toward ${other}.`;
+  }
+  if (ch.changeType === "upgraded") {
+    if (ch.kind === "lover") {
+      return `${owner}'s friendship with ${other} deepened into Lover of ${other}.`;
+    }
+    if (ch.kind === "hatred") {
+      return `${owner}'s rivalry with ${other} deepened into Hatred for ${other}.`;
+    }
+    return `${owner} upgraded a bond toward ${other}.`;
+  }
+  if (ch.changeType === "replaced" && ch.removedKind !== undefined) {
+    const removedWord =
+      ch.removedKind === "friend" || ch.removedKind === "lover"
+        ? "positive bond"
+        : "negative bond";
+    const gained =
+      ch.kind === "friend"
+        ? `Friend of ${other}`
+        : ch.kind === "rival"
+          ? `Rival of ${other}`
+          : ch.kind;
+    return `${owner} replaced a ${removedWord} with ${gained}.`;
+  }
+  return `${owner}: dynamic trait ${ch.changeType} (${ch.kind}).`;
 }
 
 /** Revealed vs hidden security stack for UI (order preserved for revealed slice). */
@@ -706,14 +852,77 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     });
   }
 
-  function assignMissionSuccessChanceLabel(): string {
+  function formatSignedPercent(delta: number): string {
+    if (delta > 0) {
+      return `+${delta}%`;
+    }
+    return `${delta}%`;
+  }
+
+  function formatMissionSuccessChanceTooltipLines(
+    breakdown: SuccessChanceBreakdown,
+    dynamicEntries: readonly DynamicTraitSuccessBreakdownEntry[],
+    roster: readonly MinionInstance[],
+  ): string[] {
+    const lines: string[] = [];
+    const denom = breakdown.requiredTraitCount + breakdown.requiredAssetSlotCount;
+    if (denom === 0) {
+      lines.push("Base 100% (no required traits or assets).");
+    } else {
+      lines.push(
+        `Base ${breakdown.basePercent}% = round(100 * (${breakdown.matchedTraits} + ${breakdown.matchedAssets}) / ${denom}).`,
+      );
+      if (breakdown.requiredTraitCount > 0) {
+        lines.push(
+          `Traits: ${breakdown.matchedTraits}/${breakdown.requiredTraitCount} required ids covered by the participant union.`,
+        );
+      }
+      if (breakdown.requiredAssetSlotCount > 0) {
+        lines.push(
+          `Assets: ${breakdown.matchedAssets}/${breakdown.requiredAssetSlotCount} required asset slots covered by inventory (per-id min of need vs owned, summed).`,
+        );
+      }
+    }
+    if (breakdown.missingTraitIds.length > 0) {
+      lines.push(`Missing required traits: ${traitDisplayNames(content, breakdown.missingTraitIds)}.`);
+    }
+    if (breakdown.statusEntries.length > 0) {
+      for (const e of breakdown.statusEntries) {
+        const who = minionNameByInstanceId(content, roster, e.instanceId);
+        const tn = content.traits.find((t) => t.id === e.traitId)?.name ?? e.traitId;
+        lines.push(`  ${who} — ${tn}: ${formatSignedPercent(e.delta)}`);
+      }
+    }
+    if (dynamicEntries.length > 0) {
+      for (const e of dynamicEntries) {
+        const who = minionNameByInstanceId(content, roster, e.ownerInstanceId);
+        lines.push(`  ${who} — ${e.traitLabel}: ${formatSignedPercent(e.delta)}`);
+      }
+    }
+    if (breakdown.opposingAgentCount > 0) {
+      lines.push(
+        `Revealed opposing agents at target: ${breakdown.opposingAgentCount} * -${OPPOSING_AGENT_SUCCESS_PENALTY}% = -${breakdown.opposingAgentPenaltyTotal}%.`,
+      );
+    }
+    if (breakdown.preClampPercent !== breakdown.finalPercent) {
+      lines.push(`Clamped to [0, 100]: shown success chance is ${breakdown.finalPercent}%.`);
+    } else {
+      lines.push(`Shown success chance: ${breakdown.finalPercent}%.`);
+    }
+    return lines;
+  }
+
+  function assignMissionSuccessChanceUi(): {
+    label: string;
+    tooltipLines?: readonly string[];
+  } {
     const mid = assignMissionTemplateId;
     if (!mid) {
-      return "—";
+      return { label: "—" };
     }
     const m = content.missions.find((x) => x.id === mid);
     if (!m) {
-      return "—";
+      return { label: "—" };
     }
     const slotIds = getAssignParticipantIds();
     const instanceById = new Map(
@@ -728,18 +937,40 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const lid = assignTarget !== null ? getMissionTargetLocationId(assignTarget) : null;
       const opposingAgentPenaltyCount =
         lid === null ? 0 : countOpposingAgentsAtLocation(state, lid, "revealed");
+      const dynamicTraitDelta = dynamicTraitSuccessModifierFromFullRoster(
+        state.player.minions,
+        slotIds,
+        lid,
+      );
       const opts = {
         ...baseOpts,
         playerAssets: state.player.assets,
         traitsCatalog: content.traits,
         opposingAgentPenaltyCount,
+        dynamicTraitDelta,
       };
-      return `${successChancePercent(m, participants, opts)}%`;
+      const breakdown = computeSuccessChanceBreakdown(m, participants, opts);
+      const dynamicBreakdown = dynamicTraitSuccessModifierBreakdownFromFullRoster(
+        content,
+        state.player.minions,
+        slotIds,
+        lid,
+      );
+      return {
+        label: `${breakdown.finalPercent}%`,
+        tooltipLines: formatMissionSuccessChanceTooltipLines(
+          breakdown,
+          dynamicBreakdown.entries,
+          state.player.minions,
+        ),
+      };
     }
     if (slotIds.length === 0) {
-      return "—";
+      return { label: "—" };
     }
-    return "Pick 1–" + String(state.player.maxParticipantsPerMission) + " minions";
+    return {
+      label: "Pick 1–" + String(state.player.maxParticipantsPerMission) + " minions",
+    };
   }
 
   function renderAssignPickSlots(): void {
@@ -773,10 +1004,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
             )
           : undefined;
 
+      const chanceUi = assignMissionSuccessChanceUi();
       const article = buildMissionCatalogArticle(
         assignMissionTemplateId,
-        assignMissionSuccessChanceLabel(),
+        chanceUi.label,
         mergedForAssign,
+        chanceUi.tooltipLines,
       );
       article.classList.add("assign-pick-embedded-card");
       article.draggable = mainOnly;
@@ -978,12 +1211,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       chipLabel.className = "assign-minion-chip-label";
       chipLabel.textContent = tpl?.name ?? targetPick.instanceId;
       chipMain.appendChild(chipLabel);
-      if (inst && inst.traitIds.length > 0) {
+      if (
+        inst &&
+        (inst.traitIds.length > 0 || inst.dynamicTraits.length > 0)
+      ) {
         const traitsEl = document.createElement("div");
         traitsEl.className = "assign-minion-chip-traits";
         for (const tid of inst.traitIds) {
           const span = document.createElement("span");
           styleAssignChipTraitSpan(span, content, tid, new Set<string>());
+          traitsEl.appendChild(span);
+        }
+        for (const dtrait of inst.dynamicTraits) {
+          const span = document.createElement("span");
+          span.className = `assign-minion-chip-trait ${assignChipDynamicPillModifierClass(dtrait)}`;
+          span.textContent = dynamicTraitDisplayLabel(content, state.player.minions, dtrait);
           traitsEl.appendChild(span);
         }
         chipMain.appendChild(traitsEl);
@@ -1162,12 +1404,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         chipLabel.textContent = tpl?.name ?? instanceId;
         chipMain.appendChild(chipLabel);
 
-        if (inst && inst.traitIds.length > 0) {
+        if (
+          inst &&
+          (inst.traitIds.length > 0 || inst.dynamicTraits.length > 0)
+        ) {
           const traitsEl = document.createElement("div");
           traitsEl.className = "assign-minion-chip-traits";
           for (const tid of inst.traitIds) {
             const span = document.createElement("span");
             styleAssignChipTraitSpan(span, content, tid, requiredTraitSet);
+            traitsEl.appendChild(span);
+          }
+          for (const dtrait of inst.dynamicTraits) {
+            const span = document.createElement("span");
+            span.className = `assign-minion-chip-trait ${assignChipDynamicPillModifierClass(dtrait)}`;
+            span.textContent = dynamicTraitDisplayLabel(content, state.player.minions, dtrait);
             traitsEl.appendChild(span);
           }
           chipMain.appendChild(traitsEl);
@@ -1216,6 +1467,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     missionId: string,
     successChanceDisplay = "—",
     mergedRequiredTraitIdsForDisplay?: string[],
+    successChanceTooltipLines?: readonly string[],
   ): HTMLElement {
     const mission = content.missions.find((m) => m.id === missionId);
     const article = document.createElement("article");
@@ -1258,7 +1510,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           label: "Required assets",
           value: assetDisplayNames(content, mission.requiredAssetIds),
         },
-        { label: "Success chance", value: successChanceDisplay },
+        {
+          label: "Success chance",
+          value: successChanceDisplay,
+          ...(successChanceTooltipLines !== undefined && successChanceTooltipLines.length > 0
+            ? { tooltipLines: successChanceTooltipLines }
+            : {}),
+        },
       );
     } else {
       rows.push({ label: "Mission id", value: missionId });
@@ -1400,13 +1658,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function appendMinionStatRows(
     dl: HTMLElement,
-    rows: Array<{ label: string; value: string }>,
+    rows: Array<{ label: string; value: string; tooltipLines?: readonly string[] }>,
   ): void {
-    for (const { label, value } of rows) {
+    for (const { label, value, tooltipLines } of rows) {
       const dt = document.createElement("dt");
       dt.textContent = label;
       const dd = document.createElement("dd");
-      dd.textContent = value;
+      if (tooltipLines !== undefined && tooltipLines.length > 0) {
+        const span = document.createElement("span");
+        span.className = "mission-success-chance-value";
+        span.textContent = value;
+        span.title = tooltipLines.join("\n");
+        dd.appendChild(span);
+      } else {
+        dd.textContent = value;
+      }
       dl.appendChild(dt);
       dl.appendChild(dd);
     }
@@ -1464,7 +1730,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           { label: "Level", value: String(inst.currentLevel) },
           { label: "XP", value: String(inst.currentExperience) },
         ]);
-        appendMinionTraitsRow(dl, content, inst.traitIds);
+        appendMinionTraitsRow(dl, content, inst.traitIds, {
+          roster: state.player.minions,
+          traits: inst.dynamicTraits,
+        });
         body.appendChild(dl);
 
         const fireBtn = document.createElement("button");
@@ -1539,7 +1808,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         { label: "Level", value: String(tpl.startingLevel ?? 1) },
         { label: "XP", value: "0" },
       ]);
-      appendMinionTraitsRow(dl, content, startingIds);
+      appendMinionTraitsRow(dl, content, startingIds, {
+        previewLabels: formatStartingDynamicTraitsPreview(content, tpl.startingDynamicTraits),
+      });
       body.appendChild(dl);
 
       const actions = document.createElement("div");
@@ -1596,7 +1867,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         { label: "Level", value: String(rehireInst.currentLevel) },
         { label: "XP", value: String(rehireInst.currentExperience) },
       ]);
-      appendMinionTraitsRow(dl, content, rehireInst.traitIds);
+      appendMinionTraitsRow(dl, content, rehireInst.traitIds, {
+        roster: state.player.minions,
+        traits: rehireInst.dynamicTraits,
+      });
       body.appendChild(dl);
 
       const actions = document.createElement("div");
@@ -1892,7 +2166,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         })
         .join(", ");
 
-      const rows: Array<{ label: string; value: string }> = [
+      const rows: Array<{ label: string; value: string; tooltipLines?: readonly string[] }> = [
         { label: "Source", value: sourceLabel },
         { label: "Target", value: formatMissionTargetSummary(am.target) },
       ];
@@ -1911,11 +2185,17 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         const lid = getMissionTargetLocationId(am.target);
         const opposingAgentPenaltyCount =
           lid === null ? 0 : countOpposingAgentsAtLocation(state, lid, "revealed");
+        const dynamicTraitDelta = dynamicTraitSuccessModifierFromFullRoster(
+          state.player.minions,
+          am.participantInstanceIds,
+          lid,
+        );
         const successOpts = {
           ...missionSuccessOptionsForTarget(state, am.target),
           playerAssets: state.player.assets,
           traitsCatalog: content.traits,
           opposingAgentPenaltyCount,
+          dynamicTraitDelta,
         };
         const mergedDisplay = mergedRequiredTraitIdsSorted(mission, successOpts);
         rows.push(
@@ -1936,12 +2216,29 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           },
         );
         let successValue: string;
+        let successTooltip: readonly string[] | undefined;
         if (canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
-          successValue = `${successChancePercent(mission, participants, successOpts)}%`;
+          const breakdown = computeSuccessChanceBreakdown(mission, participants, successOpts);
+          successValue = `${breakdown.finalPercent}%`;
+          const dynEntries = dynamicTraitSuccessModifierBreakdownFromFullRoster(
+            content,
+            state.player.minions,
+            am.participantInstanceIds,
+            lid,
+          );
+          successTooltip = formatMissionSuccessChanceTooltipLines(
+            breakdown,
+            dynEntries.entries,
+            state.player.minions,
+          );
         } else {
           successValue = "—";
         }
-        rows.push({ label: "Success chance", value: successValue });
+        rows.push(
+          successTooltip !== undefined && successTooltip.length > 0
+            ? { label: "Success chance", value: successValue, tooltipLines: successTooltip }
+            : { label: "Success chance", value: successValue },
+        );
       } else {
         rows.push(
           { label: "Turns remaining", value: String(am.turnsRemaining) },
@@ -2235,6 +2532,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
               : "none";
           const outcomeLabel = ev.success ? "Success" : "Failure";
           let line = `${ev.missionName} @ ${whereLabel}: ${outcomeLabel} (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}. Outcome: baseline infamy ${baseline}. Mission effects: ${templateFx}.`;
+          if (ev.dynamicTraitChanges !== undefined && ev.dynamicTraitChanges.length > 0) {
+            const dynParts = ev.dynamicTraitChanges.map((c) =>
+              formatDynamicTraitActivityChange(content, state.player.minions, c),
+            );
+            line += ` ${dynParts.join(" ")}`;
+          }
           if (ev.criticalFailure && ev.criticalInjuryChancePercent !== undefined) {
             const n = ev.criticalOpposingAgentCount ?? 0;
             const injuredWho =

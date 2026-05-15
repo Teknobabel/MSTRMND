@@ -9,6 +9,8 @@ export type MissionSuccessOptions = {
   traitsCatalog?: readonly Trait[];
   /** Opposing agents at the mission site: each applies a flat −20% to success chance (default 0). */
   opposingAgentPenaltyCount?: number;
+  /** Flat % delta from participants' dynamic traits (relationships / hero / wanted). */
+  dynamicTraitDelta?: number;
 };
 
 /**
@@ -90,16 +92,23 @@ const STATUS_NEGATIVE_PENALTY = 20;
 /** Flat success % reduction per opposing agent at the mission's target site. */
 export const OPPOSING_AGENT_SUCCESS_PENALTY = 20;
 
-function participantStatusModifierDelta(
+export type StatusTraitSuccessEntry = {
+  instanceId: string;
+  templateId: string;
+  traitId: string;
+  /** +10 for status_positive, −20 for status_negative. */
+  delta: number;
+};
+
+function participantStatusModifierEntries(
   participants: MinionInstance[],
   traitsCatalog: readonly Trait[] | undefined,
-): number {
+): StatusTraitSuccessEntry[] {
   if (traitsCatalog === undefined || traitsCatalog.length === 0) {
-    return 0;
+    return [];
   }
   const byId = new Map(traitsCatalog.map((t) => [t.id, t] as const));
-  let positive = 0;
-  let negative = 0;
+  const out: StatusTraitSuccessEntry[] = [];
   for (const p of participants) {
     for (const tid of p.traitIds) {
       const t = byId.get(tid);
@@ -107,27 +116,48 @@ function participantStatusModifierDelta(
         continue;
       }
       if (t.type === "status_positive") {
-        positive += 1;
+        out.push({
+          instanceId: p.instanceId,
+          templateId: p.templateId,
+          traitId: tid,
+          delta: STATUS_POSITIVE_BONUS,
+        });
       } else if (t.type === "status_negative") {
-        negative += 1;
+        out.push({
+          instanceId: p.instanceId,
+          templateId: p.templateId,
+          traitId: tid,
+          delta: -STATUS_NEGATIVE_PENALTY,
+        });
       }
     }
   }
-  return STATUS_POSITIVE_BONUS * positive - STATUS_NEGATIVE_PENALTY * negative;
+  return out;
 }
 
-/**
- * Linear success: (matched distinct traits + matched asset units) /
- * (required trait count + required asset occurrence count). Uses current `playerAssets`
- * when provided; missing inventory counts as no assets. Then applies flat +10% per
- * participating `status_positive` trait occurrence and −20% per `status_negative`,
- * then −20% per `opposingAgentPenaltyCount`, clamped to [0, 100].
- */
-export function successChancePercent(
+/** Intermediate values for {@link successChancePercent} (same formula). */
+export type SuccessChanceBreakdown = {
+  finalPercent: number;
+  /** Before clamping to [0, 100]. */
+  preClampPercent: number;
+  basePercent: number;
+  requiredTraitCount: number;
+  requiredAssetSlotCount: number;
+  matchedTraits: number;
+  matchedAssets: number;
+  missingTraitIds: string[];
+  statusDelta: number;
+  statusEntries: StatusTraitSuccessEntry[];
+  dynamicTraitDelta: number;
+  opposingAgentCount: number;
+  opposingAgentPenaltyTotal: number;
+};
+
+export function computeSuccessChanceBreakdown(
   template: MissionTemplate,
   participants: MinionInstance[],
   options?: MissionSuccessOptions,
-): number {
+): SuccessChanceBreakdown {
   const traitRequired = [...mergeRequiredTraitSet(template, options)];
   const assetRequired = template.requiredAssetIds;
   const totalTraits = traitRequired.length;
@@ -135,16 +165,52 @@ export function successChancePercent(
   const total = totalTraits + totalAssets;
   const union = unionParticipantTraitIds(participants);
   let matchedTraits = 0;
+  const missingTraitIds: string[] = [];
   for (const id of traitRequired) {
     if (union.has(id)) {
       matchedTraits += 1;
+    } else {
+      missingTraitIds.push(id);
     }
   }
   const matchedAssets = matchedAssetUnits(assetRequired, options?.playerAssets);
   const base =
     total === 0 ? 100 : Math.round((100 * (matchedTraits + matchedAssets)) / total);
-  const statusDelta = participantStatusModifierDelta(participants, options?.traitsCatalog);
-  const agentPenalty =
-    OPPOSING_AGENT_SUCCESS_PENALTY * Math.max(0, options?.opposingAgentPenaltyCount ?? 0);
-  return Math.min(100, Math.max(0, base + statusDelta - agentPenalty));
+  const statusEntries = participantStatusModifierEntries(participants, options?.traitsCatalog);
+  const statusDelta = statusEntries.reduce((s, e) => s + e.delta, 0);
+  const dyn = options?.dynamicTraitDelta ?? 0;
+  const opposingAgentCount = Math.max(0, options?.opposingAgentPenaltyCount ?? 0);
+  const opposingAgentPenaltyTotal = OPPOSING_AGENT_SUCCESS_PENALTY * opposingAgentCount;
+  const preClampPercent = base + statusDelta + dyn - opposingAgentPenaltyTotal;
+  const finalPercent = Math.min(100, Math.max(0, preClampPercent));
+  return {
+    finalPercent,
+    preClampPercent,
+    basePercent: base,
+    requiredTraitCount: totalTraits,
+    requiredAssetSlotCount: totalAssets,
+    matchedTraits,
+    matchedAssets,
+    missingTraitIds,
+    statusDelta,
+    statusEntries,
+    dynamicTraitDelta: dyn,
+    opposingAgentCount,
+    opposingAgentPenaltyTotal,
+  };
+}
+
+/**
+ * Linear success: (matched distinct traits + matched asset units) /
+ * (required trait count + required asset occurrence count). Uses current `playerAssets`
+ * when provided; missing inventory counts as no assets. Then applies flat +10% per
+ * participating `status_positive` trait occurrence and −20% per `status_negative`,
+ * then `dynamicTraitDelta`, then −20% per `opposingAgentPenaltyCount`, clamped to [0, 100].
+ */
+export function successChancePercent(
+  template: MissionTemplate,
+  participants: MinionInstance[],
+  options?: MissionSuccessOptions,
+): number {
+  return computeSuccessChanceBreakdown(template, participants, options).finalPercent;
 }

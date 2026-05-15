@@ -1,8 +1,39 @@
-import type { MinionInstance, MinionTemplate } from "./types";
+import type {
+  DynamicTrait,
+  MinionInstance,
+  MinionTemplate,
+  StartingDynamicTrait,
+} from "./types";
 
 export type CreateMinionOverrides = Partial<
-  Pick<MinionInstance, "currentLevel" | "currentExperience" | "traitIds">
+  Pick<MinionInstance, "currentLevel" | "currentExperience" | "traitIds" | "dynamicTraits">
 >;
+
+function dynamicTraitsFromStarting(
+  traits: readonly StartingDynamicTrait[] | undefined,
+): DynamicTrait[] {
+  if (traits === undefined || traits.length === 0) {
+    return [];
+  }
+  const out: DynamicTrait[] = [];
+  for (const s of traits) {
+    if (
+      s.kind === "friend" ||
+      s.kind === "lover" ||
+      s.kind === "rival" ||
+      s.kind === "hatred"
+    ) {
+      out.push({
+        kind: s.kind,
+        targetMinionInstanceId: "",
+        pendingTargetTemplateId: s.targetMinionTemplateId,
+      });
+    } else {
+      out.push({ kind: s.kind, locationId: s.locationId });
+    }
+  }
+  return out;
+}
 
 export function createMinionFromTemplate(
   template: MinionTemplate,
@@ -12,12 +43,17 @@ export function createMinionFromTemplate(
   const starting = template.startingTraitIds ?? [];
   const traitIds =
     overrides?.traitIds !== undefined ? [...overrides.traitIds] : [...starting];
+  const dynamicTraits =
+    overrides?.dynamicTraits !== undefined
+      ? [...overrides.dynamicTraits]
+      : dynamicTraitsFromStarting(template.startingDynamicTraits);
   let instance: MinionInstance = {
     instanceId,
     templateId: template.id,
     currentLevel: 1,
     currentExperience: overrides?.currentExperience ?? 0,
     traitIds,
+    dynamicTraits,
   };
   const targetLevel = Math.max(
     1,

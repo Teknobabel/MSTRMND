@@ -30,7 +30,13 @@
     "description": "Patterns in noise; spreadsheets where others see chaos.",
     "hireCommandPoints": 3,
     "startingTraitIds": ["hacker"],
-    "levelUpTraitOrder": ["tactician", "loyal", "lucky", "burnout"]
+    "levelUpTraitOrder": ["tactician", "loyal", "lucky", "burnout"],
+    "startingDynamicTraits": [
+      {
+        "kind": "hatred",
+        "targetMinionTemplateId": "operative_alpha"
+      }
+    ]
   },
   {
     "id": "muscle_kappa",
@@ -62,7 +68,13 @@
     "description": "Builds bridges—digital ones—and burns them when paid.",
     "hireCommandPoints": 3,
     "startingTraitIds": ["hacker"],
-    "levelUpTraitOrder": ["tactician", "lucky", "loyal", "burnout"]
+    "levelUpTraitOrder": ["tactician", "lucky", "loyal", "burnout"],
+    "startingDynamicTraits": [
+      {
+        "kind": "wanted",
+        "locationId": "abandoned_substation"
+      }
+    ]
   },
   {
     "id": "mirror_guard",
