@@ -17,6 +17,8 @@ export type MissionSuccessOptions = {
   opposingAgentPenaltyCount?: number;
   /** Flat % delta from participants' dynamic traits (relationships / hero / wanted). */
   dynamicTraitDelta?: number;
+  /** Flat % delta from timed event modifiers (see `GameState.activeSuccessModifiers`). */
+  eventSuccessModifierDelta?: number;
 };
 
 /**
@@ -176,6 +178,7 @@ export type SuccessChanceBreakdown = {
   dynamicTraitDelta: number;
   opposingAgentCount: number;
   opposingAgentPenaltyTotal: number;
+  eventSuccessModifierDelta: number;
 };
 
 export function computeSuccessChanceBreakdown(
@@ -208,9 +211,10 @@ export function computeSuccessChanceBreakdown(
   const statusEntries = participantStatusModifierEntries(participants, options?.traitsCatalog);
   const statusDelta = statusEntries.reduce((s, e) => s + e.delta, 0);
   const dyn = options?.dynamicTraitDelta ?? 0;
+  const eventMod = options?.eventSuccessModifierDelta ?? 0;
   const opposingAgentCount = Math.max(0, options?.opposingAgentPenaltyCount ?? 0);
   const opposingAgentPenaltyTotal = OPPOSING_AGENT_SUCCESS_PENALTY * opposingAgentCount;
-  const preClampPercent = base + statusDelta + dyn - opposingAgentPenaltyTotal;
+  const preClampPercent = base + statusDelta + dyn + eventMod - opposingAgentPenaltyTotal;
   const finalPercent = Math.min(100, Math.max(0, preClampPercent));
   return {
     finalPercent,
@@ -226,6 +230,7 @@ export function computeSuccessChanceBreakdown(
     dynamicTraitDelta: dyn,
     opposingAgentCount,
     opposingAgentPenaltyTotal,
+    eventSuccessModifierDelta: eventMod,
   };
 }
 

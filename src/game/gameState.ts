@@ -2,6 +2,7 @@ import type {
   AgentInstance,
   ContentCatalog,
   DynamicTraitActivityChange,
+  EventTemplate,
   LocationAssetPlacement,
   LocationAssetSlot,
   LocationAgentPresence,
@@ -66,6 +67,11 @@ export type PlayerState = {
   maxConcurrentMissions: number;
   /** Max minions assignable to a single mission (default 3). */
   maxParticipantsPerMission: number;
+  /**
+   * One-shot bonus CP added on top of `maxCommandPoints` at the next `advanceToNextTurn` refill,
+   * then cleared.
+   */
+  pendingBonusCommandPoints: number;
 };
 
 export type ActiveMission = {
@@ -136,6 +142,12 @@ export type ActivityEvent =
       participantInstanceIds: string[];
     }
   | { kind: "mission_cancelled"; missionTemplateId: string; target: MissionTarget }
+  | { kind: "event_rotated_in"; eventTemplateId: string }
+  | {
+      kind: "event_expired";
+      eventTemplateId: string;
+      effectDescriptions: string[];
+    }
   | { kind: "asset_gained"; assetId: string; quantity: number }
   | { kind: "asset_lost"; assetId: string; quantity: number }
   | {
@@ -220,6 +232,15 @@ export type GameState = {
    * Recomputed at end of each `executePlan` from final `player.infamy`.
    */
   wantedLevelTierIndex: number;
+  /** Rotating global event offer (`EventTemplate.id`); null when `catalog.events` is empty. */
+  currentEventTemplateId: string | null;
+  /** Flat success % modifiers from event effects; each entry decays once per `executePlan`. */
+  activeSuccessModifiers: { delta: number; turnsRemaining: number }[];
+  /**
+   * True when the player assigned the current event offer this turn (Main Phase); used so
+   * `expireEffects` do not fire when the offer was engaged, including same-turn completion.
+   */
+  eventOfferEngagedThisTurn: boolean;
 };
 
 export type GameError =
@@ -263,8 +284,13 @@ export type GameError =
       expectedAssetId: string;
       actual: string;
     }
-  | { code: "not_enough_assets"; assetId: string; need: number; have: number };
-
+  | { code: "not_enough_assets"; assetId: string; need: number; have: number }
+  | { code: "no_current_event_offer" }
+  | {
+      code: "event_mission_mismatch";
+      currentOffer: string | null;
+      requested: string;
+    };
 export type Ok<T> = { ok: true; value: T };
 export type Err<E> = { ok: false; error: E };
 export type Result<T, E> = Ok<T> | Err<E>;
@@ -345,6 +371,8 @@ const DEFAULT_MAX_ROSTER_SIZE = 5;
 const DEFAULT_MAX_HIRE_OFFERS = 3;
 const DEFAULT_MAX_CONCURRENT_MISSIONS = 2;
 const DEFAULT_MAX_PARTICIPANTS_PER_MISSION = 3;
+/** Fixed participant cap for rotating global events (`missionSource === "event"`). */
+export const EVENT_MAX_PARTICIPANTS_PER_MISSION = 3;
 /** CP spent to reroll the hire offer pool during Main Phase */
 export const REROLL_HIRE_OFFERS_CP = 1;
 
@@ -496,6 +524,16 @@ function pickRandomOrganizationName(catalog: ContentCatalog, rng: Rng): string {
   return names[i]!;
 }
 
+/** Uniform random event template id, or null when the catalog has no events. */
+export function pickRandomEventTemplateId(catalog: ContentCatalog, rng: Rng): string | null {
+  const list = catalog.events;
+  if (list.length === 0) {
+    return null;
+  }
+  const i = Math.floor(rng() * list.length);
+  return list[i]!.id;
+}
+
 export function createInitialGameState(catalog: ContentCatalog): GameState {
   const rng: Rng = () => Math.random();
   const activeOmegaPlanId = pickRandomOmegaPlanId(catalog, rng);
@@ -517,6 +555,7 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     maxHireOffers: DEFAULT_MAX_HIRE_OFFERS,
     maxConcurrentMissions: DEFAULT_MAX_CONCURRENT_MISSIONS,
     maxParticipantsPerMission: DEFAULT_MAX_PARTICIPANTS_PER_MISSION,
+    pendingBonusCommandPoints: 0,
   };
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
   const locationRequiredTraits = rollLocationRequiredTraits(catalog, runLocations, rng);
@@ -549,6 +588,9 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
     activeOmegaStageIndex: 0,
     omegaRowProgress: [false, false, false],
     wantedLevelTierIndex: 0,
+    currentEventTemplateId: pickRandomEventTemplateId(catalog, rng),
+    activeSuccessModifiers: [],
+    eventOfferEngagedThisTurn: false,
   };
 
   const assetEvents: ActivityEvent[] = [];
@@ -570,6 +612,14 @@ function missionTemplateById(
   catalog: ContentCatalog,
   id: string,
 ): MissionTemplate | undefined {
+  return catalog.missions.find((m) => m.id === id) ?? catalog.events.find((e) => e.id === id);
+}
+
+function eventTemplateById(catalog: ContentCatalog, id: string): EventTemplate | undefined {
+  return catalog.events.find((e) => e.id === id);
+}
+
+function catalogMissionOnlyById(catalog: ContentCatalog, id: string): MissionTemplate | undefined {
   return catalog.missions.find((m) => m.id === id);
 }
 
@@ -879,7 +929,7 @@ export function assignMission(
         error: { code: "mission_not_on_lair", missionId: missionTemplateId },
       };
     }
-  } else {
+  } else if (missionSource === "omega") {
     if (state.activeOmegaPlanId === null) {
       return { ok: false, error: { code: "no_active_omega_plan" } };
     }
@@ -920,6 +970,31 @@ export function assignMission(
         },
       };
     }
+  } else if (missionSource === "event") {
+    if (omegaStageIndex !== null || omegaSlotIndex !== null) {
+      return {
+        ok: false,
+        error: { code: "invalid_mission_source_binding", reason: "Event missions do not use omega slots" },
+      };
+    }
+    if (state.currentEventTemplateId === null) {
+      return { ok: false, error: { code: "no_current_event_offer" } };
+    }
+    if (missionTemplateId !== state.currentEventTemplateId) {
+      return {
+        ok: false,
+        error: {
+          code: "event_mission_mismatch",
+          currentOffer: state.currentEventTemplateId,
+          requested: missionTemplateId,
+        },
+      };
+    }
+  } else {
+    return {
+      ok: false,
+      error: { code: "invalid_mission_source_binding", reason: "Unknown mission source" },
+    };
   }
 
   const busy = busyInstanceIds(state.activeMissions);
@@ -1006,12 +1081,21 @@ export function assignMission(
     participants.push(m);
   }
 
-  if (!canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
+  if (!canAssignParticipants(
+    participants,
+    missionSource === "event"
+      ? EVENT_MAX_PARTICIPANTS_PER_MISSION
+      : state.player.maxParticipantsPerMission,
+  )) {
+    const cap =
+      missionSource === "event"
+        ? EVENT_MAX_PARTICIPANTS_PER_MISSION
+        : state.player.maxParticipantsPerMission;
     return {
       ok: false,
       error: {
         code: "invalid_participants",
-        reason: `Assign 1–${state.player.maxParticipantsPerMission} minions`,
+        reason: `Assign 1–${cap} minions`,
       },
     };
   }
@@ -1100,6 +1184,8 @@ export function assignMission(
   const next: GameState = {
     ...state,
     activeMissions: [...state.activeMissions, activeMission],
+    eventOfferEngagedThisTurn:
+      missionSource === "event" ? true : state.eventOfferEngagedThisTurn,
     player: {
       ...state.player,
       commandPoints: state.player.commandPoints - cost,
@@ -1185,7 +1271,7 @@ export function addLairMissionToPool(
   if (state.activeLairId === null) {
     return { ok: false, error: { code: "no_active_lair" } };
   }
-  if (!missionTemplateById(catalog, missionTemplateId)) {
+  if (!catalogMissionOnlyById(catalog, missionTemplateId)) {
     return { ok: false, error: { code: "unknown_mission", missionId: missionTemplateId } };
   }
   if (state.lairMissionIds.includes(missionTemplateId)) {
@@ -1245,6 +1331,10 @@ export function executePlan(
 
   const instanceById = new Map(state.player.minions.map((m) => [m.instanceId, m]));
 
+  let activeSuccessModifiers = state.activeSuccessModifiers.map((m) => ({ ...m }));
+  const offerAtStart = state.currentEventTemplateId;
+  const engagedAtStart = state.eventOfferEngagedThisTurn;
+
   const updated = state.activeMissions.map((am) => ({
     ...am,
     turnsRemaining: am.turnsRemaining - 1,
@@ -1278,7 +1368,15 @@ export function executePlan(
       }
       participants.push(inst);
     }
-    if (missing || !canAssignParticipants(participants, player.maxParticipantsPerMission)) {
+    if (
+      missing ||
+      !canAssignParticipants(
+        participants,
+        am.missionSource === "event"
+          ? EVENT_MAX_PARTICIPANTS_PER_MISSION
+          : player.maxParticipantsPerMission,
+      )
+    ) {
       continue;
     }
 
@@ -1299,6 +1397,8 @@ export function executePlan(
       missionLocId,
     );
 
+    const eventSuccessModifierDelta = activeSuccessModifiers.reduce((s, m) => s + m.delta, 0);
+
     const pct = successChancePercent(
       template,
       participants,
@@ -1308,6 +1408,7 @@ export function executePlan(
         traitsCatalog: catalog.traits,
         opposingAgentPenaltyCount,
         dynamicTraitDelta,
+        eventSuccessModifierDelta,
       },
     );
     const roll = Math.floor(rng() * 100);
@@ -1327,11 +1428,13 @@ export function executePlan(
       player,
       locationAssetSlots,
       locationSecurityStates,
+      activeSuccessModifiers,
     };
     const applied = applyMissionEffects(effectState, effectList, am, catalog, rng);
     player = applied.player;
     locationAssetSlots = applied.locationAssetSlots;
     locationSecurityStates = applied.locationSecurityStates;
+    activeSuccessModifiers = applied.activeSuccessModifiers;
     /* Sync the lookup with any minion mutations from applyMissionEffects
      * (e.g. add_target_minion_traits, add_random_participant_traits, add_all_participant_traits) so the XP pass and final merge below see them. */
     for (const m of player.minions) {
@@ -1417,7 +1520,7 @@ export function executePlan(
           continue;
         }
         if (
-          missionTemplateById(catalog, eff.missionId) &&
+          catalogMissionOnlyById(catalog, eff.missionId) &&
           !lairMissionIds.includes(eff.missionId)
         ) {
           lairMissionIds = [...lairMissionIds, eff.missionId];
@@ -1534,6 +1637,58 @@ export function executePlan(
     locationAgentPresence = spawned.locationAgentPresence;
   }
 
+  let nextCurrentEventTemplateId: string | null = null;
+  if (catalog.events.length > 0) {
+    if (offerAtStart !== null && !engagedAtStart) {
+      const et = eventTemplateById(catalog, offerAtStart);
+      const expireList = et?.expireEffects ?? [];
+      if (expireList.length > 0) {
+        const stubAm: ActiveMission = {
+          id: "__event_expire__",
+          missionTemplateId: offerAtStart,
+          target: { kind: "none" },
+          missionSource: "event",
+          omegaStageIndex: null,
+          omegaSlotIndex: null,
+          participantInstanceIds: [],
+          plannedAssetIds: [],
+          turnsRemaining: 0,
+          startedOnTurn: state.turnNumber,
+        };
+        const expireState: GameState = {
+          ...state,
+          player,
+          locationAssetSlots,
+          locationSecurityStates,
+          activeSuccessModifiers,
+        };
+        const expired = applyMissionEffects(expireState, expireList, stubAm, catalog, rng);
+        player = expired.player;
+        locationAssetSlots = expired.locationAssetSlots;
+        locationSecurityStates = expired.locationSecurityStates;
+        activeSuccessModifiers = expired.activeSuccessModifiers;
+        resolveEvents.push({
+          kind: "event_expired",
+          eventTemplateId: offerAtStart,
+          effectDescriptions: describeMissionTemplateEffects(expireList),
+        });
+        resolveEvents.push(...expired.events);
+      }
+    }
+  }
+
+  activeSuccessModifiers = activeSuccessModifiers
+    .map((m) => ({ ...m, turnsRemaining: m.turnsRemaining - 1 }))
+    .filter((m) => m.turnsRemaining > 0);
+
+  if (catalog.events.length > 0) {
+    nextCurrentEventTemplateId = pickRandomEventTemplateId(catalog, rng);
+    resolveEvents.push({
+      kind: "event_rotated_in",
+      eventTemplateId: nextCurrentEventTemplateId ?? "",
+    });
+  }
+
   const activityLog = mergeResolveActivityEventsIntoActivityLog(
     state.activityLog,
     state.turnNumber,
@@ -1558,6 +1713,9 @@ export function executePlan(
       wantedLevelTierIndex,
       opposingAgentInstances,
       locationAgentPresence,
+      currentEventTemplateId: nextCurrentEventTemplateId,
+      activeSuccessModifiers,
+      eventOfferEngagedThisTurn: false,
     },
   };
 }
@@ -1577,8 +1735,11 @@ export function advanceToNextTurn(state: GameState): Result<GameState, GameError
       turnNumber: state.turnNumber + 1,
       player: {
         ...state.player,
-        commandPoints: state.player.maxCommandPoints,
+        commandPoints:
+          state.player.maxCommandPoints + state.player.pendingBonusCommandPoints,
+        pendingBonusCommandPoints: 0,
       },
+      eventOfferEngagedThisTurn: false,
     },
   };
 }

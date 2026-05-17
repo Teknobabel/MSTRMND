@@ -5,6 +5,7 @@ import {
   busyInstanceIds,
   cancelMission,
   createInitialGameState,
+  EVENT_MAX_PARTICIPANTS_PER_MISSION,
   executePlan,
   fireMinion,
   getMissionTargetLocationId,
@@ -14,6 +15,7 @@ import {
   rehireMinion,
   rerollHireOffers,
   REROLL_HIRE_OFFERS_CP,
+  type ActiveMission,
   type GameError,
   type GameState,
 } from "./game/gameState";
@@ -26,6 +28,7 @@ import type {
   MissionSource,
   MissionTarget,
   MissionTargetType,
+  MissionTemplate,
   Trait,
 } from "./game/types";
 import { isOccupiedAssetSlot } from "./game/types";
@@ -44,6 +47,7 @@ import {
   isPositiveDynamicTraitKind,
   type DynamicTraitSuccessBreakdownEntry,
 } from "./game/dynamicTrait";
+import { describeMissionTemplateEffects } from "./game/missionEffects";
 import { loadContent } from "./game/loadContent";
 import {
   locationTemplatesForOmegaPlan,
@@ -99,6 +103,8 @@ console.info(
   "assets,",
   catalog.omegaPlans.length,
   "omega plans,",
+  catalog.events.length,
+  "events,",
   catalog.organizationNames.length,
   "organization names,",
   catalog.wantedLevels.length,
@@ -484,6 +490,10 @@ function formatAssignMissionError(err: GameError): string {
       return `Wrong asset in slot ${err.slotIndex + 1} (expected ${err.expectedAssetId}).`;
     case "not_enough_assets":
       return `Not enough ${err.assetId} (need ${err.need}, have ${err.have}).`;
+    case "no_current_event_offer":
+      return "No rotating event is available right now.";
+    case "event_mission_mismatch":
+      return `That event is not the current offer (current: ${err.currentOffer ?? "none"}).`;
     default:
       return `Cannot assign (${(err as { code: string }).code}).`;
   }
@@ -491,6 +501,7 @@ function formatAssignMissionError(err: GameError): string {
 
 function initGameController(content: ReturnType<typeof loadContent>): void {
   let state: GameState = createInitialGameState(content);
+  let missionFxTooltipSerial = 0;
 
   const organizationNameEl = req<HTMLElement>("organization-name");
   const statsEl = req<HTMLElement>("game-stats");
@@ -513,12 +524,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const omegaPlanPanelEl = req<HTMLElement>("omega-plan-panel");
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const assetsPanelEl = req<HTMLElement>("assets-panel");
-  const activeMissionsPanelEl = req<HTMLElement>("active-missions-panel");
+  const missionsPanelRootEl = req<HTMLElement>("missions-panel-root");
   const lairPanelEl = req<HTMLElement>("lair-panel");
 
   const rng = (): number => Math.random();
 
-  /** Upper bound for participant assign UI; must be >= any runtime `maxParticipantsPerMission`. */
+  /** Upper bound for participant assign UI; must be >= any runtime `maxParticipantsPerMission` or event cap (3). */
   const ASSIGN_PARTICIPANT_SLOT_CAPACITY = 12;
   const assignSlotInstanceIds: (string | null)[] = Array.from(
     { length: ASSIGN_PARTICIPANT_SLOT_CAPACITY },
@@ -540,9 +551,91 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   let locationsCategoryTab: LocationType = "economic";
   let lairPanelTab: "missions" | "upgrades" = "missions";
+  let missionsPanelTab: "active" | "events" = "active";
+
+  function findMissionOrEventTemplate(id: string): MissionTemplate | undefined {
+    return content.missions.find((m) => m.id === id) ?? content.events.find((e) => e.id === id);
+  }
+
+  /** Native tooltip text for mission card titles (success / failure template effects). */
+  function missionOutcomeEffectsTitle(mission: MissionTemplate | undefined): string | undefined {
+    if (mission === undefined) {
+      return undefined;
+    }
+    const successLines = describeMissionTemplateEffects(mission.onSuccessEffects ?? []);
+    const failureLines = describeMissionTemplateEffects(mission.onFailureEffects ?? []);
+    if (successLines.length === 0 && failureLines.length === 0) {
+      return undefined;
+    }
+    const blocks: string[] = [];
+    if (successLines.length > 0) {
+      blocks.push(["On success:", ...successLines.map((line) => `• ${line}`)].join("\n"));
+    }
+    if (failureLines.length > 0) {
+      blocks.push(["On failure:", ...failureLines.map((line) => `• ${line}`)].join("\n"));
+    }
+    return blocks.join("\n\n");
+  }
+
+  /** Native `title` is flaky on `draggable` cards in Chromium; use a hover panel instead. */
+  function appendMissionTitleWithFxTooltip(
+    body: HTMLElement,
+    mission: MissionTemplate | undefined,
+    displayName: string,
+  ): void {
+    const title = document.createElement("h4");
+    title.className = "asset-card-title";
+    title.textContent = displayName;
+    const tip = missionOutcomeEffectsTitle(mission);
+    if (tip === undefined) {
+      body.appendChild(title);
+      return;
+    }
+    missionFxTooltipSerial += 1;
+    const tipId = `mission-fx-tip-${missionFxTooltipSerial}`;
+    const wrap = document.createElement("div");
+    wrap.className = "mission-outcome-tooltip-anchor";
+    wrap.tabIndex = 0;
+    const panel = document.createElement("div");
+    panel.className = "mission-outcome-tooltip-panel";
+    panel.id = tipId;
+    panel.setAttribute("role", "tooltip");
+    panel.textContent = tip;
+    title.setAttribute("aria-describedby", tipId);
+    wrap.appendChild(title);
+    wrap.appendChild(panel);
+    body.appendChild(wrap);
+  }
+
+  function totalEventSuccessModifierDelta(): number {
+    return state.activeSuccessModifiers.reduce((s, m) => s + m.delta, 0);
+  }
+
+  function stagedParticipantCeiling(): number {
+    if (assignMissionSource === "event") {
+      return EVENT_MAX_PARTICIPANTS_PER_MISSION;
+    }
+    return state.player.maxParticipantsPerMission;
+  }
+
+  function stagedParticipantSlotCount(): number {
+    if (!assignMissionTemplateId) {
+      return state.player.maxParticipantsPerMission;
+    }
+    return Math.max(state.player.maxParticipantsPerMission, stagedParticipantCeiling());
+  }
+
+  function participantCapForActiveMission(am: ActiveMission): number {
+    return am.missionSource === "event"
+      ? EVENT_MAX_PARTICIPANTS_PER_MISSION
+      : state.player.maxParticipantsPerMission;
+  }
 
   function getAssignParticipantIds(): string[] {
-    const max = state.player.maxParticipantsPerMission;
+    const max =
+      assignMissionTemplateId && assignMissionSource !== null
+        ? stagedParticipantCeiling()
+        : state.player.maxParticipantsPerMission;
     return assignSlotInstanceIds
       .slice(0, max)
       .filter((id): id is string => id !== null);
@@ -551,7 +644,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   function reconcileAssignSlots(): void {
     const busy = busyInstanceIds(state.activeMissions);
     const valid = new Set(state.player.minions.map((m) => m.instanceId));
-    const max = state.player.maxParticipantsPerMission;
+    const max =
+      assignMissionTemplateId && assignMissionSource !== null
+        ? stagedParticipantCeiling()
+        : state.player.maxParticipantsPerMission;
     for (let i = 0; i < assignSlotInstanceIds.length; i += 1) {
       const id = assignSlotInstanceIds[i];
       if (id === null) {
@@ -589,6 +685,16 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     clearAssignMissionTarget();
   }
 
+  /** Rotating event offers replace `currentEventTemplateId` each resolve; drop stale staged plans. */
+  function reconcileStagedEventMissionWithState(): void {
+    if (assignMissionSource !== "event" || assignMissionTemplateId === null) {
+      return;
+    }
+    if (state.currentEventTemplateId !== assignMissionTemplateId) {
+      clearAllAssignSlots();
+    }
+  }
+
   function placeInstanceInSlot(instanceId: string, slotIndex: number): void {
     for (let i = 0; i < assignSlotInstanceIds.length; i += 1) {
       if (assignSlotInstanceIds[i] === instanceId) {
@@ -609,13 +715,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
-  function selectedMissionTemplate():
-    | (typeof content.missions)[number]
-    | undefined {
+  function selectedMissionTemplate(): MissionTemplate | undefined {
     if (!assignMissionTemplateId) {
       return undefined;
     }
-    return content.missions.find((m) => m.id === assignMissionTemplateId);
+    return findMissionOrEventTemplate(assignMissionTemplateId);
   }
 
   function rebuildAssignAssetSlots(): void {
@@ -691,6 +795,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   type MissionDragPayload =
     | { kind: "mastermind-mission"; source: "lair"; missionTemplateId: string }
+    | { kind: "mastermind-mission"; source: "event"; missionTemplateId: string }
     | {
         kind: "mastermind-mission";
         source: "omega";
@@ -738,6 +843,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       };
       if (o.kind === "mastermind-mission" && o.source === "lair" && typeof o.missionTemplateId === "string") {
         return { kind: "mastermind-mission", source: "lair", missionTemplateId: o.missionTemplateId };
+      }
+      if (o.kind === "mastermind-mission" && o.source === "event" && typeof o.missionTemplateId === "string") {
+        return { kind: "mastermind-mission", source: "event", missionTemplateId: o.missionTemplateId };
       }
       if (
         o.kind === "mastermind-mission" &&
@@ -826,13 +934,16 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   }
 
   function missionDragJson(
-    source: "lair" | "omega",
+    source: "lair" | "omega" | "event",
     missionTemplateId: string,
     stageIndex?: number,
     slotIndex?: number,
   ): string {
     if (source === "lair") {
       return JSON.stringify({ kind: "mastermind-mission", source: "lair", missionTemplateId });
+    }
+    if (source === "event") {
+      return JSON.stringify({ kind: "mastermind-mission", source: "event", missionTemplateId });
     }
     return JSON.stringify({
       kind: "mastermind-mission",
@@ -898,6 +1009,17 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         return;
       }
       if (kind === "mission" && payload.kind === "mastermind-mission") {
+        if (payload.source === "event") {
+          if (state.phase !== "main") {
+            return;
+          }
+          if (
+            state.currentEventTemplateId === null ||
+            payload.missionTemplateId !== state.currentEventTemplateId
+          ) {
+            return;
+          }
+        }
         assignMissionTemplateId = payload.missionTemplateId;
         assignMissionSource = payload.source;
         if (payload.source === "omega") {
@@ -1014,6 +1136,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         lines.push(`  ${who} — ${e.traitLabel}: ${formatSignedPercent(e.delta)}`);
       }
     }
+    if (breakdown.eventSuccessModifierDelta !== 0) {
+      lines.push(
+        `Timed event modifier: ${formatSignedPercent(breakdown.eventSuccessModifierDelta)}.`,
+      );
+    }
     if (breakdown.opposingAgentCount > 0) {
       lines.push(
         `Revealed opposing agents at target: ${breakdown.opposingAgentCount} * -${OPPOSING_AGENT_SUCCESS_PENALTY}% = -${breakdown.opposingAgentPenaltyTotal}%.`,
@@ -1025,75 +1152,6 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       lines.push(`Shown success chance: ${breakdown.finalPercent}%.`);
     }
     return lines;
-  }
-
-  function assignMissionSuccessChanceUi(): {
-    label: string;
-    tooltipLines?: readonly string[];
-  } {
-    const mid = assignMissionTemplateId;
-    if (!mid) {
-      return { label: "—" };
-    }
-    const m = content.missions.find((x) => x.id === mid);
-    if (!m) {
-      return { label: "—" };
-    }
-    const slotIds = getAssignParticipantIds();
-    const instanceById = new Map(
-      state.player.minions.map((mi) => [mi.instanceId, mi] as const),
-    );
-    const participants = slotIds
-      .map((id) => instanceById.get(id))
-      .filter((x): x is NonNullable<typeof x> => x !== undefined);
-    if (canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
-      const baseOpts =
-        assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : {};
-      const lid = assignTarget !== null ? getMissionTargetLocationId(assignTarget) : null;
-      const opposingAgentPenaltyCount =
-        lid === null ? 0 : countOpposingAgentsAtLocation(state, lid, "revealed");
-      const dynamicTraitDelta = dynamicTraitSuccessModifierFromFullRoster(
-        state.player.minions,
-        slotIds,
-        lid,
-      );
-      const opts = {
-        ...baseOpts,
-        playerAssets: state.player.assets,
-        traitsCatalog: content.traits,
-        opposingAgentPenaltyCount,
-        dynamicTraitDelta,
-        ...(m.requiredAssetIds.length > 0
-          ? {
-              assignedAssetIds: Array.from(
-                { length: m.requiredAssetIds.length },
-                (_, i) => assignAssetSlotAssetIds[i] ?? null,
-              ),
-            }
-          : {}),
-      };
-      const breakdown = computeSuccessChanceBreakdown(m, participants, opts);
-      const dynamicBreakdown = dynamicTraitSuccessModifierBreakdownFromFullRoster(
-        content,
-        state.player.minions,
-        slotIds,
-        lid,
-      );
-      return {
-        label: `${breakdown.finalPercent}%`,
-        tooltipLines: formatMissionSuccessChanceTooltipLines(
-          breakdown,
-          dynamicBreakdown.entries,
-          state.player.minions,
-        ),
-      };
-    }
-    if (slotIds.length === 0) {
-      return { label: "—" };
-    }
-    return {
-      label: "Pick 1–" + String(state.player.maxParticipantsPerMission) + " minions",
-    };
   }
 
   function renderAssignAssetSlots(): void {
@@ -1221,13 +1279,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (assignMissionTemplateId === null) {
       const ph = document.createElement("span");
       ph.className = "assign-minion-slot-placeholder";
-      ph.textContent = "Drag a mission from Omega Plan or Lair";
+      ph.textContent = "Drag a mission from Omega Plan, Lair, or Events tab";
       missionSlot.appendChild(ph);
     } else {
       const wrap = document.createElement("div");
       wrap.className = "assign-pick-slot-card-wrap";
 
-      const missionTpl = content.missions.find((x) => x.id === assignMissionTemplateId);
+      const missionTpl = findMissionOrEventTemplate(assignMissionTemplateId);
       const mergedForAssign =
         missionTpl !== undefined
           ? mergedRequiredTraitIdsSorted(
@@ -1238,13 +1296,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
             )
           : undefined;
 
-      const chanceUi = assignMissionSuccessChanceUi();
-      const article = buildMissionCatalogArticle(
-        assignMissionTemplateId,
-        chanceUi.label,
-        mergedForAssign,
-        chanceUi.tooltipLines,
-      );
+      const article = buildMissionCatalogArticle(assignMissionTemplateId, mergedForAssign);
       article.classList.add("assign-pick-embedded-card");
       article.draggable = mainOnly;
       article.addEventListener("dragstart", (e) => {
@@ -1256,12 +1308,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         const json =
           assignMissionSource === "lair" && assignMissionTemplateId
             ? missionDragJson("lair", assignMissionTemplateId)
-            : missionDragJson(
-                "omega",
-                assignMissionTemplateId!,
-                assignOmegaStageIndex ?? 0,
-                assignOmegaSlotIndex ?? 0,
-              );
+            : assignMissionSource === "event" && assignMissionTemplateId
+              ? missionDragJson("event", assignMissionTemplateId)
+              : missionDragJson(
+                  "omega",
+                  assignMissionTemplateId!,
+                  assignOmegaStageIndex ?? 0,
+                  assignOmegaSlotIndex ?? 0,
+                );
         e.dataTransfer?.setData("text/plain", json);
         e.dataTransfer!.effectAllowed = "move";
       });
@@ -1501,7 +1555,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       btnAssign.title = "Choose a mission";
       return;
     }
-    const missionTemplate = content.missions.find((x) => x.id === assignMissionTemplateId);
+    const missionTemplate = findMissionOrEventTemplate(assignMissionTemplateId);
     if (!missionTemplate) {
       btnAssign.disabled = true;
       btnAssign.title = "Choose a mission";
@@ -1527,7 +1581,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       return;
     }
     const parts = getAssignParticipantIds();
-    const maxP = state.player.maxParticipantsPerMission;
+    const maxP = stagedParticipantCeiling();
     if (parts.length < 1 || parts.length > maxP) {
       btnAssign.disabled = true;
       btnAssign.title = `Assign 1–${maxP} minions`;
@@ -1539,9 +1593,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const participants = parts
       .map((id) => instanceById.get(id))
       .filter((x): x is NonNullable<typeof x> => x !== undefined);
-    if (!canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
+    if (!canAssignParticipants(participants, maxP)) {
       btnAssign.disabled = true;
-      btnAssign.title = `Assign 1–${state.player.maxParticipantsPerMission} minions`;
+      btnAssign.title = `Assign 1–${maxP} minions`;
       return;
     }
     const cost = missionTemplate.startCommandPoints;
@@ -1560,7 +1614,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const busy = busyInstanceIds(state.activeMissions);
     const mainOnly = state.phase === "main";
 
-    for (let slotIndex = 0; slotIndex < state.player.maxParticipantsPerMission; slotIndex += 1) {
+    for (let slotIndex = 0; slotIndex < stagedParticipantSlotCount(); slotIndex += 1) {
       const slot = document.createElement("div");
       slot.className = "assign-minion-slot";
       slot.dataset.slotIndex = String(slotIndex);
@@ -1617,7 +1671,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           ? content.minions.find((t) => t.id === inst.templateId)
           : undefined;
         const mission = assignMissionTemplateId
-          ? content.missions.find((x) => x.id === assignMissionTemplateId)
+          ? findMissionOrEventTemplate(assignMissionTemplateId)
           : undefined;
         const assignOpts =
           assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : {};
@@ -1701,20 +1755,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function buildMissionCatalogArticle(
     missionId: string,
-    successChanceDisplay = "—",
     mergedRequiredTraitIdsForDisplay?: string[],
-    successChanceTooltipLines?: readonly string[],
   ): HTMLElement {
-    const mission = content.missions.find((m) => m.id === missionId);
+    const mission = findMissionOrEventTemplate(missionId);
     const article = document.createElement("article");
     article.className = "asset-card omega-plan-mission-card";
 
     const body = appendCardArtShell(article, resolveMissionCardArt(mission));
 
-    const title = document.createElement("h4");
-    title.className = "asset-card-title";
-    title.textContent = mission?.name ?? missionId;
-    body.appendChild(title);
+    appendMissionTitleWithFxTooltip(body, mission, mission?.name ?? missionId);
 
     if (mission?.description) {
       const desc = document.createElement("p");
@@ -1742,18 +1791,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           label: "Required traits",
           value: traitDisplayNames(content, traitIdsForDisplay),
         },
-        {
+      );
+      if (mission.requiredAssetIds.length > 0) {
+        rows.push({
           label: "Required assets",
           value: assetDisplayNames(content, mission.requiredAssetIds),
-        },
-        {
-          label: "Success chance",
-          value: successChanceDisplay,
-          ...(successChanceTooltipLines !== undefined && successChanceTooltipLines.length > 0
-            ? { tooltipLines: successChanceTooltipLines }
-            : {}),
-        },
-      );
+        });
+      }
     } else {
       rows.push({ label: "Mission id", value: missionId });
     }
@@ -2152,6 +2196,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   type MissionCardDragMeta =
     | { draggable: true; source: "lair"; missionTemplateId: string }
+    | { draggable: true; source: "event"; missionTemplateId: string }
     | {
         draggable: true;
         source: "omega";
@@ -2175,12 +2220,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         const json =
           meta.source === "lair"
             ? missionDragJson("lair", meta.missionTemplateId)
-            : missionDragJson(
-                "omega",
-                meta.missionTemplateId,
-                meta.stageIndex,
-                meta.slotIndex,
-              );
+            : meta.source === "event"
+              ? missionDragJson("event", meta.missionTemplateId)
+              : missionDragJson(
+                  "omega",
+                  meta.missionTemplateId,
+                  meta.stageIndex,
+                  meta.slotIndex,
+                );
         e.dataTransfer?.setData("text/plain", json);
         e.dataTransfer!.effectAllowed = "copy";
       });
@@ -2369,185 +2416,285 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
-  function renderActiveMissionsPanel(): void {
-    activeMissionsPanelEl.innerHTML = "";
+  function appendActiveMissionCard(parent: HTMLElement, am: ActiveMission): void {
+    const mission = findMissionOrEventTemplate(am.missionTemplateId);
+    const targetLocId =
+      am.target.kind === "location" || am.target.kind === "asset"
+        ? am.target.locationId
+        : null;
+    const targetLoc = targetLocId
+      ? content.locations.find((l) => l.id === targetLocId)
+      : undefined;
+    const sourceLabel =
+      am.missionSource === "lair"
+        ? "Lair"
+        : am.missionSource === "event"
+          ? "Event"
+          : `Omega (phase ${(am.omegaStageIndex ?? 0) + 1} · slot ${(am.omegaSlotIndex ?? 0) + 1})`;
+
+    const article = document.createElement("article");
+    article.className = "asset-card active-mission-card";
+
+    const body = appendCardArtShell(article, resolveMissionCardArt(mission));
+
+    appendMissionTitleWithFxTooltip(body, mission, mission?.name ?? am.missionTemplateId);
+
+    if (mission?.description) {
+      const desc = document.createElement("p");
+      desc.className = "asset-card-description";
+      desc.textContent = mission.description;
+      body.appendChild(desc);
+    }
+
+    const dl = document.createElement("dl");
+    dl.className = "asset-card-stats";
+    const participants = state.player.minions.filter((inst) =>
+      am.participantInstanceIds.includes(inst.instanceId),
+    );
+    const participantNames = participants
+      .map((inst) => {
+        const tpl = content.minions.find((t) => t.id === inst.templateId);
+        return tpl?.name ?? inst.templateId;
+      })
+      .join(", ");
+
+    const rows: Array<{ label: string; value: string; tooltipLines?: readonly string[] }> = [
+      { label: "Source", value: sourceLabel },
+      { label: "Target", value: formatMissionTargetSummary(am.target) },
+    ];
+    if (targetLoc) {
+      rows.push(
+        { label: "Location type", value: formatLocationTypeLabel(targetLoc.locationType) },
+        { label: "Location level", value: String(targetLoc.locationLevel) },
+      );
+    }
+    rows.push({
+      label: "Participants",
+      value: participantNames.length > 0 ? participantNames : "—",
+    });
+
+    if (mission) {
+      const lid = getMissionTargetLocationId(am.target);
+      const opposingAgentPenaltyCount =
+        lid === null ? 0 : countOpposingAgentsAtLocation(state, lid, "revealed");
+      const dynamicTraitDelta = dynamicTraitSuccessModifierFromFullRoster(
+        state.player.minions,
+        am.participantInstanceIds,
+        lid,
+      );
+      const successOpts = {
+        ...missionSuccessOptionsForTarget(state, am.target),
+        traitsCatalog: content.traits,
+        opposingAgentPenaltyCount,
+        dynamicTraitDelta,
+        eventSuccessModifierDelta: totalEventSuccessModifierDelta(),
+        ...(mission.requiredAssetIds.length > 0
+          ? { assignedAssetIds: am.plannedAssetIds }
+          : { playerAssets: state.player.assets }),
+      };
+      const mergedDisplay = mergedRequiredTraitIdsSorted(mission, successOpts);
+      rows.push(
+        { label: "Start cost", value: `${mission.startCommandPoints} CP (paid)` },
+        {
+          label: "Progress",
+          value: `${am.turnsRemaining} / ${mission.durationTurns} turn${
+            mission.durationTurns === 1 ? "" : "s"
+          } remaining`,
+        },
+        {
+          label: "Required traits",
+          value: traitDisplayNames(content, mergedDisplay),
+        },
+      );
+      if (mission.requiredAssetIds.length > 0) {
+        rows.push(
+          {
+            label: "Required assets",
+            value: assetDisplayNames(content, mission.requiredAssetIds),
+          },
+          {
+            label: "Planned assets",
+            value: plannedAssetSlotsDisplay(
+              content,
+              mission.requiredAssetIds,
+              am.plannedAssetIds,
+            ),
+          },
+        );
+      }
+      let successValue: string;
+      let successTooltip: readonly string[] | undefined;
+      const partCap = participantCapForActiveMission(am);
+      if (canAssignParticipants(participants, partCap)) {
+        const breakdown = computeSuccessChanceBreakdown(mission, participants, successOpts);
+        successValue = `${breakdown.finalPercent}%`;
+        const dynEntries = dynamicTraitSuccessModifierBreakdownFromFullRoster(
+          content,
+          state.player.minions,
+          am.participantInstanceIds,
+          lid,
+        );
+        successTooltip = formatMissionSuccessChanceTooltipLines(
+          breakdown,
+          dynEntries.entries,
+          state.player.minions,
+        );
+      } else {
+        successValue = "—";
+      }
+      rows.push(
+        successTooltip !== undefined && successTooltip.length > 0
+          ? { label: "Success chance", value: successValue, tooltipLines: successTooltip }
+          : { label: "Success chance", value: successValue },
+      );
+    } else {
+      rows.push(
+        { label: "Turns remaining", value: String(am.turnsRemaining) },
+        { label: "Mission template", value: am.missionTemplateId },
+      );
+    }
+
+    appendMinionStatRows(dl, rows);
+    body.appendChild(dl);
+
+    const mainOnly = state.phase === "main";
+    const actions = document.createElement("div");
+    actions.className = "active-mission-card-actions";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "btn active-mission-card-cancel";
+    cancelBtn.textContent = "Cancel mission";
+    cancelBtn.disabled = !mainOnly;
+    cancelBtn.title = mainOnly ? "Remove mission; minions free immediately" : "Only during Main Phase";
+    cancelBtn.addEventListener("click", () => {
+      if (state.phase !== "main") {
+        return;
+      }
+      const result = cancelMission(state, content, am.id);
+      if (result.ok) {
+        state = result.value;
+        refresh();
+      }
+    });
+    actions.appendChild(cancelBtn);
+    body.appendChild(actions);
+
+    parent.appendChild(article);
+  }
+
+  function renderActiveMissionsInto(panel: HTMLElement): void {
+    panel.innerHTML = "";
     const summary = document.createElement("p");
     summary.className = "active-missions-summary";
     summary.textContent = `${state.activeMissions.length} / ${state.player.maxConcurrentMissions} missions`;
-    activeMissionsPanelEl.appendChild(summary);
+    panel.appendChild(summary);
 
     if (state.activeMissions.length === 0) {
       const empty = document.createElement("p");
       empty.className = "assets-panel-empty";
       empty.textContent = "No active missions.";
-      activeMissionsPanelEl.appendChild(empty);
+      panel.appendChild(empty);
       return;
     }
 
+    const listWrap = document.createElement("div");
+    listWrap.className = "missions-active-list";
     for (const am of state.activeMissions) {
-      const mission = content.missions.find((x) => x.id === am.missionTemplateId);
-      const targetLocId =
-        am.target.kind === "location" || am.target.kind === "asset"
-          ? am.target.locationId
-          : null;
-      const targetLoc = targetLocId
-        ? content.locations.find((l) => l.id === targetLocId)
-        : undefined;
-      const sourceLabel =
-        am.missionSource === "lair"
-          ? "Lair"
-          : `Omega (phase ${(am.omegaStageIndex ?? 0) + 1} · slot ${(am.omegaSlotIndex ?? 0) + 1})`;
+      appendActiveMissionCard(listWrap, am);
+    }
+    panel.appendChild(listWrap);
+  }
 
-      const article = document.createElement("article");
-      article.className = "asset-card active-mission-card";
+  function renderEventsTab(panel: HTMLElement): void {
+    panel.innerHTML = "";
+    const mainOnly = state.phase === "main";
 
-      const body = appendCardArtShell(article, resolveMissionCardArt(mission));
+    const offerHeading = document.createElement("h3");
+    offerHeading.className = "events-tab-section-title";
+    offerHeading.textContent = "Current offer";
+    panel.appendChild(offerHeading);
 
-      const title = document.createElement("h4");
-      title.className = "asset-card-title";
-      title.textContent = mission?.name ?? am.missionTemplateId;
-      body.appendChild(title);
-
-      if (mission?.description) {
-        const desc = document.createElement("p");
-        desc.className = "asset-card-description";
-        desc.textContent = mission.description;
-        body.appendChild(desc);
-      }
-
-      const dl = document.createElement("dl");
-      dl.className = "asset-card-stats";
-      const participants = state.player.minions.filter((inst) =>
-        am.participantInstanceIds.includes(inst.instanceId),
-      );
-      const participantNames = participants
-        .map((inst) => {
-          const tpl = content.minions.find((t) => t.id === inst.templateId);
-          return tpl?.name ?? inst.templateId;
-        })
-        .join(", ");
-
-      const rows: Array<{ label: string; value: string; tooltipLines?: readonly string[] }> = [
-        { label: "Source", value: sourceLabel },
-        { label: "Target", value: formatMissionTargetSummary(am.target) },
-      ];
-      if (targetLoc) {
-        rows.push(
-          { label: "Location type", value: formatLocationTypeLabel(targetLoc.locationType) },
-          { label: "Location level", value: String(targetLoc.locationLevel) },
-        );
-      }
-      rows.push({
-        label: "Participants",
-        value: participantNames.length > 0 ? participantNames : "—",
-      });
-
-      if (mission) {
-        const lid = getMissionTargetLocationId(am.target);
-        const opposingAgentPenaltyCount =
-          lid === null ? 0 : countOpposingAgentsAtLocation(state, lid, "revealed");
-        const dynamicTraitDelta = dynamicTraitSuccessModifierFromFullRoster(
-          state.player.minions,
-          am.participantInstanceIds,
-          lid,
-        );
-        const successOpts = {
-          ...missionSuccessOptionsForTarget(state, am.target),
-          traitsCatalog: content.traits,
-          opposingAgentPenaltyCount,
-          dynamicTraitDelta,
-          ...(mission.requiredAssetIds.length > 0
-            ? { assignedAssetIds: am.plannedAssetIds }
-            : { playerAssets: state.player.assets }),
-        };
-        const mergedDisplay = mergedRequiredTraitIdsSorted(mission, successOpts);
-        rows.push(
-          { label: "Start cost", value: `${mission.startCommandPoints} CP (paid)` },
-          {
-            label: "Progress",
-            value: `${am.turnsRemaining} / ${mission.durationTurns} turn${
-              mission.durationTurns === 1 ? "" : "s"
-            } remaining`,
-          },
-          {
-            label: "Required traits",
-            value: traitDisplayNames(content, mergedDisplay),
-          },
-          {
-            label: "Required assets",
-            value: assetDisplayNames(content, mission.requiredAssetIds),
-          },
-          ...(mission.requiredAssetIds.length > 0
-            ? [
-                {
-                  label: "Planned assets",
-                  value: plannedAssetSlotsDisplay(
-                    content,
-                    mission.requiredAssetIds,
-                    am.plannedAssetIds,
-                  ),
-                },
-              ]
-            : []),
-        );
-        let successValue: string;
-        let successTooltip: readonly string[] | undefined;
-        if (canAssignParticipants(participants, state.player.maxParticipantsPerMission)) {
-          const breakdown = computeSuccessChanceBreakdown(mission, participants, successOpts);
-          successValue = `${breakdown.finalPercent}%`;
-          const dynEntries = dynamicTraitSuccessModifierBreakdownFromFullRoster(
-            content,
-            state.player.minions,
-            am.participantInstanceIds,
-            lid,
-          );
-          successTooltip = formatMissionSuccessChanceTooltipLines(
-            breakdown,
-            dynEntries.entries,
-            state.player.minions,
-          );
-        } else {
-          successValue = "—";
-        }
-        rows.push(
-          successTooltip !== undefined && successTooltip.length > 0
-            ? { label: "Success chance", value: successValue, tooltipLines: successTooltip }
-            : { label: "Success chance", value: successValue },
-        );
+    const curId = state.currentEventTemplateId;
+    if (curId === null || content.events.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent =
+        content.events.length === 0 ? "No events in this catalog." : "No current event offer.";
+      panel.appendChild(empty);
+    } else {
+      const et = content.events.find((e) => e.id === curId);
+      const article = buildMissionCatalogArticle(curId);
+      if (mainOnly && et) {
+        article.draggable = true;
+        article.classList.add("assign-draggable-mission");
+        article.addEventListener("dragstart", (e) => {
+          e.stopPropagation();
+          e.dataTransfer?.setData("text/plain", missionDragJson("event", curId));
+          e.dataTransfer!.effectAllowed = "copy";
+        });
       } else {
-        rows.push(
-          { label: "Turns remaining", value: String(am.turnsRemaining) },
-          { label: "Mission template", value: am.missionTemplateId },
-        );
+        article.draggable = false;
       }
+      panel.appendChild(article);
+      const note = document.createElement("p");
+      note.className = "assets-panel-empty";
+      note.style.marginTop = "0.25rem";
+      note.textContent =
+        "Drag the offer to Plan mission to start it. If you do not, it expires when you Execute Plan.";
+      panel.appendChild(note);
+    }
+  }
 
-      appendMinionStatRows(dl, rows);
-      body.appendChild(dl);
+  function renderMissionsPanel(): void {
+    missionsPanelRootEl.innerHTML = "";
 
-      const mainOnly = state.phase === "main";
-      const actions = document.createElement("div");
-      actions.className = "active-mission-card-actions";
-      const cancelBtn = document.createElement("button");
-      cancelBtn.type = "button";
-      cancelBtn.className = "btn active-mission-card-cancel";
-      cancelBtn.textContent = "Cancel mission";
-      cancelBtn.disabled = !mainOnly;
-      cancelBtn.title = mainOnly ? "Remove mission; minions free immediately" : "Only during Main Phase";
-      cancelBtn.addEventListener("click", () => {
-        if (state.phase !== "main") {
+    const tablist = document.createElement("div");
+    tablist.className = "missions-panel-tabs";
+    tablist.setAttribute("role", "tablist");
+    tablist.setAttribute("aria-label", "Missions sections");
+
+    const tabDefs: { id: "active" | "events"; label: string }[] = [
+      { id: "active", label: "Active Missions" },
+      { id: "events", label: "Events" },
+    ];
+    for (const def of tabDefs) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "missions-panel-tab";
+      if (def.id === missionsPanelTab) {
+        tab.classList.add("missions-panel-tab--active");
+      }
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", def.id === missionsPanelTab ? "true" : "false");
+      tab.id = `missions-panel-tab-${def.id}`;
+      tab.textContent = def.label;
+      tab.addEventListener("click", () => {
+        if (missionsPanelTab === def.id) {
           return;
         }
-        const result = cancelMission(state, content, am.id);
-        if (result.ok) {
-          state = result.value;
-          refresh();
-        }
+        missionsPanelTab = def.id;
+        renderMissionsPanel();
       });
-      actions.appendChild(cancelBtn);
-      body.appendChild(actions);
-
-      activeMissionsPanelEl.appendChild(article);
+      tablist.appendChild(tab);
     }
+    missionsPanelRootEl.appendChild(tablist);
+
+    const activePage = document.createElement("div");
+    activePage.className = "missions-panel-page";
+    activePage.hidden = missionsPanelTab !== "active";
+    activePage.setAttribute("role", "tabpanel");
+    activePage.setAttribute("aria-labelledby", "missions-panel-tab-active");
+    renderActiveMissionsInto(activePage);
+
+    const eventsPage = document.createElement("div");
+    eventsPage.className = "missions-panel-page";
+    eventsPage.hidden = missionsPanelTab !== "events";
+    eventsPage.setAttribute("role", "tabpanel");
+    eventsPage.setAttribute("aria-labelledby", "missions-panel-tab-events");
+    renderEventsTab(eventsPage);
+
+    missionsPanelRootEl.appendChild(activePage);
+    missionsPanelRootEl.appendChild(eventsPage);
   }
 
   function renderLocationsPanel(): void {
@@ -2769,7 +2916,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
 
     function missionName(missionTemplateId: string): string {
-      return content.missions.find((m) => m.id === missionTemplateId)?.name ?? missionTemplateId;
+      return (
+        content.missions.find((m) => m.id === missionTemplateId)?.name ??
+        content.events.find((e) => e.id === missionTemplateId)?.name ??
+        missionTemplateId
+      );
     }
 
     function assetDisplayName(assetId: string): string {
@@ -2860,6 +3011,16 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           }
           return `${n} reached level ${ev.newLevel}.`;
         }
+        case "event_rotated_in": {
+          const n = missionName(ev.eventTemplateId);
+          return `Event "${n}".`;
+        }
+        case "event_expired": {
+          const n = missionName(ev.eventTemplateId);
+          const fx =
+            ev.effectDescriptions.length > 0 ? ev.effectDescriptions.join("; ") : "no listed effects";
+          return `Event "${n}" expired — ${fx}.`;
+        }
         default: {
           const _exhaustive: never = ev;
           return String(_exhaustive);
@@ -2902,6 +3063,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   }
 
   function refresh(): void {
+    reconcileStagedEventMissionWithState();
     const p = state.player;
     reconcileAssignSlots();
     syncAssignAssetSlotArrayWithMission();
@@ -2926,7 +3088,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     renderOmegaPlanPanel();
     renderLocationsPanel();
     renderAssetsPanel();
-    renderActiveMissionsPanel();
+    renderMissionsPanel();
     renderLairPanel();
     renderActivityPanel();
 
@@ -2949,9 +3111,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (!assignMissionTemplateId || assignMissionSource === null) {
       return;
     }
-    const mt = content.missions.find((m) => m.id === assignMissionTemplateId);
+    const mt = findMissionOrEventTemplate(assignMissionTemplateId);
     if (!mt) {
-      btnAssign.title = "Unknown mission — pick another from Omega or Lair.";
+      btnAssign.title = "Unknown mission — pick another from Omega, Lair, or Events.";
       return;
     }
     let targetPayload: MissionTarget;

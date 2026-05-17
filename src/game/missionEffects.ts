@@ -11,6 +11,7 @@ import type {
   LocationAssetPlacement,
   LocationAssetSlot,
   LocationSecurityState,
+  LocationType,
   MissionEffect,
   MissionTarget,
 } from "./types";
@@ -58,6 +59,26 @@ function describeMissionEffect(effect: MissionEffect): string {
       return `Max participants per mission ${signedInt(effect.delta)}`;
     case "max_command_points_per_turn_delta":
       return `Max command points per turn ${signedInt(effect.delta)}`;
+    case "security_level_delta_global":
+      return `Security level globally ${signedInt(effect.delta)} (all playable locations)`;
+    case "security_level_delta_by_location_type":
+      return `Security level ${signedInt(effect.delta)} at all ${effect.locationType} locations`;
+    case "security_level_delta_by_location_level":
+      return `Security level ${signedInt(effect.delta)} at all level-${effect.locationLevel} locations`;
+    case "remove_trait_from_all_minions":
+      return `Removed trait ${effect.traitId} from all hired minions`;
+    case "add_trait_to_random_minions":
+      return `Granted trait ${effect.traitId} to up to ${effect.count} random minion(s)`;
+    case "reveal_hidden_assets_global":
+      return `Revealed up to ${effect.count} hidden asset slot(s) globally`;
+    case "reveal_hidden_assets_by_location_type":
+      return `Revealed up to ${effect.count} hidden asset slot(s) at ${effect.locationType} sites`;
+    case "reveal_hidden_assets_by_location_level":
+      return `Revealed up to ${effect.count} hidden asset slot(s) at level-${effect.locationLevel} sites`;
+    case "grant_command_points_next_turn":
+      return `Grants +${effect.amount} command points on next turn refill`;
+    case "add_success_chance_modifier":
+      return `Mission success chance ${signedInt(effect.delta)}% for ${effect.turns} resolve pass(es)`;
     default: {
       const _exhaustive: never = effect;
       return String(_exhaustive);
@@ -81,7 +102,10 @@ export function orderedMissionEffects(effects: readonly MissionEffect[]): Missio
   const reveals = effects.filter(
     (e) =>
       e.kind === "reveal_target_asset" ||
-      e.kind === "reveal_all_hidden_assets_at_location",
+      e.kind === "reveal_all_hidden_assets_at_location" ||
+      e.kind === "reveal_hidden_assets_global" ||
+      e.kind === "reveal_hidden_assets_by_location_type" ||
+      e.kind === "reveal_hidden_assets_by_location_level",
   );
   const steals = effects.filter(
     (e) =>
@@ -93,6 +117,9 @@ export function orderedMissionEffects(effects: readonly MissionEffect[]): Missio
     (e) =>
       e.kind !== "reveal_target_asset" &&
       e.kind !== "reveal_all_hidden_assets_at_location" &&
+      e.kind !== "reveal_hidden_assets_global" &&
+      e.kind !== "reveal_hidden_assets_by_location_type" &&
+      e.kind !== "reveal_hidden_assets_by_location_level" &&
       e.kind !== "steal_target_asset" &&
       e.kind !== "steal_all_assets_at_location" &&
       e.kind !== "steal_all_revealed_assets_at_location",
@@ -151,6 +178,167 @@ function applySecurityLevelDelta(
     const next = Math.max(0, Math.min(cap, s.securityLevel + delta));
     return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
   });
+}
+
+function applySecurityLevelDeltaGlobal(
+  catalog: ContentCatalog,
+  states: LocationSecurityState[],
+  delta: number,
+): LocationSecurityState[] {
+  return states.map((s) => {
+    const cap = maxSecurityLevelForLocation(catalog, s.locationId);
+    const next = Math.max(0, Math.min(cap, s.securityLevel + delta));
+    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
+  });
+}
+
+function applySecurityLevelDeltaByLocationType(
+  catalog: ContentCatalog,
+  states: LocationSecurityState[],
+  delta: number,
+  locationType: LocationType,
+): LocationSecurityState[] {
+  const typeById = new Map(catalog.locations.map((l) => [l.id, l.locationType] as const));
+  return states.map((s) => {
+    if (typeById.get(s.locationId) !== locationType) {
+      return s;
+    }
+    const cap = maxSecurityLevelForLocation(catalog, s.locationId);
+    const next = Math.max(0, Math.min(cap, s.securityLevel + delta));
+    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
+  });
+}
+
+function applySecurityLevelDeltaByLocationLevel(
+  catalog: ContentCatalog,
+  states: LocationSecurityState[],
+  delta: number,
+  locationLevel: 1 | 2 | 3,
+): LocationSecurityState[] {
+  const levelById = new Map(catalog.locations.map((l) => [l.id, l.locationLevel] as const));
+  return states.map((s) => {
+    if (levelById.get(s.locationId) !== locationLevel) {
+      return s;
+    }
+    const cap = maxSecurityLevelForLocation(catalog, s.locationId);
+    const next = Math.max(0, Math.min(cap, s.securityLevel + delta));
+    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
+  });
+}
+
+type HiddenSlotRef = { locationId: string; slotIndex: number };
+
+function collectHiddenOccupiedSlots(
+  catalog: ContentCatalog,
+  placements: LocationAssetPlacement[],
+  filter?: { locationType?: LocationType; locationLevel?: 1 | 2 | 3 },
+): HiddenSlotRef[] {
+  const locById = new Map(catalog.locations.map((l) => [l.id, l] as const));
+  const out: HiddenSlotRef[] = [];
+  for (const p of placements) {
+    const locTpl = locById.get(p.locationId);
+    if (locTpl === undefined) {
+      continue;
+    }
+    if (filter?.locationType !== undefined && locTpl.locationType !== filter.locationType) {
+      continue;
+    }
+    if (filter?.locationLevel !== undefined && locTpl.locationLevel !== filter.locationLevel) {
+      continue;
+    }
+    for (let si = 0; si < p.slots.length; si += 1) {
+      const slot = p.slots[si]!;
+      if (isOccupiedAssetSlot(slot) && slot.visibility === "hidden") {
+        out.push({ locationId: p.locationId, slotIndex: si });
+      }
+    }
+  }
+  return out;
+}
+
+function applyRevealHiddenSlots(
+  placements: LocationAssetPlacement[],
+  refs: readonly HiddenSlotRef[],
+): LocationAssetPlacement[] {
+  let next = placements;
+  for (const ref of refs) {
+    next = mapSlotAt(next, ref.locationId, ref.slotIndex, (slot) => {
+      if (!isOccupiedAssetSlot(slot) || slot.visibility === "revealed") {
+        return slot;
+      }
+      return { kind: "occupied", assetId: slot.assetId, visibility: "revealed" as const };
+    });
+  }
+  return next;
+}
+
+function shuffleInPlaceRefs(arr: HiddenSlotRef[], rng: Rng): void {
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = t;
+  }
+}
+
+function applyRevealHiddenAssetsScoped(
+  catalog: ContentCatalog,
+  placements: LocationAssetPlacement[],
+  count: number,
+  rng: Rng,
+  filter?: { locationType?: LocationType; locationLevel?: 1 | 2 | 3 },
+): LocationAssetPlacement[] {
+  if (count <= 0) {
+    return placements;
+  }
+  const candidates = collectHiddenOccupiedSlots(catalog, placements, filter);
+  if (candidates.length === 0) {
+    return placements;
+  }
+  shuffleInPlaceRefs(candidates, rng);
+  return applyRevealHiddenSlots(placements, candidates.slice(0, Math.min(count, candidates.length)));
+}
+
+function applyRemoveTraitFromAllMinions(
+  player: PlayerState,
+  traitId: string,
+): PlayerState {
+  return {
+    ...player,
+    minions: player.minions.map((m) => ({
+      ...m,
+      traitIds: m.traitIds.filter((id) => id !== traitId),
+    })),
+  };
+}
+
+function applyAddTraitToRandomMinions(
+  player: PlayerState,
+  effect: Extract<MissionEffect, { kind: "add_trait_to_random_minions" }>,
+  rng: Rng,
+): PlayerState {
+  const { traitId, count } = effect;
+  if (player.minions.length === 0 || count <= 0) {
+    return player;
+  }
+  const indices = player.minions.map((_, i) => i);
+  for (let i = indices.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = indices[i]!;
+    indices[i] = indices[j]!;
+    indices[j] = t;
+  }
+  const pickN = Math.min(count, indices.length);
+  const pickSet = new Set(indices.slice(0, pickN));
+  return {
+    ...player,
+    minions: player.minions.map((m, idx) => {
+      if (!pickSet.has(idx) || m.traitIds.includes(traitId)) {
+        return m;
+      }
+      return { ...m, traitIds: [...m.traitIds, traitId] };
+    }),
+  };
 }
 
 function applyRevealTargetAsset(
@@ -566,6 +754,7 @@ export function applyMissionEffects(
   locationAssetSlots: LocationAssetPlacement[];
   locationSecurityStates: LocationSecurityState[];
   events: ActivityEvent[];
+  activeSuccessModifiers: { delta: number; turnsRemaining: number }[];
 } {
   const target = activeMission.target;
   const ordered = orderedMissionEffects(effects);
@@ -576,12 +765,36 @@ export function applyMissionEffects(
   }));
   let locationSecurityStates = state.locationSecurityStates.map((s) => ({ ...s }));
   const events: ActivityEvent[] = [];
+  let activeSuccessModifiers = state.activeSuccessModifiers.map((m) => ({ ...m }));
 
   for (const effect of ordered) {
     if (effect.kind === "reveal_target_asset") {
       locationAssetSlots = applyRevealTargetAsset(locationAssetSlots, target);
     } else if (effect.kind === "reveal_all_hidden_assets_at_location") {
       locationAssetSlots = applyRevealAllHiddenAtLocation(locationAssetSlots, target);
+    } else if (effect.kind === "reveal_hidden_assets_global") {
+      locationAssetSlots = applyRevealHiddenAssetsScoped(
+        catalog,
+        locationAssetSlots,
+        effect.count,
+        rng,
+      );
+    } else if (effect.kind === "reveal_hidden_assets_by_location_type") {
+      locationAssetSlots = applyRevealHiddenAssetsScoped(
+        catalog,
+        locationAssetSlots,
+        effect.count,
+        rng,
+        { locationType: effect.locationType },
+      );
+    } else if (effect.kind === "reveal_hidden_assets_by_location_level") {
+      locationAssetSlots = applyRevealHiddenAssetsScoped(
+        catalog,
+        locationAssetSlots,
+        effect.count,
+        rng,
+        { locationLevel: effect.locationLevel },
+      );
     } else if (effect.kind === "steal_target_asset") {
       const r = applyStealTargetAsset(locationAssetSlots, target, player);
       locationAssetSlots = r.placements;
@@ -612,6 +825,41 @@ export function applyMissionEffects(
         target,
         effect.delta,
       );
+    } else if (effect.kind === "security_level_delta_global") {
+      locationSecurityStates = applySecurityLevelDeltaGlobal(
+        catalog,
+        locationSecurityStates,
+        effect.delta,
+      );
+    } else if (effect.kind === "security_level_delta_by_location_type") {
+      locationSecurityStates = applySecurityLevelDeltaByLocationType(
+        catalog,
+        locationSecurityStates,
+        effect.delta,
+        effect.locationType,
+      );
+    } else if (effect.kind === "security_level_delta_by_location_level") {
+      locationSecurityStates = applySecurityLevelDeltaByLocationLevel(
+        catalog,
+        locationSecurityStates,
+        effect.delta,
+        effect.locationLevel,
+      );
+    } else if (effect.kind === "remove_trait_from_all_minions") {
+      player = applyRemoveTraitFromAllMinions(player, effect.traitId);
+    } else if (effect.kind === "add_trait_to_random_minions") {
+      player = applyAddTraitToRandomMinions(player, effect, rng);
+    } else if (effect.kind === "grant_command_points_next_turn") {
+      player = {
+        ...player,
+        pendingBonusCommandPoints:
+          (player.pendingBonusCommandPoints ?? 0) + effect.amount,
+      };
+    } else if (effect.kind === "add_success_chance_modifier") {
+      activeSuccessModifiers = [
+        ...activeSuccessModifiers,
+        { delta: effect.delta, turnsRemaining: effect.turns },
+      ];
     } else if (effect.kind === "add_target_minion_traits") {
       player = applyAddTargetMinionTraits(player, target, effect);
     } else if (effect.kind === "add_random_participant_traits") {
@@ -626,5 +874,5 @@ export function applyMissionEffects(
   }
 
   player = { ...player, infamy: clampInfamy(player.infamy) };
-  return { player, locationAssetSlots, locationSecurityStates, events };
+  return { player, locationAssetSlots, locationSecurityStates, events, activeSuccessModifiers };
 }

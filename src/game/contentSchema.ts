@@ -3,12 +3,14 @@ import type {
   AgentTemplate,
   Asset,
   ContentCatalog,
+  EventTemplate,
   LairTemplate,
   LocationTemplate,
   MapTemplate,
   MinionTemplate,
   MissionEffect,
   MissionTemplate,
+  MissionTargetType,
   OmegaPlanStage,
   OmegaPlanTemplate,
   StartingDynamicTrait,
@@ -262,6 +264,10 @@ const missionTargetTypeSchema = z.enum([
 
 const deltaSchema = z.number().int().min(-50).max(50);
 
+const locationLevelEffectSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
+
+const locationTypeSchema = z.enum(["political", "military", "economic"]);
+
 const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("reveal_target_asset") }),
   z.object({ kind: z.literal("reveal_all_hidden_assets_at_location") }),
@@ -321,6 +327,52 @@ const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnion("kind
     kind: z.literal("max_command_points_per_turn_delta"),
     delta: deltaSchema,
   }),
+  z.object({
+    kind: z.literal("security_level_delta_global"),
+    delta: deltaSchema,
+  }),
+  z.object({
+    kind: z.literal("security_level_delta_by_location_type"),
+    delta: deltaSchema,
+    locationType: locationTypeSchema,
+  }),
+  z.object({
+    kind: z.literal("security_level_delta_by_location_level"),
+    delta: deltaSchema,
+    locationLevel: locationLevelEffectSchema,
+  }),
+  z.object({
+    kind: z.literal("remove_trait_from_all_minions"),
+    traitId: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal("add_trait_to_random_minions"),
+    traitId: z.string().min(1),
+    count: z.number().int().min(1).max(99),
+  }),
+  z.object({
+    kind: z.literal("reveal_hidden_assets_global"),
+    count: z.number().int().min(0).max(99),
+  }),
+  z.object({
+    kind: z.literal("reveal_hidden_assets_by_location_type"),
+    count: z.number().int().min(0).max(99),
+    locationType: locationTypeSchema,
+  }),
+  z.object({
+    kind: z.literal("reveal_hidden_assets_by_location_level"),
+    count: z.number().int().min(0).max(99),
+    locationLevel: locationLevelEffectSchema,
+  }),
+  z.object({
+    kind: z.literal("grant_command_points_next_turn"),
+    amount: z.number().int().min(1).max(99),
+  }),
+  z.object({
+    kind: z.literal("add_success_chance_modifier"),
+    delta: z.number().int().min(-100).max(100),
+    turns: z.number().int().min(1).max(99),
+  }),
 ]);
 
 const missionTemplateSchema = z
@@ -346,6 +398,137 @@ const missionTemplateSchema = z
       });
     }
   });
+
+/** Validates mission effects (placement rules + cross-refs). Used for missions and events. */
+function validateMissionEffectsForContext(
+  templateId: string,
+  targetType: MissionTargetType,
+  effects: readonly MissionEffect[],
+  catalogMissionIdSet: Set<string>,
+  traitIds: Set<string>,
+  assetIds: Set<string>,
+): void {
+  const assetOnlyKinds = new Set<MissionEffect["kind"]>(["reveal_target_asset", "steal_target_asset"]);
+  const revealAllAtLocationKinds = new Set<MissionEffect["kind"]>([
+    "reveal_all_hidden_assets_at_location",
+    "steal_all_assets_at_location",
+    "steal_all_revealed_assets_at_location",
+    "security_level_delta",
+  ]);
+  const minionOnlyKinds = new Set<MissionEffect["kind"]>(["add_target_minion_traits"]);
+  const targetIsNotAssetSlot =
+    targetType !== "asset_hidden" && targetType !== "asset_revealed";
+  const targetHasMissionLocation =
+    targetType === "location" ||
+    targetType === "asset_hidden" ||
+    targetType === "asset_revealed";
+
+  for (const eff of effects) {
+    if (eff.kind === "unlock_lair_mission" && !catalogMissionIdSet.has(eff.missionId)) {
+      throw new Error(
+        `Unknown mission id "${eff.missionId}" in unlock_lair_mission for template "${templateId}"`,
+      );
+    }
+    if (targetIsNotAssetSlot && assetOnlyKinds.has(eff.kind)) {
+      throw new Error(
+        `Template "${templateId}" uses effect "${eff.kind}" but targetType is "${targetType}" (requires asset_hidden or asset_revealed)`,
+      );
+    }
+    if (!targetHasMissionLocation && revealAllAtLocationKinds.has(eff.kind)) {
+      throw new Error(
+        `Template "${templateId}" uses effect "${eff.kind}" but targetType is "${targetType}" (requires location, asset_hidden, or asset_revealed)`,
+      );
+    }
+    if (targetType !== "minion" && minionOnlyKinds.has(eff.kind)) {
+      throw new Error(
+        `Template "${templateId}" uses effect "${eff.kind}" but targetType is "${targetType}" (requires minion)`,
+      );
+    }
+    if (eff.kind === "add_target_minion_traits") {
+      const seenTrait = new Set<string>();
+      for (const tid of eff.traitIds) {
+        if (seenTrait.has(tid)) {
+          throw new Error(
+            `Duplicate trait id "${tid}" in add_target_minion_traits for template "${templateId}"`,
+          );
+        }
+        seenTrait.add(tid);
+        if (!traitIds.has(tid)) {
+          throw new Error(
+            `Unknown trait id "${tid}" in add_target_minion_traits for template "${templateId}"`,
+          );
+        }
+      }
+    }
+    if (eff.kind === "add_random_participant_traits") {
+      const seenTrait = new Set<string>();
+      for (const tid of eff.traitIds) {
+        if (seenTrait.has(tid)) {
+          throw new Error(
+            `Duplicate trait id "${tid}" in add_random_participant_traits for template "${templateId}"`,
+          );
+        }
+        seenTrait.add(tid);
+        if (!traitIds.has(tid)) {
+          throw new Error(
+            `Unknown trait id "${tid}" in add_random_participant_traits for template "${templateId}"`,
+          );
+        }
+      }
+    }
+    if (eff.kind === "add_all_participant_traits") {
+      const seenTrait = new Set<string>();
+      for (const tid of eff.traitIds) {
+        if (seenTrait.has(tid)) {
+          throw new Error(
+            `Duplicate trait id "${tid}" in add_all_participant_traits for template "${templateId}"`,
+          );
+        }
+        seenTrait.add(tid);
+        if (!traitIds.has(tid)) {
+          throw new Error(
+            `Unknown trait id "${tid}" in add_all_participant_traits for template "${templateId}"`,
+          );
+        }
+      }
+    }
+    if (eff.kind === "remove_trait_from_all_minions" || eff.kind === "add_trait_to_random_minions") {
+      if (!traitIds.has(eff.traitId)) {
+        throw new Error(
+          `Unknown trait id "${eff.traitId}" in ${eff.kind} for template "${templateId}"`,
+        );
+      }
+    }
+    if (eff.kind === "gain_assets") {
+      for (const aid of eff.assetIds) {
+        if (!assetIds.has(aid)) {
+          throw new Error(`Unknown asset id "${aid}" in gain_assets for template "${templateId}"`);
+        }
+      }
+    }
+    if (eff.kind === "exchange_assets") {
+      if (eff.removeAssetIds.length === 0 && eff.gainAssetIds.length === 0) {
+        throw new Error(
+          `Template "${templateId}" exchange_assets must list at least one removeAssetIds or gainAssetIds entry`,
+        );
+      }
+      for (const aid of eff.removeAssetIds) {
+        if (!assetIds.has(aid)) {
+          throw new Error(
+            `Unknown asset id "${aid}" in exchange_assets.removeAssetIds for template "${templateId}"`,
+          );
+        }
+      }
+      for (const aid of eff.gainAssetIds) {
+        if (!assetIds.has(aid)) {
+          throw new Error(
+            `Unknown asset id "${aid}" in exchange_assets.gainAssetIds for template "${templateId}"`,
+          );
+        }
+      }
+    }
+  }
+}
 
 function parseMissionsWithRefs(
   missionsRaw: unknown,
@@ -386,121 +569,15 @@ function parseMissionsWithRefs(
         );
       }
     }
-    const assetOnlyKinds = new Set<MissionEffect["kind"]>(["reveal_target_asset", "steal_target_asset"]);
-    const revealAllAtLocationKinds = new Set<MissionEffect["kind"]>([
-      "reveal_all_hidden_assets_at_location",
-      "steal_all_assets_at_location",
-      "steal_all_revealed_assets_at_location",
-      "security_level_delta",
-    ]);
-    const minionOnlyKinds = new Set<MissionEffect["kind"]>(["add_target_minion_traits"]);
-    const targetIsNotAssetSlot =
-      m.targetType !== "asset_hidden" && m.targetType !== "asset_revealed";
-    const targetHasMissionLocation =
-      m.targetType === "location" ||
-      m.targetType === "asset_hidden" ||
-      m.targetType === "asset_revealed";
     const allEffects = [...(m.onSuccessEffects ?? []), ...(m.onFailureEffects ?? [])];
-    for (const eff of allEffects) {
-      if (eff.kind === "unlock_lair_mission" && !catalogMissionIdSet.has(eff.missionId)) {
-        throw new Error(
-          `Unknown mission id "${eff.missionId}" in unlock_lair_mission for mission "${m.id}"`,
-        );
-      }
-      if (targetIsNotAssetSlot && assetOnlyKinds.has(eff.kind)) {
-        throw new Error(
-          `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires asset_hidden or asset_revealed)`,
-        );
-      }
-      if (!targetHasMissionLocation && revealAllAtLocationKinds.has(eff.kind)) {
-        throw new Error(
-          `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires location, asset_hidden, or asset_revealed)`,
-        );
-      }
-      if (m.targetType !== "minion" && minionOnlyKinds.has(eff.kind)) {
-        throw new Error(
-          `Mission "${m.id}" uses effect "${eff.kind}" but targetType is "${m.targetType}" (requires minion)`,
-        );
-      }
-      if (eff.kind === "add_target_minion_traits") {
-        const seenTrait = new Set<string>();
-        for (const tid of eff.traitIds) {
-          if (seenTrait.has(tid)) {
-            throw new Error(
-              `Duplicate trait id "${tid}" in add_target_minion_traits for mission "${m.id}"`,
-            );
-          }
-          seenTrait.add(tid);
-          if (!traitIds.has(tid)) {
-            throw new Error(
-              `Unknown trait id "${tid}" in add_target_minion_traits for mission "${m.id}"`,
-            );
-          }
-        }
-      }
-      if (eff.kind === "add_random_participant_traits") {
-        const seenTrait = new Set<string>();
-        for (const tid of eff.traitIds) {
-          if (seenTrait.has(tid)) {
-            throw new Error(
-              `Duplicate trait id "${tid}" in add_random_participant_traits for mission "${m.id}"`,
-            );
-          }
-          seenTrait.add(tid);
-          if (!traitIds.has(tid)) {
-            throw new Error(
-              `Unknown trait id "${tid}" in add_random_participant_traits for mission "${m.id}"`,
-            );
-          }
-        }
-      }
-      if (eff.kind === "add_all_participant_traits") {
-        const seenTrait = new Set<string>();
-        for (const tid of eff.traitIds) {
-          if (seenTrait.has(tid)) {
-            throw new Error(
-              `Duplicate trait id "${tid}" in add_all_participant_traits for mission "${m.id}"`,
-            );
-          }
-          seenTrait.add(tid);
-          if (!traitIds.has(tid)) {
-            throw new Error(
-              `Unknown trait id "${tid}" in add_all_participant_traits for mission "${m.id}"`,
-            );
-          }
-        }
-      }
-      if (eff.kind === "gain_assets") {
-        for (const aid of eff.assetIds) {
-          if (!assetIds.has(aid)) {
-            throw new Error(
-              `Unknown asset id "${aid}" in gain_assets for mission "${m.id}"`,
-            );
-          }
-        }
-      }
-      if (eff.kind === "exchange_assets") {
-        if (eff.removeAssetIds.length === 0 && eff.gainAssetIds.length === 0) {
-          throw new Error(
-            `Mission "${m.id}" exchange_assets must list at least one removeAssetIds or gainAssetIds entry`,
-          );
-        }
-        for (const aid of eff.removeAssetIds) {
-          if (!assetIds.has(aid)) {
-            throw new Error(
-              `Unknown asset id "${aid}" in exchange_assets.removeAssetIds for mission "${m.id}"`,
-            );
-          }
-        }
-        for (const aid of eff.gainAssetIds) {
-          if (!assetIds.has(aid)) {
-            throw new Error(
-              `Unknown asset id "${aid}" in exchange_assets.gainAssetIds for mission "${m.id}"`,
-            );
-          }
-        }
-      }
-    }
+    validateMissionEffectsForContext(
+      m.id,
+      m.targetType,
+      allEffects,
+      catalogMissionIdSet,
+      traitIds,
+      assetIds,
+    );
     for (const eff of m.onFailureEffects ?? []) {
       if (eff.kind === "unlock_lair_mission") {
         throw new Error(
@@ -533,7 +610,113 @@ function parseMissionsWithRefs(
   });
 }
 
-const locationTypeSchema = z.enum(["political", "military", "economic"]);
+const eventTemplateSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+  cardArt: z.string().min(1).optional(),
+  targetType: missionTargetTypeSchema,
+  startCommandPoints: z.coerce.number().int().min(0),
+  requiredTraitIds: z.array(z.string().min(1)).default([]),
+  requiredAssetIds: z.array(z.string().min(1)).default([]),
+  durationTurns: z.coerce.number().int().min(1),
+  onSuccessEffects: z.array(missionEffectSchema).optional(),
+  onFailureEffects: z.array(missionEffectSchema).optional(),
+  expireEffects: z.array(missionEffectSchema).optional(),
+});
+
+function parseEventsWithRefs(
+  eventsRaw: unknown,
+  traitIds: Set<string>,
+  assetIds: Set<string>,
+  catalogMissionIdSet: Set<string>,
+): EventTemplate[] {
+  const parsed = z.array(eventTemplateSchema).safeParse(eventsRaw);
+  if (!parsed.success) {
+    throw parsed.error;
+  }
+  const arr = parsed.data;
+  const seenEventIds = new Set<string>();
+  for (let i = 0; i < arr.length; i += 1) {
+    const m = arr[i];
+    if (seenEventIds.has(m.id)) {
+      throw new Error(`Duplicate event id: ${m.id} (index ${i})`);
+    }
+    seenEventIds.add(m.id);
+    if (catalogMissionIdSet.has(m.id)) {
+      throw new Error(
+        `Event id "${m.id}" conflicts with a mission template id (mission and event ids must be disjoint)`,
+      );
+    }
+    const seenRequiredTraits = new Set<string>();
+    for (const tid of m.requiredTraitIds) {
+      if (seenRequiredTraits.has(tid)) {
+        throw new Error(`Duplicate required trait id "${tid}" in event "${m.id}"`);
+      }
+      seenRequiredTraits.add(tid);
+      if (!traitIds.has(tid)) {
+        throw new Error(`Unknown trait id "${tid}" referenced by event "${m.id}"`);
+      }
+    }
+    for (const aid of m.requiredAssetIds) {
+      if (!assetIds.has(aid)) {
+        throw new Error(`Unknown asset id "${aid}" referenced by event "${m.id}"`);
+      }
+    }
+    const allEffects = [
+      ...(m.onSuccessEffects ?? []),
+      ...(m.onFailureEffects ?? []),
+      ...(m.expireEffects ?? []),
+    ];
+    validateMissionEffectsForContext(
+      m.id,
+      m.targetType,
+      allEffects,
+      catalogMissionIdSet,
+      traitIds,
+      assetIds,
+    );
+    for (const eff of m.onFailureEffects ?? []) {
+      if (eff.kind === "unlock_lair_mission") {
+        throw new Error(
+          `Event "${m.id}" must not use unlock_lair_mission in onFailureEffects (success only)`,
+        );
+      }
+    }
+    for (const eff of m.expireEffects ?? []) {
+      if (eff.kind === "unlock_lair_mission") {
+        throw new Error(
+          `Event "${m.id}" must not use unlock_lair_mission in expireEffects (success only)`,
+        );
+      }
+    }
+  }
+  return arr.map((m) => {
+    const base: EventTemplate = {
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      targetType: m.targetType,
+      startCommandPoints: m.startCommandPoints,
+      requiredTraitIds: [...m.requiredTraitIds],
+      requiredAssetIds: [...m.requiredAssetIds],
+      durationTurns: m.durationTurns,
+    };
+    if (m.cardArt !== undefined) {
+      base.cardArt = m.cardArt;
+    }
+    if (m.onSuccessEffects !== undefined && m.onSuccessEffects.length > 0) {
+      base.onSuccessEffects = [...m.onSuccessEffects];
+    }
+    if (m.onFailureEffects !== undefined && m.onFailureEffects.length > 0) {
+      base.onFailureEffects = [...m.onFailureEffects];
+    }
+    if (m.expireEffects !== undefined && m.expireEffects.length > 0) {
+      base.expireEffects = [...m.expireEffects];
+    }
+    return base;
+  });
+}
 
 const locationTemplateSchema = z.object({
   id: z.string().min(1),
@@ -818,6 +1001,7 @@ export function parseCatalog(
   assetsRaw: unknown,
   omegaPlansRaw: unknown,
   lairsRaw: unknown,
+  eventsRaw: unknown,
   organizationNamesRaw: unknown,
   wantedLevelsRaw: unknown,
 ): ContentCatalog {
@@ -850,6 +1034,7 @@ export function parseCatalog(
     mapIds,
   );
   const lairs = parseLairsWithRefs(lairsRaw, missionIds, assetIds);
+  const events = parseEventsWithRefs(eventsRaw, traitIds, assetIds, missionIds);
   const organizationNamesResult =
     organizationNamesArraySchema.safeParse(organizationNamesRaw);
   if (!organizationNamesResult.success) {
@@ -867,6 +1052,7 @@ export function parseCatalog(
     assets,
     omegaPlans,
     lairs,
+    events,
     organizationNames,
     wantedLevels,
   };

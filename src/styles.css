@@ -446,16 +446,77 @@ body {
   min-height: 0;
 }
 
-.game-panel.game-panel--active-missions .active-missions-panel {
+.game-panel.game-panel--missions {
+  min-height: 0;
+}
+
+.game-panel.game-panel--missions .missions-panel-root {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.missions-panel-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.15rem;
+}
+
+.missions-panel-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #a1a1aa;
+  background: #27272a;
+  border: 1px solid #3f3f46;
+  border-radius: 0.35rem;
+  cursor: pointer;
+}
+
+.missions-panel-tab:hover {
+  color: #e4e4e7;
+  border-color: #52525b;
+}
+
+.missions-panel-tab--active {
+  color: #fafafa;
+  background: #3f3f46;
+  border-color: #71717a;
+}
+
+.missions-panel-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
 }
 
-.active-missions-panel {
+/* `hidden` must win over `display: flex` above (author CSS overrides UA [hidden] otherwise). */
+.missions-panel-page[hidden] {
+  display: none !important;
+}
+
+.missions-active-list {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.events-tab-section-title {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .active-missions-summary {
@@ -556,6 +617,46 @@ body {
   font-size: 0.8125rem;
   font-weight: 600;
   color: #e4e4e7;
+}
+
+/* Native `title` often fails on draggable mission cards (Chrome); hover panel instead. */
+.mission-outcome-tooltip-anchor {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 0.3rem;
+  cursor: help;
+  outline: none;
+}
+
+.mission-outcome-tooltip-anchor .asset-card-title {
+  margin: 0;
+}
+
+.mission-outcome-tooltip-panel {
+  display: none;
+  position: absolute;
+  z-index: 80;
+  left: 0;
+  top: calc(100% + 4px);
+  min-width: min(100%, 220px);
+  max-width: min(340px, calc(100vw - 2rem));
+  padding: 0.45rem 0.55rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: #f4f4f5;
+  background: #18181b;
+  border: 1px solid #52525b;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+
+.mission-outcome-tooltip-anchor:hover .mission-outcome-tooltip-panel,
+.mission-outcome-tooltip-anchor:focus-within .mission-outcome-tooltip-panel {
+  display: block;
 }
 
 .asset-card-stats {

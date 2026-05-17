@@ -155,7 +155,27 @@ export type MissionEffect =
   | { kind: "max_roster_size_delta"; delta: number }
   | { kind: "max_hire_offers_delta"; delta: number }
   | { kind: "max_participants_per_mission_delta"; delta: number }
-  | { kind: "max_command_points_per_turn_delta"; delta: number };
+  | { kind: "max_command_points_per_turn_delta"; delta: number }
+  /** Adds delta to security at every playable location; clamped per-site to [0, locationLevel]. */
+  | { kind: "security_level_delta_global"; delta: number }
+  | { kind: "security_level_delta_by_location_type"; delta: number; locationType: LocationType }
+  | { kind: "security_level_delta_by_location_level"; delta: number; locationLevel: 1 | 2 | 3 }
+  /** Removes trait id from every hired roster minion (no-op if none have it). */
+  | { kind: "remove_trait_from_all_minions"; traitId: string }
+  /**
+   * Grants trait to up to `count` distinct hired minions chosen uniformly at random (including busy).
+   */
+  | { kind: "add_trait_to_random_minions"; traitId: string; count: number }
+  /** Reveals up to `count` random hidden occupied asset slots across playable locations. */
+  | { kind: "reveal_hidden_assets_global"; count: number }
+  | { kind: "reveal_hidden_assets_by_location_type"; count: number; locationType: LocationType }
+  | { kind: "reveal_hidden_assets_by_location_level"; count: number; locationLevel: 1 | 2 | 3 }
+  /** Adds to one-time bonus CP applied on the next turn's CP refill, then cleared. */
+  | { kind: "grant_command_points_next_turn"; amount: number }
+  /**
+   * Adds a flat success % modifier for `turns` resolve cycles (each `executePlan` counts as one).
+   */
+  | { kind: "add_success_chance_modifier"; delta: number; turns: number };
 
 export type MissionTemplate = {
   id: string;
@@ -178,6 +198,15 @@ export type MissionTemplate = {
   onSuccessEffects?: MissionEffect[];
   /** Applied in order when the mission resolves as a failure (after baseline infamy). */
   onFailureEffects?: MissionEffect[];
+};
+
+/**
+ * Event mission template (same fields as {@link MissionTemplate} plus optional expire effects).
+ * Stored in `content/events.json`.
+ */
+export type EventTemplate = MissionTemplate & {
+  /** Applied automatically if this event is never started before the next event is rolled. */
+  expireEffects?: MissionEffect[];
 };
 
 /** Visibility of an asset at a location for the player (kind known only when revealed). */
@@ -228,8 +257,8 @@ export type LocationTemplate = {
   locationLevel: 1 | 2 | 3;
 };
 
-/** Where an active mission was started from (lair pool vs current Omega row). */
-export type MissionSource = "lair" | "omega";
+/** Where an active mission was started from (lair pool vs current Omega row vs rotating event). */
+export type MissionSource = "lair" | "omega" | "event";
 
 /**
  * Per-run security at a location (not in catalog JSON). Updated by gameplay systems.
@@ -306,6 +335,8 @@ export type ContentCatalog = {
   assets: Asset[];
   omegaPlans: OmegaPlanTemplate[];
   lairs: LairTemplate[];
+  /** Rotating global event mission templates (`content/events.json`). */
+  events: EventTemplate[];
   /** Display names for the player's evil organization; one chosen per run. */
   organizationNames: string[];
   /** Ordered wanted tiers (ascending `minInfamy`); drives max opposing agents cap. */

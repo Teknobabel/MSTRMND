@@ -1,5 +1,6 @@
 import agentsJson from "../../content/agents.json";
 import assetsJson from "../../content/assets.json";
+import eventsJson from "../../content/events.json";
 import lairsJson from "../../content/lairs.json";
 import locationsJson from "../../content/locations.json";
 import mapsJson from "../../content/maps.json";
@@ -23,6 +24,7 @@ export function loadContent(): ContentCatalog {
     assetsJson,
     omegaPlansJson,
     lairsJson,
+    eventsJson,
     organizationNamesJson,
     wantedLevelsJson,
   );
