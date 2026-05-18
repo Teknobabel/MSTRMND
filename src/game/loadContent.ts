@@ -7,6 +7,7 @@ import mapsJson from "../../content/maps.json";
 import minionsJson from "../../content/minions.json";
 import missionsJson from "../../content/missions.json";
 import organizationNamesJson from "../../content/organizationNames.json";
+import playerProfilesJson from "../../content/playerProfiles.json";
 import omegaPlansJson from "../../content/omegaPlans.json";
 import traitsJson from "../../content/traits.json";
 import wantedLevelsJson from "../../content/wantedLevels.json";
@@ -26,6 +27,7 @@ export function loadContent(): ContentCatalog {
     lairsJson,
     eventsJson,
     organizationNamesJson,
+    playerProfilesJson,
     wantedLevelsJson,
   );
 }

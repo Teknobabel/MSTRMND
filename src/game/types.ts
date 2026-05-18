@@ -324,6 +324,13 @@ export type LairTemplate = {
   startingAssets?: Record<string, number>;
 };
 
+/** Catalog entry for the player mastermind identity; one row chosen per run. */
+export type PlayerProfile = {
+  name: string;
+  /** Site root path under `public/` (e.g. `/assets/cards/minion.png`). */
+  profilePic: string;
+};
+
 export type ContentCatalog = {
   traits: Trait[];
   minions: MinionTemplate[];
@@ -339,6 +346,8 @@ export type ContentCatalog = {
   events: EventTemplate[];
   /** Display names for the player's evil organization; one chosen per run. */
   organizationNames: string[];
+  /** Player mastermind profiles; one chosen per run for name + portrait. */
+  playerProfiles: PlayerProfile[];
   /** Ordered wanted tiers (ascending `minInfamy`); drives max opposing agents cap. */
   wantedLevels: WantedLevelTier[];
 };

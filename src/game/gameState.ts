@@ -180,6 +180,10 @@ export type GameState = {
   turnNumber: number;
   /** Evil organization display name for this run (from `ContentCatalog.organizationNames`). */
   organizationName: string;
+  /** Player mastermind display name for this run (from `ContentCatalog.playerProfiles`). */
+  playerName: string;
+  /** Player portrait URL for this run (from chosen profile’s `profilePic`). */
+  playerProfilePic: string;
   player: PlayerState;
   activeMissions: ActiveMission[];
   /** Minion template ids offered for hire until the next resolve rerolls them */
@@ -524,6 +528,16 @@ function pickRandomOrganizationName(catalog: ContentCatalog, rng: Rng): string {
   return names[i]!;
 }
 
+function pickRandomPlayerProfile(
+  catalog: ContentCatalog,
+  rng: Rng,
+): { name: string; profilePic: string } {
+  const profiles = catalog.playerProfiles;
+  const i = Math.floor(rng() * profiles.length);
+  const p = profiles[i]!;
+  return { name: p.name, profilePic: p.profilePic };
+}
+
 /** Uniform random event template id, or null when the catalog has no events. */
 export function pickRandomEventTemplateId(catalog: ContentCatalog, rng: Rng): string | null {
   const list = catalog.events;
@@ -561,10 +575,13 @@ export function createInitialGameState(catalog: ContentCatalog): GameState {
   const locationRequiredTraits = rollLocationRequiredTraits(catalog, runLocations, rng);
   const locationSecurityTraits = rollLocationSecurityTraits(catalog, runLocations, rng);
   const lairMissionIds = lairTemplate ? [...lairTemplate.availableMissionIds] : [];
+  const playerProfile = pickRandomPlayerProfile(catalog, rng);
   const base: GameState = {
     phase: "main",
     turnNumber: 1,
     organizationName: pickRandomOrganizationName(catalog, rng),
+    playerName: playerProfile.name,
+    playerProfilePic: playerProfile.profilePic,
     player,
     activeMissions: [],
     availableMinionTemplateIds: pickRandomMinionTemplateIds(

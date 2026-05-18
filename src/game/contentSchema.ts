@@ -13,6 +13,7 @@ import type {
   MissionTargetType,
   OmegaPlanStage,
   OmegaPlanTemplate,
+  PlayerProfile,
   StartingDynamicTrait,
   Trait,
   WantedLevelTier,
@@ -874,6 +875,13 @@ const assetsArraySchema = z
 
 const organizationNamesArraySchema = z.array(z.string().min(1)).min(1);
 
+const playerProfileSchema = z.object({
+  name: z.string().min(1),
+  profilePic: z.string().min(1),
+});
+
+const playerProfilesArraySchema = z.array(playerProfileSchema).min(1);
+
 const wantedLevelTierSchema = z.object({
   minInfamy: z.number().int().min(0).max(100),
   name: z.string().min(1),
@@ -1003,6 +1011,7 @@ export function parseCatalog(
   lairsRaw: unknown,
   eventsRaw: unknown,
   organizationNamesRaw: unknown,
+  playerProfilesRaw: unknown,
   wantedLevelsRaw: unknown,
 ): ContentCatalog {
   const traitsResult = traitsArraySchema.safeParse(traitsRaw);
@@ -1041,6 +1050,11 @@ export function parseCatalog(
     throw organizationNamesResult.error;
   }
   const organizationNames = organizationNamesResult.data;
+  const playerProfilesResult = playerProfilesArraySchema.safeParse(playerProfilesRaw);
+  if (!playerProfilesResult.success) {
+    throw playerProfilesResult.error;
+  }
+  const playerProfiles: PlayerProfile[] = playerProfilesResult.data;
   const wantedLevels = parseWantedLevels(wantedLevelsRaw);
   return {
     traits,
@@ -1054,6 +1068,7 @@ export function parseCatalog(
     lairs,
     events,
     organizationNames,
+    playerProfiles,
     wantedLevels,
   };
 }

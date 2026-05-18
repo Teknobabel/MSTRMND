@@ -13,6 +13,9 @@ try {
   const organizationNames = JSON.parse(
     readFileSync(join(root, "content/organizationNames.json"), "utf8"),
   );
+  const playerProfiles = JSON.parse(
+    readFileSync(join(root, "content/playerProfiles.json"), "utf8"),
+  );
   const locations = JSON.parse(readFileSync(join(root, "content/locations.json"), "utf8"));
   const maps = JSON.parse(readFileSync(join(root, "content/maps.json"), "utf8"));
   const assets = JSON.parse(readFileSync(join(root, "content/assets.json"), "utf8"));
@@ -32,10 +35,11 @@ try {
     lairs,
     events,
     organizationNames,
+    playerProfiles,
     wantedLevels,
   );
   console.log(
-    `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.agents.length} agent templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.events.length} events, ${catalog.organizationNames.length} organization names, ${catalog.wantedLevels.length} wanted levels`,
+    `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.agents.length} agent templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.events.length} events, ${catalog.organizationNames.length} organization names, ${catalog.playerProfiles.length} player profiles, ${catalog.wantedLevels.length} wanted levels`,
   );
 } catch (e) {
   console.error(e);

@@ -1,0 +1,14 @@
+[
+  { "name": "Victor Malice", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Iris Vex", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Silas Rook", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Mara Thorn", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Dr. Gideon Frost", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Lenora Blackwell", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Kade Mercer", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Elodie Cross", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Roman Vale", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Juno Pike", "profilePic": "/assets/cards/minion.png" },
+  { "name": "The Architect", "profilePic": "/assets/cards/minion.png" },
+  { "name": "Cassandra Wry", "profilePic": "/assets/cards/minion.png" }
+]

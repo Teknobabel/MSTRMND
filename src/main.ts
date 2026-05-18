@@ -84,6 +84,22 @@ const LOCATION_CATEGORY_LABEL: Record<LocationType, string> = {
   military: "Military",
 };
 
+const GAME_MENU_VALUES = [
+  "dashboard",
+  "omega",
+  "minions",
+  "locations",
+  "lair",
+  "assets",
+  "events",
+] as const;
+
+type GameMenu = (typeof GAME_MENU_VALUES)[number];
+
+function isGameMenu(value: string | undefined): value is GameMenu {
+  return value !== undefined && (GAME_MENU_VALUES as readonly string[]).includes(value);
+}
+
 const catalog = loadContent();
 console.info(
   "[Mastermind] content:",
@@ -107,6 +123,8 @@ console.info(
   "events,",
   catalog.organizationNames.length,
   "organization names,",
+  catalog.playerProfiles.length,
+  "player profiles,",
   catalog.wantedLevels.length,
   "wanted levels",
 );
@@ -123,11 +141,6 @@ function drawGameFrame(): void {
   const { width, height } = canvas;
   ctx.fillStyle = "#2a2a32";
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#a1a1aa";
-  ctx.font = `${Math.max(14, Math.min(width, height) * 0.06)}px system-ui`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("Game", width / 2, height / 2);
 }
 
 let rafId: number | null = null;
@@ -504,6 +517,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   let missionFxTooltipSerial = 0;
 
   const organizationNameEl = req<HTMLElement>("organization-name");
+  const playerNameEl = req<HTMLElement>("player-name");
+  const playerProfilePicEl = req<HTMLImageElement>("player-profile-pic");
   const statsEl = req<HTMLElement>("game-stats");
   const activityPanelEl = req<HTMLElement>("activity-panel");
   const minionsRosterEl = req<HTMLElement>("minions-roster-list");
@@ -525,7 +540,22 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const assetsPanelEl = req<HTMLElement>("assets-panel");
   const missionsPanelRootEl = req<HTMLElement>("missions-panel-root");
+  const eventsPanelEl = req<HTMLElement>("events-panel");
   const lairPanelEl = req<HTMLElement>("lair-panel");
+  const planColumnTabPlan = req<HTMLButtonElement>("plan-column-tab-plan");
+  const planColumnTabActivity = req<HTMLButtonElement>("plan-column-tab-activity");
+  const planColumnPanelPlan = req<HTMLElement>("plan-column-panel-plan");
+  const planColumnPanelActivity = req<HTMLElement>("plan-column-panel-activity");
+  const rightColumnsRowEl = document.querySelector<HTMLElement>(".game-ui-columns-row");
+  if (!rightColumnsRowEl) {
+    throw new Error("Missing .game-ui-columns-row");
+  }
+  const menuButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>("[data-game-menu]"),
+  );
+  const menuPanels = Array.from(
+    document.querySelectorAll<HTMLElement>("[data-menu-panel]"),
+  );
 
   const rng = (): number => Math.random();
 
@@ -551,7 +581,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   let locationsCategoryTab: LocationType = "economic";
   let lairPanelTab: "missions" | "upgrades" = "missions";
-  let missionsPanelTab: "active" | "events" = "active";
+  let currentMenu: GameMenu = "dashboard";
 
   function findMissionOrEventTemplate(id: string): MissionTemplate | undefined {
     return content.missions.find((m) => m.id === id) ?? content.events.find((e) => e.id === id);
@@ -2333,6 +2363,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       return;
     }
 
+    const gridMode = currentMenu === "assets";
+    let mount: HTMLElement = assetsPanelEl;
+    if (gridMode) {
+      const grid = document.createElement("div");
+      grid.className = "assets-panel-grid";
+      assetsPanelEl.appendChild(grid);
+      mount = grid;
+    }
+
     for (const { assetId, quantity, template } of rows) {
       let usedInPlan = 0;
       for (let j = 0; j < assignAssetSlotAssetIds.length; j += 1) {
@@ -2345,6 +2384,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
       const article = document.createElement("article");
       article.className = "asset-card";
+      if (gridMode) {
+        article.classList.add("asset-card--grid-tile");
+      }
       if (available <= 0) {
         article.classList.add("asset-card--unavailable");
       }
@@ -2380,7 +2422,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         body.appendChild(desc);
       }
 
-      assetsPanelEl.appendChild(article);
+      mount.appendChild(article);
     }
   }
 
@@ -2605,7 +2647,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     panel.appendChild(listWrap);
   }
 
-  function renderEventsTab(panel: HTMLElement): void {
+  function renderEventsPanelInto(panel: HTMLElement): void {
     panel.innerHTML = "";
     const mainOnly = state.phase === "main";
 
@@ -2647,54 +2689,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function renderMissionsPanel(): void {
     missionsPanelRootEl.innerHTML = "";
+    renderActiveMissionsInto(missionsPanelRootEl);
+  }
 
-    const tablist = document.createElement("div");
-    tablist.className = "missions-panel-tabs";
-    tablist.setAttribute("role", "tablist");
-    tablist.setAttribute("aria-label", "Missions sections");
-
-    const tabDefs: { id: "active" | "events"; label: string }[] = [
-      { id: "active", label: "Active Missions" },
-      { id: "events", label: "Events" },
-    ];
-    for (const def of tabDefs) {
-      const tab = document.createElement("button");
-      tab.type = "button";
-      tab.className = "missions-panel-tab";
-      if (def.id === missionsPanelTab) {
-        tab.classList.add("missions-panel-tab--active");
-      }
-      tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", def.id === missionsPanelTab ? "true" : "false");
-      tab.id = `missions-panel-tab-${def.id}`;
-      tab.textContent = def.label;
-      tab.addEventListener("click", () => {
-        if (missionsPanelTab === def.id) {
-          return;
-        }
-        missionsPanelTab = def.id;
-        renderMissionsPanel();
-      });
-      tablist.appendChild(tab);
-    }
-    missionsPanelRootEl.appendChild(tablist);
-
-    const activePage = document.createElement("div");
-    activePage.className = "missions-panel-page";
-    activePage.hidden = missionsPanelTab !== "active";
-    activePage.setAttribute("role", "tabpanel");
-    activePage.setAttribute("aria-labelledby", "missions-panel-tab-active");
-    renderActiveMissionsInto(activePage);
-
-    const eventsPage = document.createElement("div");
-    eventsPage.className = "missions-panel-page";
-    eventsPage.hidden = missionsPanelTab !== "events";
-    eventsPage.setAttribute("role", "tabpanel");
-    eventsPage.setAttribute("aria-labelledby", "missions-panel-tab-events");
-    renderEventsTab(eventsPage);
-
-    missionsPanelRootEl.appendChild(activePage);
-    missionsPanelRootEl.appendChild(eventsPage);
+  function renderEventsPanel(): void {
+    renderEventsPanelInto(eventsPanelEl);
   }
 
   function renderLocationsPanel(): void {
@@ -2706,6 +2705,67 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       state.locationAssetSlots.map((p) => [p.locationId, p.slots]),
     );
     const assetNameById = new Map(content.assets.map((a) => [a.id, a.name]));
+    const mainOnly = state.phase === "main";
+
+    function sortedLocationsForCategory(tabType: LocationType) {
+      return runLocations()
+        .filter((loc) => loc.locationType === tabType)
+        .sort((a, b) => {
+          if (a.locationLevel !== b.locationLevel) {
+            return a.locationLevel - b.locationLevel;
+          }
+          return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        });
+    }
+
+    function fillLocationList(listEl: HTMLElement, tabType: LocationType): void {
+      const sortedForTab = sortedLocationsForCategory(tabType);
+      if (sortedForTab.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "locations-panel-empty";
+        empty.textContent = `No ${LOCATION_CATEGORY_LABEL[tabType].toLowerCase()} locations on this map.`;
+        listEl.appendChild(empty);
+        return;
+      }
+      for (const loc of sortedForTab) {
+        const sec = securityByLocationId.get(loc.id);
+        const slots = assetSlotsByLocationId.get(loc.id) ?? [];
+        const article = buildLocationCardArticle(
+          loc,
+          sec,
+          slots,
+          assetNameById,
+          mainOnly,
+          state.locationRequiredTraits[loc.id] ?? [],
+          state.locationSecurityTraits[loc.id] ?? [],
+        );
+        listEl.appendChild(article);
+      }
+    }
+
+    if (currentMenu === "locations") {
+      const columnsWrap = document.createElement("div");
+      columnsWrap.className = "locations-panel-columns";
+      for (const tabType of LOCATION_CATEGORY_TAB_ORDER) {
+        const column = document.createElement("section");
+        column.className = "locations-panel-column";
+        column.setAttribute("aria-label", `${LOCATION_CATEGORY_LABEL[tabType]} locations`);
+
+        const heading = document.createElement("h3");
+        heading.className = "game-controls-heading locations-panel-column-title";
+        heading.textContent = LOCATION_CATEGORY_LABEL[tabType];
+
+        const listEl = document.createElement("div");
+        listEl.className = "locations-panel-list";
+        fillLocationList(listEl, tabType);
+
+        column.appendChild(heading);
+        column.appendChild(listEl);
+        columnsWrap.appendChild(column);
+      }
+      locationsPanelEl.appendChild(columnsWrap);
+      return;
+    }
 
     const tablist = document.createElement("div");
     tablist.className = "locations-category-tabs";
@@ -2739,38 +2799,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     listEl.id = "locations-panel-list";
     listEl.setAttribute("role", "tabpanel");
     listEl.setAttribute("aria-labelledby", `locations-tab-${locationsCategoryTab}`);
-
-    const sortedForTab = runLocations()
-      .filter((loc) => loc.locationType === locationsCategoryTab)
-      .sort((a, b) => {
-        if (a.locationLevel !== b.locationLevel) {
-          return a.locationLevel - b.locationLevel;
-        }
-        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      });
-
-    const mainOnly = state.phase === "main";
-    if (sortedForTab.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "locations-panel-empty";
-      empty.textContent = `No ${LOCATION_CATEGORY_LABEL[locationsCategoryTab].toLowerCase()} locations on this map.`;
-      listEl.appendChild(empty);
-    } else {
-      for (const loc of sortedForTab) {
-        const sec = securityByLocationId.get(loc.id);
-        const slots = assetSlotsByLocationId.get(loc.id) ?? [];
-        const article = buildLocationCardArticle(
-          loc,
-          sec,
-          slots,
-          assetNameById,
-          mainOnly,
-          state.locationRequiredTraits[loc.id] ?? [],
-          state.locationSecurityTraits[loc.id] ?? [],
-        );
-        listEl.appendChild(article);
-      }
-    }
+    fillLocationList(listEl, locationsCategoryTab);
     locationsPanelEl.appendChild(listEl);
   }
 
@@ -2817,6 +2846,87 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       );
     }
 
+    function fillLairMissionsInto(container: HTMLElement): void {
+      if (state.lairMissionIds.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "assets-panel-empty";
+        empty.textContent = "No missions at this lair.";
+        container.appendChild(empty);
+        return;
+      }
+      for (const mid of sortMissionIds(state.lairMissionIds)) {
+        container.appendChild(
+          omegaPlanMissionCard(
+            mid,
+            state.phase === "main"
+              ? { draggable: true, source: "lair", missionTemplateId: mid }
+              : undefined,
+          ),
+        );
+      }
+    }
+
+    function fillLairUpgradesInto(container: HTMLElement): void {
+      const pending = sortMissionIds(
+        pendingLairUpgradeMissionIds(
+          state.activeLairId,
+          state.completedLairUpgradeMissionIds,
+          content,
+        ),
+      );
+      if (pending.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "assets-panel-empty";
+        empty.textContent = "No pending upgrades.";
+        container.appendChild(empty);
+        return;
+      }
+      for (const mid of pending) {
+        container.appendChild(
+          omegaPlanMissionCard(
+            mid,
+            state.phase === "main"
+              ? { draggable: true, source: "lair", missionTemplateId: mid }
+              : undefined,
+          ),
+        );
+      }
+    }
+
+    if (currentMenu === "lair") {
+      const columnsWrap = document.createElement("div");
+      columnsWrap.className = "lair-panel-columns";
+
+      const missionsCol = document.createElement("section");
+      missionsCol.className = "lair-panel-column";
+      missionsCol.setAttribute("aria-label", "Lair missions");
+      const missionsHeading = document.createElement("h3");
+      missionsHeading.className = "game-controls-heading lair-panel-column-title";
+      missionsHeading.textContent = "Missions";
+      const missionsList = document.createElement("div");
+      missionsList.className = "lair-panel-missions";
+      fillLairMissionsInto(missionsList);
+      missionsCol.appendChild(missionsHeading);
+      missionsCol.appendChild(missionsList);
+
+      const upgradesCol = document.createElement("section");
+      upgradesCol.className = "lair-panel-column";
+      upgradesCol.setAttribute("aria-label", "Lair upgrades");
+      const upgradesHeading = document.createElement("h3");
+      upgradesHeading.className = "game-controls-heading lair-panel-column-title";
+      upgradesHeading.textContent = "Upgrades";
+      const upgradesList = document.createElement("div");
+      upgradesList.className = "lair-panel-missions";
+      fillLairUpgradesInto(upgradesList);
+      upgradesCol.appendChild(upgradesHeading);
+      upgradesCol.appendChild(upgradesList);
+
+      columnsWrap.appendChild(missionsCol);
+      columnsWrap.appendChild(upgradesCol);
+      lairPanelEl.appendChild(columnsWrap);
+      return;
+    }
+
     const tablist = document.createElement("div");
     tablist.className = "lair-panel-tabs";
     tablist.setAttribute("role", "tablist");
@@ -2854,48 +2964,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     list.setAttribute("aria-labelledby", `lair-panel-tab-${lairPanelTab}`);
 
     if (lairPanelTab === "missions") {
-      if (state.lairMissionIds.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "assets-panel-empty";
-        empty.textContent = "No missions at this lair.";
-        list.appendChild(empty);
-      } else {
-        for (const mid of sortMissionIds(state.lairMissionIds)) {
-          list.appendChild(
-            omegaPlanMissionCard(
-              mid,
-              state.phase === "main"
-                ? { draggable: true, source: "lair", missionTemplateId: mid }
-                : undefined,
-            ),
-          );
-        }
-      }
+      fillLairMissionsInto(list);
     } else {
-      const pending = sortMissionIds(
-        pendingLairUpgradeMissionIds(
-          state.activeLairId,
-          state.completedLairUpgradeMissionIds,
-          content,
-        ),
-      );
-      if (pending.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "assets-panel-empty";
-        empty.textContent = "No pending upgrades.";
-        list.appendChild(empty);
-      } else {
-        for (const mid of pending) {
-          list.appendChild(
-            omegaPlanMissionCard(
-              mid,
-              state.phase === "main"
-                ? { draggable: true, source: "lair", missionTemplateId: mid }
-                : undefined,
-            ),
-          );
-        }
-      }
+      fillLairUpgradesInto(list);
     }
     lairPanelEl.appendChild(list);
   }
@@ -3062,6 +3133,70 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
+  function setPlanColumnTab(which: "plan" | "activity"): void {
+    const isPlan = which === "plan";
+    planColumnTabPlan.classList.toggle("missions-panel-tab--active", isPlan);
+    planColumnTabActivity.classList.toggle("missions-panel-tab--active", !isPlan);
+    planColumnTabPlan.setAttribute("aria-selected", String(isPlan));
+    planColumnTabActivity.setAttribute("aria-selected", String(!isPlan));
+    planColumnPanelPlan.hidden = !isPlan;
+    planColumnPanelActivity.hidden = isPlan;
+  }
+
+  function applyGameMenuVisibility(): void {
+    const showDashboard = currentMenu === "dashboard";
+
+    for (const panel of menuPanels) {
+      panel.hidden = !showDashboard && panel.dataset.menuPanel !== currentMenu;
+    }
+
+    for (const column of Array.from(rightColumnsRowEl.children)) {
+      if (!(column instanceof HTMLElement)) {
+        continue;
+      }
+      const hasVisiblePanel = Array.from(column.querySelectorAll<HTMLElement>("[data-menu-panel]"))
+        .some((panel) => !panel.hidden);
+      column.hidden = !hasVisiblePanel;
+    }
+
+    rightColumnsRowEl.classList.toggle("game-ui-columns-row--single", !showDashboard);
+
+    for (const button of menuButtons) {
+      const menu = button.dataset.gameMenu;
+      const isActive = menu === currentMenu;
+      button.classList.toggle("game-panel-menu__button--active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+    }
+  }
+
+  function setGameMenu(menu: GameMenu): void {
+    if (currentMenu === menu) {
+      return;
+    }
+    currentMenu = menu;
+    applyGameMenuVisibility();
+    renderLocationsPanel();
+    renderAssetsPanel();
+    renderLairPanel();
+  }
+
+  for (const button of menuButtons) {
+    const menu = button.dataset.gameMenu;
+    if (!isGameMenu(menu)) {
+      continue;
+    }
+    button.addEventListener("click", () => {
+      setGameMenu(menu);
+    });
+  }
+
+  planColumnTabPlan.addEventListener("click", () => {
+    setPlanColumnTab("plan");
+  });
+  planColumnTabActivity.addEventListener("click", () => {
+    setPlanColumnTab("activity");
+  });
+
   function refresh(): void {
     reconcileStagedEventMissionWithState();
     const p = state.player;
@@ -3069,13 +3204,16 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     syncAssignAssetSlotArrayWithMission();
 
     organizationNameEl.textContent = state.organizationName;
+    playerNameEl.textContent = state.playerName;
+    playerProfilePicEl.src = state.playerProfilePic;
+    playerProfilePicEl.alt = `${state.playerName} profile`;
     statsEl.innerHTML = `
       <div><strong>CP:</strong> ${p.commandPoints} / ${p.maxCommandPoints}</div>
       <div><strong>Infamy:</strong> ${p.infamy}</div>
-      <div><strong>Wanted:</strong> ${wantedTierAtIndex(catalog, state.wantedLevelTierIndex)?.name ?? "—"}</div>
+      <div><strong>Wanted level:</strong> ${wantedTierAtIndex(catalog, state.wantedLevelTierIndex)?.name ?? "—"}</div>
       <div><strong>Agents:</strong> ${totalOpposingAgentsAcrossLocations(state)}</div>
     `;
-    hudShort.textContent = `T${state.turnNumber} · ${state.phase}`;
+    hudShort.textContent = `Turn ${state.turnNumber} · ${state.phase}`;
 
     const mainOnly = state.phase === "main";
     btnExec.hidden = !mainOnly;
@@ -3089,8 +3227,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     renderLocationsPanel();
     renderAssetsPanel();
     renderMissionsPanel();
+    renderEventsPanel();
     renderLairPanel();
     renderActivityPanel();
+    applyGameMenuVisibility();
 
     const rerollCost = REROLL_HIRE_OFFERS_CP;
     const canRerollOffers = mainOnly && p.commandPoints >= rerollCost;
