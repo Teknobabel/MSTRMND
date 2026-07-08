@@ -100,6 +100,35 @@ function isGameMenu(value: string | undefined): value is GameMenu {
   return value !== undefined && (GAME_MENU_VALUES as readonly string[]).includes(value);
 }
 
+/* Inline SVG icons for the OMEGA OS status bar (stroked via CSS). */
+const ICON_BOLT =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4.5 13.5H10L9 22l8.5-11.5H12L13 2Z"/></svg>';
+const ICON_EYE =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const ICON_PERSON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4.5 21v-1.5a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6V21"/></svg>';
+const ICON_CROSSHAIR =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>';
+const ICON_SKULL_FILLED =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2C7.1 2 3.5 5.6 3.5 10.2c0 2.9 1.5 5 3.5 6.3V20a1 1 0 0 0 1 1h1.6v-2.2h1.5V21h1.8v-2.2h1.5V21H16a1 1 0 0 0 1-1v-3.5c2-1.3 3.5-3.4 3.5-6.3C20.5 5.6 16.9 2 12 2Zm-3.2 10.8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm6.4 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"/></svg>';
+
+function statBlockHtml(
+  iconHtml: string,
+  label: string,
+  valueHtml: string,
+  extraClass = "",
+): string {
+  const cls = extraClass === "" ? "stat-block" : `stat-block ${extraClass}`;
+  return `
+    <div class="${cls}">
+      <span class="stat-block__icon">${iconHtml}</span>
+      <div class="stat-block__main">
+        <span class="stat-block__label">${label}</span>
+        <span class="stat-block__value">${valueHtml}</span>
+      </div>
+    </div>`;
+}
+
 const catalog = loadContent();
 console.info(
   "[Mastermind] content:",
@@ -136,17 +165,91 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 
 const ctx = setupCanvas(canvas);
 
-function drawGameFrame(): void {
+/** Cached hex-grid layer for the OMEGA OS map background; rebuilt on resize. */
+let bgHexGrid: HTMLCanvasElement | null = null;
+let bgHexGridW = 0;
+let bgHexGridH = 0;
+
+function buildHexGridLayer(width: number, height: number): HTMLCanvasElement {
+  const layer = document.createElement("canvas");
+  layer.width = width;
+  layer.height = height;
+  const g = layer.getContext("2d");
+  if (!g) {
+    return layer;
+  }
+  const r = Math.max(22, Math.min(width, height) / 28);
+  const hexH = Math.sqrt(3) * r;
+  g.strokeStyle = "rgba(232, 17, 45, 0.09)";
+  g.lineWidth = 1;
+  for (let col = 0; col * r * 1.5 < width + r * 2; col += 1) {
+    const cx = col * r * 1.5;
+    const yOffset = col % 2 === 1 ? hexH / 2 : 0;
+    for (let row = 0; row * hexH < height + hexH * 2; row += 1) {
+      const cy = row * hexH + yOffset;
+      g.beginPath();
+      for (let i = 0; i < 6; i += 1) {
+        const a = (Math.PI / 3) * i;
+        const x = cx + r * Math.cos(a);
+        const y = cy + r * Math.sin(a);
+        if (i === 0) {
+          g.moveTo(x, y);
+        } else {
+          g.lineTo(x, y);
+        }
+      }
+      g.closePath();
+      g.stroke();
+    }
+  }
+  return layer;
+}
+
+/** Relative positions of ambient "operations" glow hotspots on the map grid. */
+const BG_GLOW_SPOTS: ReadonlyArray<readonly [number, number]> = [
+  [0.16, 0.28],
+  [0.46, 0.55],
+  [0.74, 0.3],
+  [0.3, 0.78],
+  [0.88, 0.72],
+  [0.6, 0.18],
+];
+
+function drawGameFrame(timeMs: number): void {
   resizeCanvasToDisplaySize(canvas);
   const { width, height } = canvas;
-  ctx.fillStyle = "#2a2a32";
+  const t = timeMs / 1000;
+
+  ctx.fillStyle = "#070304";
   ctx.fillRect(0, 0, width, height);
+
+  if (bgHexGrid === null || bgHexGridW !== width || bgHexGridH !== height) {
+    bgHexGrid = buildHexGridLayer(width, height);
+    bgHexGridW = width;
+    bgHexGridH = height;
+  }
+  ctx.globalAlpha = 0.6 + 0.25 * Math.sin(t * 0.6);
+  ctx.drawImage(bgHexGrid, 0, 0);
+  ctx.globalAlpha = 1;
+
+  for (let i = 0; i < BG_GLOW_SPOTS.length; i += 1) {
+    const [fx, fy] = BG_GLOW_SPOTS[i]!;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 0.8 + i * 1.9);
+    const radius = Math.min(width, height) * (0.14 + 0.06 * pulse);
+    const cx = fx * width;
+    const cy = fy * height;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    grad.addColorStop(0, `rgba(190, 16, 36, ${(0.08 + 0.07 * pulse).toFixed(3)})`);
+    grad.addColorStop(1, "rgba(190, 16, 36, 0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+  }
 }
 
 let rafId: number | null = null;
 
-function tick(): void {
-  drawGameFrame();
+function tick(timeMs: number): void {
+  drawGameFrame(timeMs);
   rafId = requestAnimationFrame(tick);
 }
 
@@ -536,6 +639,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const btnExec = req<HTMLButtonElement>("btn-execute-plan");
   const btnRerollHire = req<HTMLButtonElement>("btn-reroll-hire");
   const hudShort = req<HTMLElement>("game-hud-short");
+  const threatLevelEl = req<HTMLElement>("threat-level");
+  const globalTickerEl = req<HTMLElement>("global-events-ticker");
   const omegaPlanPanelEl = req<HTMLElement>("omega-plan-panel");
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const assetsPanelEl = req<HTMLElement>("assets-panel");
@@ -2287,20 +2392,35 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       return;
     }
 
+    const header = document.createElement("div");
+    header.className = "omega-plan-header";
+
     const nameEl = document.createElement("p");
     nameEl.className = "omega-plan-name";
     nameEl.textContent = plan.name;
-    omegaPlanPanelEl.appendChild(nameEl);
+    header.appendChild(nameEl);
 
     const descEl = document.createElement("p");
     descEl.className = "omega-plan-description";
     descEl.textContent = plan.description;
-    omegaPlanPanelEl.appendChild(descEl);
+    header.appendChild(descEl);
 
     const stageHint = document.createElement("p");
     stageHint.className = "omega-plan-stage-hint";
     stageHint.textContent = `Active phase: ${state.activeOmegaStageIndex + 1} · Row successes: ${state.omegaRowProgress.filter(Boolean).length}/3`;
-    omegaPlanPanelEl.appendChild(stageHint);
+    header.appendChild(stageHint);
+
+    omegaPlanPanelEl.appendChild(header);
+
+    const PHASE_ROMAN = ["I", "II", "III"] as const;
+    const PHASE_NAMES = [
+      "Shadow Seeding",
+      "Global Destabilization",
+      "Final Subjugation",
+    ] as const;
+
+    const phasesWrap = document.createElement("div");
+    phasesWrap.className = "omega-plan-phases";
 
     const mainOnly = state.phase === "main";
     for (let stageIndex = 0; stageIndex < 3; stageIndex += 1) {
@@ -2309,38 +2429,110 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       section.className = "omega-plan-phase";
       section.setAttribute("aria-label", `Phase ${stageIndex + 1}`);
       const isCurrent = stageIndex === state.activeOmegaStageIndex;
-      if (!isCurrent) {
+      const isComplete = stageIndex < state.activeOmegaStageIndex;
+      if (isCurrent) {
+        section.classList.add("omega-plan-phase--current");
+      } else if (isComplete) {
+        section.classList.add("omega-plan-phase--complete");
+      } else {
         section.classList.add("omega-plan-phase--locked");
       }
 
+      const phaseHeader = document.createElement("div");
+      phaseHeader.className = "omega-phase-header";
+      const headerText = document.createElement("div");
+      const kicker = document.createElement("p");
+      kicker.className = "omega-phase-kicker";
+      kicker.style.margin = "0";
+      kicker.textContent = `Phase ${PHASE_ROMAN[stageIndex]}`;
       const heading = document.createElement("h3");
-      heading.className = "game-controls-heading omega-plan-phase-title";
-      heading.textContent = `Phase ${stageIndex + 1}`;
+      heading.className = "omega-plan-phase-title";
+      heading.textContent = PHASE_NAMES[stageIndex]!;
+      headerText.appendChild(kicker);
+      headerText.appendChild(heading);
+      phaseHeader.appendChild(headerText);
+
+      const phaseBadge = document.createElement("span");
+      if (isComplete) {
+        phaseBadge.className = "status-badge status-badge--complete";
+        phaseBadge.textContent = "Complete";
+      } else if (isCurrent) {
+        phaseBadge.className = "status-badge status-badge--inprogress";
+        phaseBadge.textContent = "In Progress";
+      } else {
+        phaseBadge.className = "status-badge status-badge--locked";
+        phaseBadge.textContent = "Locked";
+      }
+      phaseHeader.appendChild(phaseBadge);
+      section.appendChild(phaseHeader);
+
+      const phaseSuccesses = isComplete
+        ? 3
+        : isCurrent
+          ? state.omegaRowProgress.filter(Boolean).length
+          : 0;
+      const progress = document.createElement("div");
+      progress.className = "omega-phase-progress";
+      const fill = document.createElement("div");
+      fill.className = "omega-phase-progress__fill";
+      if (isComplete) {
+        fill.classList.add("omega-phase-progress__fill--complete");
+      }
+      fill.style.width = `${Math.round((phaseSuccesses / 3) * 100)}%`;
+      progress.appendChild(fill);
+      section.appendChild(progress);
 
       const missionWrap = document.createElement("div");
       missionWrap.className = "omega-plan-phase-missions";
       for (let mi = 0; mi < 3; mi += 1) {
         const missionId = stage.missionIds[mi]!;
-        missionWrap.appendChild(
-          omegaPlanMissionCard(
-            missionId,
-            mainOnly && isCurrent
-              ? {
-                  draggable: true,
-                  source: "omega",
-                  missionTemplateId: missionId,
-                  stageIndex,
-                  slotIndex: mi,
-                }
-              : undefined,
-          ),
+        const card = omegaPlanMissionCard(
+          missionId,
+          mainOnly && isCurrent
+            ? {
+                draggable: true,
+                source: "omega",
+                missionTemplateId: missionId,
+                stageIndex,
+                slotIndex: mi,
+              }
+            : undefined,
         );
+
+        const slotDone = isComplete || (isCurrent && state.omegaRowProgress[mi] === true);
+        const slotRunning =
+          isCurrent &&
+          !slotDone &&
+          state.activeMissions.some(
+            (am) =>
+              am.missionSource === "omega" &&
+              am.omegaStageIndex === stageIndex &&
+              am.omegaSlotIndex === mi,
+          );
+        const badge = document.createElement("span");
+        badge.classList.add("status-badge", "omega-card-badge");
+        if (slotDone) {
+          badge.classList.add("status-badge--complete");
+          badge.textContent = "Complete";
+        } else if (slotRunning) {
+          badge.classList.add("status-badge--inprogress");
+          badge.textContent = "In Progress";
+        } else if (isCurrent) {
+          badge.classList.add("status-badge--pending");
+          badge.textContent = "Pending";
+        } else {
+          badge.classList.add("status-badge--locked");
+          badge.textContent = "Locked";
+        }
+        card.appendChild(badge);
+        missionWrap.appendChild(card);
       }
 
-      section.appendChild(heading);
       section.appendChild(missionWrap);
-      omegaPlanPanelEl.appendChild(section);
+      phasesWrap.appendChild(section);
     }
+
+    omegaPlanPanelEl.appendChild(phasesWrap);
   }
 
   function renderAssetsPanel(): void {
@@ -2598,6 +2790,39 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     appendMinionStatRows(dl, rows);
     body.appendChild(dl);
+
+    if (mission && mission.durationTurns > 0) {
+      const pct = Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            ((mission.durationTurns - am.turnsRemaining) / mission.durationTurns) * 100,
+          ),
+        ),
+      );
+      const progressWrap = document.createElement("div");
+      progressWrap.className = "mission-progress";
+      const head = document.createElement("div");
+      head.className = "mission-progress__head";
+      const label = document.createElement("span");
+      label.className = "mission-progress__label";
+      label.textContent = "Operation Progress";
+      const value = document.createElement("span");
+      value.className = "mission-progress__value";
+      value.textContent = `${pct}%`;
+      head.appendChild(label);
+      head.appendChild(value);
+      const bar = document.createElement("div");
+      bar.className = "mission-progress__bar";
+      const fill = document.createElement("div");
+      fill.className = "mission-progress__fill";
+      fill.style.width = `${pct}%`;
+      bar.appendChild(fill);
+      progressWrap.appendChild(head);
+      progressWrap.appendChild(bar);
+      body.appendChild(progressWrap);
+    }
 
     const mainOnly = state.phase === "main";
     const actions = document.createElement("div");
@@ -3197,6 +3422,175 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     setPlanColumnTab("activity");
   });
 
+  function renderStatusBar(): void {
+    const p = state.player;
+    const omegaFilled = Math.min(
+      9,
+      state.activeOmegaStageIndex * 3 + state.omegaRowProgress.filter(Boolean).length,
+    );
+    const omegaPct = Math.round((omegaFilled / 9) * 100);
+    let segs = "";
+    for (let i = 0; i < 9; i += 1) {
+      const mod =
+        i < omegaFilled
+          ? " omega-progress__seg--filled"
+          : i === omegaFilled
+            ? " omega-progress__seg--current"
+            : "";
+      segs += `<span class="omega-progress__seg${mod}"></span>`;
+    }
+    const omegaBlock = `
+      <div class="stat-block stat-block--progress">
+        <span class="stat-block__icon stat-block__icon--text">&Omega;</span>
+        <div class="stat-block__main">
+          <span class="stat-block__label">Omega Plan</span>
+          <span class="stat-block__value">${omegaPct}%</span>
+          <div class="omega-progress">${segs}</div>
+        </div>
+      </div>`;
+    statsEl.innerHTML =
+      omegaBlock +
+      statBlockHtml(
+        ICON_BOLT,
+        "Command",
+        `${p.commandPoints} <small>/ ${p.maxCommandPoints}</small>`,
+      ) +
+      statBlockHtml(ICON_EYE, "Infamy", String(p.infamy)) +
+      statBlockHtml(
+        ICON_PERSON,
+        "Minions",
+        `${p.minions.length} <small>/ ${p.maxRosterSize}</small>`,
+      ) +
+      statBlockHtml(
+        ICON_CROSSHAIR,
+        "Agents",
+        String(totalOpposingAgentsAcrossLocations(state)),
+      );
+  }
+
+  function renderThreatMeter(): void {
+    threatLevelEl.innerHTML = "";
+    const tiers = catalog.wantedLevels;
+    const tierName = wantedTierAtIndex(catalog, state.wantedLevelTierIndex)?.name ?? "—";
+    const activeCount = Math.min(tiers.length, state.wantedLevelTierIndex + 1);
+
+    const text = document.createElement("div");
+    text.className = "threat-meter__text";
+    const label = document.createElement("span");
+    label.className = "threat-meter__label";
+    label.textContent = "Threat Level";
+    const tier = document.createElement("span");
+    tier.className = "threat-meter__tier";
+    tier.textContent = tierName;
+    text.appendChild(label);
+    text.appendChild(tier);
+    threatLevelEl.appendChild(text);
+
+    const skulls = document.createElement("div");
+    skulls.className = "threat-meter__skulls";
+    for (let i = 0; i < tiers.length; i += 1) {
+      const skull = document.createElement("span");
+      skull.className = "threat-skull";
+      if (i < activeCount) {
+        skull.classList.add("threat-skull--active");
+      }
+      if (i === activeCount - 1) {
+        skull.classList.add("threat-skull--latest");
+      }
+      skull.innerHTML = ICON_SKULL_FILLED;
+      skulls.appendChild(skull);
+    }
+    threatLevelEl.appendChild(skulls);
+  }
+
+  function tickerItemForEvent(
+    ev: GameState["activityLog"][number]["events"][number],
+  ): { title: string; detail: string } | null {
+    const missionNameOf = (id: string): string =>
+      content.missions.find((m) => m.id === id)?.name ??
+      content.events.find((e) => e.id === id)?.name ??
+      id;
+    const minionNameOf = (id: string): string =>
+      content.minions.find((m) => m.id === id)?.name ?? id;
+    const assetNameOf = (id: string): string =>
+      content.assets.find((a) => a.id === id)?.name ?? id;
+    switch (ev.kind) {
+      case "mission_completed":
+        return {
+          title: ev.success ? "Mission success" : "Mission failed",
+          detail: ev.missionName,
+        };
+      case "mission_started":
+        return { title: "Operation launched", detail: missionNameOf(ev.missionTemplateId) };
+      case "mission_cancelled":
+        return { title: "Operation aborted", detail: missionNameOf(ev.missionTemplateId) };
+      case "minion_hired":
+      case "minion_rehired":
+        return {
+          title: "Recruitment",
+          detail: `${minionNameOf(ev.templateId)} joined ${state.organizationName}`,
+        };
+      case "minion_fired":
+        return { title: "Termination", detail: `${minionNameOf(ev.templateId)} removed` };
+      case "asset_gained":
+        return { title: "Asset acquired", detail: `${assetNameOf(ev.assetId)} ×${ev.quantity}` };
+      case "asset_lost":
+        return { title: "Asset lost", detail: `${assetNameOf(ev.assetId)} ×${ev.quantity}` };
+      case "minion_leveled_up":
+        return {
+          title: "Power rising",
+          detail: `${minionNameOf(ev.templateId)} reached level ${ev.newLevel}`,
+        };
+      case "event_rotated_in":
+        return { title: "Global event", detail: missionNameOf(ev.eventTemplateId) };
+      case "event_expired":
+        return { title: "Event expired", detail: missionNameOf(ev.eventTemplateId) };
+      default:
+        return null;
+    }
+  }
+
+  function renderGlobalTicker(): void {
+    globalTickerEl.innerHTML = "";
+    const items: { title: string; detail: string }[] = [];
+    if (state.currentEventTemplateId !== null) {
+      const et = content.events.find((e) => e.id === state.currentEventTemplateId);
+      if (et) {
+        items.push({ title: "Incoming event", detail: et.name });
+      }
+    }
+    for (const entry of state.activityLog.slice(-2)) {
+      for (const ev of entry.events.slice(-8)) {
+        const item = tickerItemForEvent(ev);
+        if (item) {
+          items.push(item);
+        }
+      }
+    }
+    if (items.length === 0) {
+      items.push(
+        { title: "Surveillance active", detail: "No global events detected" },
+        { title: "Omega directive", detail: "Advance the plan. All will kneel." },
+      );
+    }
+    /* Track scrolls -50%; duplicate items so the loop is seamless. */
+    for (const it of [...items, ...items]) {
+      const wrap = document.createElement("span");
+      wrap.className = "ticker-item";
+      const marker = document.createElement("span");
+      marker.className = "ticker-item__marker";
+      marker.textContent = "◢";
+      const title = document.createElement("span");
+      title.className = "ticker-item__title";
+      title.textContent = it.title;
+      const detail = document.createElement("span");
+      detail.className = "ticker-item__detail";
+      detail.textContent = it.detail;
+      wrap.append(marker, title, detail);
+      globalTickerEl.appendChild(wrap);
+    }
+  }
+
   function refresh(): void {
     reconcileStagedEventMissionWithState();
     const p = state.player;
@@ -3207,13 +3601,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     playerNameEl.textContent = state.playerName;
     playerProfilePicEl.src = state.playerProfilePic;
     playerProfilePicEl.alt = `${state.playerName} profile`;
-    statsEl.innerHTML = `
-      <div><strong>CP:</strong> ${p.commandPoints} / ${p.maxCommandPoints}</div>
-      <div><strong>Infamy:</strong> ${p.infamy}</div>
-      <div><strong>Wanted level:</strong> ${wantedTierAtIndex(catalog, state.wantedLevelTierIndex)?.name ?? "—"}</div>
-      <div><strong>Agents:</strong> ${totalOpposingAgentsAcrossLocations(state)}</div>
-    `;
-    hudShort.textContent = `Turn ${state.turnNumber} · ${state.phase}`;
+    renderStatusBar();
+    renderThreatMeter();
+    renderGlobalTicker();
+    hudShort.textContent = `Turn ${state.turnNumber} · ${state.phase} phase`;
 
     const mainOnly = state.phase === "main";
     btnExec.hidden = !mainOnly;

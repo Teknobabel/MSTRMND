@@ -6,22 +6,36 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
     />
-    <meta name="theme-color" content="#1a1a1e" />
+    <meta name="theme-color" content="#070304" />
     <title>Mastermind</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23070304'/%3E%3Ctext x='16' y='24' font-family='Arial Black,sans-serif' font-size='22' font-weight='900' fill='%23e8112d' text-anchor='middle'%3E%CE%A9%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <div id="app" class="app-root">
       <section id="screen-main" class="screen screen-main" aria-labelledby="main-title">
-        <h1 id="main-title" class="screen-title">Mastermind</h1>
+        <div class="menu-backdrop" aria-hidden="true"></div>
+        <div class="menu-emblem" aria-hidden="true"><span>&Omega;</span></div>
+        <h1 id="main-title" class="screen-title screen-title--menu">MASTERMIND</h1>
+        <p class="menu-tagline">ALL WILL KNEEL.</p>
         <div class="screen-actions">
-          <button type="button" class="btn btn-primary" id="btn-play">Play</button>
+          <button type="button" class="btn btn-primary" id="btn-play">Initiate</button>
           <button type="button" class="btn" id="btn-main-settings">Settings</button>
         </div>
       </section>
 
       <section id="screen-settings" class="screen screen-settings" hidden aria-hidden="true">
-        <h2 class="screen-title">Settings</h2>
+        <div class="menu-backdrop" aria-hidden="true"></div>
+        <h2 class="screen-title screen-title--menu">SETTINGS</h2>
         <div class="screen-actions">
           <button type="button" class="btn" id="btn-settings-back">Back</button>
         </div>
@@ -29,138 +43,20 @@
 
       <section id="screen-game" class="screen screen-game" hidden aria-hidden="true">
         <canvas id="game-canvas" class="game-canvas" aria-label="Game canvas"></canvas>
-        <div class="game-ui-layer">
-        <div class="game-ui-stack-column game-ui-stack-column--plan">
-          <aside class="game-panel game-panel--plan-column" aria-label="Mission planning and activity">
-            <header class="game-player-profile" aria-label="Player and organization">
-              <img
-                id="player-profile-pic"
-                class="game-player-profile__pic"
-                src=""
-                alt=""
-                width="48"
-                height="48"
-                decoding="async"
-              />
-              <div class="game-player-profile__text">
-                <p id="player-name" class="game-player-profile__name"></p>
-                <p id="organization-name" class="organization-name game-player-profile__org"></p>
-              </div>
-            </header>
-            <nav class="game-panel-menu" aria-label="Game panel navigation">
-              <button type="button" class="game-panel-menu__button" data-game-menu="dashboard" aria-pressed="true">
-                Dashboard
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="omega" aria-pressed="false">
-                Omega Plan
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="minions" aria-pressed="false">
-                Minions
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="locations" aria-pressed="false">
-                Locations
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="lair" aria-pressed="false">
-                Lair
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="assets" aria-pressed="false">
-                Assets
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="events" aria-pressed="false">
-                Events
-              </button>
-              <button type="button" class="game-panel-menu__button game-panel-menu__button--system" id="btn-game-panel-system">
-                System
-              </button>
-            </nav>
-            <div class="plan-column-stack">
-              <div class="missions-panel-tabs" role="tablist" aria-label="Mission planning">
-                <button
-                  type="button"
-                  class="missions-panel-tab missions-panel-tab--active"
-                  role="tab"
-                  id="plan-column-tab-plan"
-                  aria-controls="plan-column-panel-plan"
-                  aria-selected="true"
-                >
-                  Plan
-                </button>
-                <button
-                  type="button"
-                  class="missions-panel-tab"
-                  role="tab"
-                  id="plan-column-tab-activity"
-                  aria-controls="plan-column-panel-activity"
-                  aria-selected="false"
-                >
-                  Activity
-                </button>
-              </div>
-              <div
-                id="plan-column-panel-plan"
-                class="missions-panel-page"
-                role="tabpanel"
-                aria-labelledby="plan-column-tab-plan"
-              >
-                <div class="game-controls">
-                  <div class="game-controls-section">
-                    <h3 class="game-controls-heading">Plan mission</h3>
-                    <label class="game-field">
-                      <span class="game-field-label">Mission</span>
-                      <div
-                        id="assign-mission-slot"
-                        class="assign-pick-slot"
-                        data-assign-pick="mission"
-                        aria-label="Mission slot, drag a mission card here"
-                      ></div>
-                    </label>
-                    <label class="game-field" id="assign-target-field">
-                      <span class="game-field-label" id="assign-target-label">Target</span>
-                      <div
-                        id="assign-target-slot"
-                        class="assign-pick-slot"
-                        data-assign-pick="target"
-                        aria-label="Mission target slot"
-                      ></div>
-                    </label>
-                    <fieldset id="assign-minions" class="game-fieldset">
-                      <legend class="game-field-label">Minions (drag up to 3 from roster)</legend>
-                      <div id="assign-minions-list"></div>
-                    </fieldset>
-                    <fieldset id="assign-asset-slots-fieldset" class="game-fieldset" hidden>
-                      <legend class="game-field-label">Required Assets (drag from Assets)</legend>
-                      <div id="assign-asset-slots-list"></div>
-                    </fieldset>
-                    <button type="button" class="btn" id="btn-assign-mission">Assign</button>
-                  </div>
-                </div>
-              </div>
-              <div
-                id="plan-column-panel-activity"
-                class="missions-panel-page"
-                role="tabpanel"
-                aria-labelledby="plan-column-tab-activity"
-                hidden
-              >
-                <div
-                  id="activity-panel"
-                  class="activity-panel"
-                  aria-live="polite"
-                  aria-relevant="additions text"
-                ></div>
-              </div>
+        <div class="omega-shell">
+          <header class="omega-topbar" aria-label="Omega OS header">
+            <span class="omega-topbar__corner omega-topbar__corner--left">OMEGA OS v0.0.1</span>
+            <div class="omega-topbar__emblem" aria-hidden="true">
+              <span class="omega-topbar__emblem-mark">&Omega;</span>
             </div>
-          </aside>
-        </div>
-        <div class="game-ui-right-block">
-          <aside class="game-panel game-ui-stats-panel" aria-label="Player status and turn">
-            <div class="game-ui-stats-panel-body">
-              <div class="game-ui-stats-panel-cluster">
-                <div id="game-stats" class="game-stats game-stats--horizontal"></div>
-                <p id="game-hud-short" class="game-hud-label game-ui-stats-turn" aria-live="polite">
-                  Game
-                </p>
-              </div>
+            <span class="omega-topbar__corner omega-topbar__corner--right">ALL WILL KNEEL.</span>
+          </header>
+
+          <div class="omega-statusbar" aria-label="Player status and turn">
+            <div id="game-stats" class="game-stats" aria-live="polite"></div>
+            <div class="omega-statusbar__right">
+              <div id="threat-level" class="threat-meter" aria-label="Threat level"></div>
+              <p id="game-hud-short" class="game-ui-stats-turn" aria-live="polite">Game</p>
               <button type="button" class="btn btn-pause-corner" id="btn-pause" aria-label="Pause">
                 <svg class="btn-pause-corner__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" />
@@ -168,80 +64,243 @@
                 </svg>
               </button>
             </div>
-          </aside>
-          <div class="game-ui-columns-row">
-            <div class="game-ui-stack-column">
-              <aside class="game-panel game-panel--omega" data-menu-panel="omega" aria-labelledby="omega-plan-panel-title">
-                <h2 id="omega-plan-panel-title" class="game-panel-title">Omega Plan</h2>
-                <div id="omega-plan-panel" class="omega-plan-panel"></div>
-              </aside>
-              <aside class="game-panel game-panel--locations" data-menu-panel="locations" aria-labelledby="locations-panel-title">
-                <h2 id="locations-panel-title" class="game-panel-title">Locations</h2>
-                <div id="locations-panel" class="locations-panel"></div>
-              </aside>
-            </div>
-            <div class="game-ui-stack-column">
-              <aside class="game-panel game-panel--minions" data-menu-panel="minions" aria-labelledby="minions-panel-title">
-                <h2 id="minions-panel-title" class="game-panel-title">Minions</h2>
-                <section class="minions-panel-section" aria-label="Hired minions">
-                  <h3 id="minions-roster-heading" class="game-controls-heading">Your roster</h3>
-                  <div id="minions-roster-list" class="minions-panel-list"></div>
-                </section>
-                <section class="minions-panel-section" aria-label="Minions available for hire">
-                  <div class="minions-section-heading-row">
-                    <h3 id="minions-available-heading" class="game-controls-heading">Available to hire</h3>
-                    <button type="button" class="btn btn-reroll-hire" id="btn-reroll-hire" aria-label="Reroll hire offers for 1 CP">
-                      Reroll
-                    </button>
-                  </div>
-                  <div id="minions-available-list" class="minions-panel-list"></div>
-                </section>
-              </aside>
-              <aside class="game-panel game-panel--assets" data-menu-panel="assets" aria-labelledby="assets-panel-title">
-                <h2 id="assets-panel-title" class="game-panel-title">Assets</h2>
-                <div id="assets-panel" class="assets-panel"></div>
-              </aside>
-            </div>
-            <div class="game-ui-stack-column">
-              <aside
-                class="game-panel game-panel--missions"
-                data-menu-panel="missions"
-                aria-labelledby="missions-panel-title"
-              >
-                <h2 id="missions-panel-title" class="game-panel-title">Missions</h2>
-                <div id="missions-panel-root" class="missions-panel-root"></div>
-              </aside>
-              <aside
-                class="game-panel game-panel--events"
-                data-menu-panel="events"
-                aria-labelledby="events-panel-title"
-              >
-                <h2 id="events-panel-title" class="game-panel-title">Events</h2>
-                <div id="events-panel" class="events-panel"></div>
-              </aside>
-              <aside
-                class="game-panel game-panel--lair"
-                data-menu-panel="lair"
-                aria-labelledby="lair-panel-title"
-              >
-                <h2 id="lair-panel-title" class="game-panel-title">Lair</h2>
-                <div id="lair-panel" class="lair-panel"></div>
-              </aside>
-            </div>
           </div>
+
+          <div class="omega-body">
+            <aside class="omega-sidebar game-panel game-panel--plan-column" aria-label="Mission planning and activity">
+              <header class="game-player-profile" aria-label="Player and organization">
+                <img
+                  id="player-profile-pic"
+                  class="game-player-profile__pic"
+                  src=""
+                  alt=""
+                  width="48"
+                  height="48"
+                  decoding="async"
+                />
+                <div class="game-player-profile__text">
+                  <p id="player-name" class="game-player-profile__name"></p>
+                  <p id="organization-name" class="organization-name game-player-profile__org"></p>
+                </div>
+              </header>
+              <nav class="game-panel-menu" aria-label="Game panel navigation">
+                <button type="button" class="game-panel-menu__button" data-game-menu="dashboard" aria-pressed="true">
+                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M3 10.5 12 3l9 7.5" />
+                    <path d="M5.5 9.5V21h13V9.5" />
+                  </svg>
+                  <span>Dashboard</span>
+                </button>
+                <button type="button" class="game-panel-menu__button" data-game-menu="omega" aria-pressed="false">
+                  <span class="nav-icon nav-icon--text" aria-hidden="true">&Omega;</span>
+                  <span>Omega Plan</span>
+                </button>
+                <button type="button" class="game-panel-menu__button" data-game-menu="minions" aria-pressed="false">
+                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="7.5" r="4" />
+                    <path d="M4.5 21v-1.5a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6V21" />
+                  </svg>
+                  <span>Minions</span>
+                </button>
+                <button type="button" class="game-panel-menu__button" data-game-menu="locations" aria-pressed="false">
+                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 21s-7-5.7-7-11a7 7 0 0 1 14 0c0 5.3-7 11-7 11Z" />
+                    <circle cx="12" cy="10" r="2.5" />
+                  </svg>
+                  <span>Locations</span>
+                </button>
+                <button type="button" class="game-panel-menu__button" data-game-menu="lair" aria-pressed="false">
+                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M4 21V9l8-6 8 6v12" />
+                    <path d="M10 21v-6h4v6" />
+                  </svg>
+                  <span>Lair</span>
+                </button>
+                <button type="button" class="game-panel-menu__button" data-game-menu="assets" aria-pressed="false">
+                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z" />
+                    <path d="M2.5 9h19" />
+                  </svg>
+                  <span>Assets</span>
+                </button>
+                <button type="button" class="game-panel-menu__button" data-game-menu="events" aria-pressed="false">
+                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M3 12h18" />
+                    <path d="M12 3a13.5 13.5 0 0 1 0 18 13.5 13.5 0 0 1 0-18Z" />
+                  </svg>
+                  <span>Events</span>
+                </button>
+                <button type="button" class="game-panel-menu__button game-panel-menu__button--system" id="btn-game-panel-system">
+                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 2.5v3m0 13v3M2.5 12h3m13 0h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19" />
+                  </svg>
+                  <span>System</span>
+                </button>
+              </nav>
+              <div class="plan-column-stack">
+                <div class="missions-panel-tabs" role="tablist" aria-label="Mission planning">
+                  <button
+                    type="button"
+                    class="missions-panel-tab missions-panel-tab--active"
+                    role="tab"
+                    id="plan-column-tab-plan"
+                    aria-controls="plan-column-panel-plan"
+                    aria-selected="true"
+                  >
+                    Plan Mission
+                  </button>
+                  <button
+                    type="button"
+                    class="missions-panel-tab"
+                    role="tab"
+                    id="plan-column-tab-activity"
+                    aria-controls="plan-column-panel-activity"
+                    aria-selected="false"
+                  >
+                    Activity
+                  </button>
+                </div>
+                <div
+                  id="plan-column-panel-plan"
+                  class="missions-panel-page"
+                  role="tabpanel"
+                  aria-labelledby="plan-column-tab-plan"
+                >
+                  <div class="game-controls">
+                    <div class="game-controls-section">
+                      <label class="game-field">
+                        <span class="game-field-label">Mission</span>
+                        <div
+                          id="assign-mission-slot"
+                          class="assign-pick-slot"
+                          data-assign-pick="mission"
+                          aria-label="Mission slot, drag a mission card here"
+                        ></div>
+                      </label>
+                      <label class="game-field" id="assign-target-field">
+                        <span class="game-field-label" id="assign-target-label">Target</span>
+                        <div
+                          id="assign-target-slot"
+                          class="assign-pick-slot"
+                          data-assign-pick="target"
+                          aria-label="Mission target slot"
+                        ></div>
+                      </label>
+                      <fieldset id="assign-minions" class="game-fieldset">
+                        <legend class="game-field-label">Minions (drag from roster)</legend>
+                        <div id="assign-minions-list"></div>
+                      </fieldset>
+                      <fieldset id="assign-asset-slots-fieldset" class="game-fieldset" hidden>
+                        <legend class="game-field-label">Required Assets (drag from Assets)</legend>
+                        <div id="assign-asset-slots-list"></div>
+                      </fieldset>
+                      <button type="button" class="btn btn-submit-mission" id="btn-assign-mission">Submit</button>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  id="plan-column-panel-activity"
+                  class="missions-panel-page"
+                  role="tabpanel"
+                  aria-labelledby="plan-column-tab-activity"
+                  hidden
+                >
+                  <div
+                    id="activity-panel"
+                    class="activity-panel"
+                    aria-live="polite"
+                    aria-relevant="additions text"
+                  ></div>
+                </div>
+              </div>
+            </aside>
+
+            <main class="omega-main game-ui-right-block">
+              <div class="game-ui-columns-row">
+                <div class="game-ui-stack-column">
+                  <aside class="game-panel game-panel--omega" data-menu-panel="omega" aria-labelledby="omega-plan-panel-title">
+                    <h2 id="omega-plan-panel-title" class="game-panel-title">Omega Plan</h2>
+                    <div id="omega-plan-panel" class="omega-plan-panel"></div>
+                  </aside>
+                  <aside class="game-panel game-panel--locations" data-menu-panel="locations" aria-labelledby="locations-panel-title">
+                    <h2 id="locations-panel-title" class="game-panel-title">Locations</h2>
+                    <div id="locations-panel" class="locations-panel"></div>
+                  </aside>
+                </div>
+                <div class="game-ui-stack-column">
+                  <aside class="game-panel game-panel--minions" data-menu-panel="minions" aria-labelledby="minions-panel-title">
+                    <h2 id="minions-panel-title" class="game-panel-title">Minions</h2>
+                    <section class="minions-panel-section" aria-label="Hired minions">
+                      <h3 id="minions-roster-heading" class="game-controls-heading">Your roster</h3>
+                      <div id="minions-roster-list" class="minions-panel-list"></div>
+                    </section>
+                    <section class="minions-panel-section" aria-label="Minions available for hire">
+                      <div class="minions-section-heading-row">
+                        <h3 id="minions-available-heading" class="game-controls-heading">Available to hire</h3>
+                        <button type="button" class="btn btn-reroll-hire" id="btn-reroll-hire" aria-label="Reroll hire offers for 1 CP">
+                          Reroll
+                        </button>
+                      </div>
+                      <div id="minions-available-list" class="minions-panel-list"></div>
+                    </section>
+                  </aside>
+                  <aside class="game-panel game-panel--assets" data-menu-panel="assets" aria-labelledby="assets-panel-title">
+                    <h2 id="assets-panel-title" class="game-panel-title">Assets</h2>
+                    <div id="assets-panel" class="assets-panel"></div>
+                  </aside>
+                </div>
+                <div class="game-ui-stack-column">
+                  <aside
+                    class="game-panel game-panel--missions"
+                    data-menu-panel="missions"
+                    aria-labelledby="missions-panel-title"
+                  >
+                    <h2 id="missions-panel-title" class="game-panel-title">Active Missions</h2>
+                    <div id="missions-panel-root" class="missions-panel-root"></div>
+                  </aside>
+                  <aside
+                    class="game-panel game-panel--events"
+                    data-menu-panel="events"
+                    aria-labelledby="events-panel-title"
+                  >
+                    <h2 id="events-panel-title" class="game-panel-title">Events</h2>
+                    <div id="events-panel" class="events-panel"></div>
+                  </aside>
+                  <aside
+                    class="game-panel game-panel--lair"
+                    data-menu-panel="lair"
+                    aria-labelledby="lair-panel-title"
+                  >
+                    <h2 id="lair-panel-title" class="game-panel-title">Lair</h2>
+                    <div id="lair-panel" class="lair-panel"></div>
+                  </aside>
+                </div>
+              </div>
+            </main>
+          </div>
+
+          <footer class="omega-ticker-bar game-hud" aria-label="Global events and plan actions">
+            <div class="omega-ticker__label">
+              <span class="omega-ticker__signal" aria-hidden="true"></span>
+              Global Events
+            </div>
+            <div class="omega-ticker" aria-live="off">
+              <div id="global-events-ticker" class="omega-ticker__track"></div>
+            </div>
+            <button type="button" class="btn btn-primary btn-execute" id="btn-execute-plan">
+              Execute <span class="btn-execute__chev" aria-hidden="true">&#9656;</span>
+            </button>
+          </footer>
         </div>
-        </div>
-        <div class="game-hud">
-          <aside class="game-hud-actions-panel" aria-label="Plan actions">
-            <button type="button" class="btn btn-primary" id="btn-execute-plan">Execute Plan</button>
-          </aside>
-        </div>
+
         <div id="overlay-pause" class="pause-overlay" hidden aria-hidden="true">
           <div class="pause-backdrop" aria-hidden="true"></div>
           <div class="pause-panel" role="dialog" aria-modal="true" aria-labelledby="pause-heading">
-            <h2 id="pause-heading" class="pause-title visually-hidden">Paused</h2>
+            <h2 id="pause-heading" class="pause-title">OPERATIONS SUSPENDED</h2>
             <div class="screen-actions pause-actions">
-              <button type="button" class="btn" id="btn-pause-back">Back</button>
+              <button type="button" class="btn" id="btn-pause-back">Resume</button>
               <button type="button" class="btn" id="btn-pause-quit">Quit</button>
               <button type="button" class="btn" id="btn-pause-settings">Settings</button>
             </div>
