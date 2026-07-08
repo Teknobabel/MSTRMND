@@ -6,6 +6,7 @@ import {
 import { computeSuccessChanceBreakdown } from "../../game/mission";
 import { createMinionFromTemplate } from "../../game/minion";
 import type { MinionInstance, MinionTemplate, MissionTemplate, Trait } from "../../game/types";
+import { artFieldRow } from "../artField";
 import type { FormCtx } from "./context";
 import { effectsListFieldset } from "./effectsEditor";
 import {
@@ -162,17 +163,10 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
     ),
   );
   container.appendChild(
-    formRow(
-      "cardArt",
-      textInput(
-        str(ctx.row, "cardArt"),
-        (v) =>
-          ctx.update((row) => {
-            setOrDelete(row, "cardArt", v, true);
-          }),
-        "(optional)",
-      ),
-    ),
+    artFieldRow(ctx, "cardArt", {
+      optional: true,
+      suggestedName: `${ctx.slice === "events" ? "event" : "mission"}-${str(ctx.row, "id")}`,
+    }),
   );
   container.appendChild(
     formRow(

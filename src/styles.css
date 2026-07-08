@@ -1716,6 +1716,26 @@ body {
   flex-shrink: 0;
 }
 
+.omega-plan-header.card-with-art {
+  flex-direction: row;
+}
+
+/* Revealed opposing agents on location cards */
+.location-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-right: 0.45rem;
+  vertical-align: middle;
+}
+
+.location-agent-chip > .card-art {
+  border: 1px solid var(--line-1);
+  border-radius: 4px;
+  object-fit: cover;
+  background: rgba(10, 4, 5, 0.8);
+}
+
 /* Mission outcome hover tooltip */
 .mission-outcome-tooltip-anchor {
   position: relative;

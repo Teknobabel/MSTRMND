@@ -1,9 +1,11 @@
 import type {
+  BalanceConfig,
   DynamicTrait,
   MinionInstance,
   MinionTemplate,
   StartingDynamicTrait,
 } from "./types";
+import { DEFAULT_BALANCE } from "./types";
 
 export type CreateMinionOverrides = Partial<
   Pick<MinionInstance, "currentLevel" | "currentExperience" | "traitIds" | "dynamicTraits">
@@ -70,21 +72,22 @@ export function nextLevelUpTraitId(
   return template.levelUpTraitOrder.find((id) => !instance.traitIds.includes(id));
 }
 
-/** XP gained per mission finished; at this total XP triggers a level-up (then XP resets to 0). */
-export const MINION_XP_PER_MISSION = 1;
-export const MINION_XP_TO_LEVEL = 3;
+/** @deprecated Read `catalog.balance.minionXpPerMission` / `.minionXpToLevel`; legacy defaults. */
+export const MINION_XP_PER_MISSION = DEFAULT_BALANCE.minionXpPerMission;
+export const MINION_XP_TO_LEVEL = DEFAULT_BALANCE.minionXpToLevel;
 
 /**
- * When a mission finishes (resolve), grant {@link MINION_XP_PER_MISSION} XP to the minion.
- * At {@link MINION_XP_TO_LEVEL} XP, level increases, XP resets to 0, and the next trait from
- * `template.levelUpTraitOrder` is applied if any remain.
+ * When a mission finishes (resolve), grant `xp.minionXpPerMission` XP to the minion.
+ * At `xp.minionXpToLevel` XP, level increases, XP resets to 0, and the next trait from
+ * `template.levelUpTraitOrder` is applied if any remain. Defaults preserve legacy values.
  */
 export function awardMissionResolutionExperience(
   instance: MinionInstance,
   template: MinionTemplate,
+  xp: Pick<BalanceConfig, "minionXpPerMission" | "minionXpToLevel"> = DEFAULT_BALANCE,
 ): { instance: MinionInstance; leveledUp: boolean; traitUnlockedId?: string } {
-  const nextXp = instance.currentExperience + MINION_XP_PER_MISSION;
-  if (nextXp < MINION_XP_TO_LEVEL) {
+  const nextXp = instance.currentExperience + xp.minionXpPerMission;
+  if (nextXp < xp.minionXpToLevel) {
     return {
       instance: { ...instance, currentExperience: nextXp },
       leveledUp: false,

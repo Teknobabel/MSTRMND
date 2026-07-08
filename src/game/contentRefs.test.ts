@@ -75,6 +75,7 @@ describe("collectContentReferences", () => {
       organizationNames: new Set<string>(),
       playerProfiles: new Set<string>(),
       wantedLevels: new Set<string>(),
+      balance: new Set<string>(),
     };
     for (const ref of realRefs) {
       expect(

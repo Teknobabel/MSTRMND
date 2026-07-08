@@ -25,6 +25,7 @@ export type FixtureSlices = Record<ContentSliceKey, unknown> & {
   organizationNames: string[];
   playerProfiles: JsonRecord[];
   wantedLevels: JsonRecord[];
+  balance: JsonRecord;
 };
 
 export function rawFixtureSlices(): FixtureSlices {
@@ -155,6 +156,8 @@ export function rawFixtureSlices(): FixtureSlices {
       { minInfamy: 0, name: "Shadow", maxAgents: 0 },
       { minInfamy: 5, name: "Noticed", maxAgents: 2 },
     ],
+    /* Empty ⇒ every knob takes its DEFAULT_BALANCE value (legacy behavior). */
+    balance: {},
   };
 }
 

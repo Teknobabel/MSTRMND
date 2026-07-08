@@ -1,3 +1,4 @@
+import { artFieldRow } from "../artField";
 import type { FormCtx } from "./context";
 import {
   el,
@@ -49,17 +50,10 @@ function descriptionRow(container: HTMLElement, ctx: FormCtx, optional: boolean)
 
 function cardArtRow(container: HTMLElement, ctx: FormCtx): void {
   container.appendChild(
-    formRow(
-      "cardArt",
-      textInput(
-        str(ctx.row, "cardArt"),
-        (v) =>
-          ctx.update((row) => {
-            setOrDelete(row, "cardArt", v, true);
-          }),
-        "/assets/cards/custom/…  (optional)",
-      ),
-    ),
+    artFieldRow(ctx, "cardArt", {
+      optional: true,
+      suggestedName: `${ctx.slice}-${str(ctx.row, "id")}`,
+    }),
   );
 }
 
@@ -181,14 +175,10 @@ export function renderPlayerProfileForm(container: HTMLElement, ctx: FormCtx): v
     ),
   );
   container.appendChild(
-    formRow(
-      "profilePic",
-      textInput(str(ctx.row, "profilePic"), (v) =>
-        ctx.update((row) => {
-          row.profilePic = v;
-        }),
-      ),
-    ),
+    artFieldRow(ctx, "profilePic", {
+      optional: false,
+      suggestedName: `profile-${str(ctx.row, "name")}`,
+    }),
   );
 }
 

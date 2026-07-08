@@ -3,21 +3,18 @@ import type {
   DynamicTrait,
   DynamicTraitActivityChange,
   DynamicTraitKind,
+  DynamicTraitModifiers,
   MinionInstance,
   MissionTarget,
   StartingDynamicTrait,
 } from "./types";
+import { DEFAULT_BALANCE } from "./types";
 
-export const DYNAMIC_TRAIT_ROLL_PERCENT = 10;
+/** @deprecated Read `catalog.balance.dynamicTraitRollPercent`; kept as the legacy default. */
+export const DYNAMIC_TRAIT_ROLL_PERCENT = DEFAULT_BALANCE.dynamicTraitRollPercent;
 
-const BONUS_BY_KIND: Record<DynamicTraitKind, number> = {
-  friend: 5,
-  lover: 10,
-  rival: -5,
-  hatred: -10,
-  hero: 5,
-  wanted: -5,
-};
+const DEFAULT_BONUS_BY_KIND: Record<DynamicTraitKind, number> =
+  DEFAULT_BALANCE.dynamicTraitModifiers;
 
 export function isPositiveDynamicTraitKind(kind: DynamicTraitKind): boolean {
   return kind === "friend" || kind === "lover" || kind === "hero";
@@ -84,6 +81,7 @@ export function dynamicTraitSuccessModifierBreakdownForMission(
   roster: readonly MinionInstance[],
   participants: readonly MinionInstance[],
   missionLocationId: string | null,
+  modifiers: DynamicTraitModifiers = DEFAULT_BONUS_BY_KIND,
 ): { total: number; entries: DynamicTraitSuccessBreakdownEntry[] } {
   if (participants.length === 0) {
     return { total: 0, entries: [] };
@@ -98,7 +96,7 @@ export function dynamicTraitSuccessModifierBreakdownForMission(
           dt.targetMinionInstanceId.length > 0 &&
           ids.has(dt.targetMinionInstanceId)
         ) {
-          const delta = BONUS_BY_KIND[dt.kind];
+          const delta = modifiers[dt.kind];
           total += delta;
           entries.push({
             ownerInstanceId: p.instanceId,
@@ -107,7 +105,7 @@ export function dynamicTraitSuccessModifierBreakdownForMission(
           });
         }
       } else if (missionLocationId !== null && dt.locationId === missionLocationId) {
-        const delta = BONUS_BY_KIND[dt.kind];
+        const delta = modifiers[dt.kind];
         total += delta;
         entries.push({
           ownerInstanceId: p.instanceId,
@@ -123,6 +121,7 @@ export function dynamicTraitSuccessModifierBreakdownForMission(
 export function dynamicTraitSuccessModifierForMission(
   participants: readonly MinionInstance[],
   missionLocationId: string | null,
+  modifiers: DynamicTraitModifiers = DEFAULT_BONUS_BY_KIND,
 ): number {
   if (participants.length === 0) {
     return 0;
@@ -136,10 +135,10 @@ export function dynamicTraitSuccessModifierForMission(
           dt.targetMinionInstanceId.length > 0 &&
           ids.has(dt.targetMinionInstanceId)
         ) {
-          delta += BONUS_BY_KIND[dt.kind];
+          delta += modifiers[dt.kind];
         }
       } else if (missionLocationId !== null && dt.locationId === missionLocationId) {
-        delta += BONUS_BY_KIND[dt.kind];
+        delta += modifiers[dt.kind];
       }
     }
   }
@@ -151,6 +150,7 @@ export function dynamicTraitSuccessModifierFromFullRoster(
   fullRoster: readonly MinionInstance[],
   participantInstanceIds: readonly string[],
   missionLocationId: string | null,
+  modifiers: DynamicTraitModifiers = DEFAULT_BONUS_BY_KIND,
 ): number {
   const materialized = materializePendingDynamicTraits(
     fullRoster.map((m) => ({ ...m, dynamicTraits: [...m.dynamicTraits] })),
@@ -163,7 +163,7 @@ export function dynamicTraitSuccessModifierFromFullRoster(
       participants.push(p);
     }
   }
-  return dynamicTraitSuccessModifierForMission(participants, missionLocationId);
+  return dynamicTraitSuccessModifierForMission(participants, missionLocationId, modifiers);
 }
 
 /** Like {@link dynamicTraitSuccessModifierFromFullRoster}, but lists each contributing trait. */
@@ -189,6 +189,7 @@ export function dynamicTraitSuccessModifierBreakdownFromFullRoster(
     materialized,
     participants,
     missionLocationId,
+    catalog.balance.dynamicTraitModifiers,
   );
 }
 
@@ -222,8 +223,8 @@ export function dynamicTraitDisplayLabel(
   return dt.kind === "hero" ? `Hero of ${locName}` : `Wanted in ${locName}`;
 }
 
-function rollHits(rng: () => number): boolean {
-  return Math.floor(rng() * 100) < DYNAMIC_TRAIT_ROLL_PERCENT;
+function rollHits(rng: () => number, rollPercent: number): boolean {
+  return Math.floor(rng() * 100) < rollPercent;
 }
 
 function pickRandomOtherParticipant(
@@ -523,6 +524,7 @@ export function rollDynamicTraitsAfterMission(
   success: boolean,
   missionTarget: MissionTarget,
   rng: () => number,
+  rollPercent: number = DEFAULT_BALANCE.dynamicTraitRollPercent,
 ): { nextMinions: MinionInstance[]; changes: DynamicTraitActivityChange[] } {
   let working = materializePendingDynamicTraits([...minions.map((m) => ({ ...m, dynamicTraits: [...m.dynamicTraits] }))]);
   const changes: DynamicTraitActivityChange[] = [];
@@ -533,7 +535,7 @@ export function rollDynamicTraitsAfterMission(
 
   for (const ownerId of participantInstanceIds) {
     if (success && multi) {
-      if (rollHits(rng)) {
+      if (rollHits(rng, rollPercent)) {
         const otherId = pickRandomOtherParticipant(participantInstanceIds, ownerId, rng);
         if (otherId !== null) {
           const cur = byId.get(ownerId);
@@ -555,7 +557,7 @@ export function rollDynamicTraitsAfterMission(
     }
 
     if (!success && multi) {
-      if (rollHits(rng)) {
+      if (rollHits(rng, rollPercent)) {
         const otherId = pickRandomOtherParticipant(participantInstanceIds, ownerId, rng);
         if (otherId !== null) {
           const cur = byId.get(ownerId);
@@ -577,7 +579,7 @@ export function rollDynamicTraitsAfterMission(
     }
 
     if (success && locationId !== null) {
-      if (rollHits(rng)) {
+      if (rollHits(rng, rollPercent)) {
         const cur = byId.get(ownerId);
         if (cur === undefined) {
           continue;
@@ -591,7 +593,7 @@ export function rollDynamicTraitsAfterMission(
     }
 
     if (!success && locationId !== null) {
-      if (rollHits(rng)) {
+      if (rollHits(rng, rollPercent)) {
         const cur = byId.get(ownerId);
         if (cur === undefined) {
           continue;

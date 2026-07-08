@@ -5,7 +5,6 @@ import {
   busyInstanceIds,
   cancelMission,
   createInitialGameState,
-  EVENT_MAX_PARTICIPANTS_PER_MISSION,
   executePlan,
   fireMinion,
   getMissionTargetLocationId,
@@ -14,7 +13,6 @@ import {
   missionTargetMatchesTemplate,
   rehireMinion,
   rerollHireOffers,
-  REROLL_HIRE_OFFERS_CP,
   type ActiveMission,
   type GameError,
   type GameState,
@@ -37,7 +35,6 @@ import {
   canAssignParticipants,
   computeSuccessChanceBreakdown,
   mergedRequiredTraitIdsSorted,
-  OPPOSING_AGENT_SUCCESS_PENALTY,
   type SuccessChanceBreakdown,
 } from "./game/mission";
 import {
@@ -65,6 +62,7 @@ import { initNavigation } from "./navigation";
 import {
   appendCardArtShell,
   createCardArtImg,
+  resolveAgentCardArt,
   resolveAssetCardArt,
   resolveLairCardArt,
   resolveLocationCardArt,
@@ -754,7 +752,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function stagedParticipantCeiling(): number {
     if (assignMissionSource === "event") {
-      return EVENT_MAX_PARTICIPANTS_PER_MISSION;
+      return content.balance.eventMaxParticipants;
     }
     return state.player.maxParticipantsPerMission;
   }
@@ -768,7 +766,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function participantCapForActiveMission(am: ActiveMission): number {
     return am.missionSource === "event"
-      ? EVENT_MAX_PARTICIPANTS_PER_MISSION
+      ? content.balance.eventMaxParticipants
       : state.player.maxParticipantsPerMission;
   }
 
@@ -1284,7 +1282,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
     if (breakdown.opposingAgentCount > 0) {
       lines.push(
-        `Revealed opposing agents at target: ${breakdown.opposingAgentCount} * -${OPPOSING_AGENT_SUCCESS_PENALTY}% = -${breakdown.opposingAgentPenaltyTotal}%.`,
+        `Revealed opposing agents at target: ${breakdown.opposingAgentCount} * -${content.balance.opposingAgentPenalty}% = -${breakdown.opposingAgentPenaltyTotal}%.`,
       );
     }
     if (breakdown.preClampPercent !== breakdown.finalPercent) {
@@ -2009,17 +2007,30 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const byInstanceId = new Map(
         state.opposingAgentInstances.map((a) => [a.instanceId, a] as const),
       );
-      const agentsValue = agentIdsAtSite
-        .map((id) => {
-          const a = byInstanceId.get(id);
-          if (a === undefined) {
-            return "(?)";
-          }
-          const name = getAgentTemplateById(content, a.templateId)?.name ?? a.templateId;
-          return a.catalogVisibility === "hidden" ? `(${name})` : name;
-        })
-        .join(", ");
-      appendMinionStatRows(dl, [{ label: "Agents", value: agentsValue }]);
+      const dt = document.createElement("dt");
+      dt.textContent = "Agents";
+      const dd = document.createElement("dd");
+      for (const id of agentIdsAtSite) {
+        const a = byInstanceId.get(id);
+        if (a === undefined) {
+          dd.appendChild(document.createTextNode("(?) "));
+          continue;
+        }
+        const template = getAgentTemplateById(content, a.templateId);
+        const name = template?.name ?? a.templateId;
+        if (a.catalogVisibility === "hidden") {
+          /* Hidden agents stay text-only: showing their portrait would leak who they are. */
+          dd.appendChild(document.createTextNode(`(${name}) `));
+          continue;
+        }
+        const chip = document.createElement("span");
+        chip.className = "location-agent-chip";
+        chip.appendChild(createCardArtImg(resolveAgentCardArt(template), "card-art--chip"));
+        chip.appendChild(document.createTextNode(name));
+        dd.appendChild(chip);
+      }
+      dl.appendChild(dt);
+      dl.appendChild(dd);
     }
 
     for (let si = 0; si < assetSlots.length; si += 1) {
@@ -2181,7 +2192,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           if (state.phase !== "main" || busy.has(inst.instanceId)) {
             return;
           }
-          dispatch((s) => fireMinion(s, inst.instanceId));
+          dispatch((s) => fireMinion(s, content, inst.instanceId));
         });
         fireBtn.addEventListener("mousedown", (ev) => {
           ev.stopPropagation();
@@ -2388,21 +2399,24 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     const header = document.createElement("div");
     header.className = "omega-plan-header";
+    /* Art only when authored — omega plans have no default placeholder. */
+    const headerBody =
+      plan.cardArt !== undefined ? appendCardArtShell(header, plan.cardArt) : header;
 
     const nameEl = document.createElement("p");
     nameEl.className = "omega-plan-name";
     nameEl.textContent = plan.name;
-    header.appendChild(nameEl);
+    headerBody.appendChild(nameEl);
 
     const descEl = document.createElement("p");
     descEl.className = "omega-plan-description";
     descEl.textContent = plan.description;
-    header.appendChild(descEl);
+    headerBody.appendChild(descEl);
 
     const stageHint = document.createElement("p");
     stageHint.className = "omega-plan-stage-hint";
     stageHint.textContent = `Active phase: ${state.activeOmegaStageIndex + 1} · Row successes: ${state.omegaRowProgress.filter(Boolean).length}/3`;
-    header.appendChild(stageHint);
+    headerBody.appendChild(stageHint);
 
     omegaPlanPanelEl.appendChild(header);
 
@@ -2709,10 +2723,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         state.player.minions,
         am.participantInstanceIds,
         lid,
+        content.balance.dynamicTraitModifiers,
       );
       const successOpts = {
         ...missionSuccessOptionsForTarget(state, am.target),
         traitsCatalog: content.traits,
+        balance: content.balance,
         opposingAgentPenaltyCount,
         dynamicTraitDelta,
         eventSuccessModifierDelta: totalEventSuccessModifierDelta(),
@@ -3622,7 +3638,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     renderActivityPanel();
     applyGameMenuVisibility();
 
-    const rerollCost = REROLL_HIRE_OFFERS_CP;
+    const rerollCost = content.balance.rerollHireOffersCp;
     const canRerollOffers = mainOnly && p.commandPoints >= rerollCost;
     btnRerollHire.disabled = !canRerollOffers;
     if (!mainOnly) {

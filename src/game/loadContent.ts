@@ -1,5 +1,6 @@
 import agentsJson from "../../content/agents.json";
 import assetsJson from "../../content/assets.json";
+import balanceJson from "../../content/balance.json";
 import eventsJson from "../../content/events.json";
 import lairsJson from "../../content/lairs.json";
 import locationsJson from "../../content/locations.json";
@@ -32,6 +33,7 @@ const rawContentSlices: RawContentSlices = {
   organizationNames: organizationNamesJson,
   playerProfiles: playerProfilesJson,
   wantedLevels: wantedLevelsJson,
+  balance: balanceJson,
 };
 
 export function loadContent(): ContentCatalog {

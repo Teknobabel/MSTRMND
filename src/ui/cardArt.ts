@@ -1,4 +1,5 @@
 import type {
+  AgentTemplate,
   Asset,
   LairTemplate,
   LocationTemplate,
@@ -18,6 +19,11 @@ export function resolveMissionCardArt(mission: MissionTemplate | undefined): str
 }
 
 export function resolveMinionCardArt(template: MinionTemplate | undefined): string {
+  return template?.cardArt ?? DEFAULT_MINION_CARD_ART;
+}
+
+/** Agents fall back to the minion placeholder — no agent-specific default is shipped. */
+export function resolveAgentCardArt(template: AgentTemplate | undefined): string {
   return template?.cardArt ?? DEFAULT_MINION_CARD_ART;
 }
 

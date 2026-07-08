@@ -1,4 +1,5 @@
-import type { MinionInstance, MissionTemplate, Trait } from "./types";
+import type { BalanceConfig, MinionInstance, MissionTemplate, Trait } from "./types";
+import { DEFAULT_BALANCE } from "./types";
 
 export type MissionSuccessOptions = {
   /** Extra required trait ids from situational modifiers; merged with template (deduped). */
@@ -19,6 +20,11 @@ export type MissionSuccessOptions = {
   dynamicTraitDelta?: number;
   /** Flat % delta from timed event modifiers (see `GameState.activeSuccessModifiers`). */
   eventSuccessModifierDelta?: number;
+  /** Tunable modifier magnitudes (`catalog.balance`); defaults preserve legacy values. */
+  balance?: Pick<
+    BalanceConfig,
+    "statusPositiveBonus" | "statusNegativePenalty" | "opposingAgentPenalty"
+  >;
 };
 
 /**
@@ -114,10 +120,8 @@ export function countMatchedAssignedSlots(
   return n;
 }
 
-const STATUS_POSITIVE_BONUS = 10;
-const STATUS_NEGATIVE_PENALTY = 20;
-/** Flat success % reduction per opposing agent at the mission's target site. */
-export const OPPOSING_AGENT_SUCCESS_PENALTY = 20;
+/** @deprecated Read `catalog.balance.opposingAgentPenalty`; kept as the legacy default. */
+export const OPPOSING_AGENT_SUCCESS_PENALTY = DEFAULT_BALANCE.opposingAgentPenalty;
 
 export type StatusTraitSuccessEntry = {
   instanceId: string;
@@ -130,6 +134,8 @@ export type StatusTraitSuccessEntry = {
 function participantStatusModifierEntries(
   participants: MinionInstance[],
   traitsCatalog: readonly Trait[] | undefined,
+  statusPositiveBonus: number,
+  statusNegativePenalty: number,
 ): StatusTraitSuccessEntry[] {
   if (traitsCatalog === undefined || traitsCatalog.length === 0) {
     return [];
@@ -147,14 +153,14 @@ function participantStatusModifierEntries(
           instanceId: p.instanceId,
           templateId: p.templateId,
           traitId: tid,
-          delta: STATUS_POSITIVE_BONUS,
+          delta: statusPositiveBonus,
         });
       } else if (t.type === "status_negative") {
         out.push({
           instanceId: p.instanceId,
           templateId: p.templateId,
           traitId: tid,
-          delta: -STATUS_NEGATIVE_PENALTY,
+          delta: -statusNegativePenalty,
         });
       }
     }
@@ -208,12 +214,18 @@ export function computeSuccessChanceBreakdown(
       : matchedAssetUnits(assetRequired, options?.playerAssets);
   const base =
     total === 0 ? 100 : Math.round((100 * (matchedTraits + matchedAssets)) / total);
-  const statusEntries = participantStatusModifierEntries(participants, options?.traitsCatalog);
+  const balance = options?.balance ?? DEFAULT_BALANCE;
+  const statusEntries = participantStatusModifierEntries(
+    participants,
+    options?.traitsCatalog,
+    balance.statusPositiveBonus,
+    balance.statusNegativePenalty,
+  );
   const statusDelta = statusEntries.reduce((s, e) => s + e.delta, 0);
   const dyn = options?.dynamicTraitDelta ?? 0;
   const eventMod = options?.eventSuccessModifierDelta ?? 0;
   const opposingAgentCount = Math.max(0, options?.opposingAgentPenaltyCount ?? 0);
-  const opposingAgentPenaltyTotal = OPPOSING_AGENT_SUCCESS_PENALTY * opposingAgentCount;
+  const opposingAgentPenaltyTotal = balance.opposingAgentPenalty * opposingAgentCount;
   const preClampPercent = base + statusDelta + dyn + eventMod - opposingAgentPenaltyTotal;
   const finalPercent = Math.min(100, Math.max(0, preClampPercent));
   return {

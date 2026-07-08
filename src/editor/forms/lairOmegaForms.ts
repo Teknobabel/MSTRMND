@@ -1,3 +1,4 @@
+import { artFieldRow } from "../artField";
 import type { FormCtx } from "./context";
 import {
   el,
@@ -43,17 +44,10 @@ export function renderLairForm(container: HTMLElement, ctx: FormCtx): void {
     ),
   );
   container.appendChild(
-    formRow(
-      "cardArt",
-      textInput(
-        str(ctx.row, "cardArt"),
-        (v) =>
-          ctx.update((row) => {
-            setOrDelete(row, "cardArt", v, true);
-          }),
-        "(optional)",
-      ),
-    ),
+    artFieldRow(ctx, "cardArt", {
+      optional: true,
+      suggestedName: `lair-${str(ctx.row, "id")}`,
+    }),
   );
 
   const missionIds = ctx.ids("missions");
@@ -156,6 +150,12 @@ export function renderOmegaPlanForm(container: HTMLElement, ctx: FormCtx): void 
         }),
       ),
     ),
+  );
+  container.appendChild(
+    artFieldRow(ctx, "cardArt", {
+      optional: true,
+      suggestedName: `omega-${str(ctx.row, "id")}`,
+    }),
   );
   container.appendChild(
     formRow(

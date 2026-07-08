@@ -406,6 +406,52 @@ textarea {
   margin-top: 6px;
 }
 
+/* ---------- Card art field ---------- */
+
+.ed-art-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ed-art-preview-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.ed-art-preview {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-inset);
+}
+
+.ed-art-badge {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+.ed-art-badge--err {
+  color: var(--err);
+}
+
+.ed-art-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ed-art-controls .ed-art-picker {
+  width: auto;
+  max-width: 260px;
+}
+
 /* ---------- Preview ---------- */
 
 .ed-preview-result {

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type {
   AgentTemplate,
   Asset,
+  BalanceConfig,
   ContentCatalog,
   EventTemplate,
   LairTemplate,
@@ -18,6 +19,7 @@ import type {
   Trait,
   WantedLevelTier,
 } from "./types";
+import { DEFAULT_BALANCE } from "./types";
 
 /* ------------------------------------------------------------------------------------------------
  * Content manifest — the single source of truth for which slices exist and where they live.
@@ -38,6 +40,7 @@ export const CONTENT_SLICE_KEYS = [
   "organizationNames",
   "playerProfiles",
   "wantedLevels",
+  "balance",
 ] as const;
 
 export type ContentSliceKey = (typeof CONTENT_SLICE_KEYS)[number];
@@ -365,6 +368,7 @@ export const omegaPlanTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
+  cardArt: z.string().min(1).optional(),
   mapId: z.string().min(1),
   stages: z.array(omegaPlanStageSchema).length(3),
 });
@@ -385,6 +389,56 @@ export const wantedLevelTierSchema: z.ZodType<WantedLevelTier> = z.object({
   minInfamy: z.number().int().min(0).max(100),
   name: z.string().min(1),
   maxAgents: z.number().int().min(0),
+});
+
+function balanceInt(min: number, max: number, def: number): z.ZodDefault<z.ZodNumber> {
+  return z.number().int().min(min).max(max).default(def);
+}
+
+/**
+ * `content/balance.json` — a single object, not an array. Every field defaults to the
+ * legacy constant in {@link DEFAULT_BALANCE}, so `{}` is a valid file that changes nothing.
+ */
+export const balanceConfigSchema = z.object({
+  statusPositiveBonus: balanceInt(0, 100, DEFAULT_BALANCE.statusPositiveBonus),
+  statusNegativePenalty: balanceInt(0, 100, DEFAULT_BALANCE.statusNegativePenalty),
+  opposingAgentPenalty: balanceInt(0, 100, DEFAULT_BALANCE.opposingAgentPenalty),
+  dynamicTraitModifiers: z
+    .object({
+      friend: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.friend),
+      lover: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.lover),
+      rival: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.rival),
+      hatred: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.hatred),
+      hero: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.hero),
+      wanted: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.wanted),
+    })
+    .default({ ...DEFAULT_BALANCE.dynamicTraitModifiers }),
+  dynamicTraitRollPercent: balanceInt(0, 100, DEFAULT_BALANCE.dynamicTraitRollPercent),
+  infamySuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamySuccessDelta),
+  infamyFailureDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamyFailureDelta),
+  injuryChancePerAgentPercent: balanceInt(0, 100, DEFAULT_BALANCE.injuryChancePerAgentPercent),
+  startingMaxCommandPoints: balanceInt(1, 99, DEFAULT_BALANCE.startingMaxCommandPoints),
+  rerollHireOffersCp: balanceInt(0, 99, DEFAULT_BALANCE.rerollHireOffersCp),
+  startingMaxRosterSize: balanceInt(1, 99, DEFAULT_BALANCE.startingMaxRosterSize),
+  startingMaxHireOffers: balanceInt(1, 99, DEFAULT_BALANCE.startingMaxHireOffers),
+  startingMaxConcurrentMissions: balanceInt(1, 99, DEFAULT_BALANCE.startingMaxConcurrentMissions),
+  startingMaxParticipantsPerMission: balanceInt(
+    1,
+    12,
+    DEFAULT_BALANCE.startingMaxParticipantsPerMission,
+  ),
+  eventMaxParticipants: balanceInt(1, 12, DEFAULT_BALANCE.eventMaxParticipants),
+  fireRehireCooldownTurns: balanceInt(0, 99, DEFAULT_BALANCE.fireRehireCooldownTurns),
+  minionXpPerMission: balanceInt(0, 99, DEFAULT_BALANCE.minionXpPerMission),
+  minionXpToLevel: balanceInt(1, 99, DEFAULT_BALANCE.minionXpToLevel),
+  assetsPerLocationMin: balanceInt(0, 10, DEFAULT_BALANCE.assetsPerLocationMin),
+  assetsPerLocationMax: balanceInt(0, 10, DEFAULT_BALANCE.assetsPerLocationMax),
+  initialRevealedAssetSlots: balanceInt(0, 99, DEFAULT_BALANCE.initialRevealedAssetSlots),
+  securityGainPerResolvedMission: balanceInt(
+    0,
+    3,
+    DEFAULT_BALANCE.securityGainPerResolvedMission,
+  ),
 });
 
 export const lairTemplateSchema = z.object({
@@ -412,6 +466,7 @@ export const contentSliceSchemas = {
   organizationNames: z.array(z.string().min(1)).min(1),
   playerProfiles: z.array(playerProfileSchema).min(1),
   wantedLevels: z.array(wantedLevelTierSchema).min(1),
+  balance: balanceConfigSchema,
 } as const;
 
 /* ------------------------------------------------------------------------------------------------
@@ -517,6 +572,7 @@ function normalizeOmegaPlans(
     id: p.id,
     name: p.name,
     description: p.description,
+    ...(p.cardArt !== undefined ? { cardArt: p.cardArt } : {}),
     mapId: p.mapId,
     stages: assertOmegaPlanStages(p.stages),
   }));
@@ -575,6 +631,7 @@ export function parseContentSlices(raw: RawContentSlices): {
     organizationNames: shape("organizationNames", (d) => d as string[]),
     playerProfiles: shape("playerProfiles", (d) => d as PlayerProfile[]),
     wantedLevels: shape("wantedLevels", (d) => d as WantedLevelTier[]),
+    balance: shape("balance", (d) => d as BalanceConfig),
   };
 
   return { slices, issues };
@@ -1257,6 +1314,15 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
       checkUnlockForbidden("events", ev.id, ev.onFailureEffects, "onFailureEffects", issues);
       checkUnlockForbidden("events", ev.id, ev.expireEffects, "expireEffects", issues);
     }
+  }
+
+  if (s.balance !== null && s.balance.assetsPerLocationMin > s.balance.assetsPerLocationMax) {
+    issues.push({
+      slice: "balance",
+      entityId: null,
+      path: "assetsPerLocationMin",
+      message: `assetsPerLocationMin (${s.balance.assetsPerLocationMin}) must be ≤ assetsPerLocationMax (${s.balance.assetsPerLocationMax})`,
+    });
   }
 
   if (s.wantedLevels !== null && s.wantedLevels.length > 0) {

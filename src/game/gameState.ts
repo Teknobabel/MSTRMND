@@ -14,7 +14,7 @@ import type {
   MissionTargetType,
   MissionTemplate,
 } from "./types";
-import { isOccupiedAssetSlot } from "./types";
+import { DEFAULT_BALANCE, isOccupiedAssetSlot } from "./types";
 import { awardMissionResolutionExperience, createMinionFromTemplate } from "./minion";
 import {
   countOpposingAgentsAtLocationFromData,
@@ -380,37 +380,33 @@ export function missionSuccessOptionsForTarget(
   return { additionalRequiredTraitIds: [...merged] };
 }
 
-const INFAMY_SUCCESS_DELTA = -3;
-const INFAMY_FAILURE_DELTA = 5;
-
-const DEFAULT_MAX_ROSTER_SIZE = 5;
-const DEFAULT_MAX_HIRE_OFFERS = 3;
-const DEFAULT_MAX_CONCURRENT_MISSIONS = 2;
-const DEFAULT_MAX_PARTICIPANTS_PER_MISSION = 3;
-/** Fixed participant cap for rotating global events (`missionSource === "event"`). */
-export const EVENT_MAX_PARTICIPANTS_PER_MISSION = 3;
-/** CP spent to reroll the hire offer pool during Main Phase */
-export const REROLL_HIRE_OFFERS_CP = 1;
-
-/** Turns (`GameState.turnNumber`) before a fired minion appears in the hire pool again. */
-export const MINION_FIRE_REHIRE_COOLDOWN_TURNS = 3;
+/** @deprecated Read `catalog.balance.eventMaxParticipants`; kept as the legacy default. */
+export const EVENT_MAX_PARTICIPANTS_PER_MISSION = DEFAULT_BALANCE.eventMaxParticipants;
+/** @deprecated Read `catalog.balance.rerollHireOffersCp`; kept as the legacy default. */
+export const REROLL_HIRE_OFFERS_CP = DEFAULT_BALANCE.rerollHireOffersCp;
+/** @deprecated Read `catalog.balance.fireRehireCooldownTurns`; kept as the legacy default. */
+export const MINION_FIRE_REHIRE_COOLDOWN_TURNS = DEFAULT_BALANCE.fireRehireCooldownTurns;
 
 export function clampInfamy(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-/** After a mission finishes at `locationId`, raise that location's security by 1 (cap = location level). */
+/**
+ * After a mission finishes at `locationId`, raise that location's security by
+ * `catalog.balance.securityGainPerResolvedMission` (cap = location level).
+ */
 function raiseSecurityAfterMissionAtLocation(
   states: LocationSecurityState[],
   catalog: ContentCatalog,
   locationId: string,
 ): LocationSecurityState[] {
   const cap = maxSecurityLevelForLocation(catalog, locationId);
+  const gain = catalog.balance.securityGainPerResolvedMission;
   return states.map((s) => {
     if (s.locationId !== locationId) {
       return s;
     }
-    const next = Math.min(cap, s.securityLevel + 1);
+    const next = Math.max(0, Math.min(cap, s.securityLevel + gain));
     return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
   });
 }
@@ -461,19 +457,24 @@ function pickDistinctRandomAssetIds(
 }
 
 /**
- * For each location: 1–3 random distinct catalog assets (none if `catalog.assets` is empty),
- * all hidden. Then `min(3, total slots)` slots chosen uniformly at random are revealed.
+ * For each location: `balance.assetsPerLocationMin`–`Max` random distinct catalog assets
+ * (none if `catalog.assets` is empty), all hidden. Then
+ * `min(balance.initialRevealedAssetSlots, total slots)` slots chosen uniformly at random
+ * are revealed.
  */
 function initializeLocationAssetPlacements(
   catalog: ContentCatalog,
   rng: Rng,
   runLocations: LocationTemplate[],
 ): LocationAssetPlacement[] {
+  const { assetsPerLocationMin, assetsPerLocationMax, initialRevealedAssetSlots } =
+    catalog.balance;
+  const spread = Math.max(0, assetsPerLocationMax - assetsPerLocationMin);
   const placements: LocationAssetPlacement[] = [];
   for (const loc of runLocations) {
     let slots: LocationAssetSlot[] = [];
     if (catalog.assets.length > 0) {
-      const targetCount = 1 + Math.floor(rng() * 3);
+      const targetCount = assetsPerLocationMin + Math.floor(rng() * (spread + 1));
       const ids = pickDistinctRandomAssetIds(
         catalog,
         Math.min(targetCount, catalog.assets.length),
@@ -495,7 +496,7 @@ function initializeLocationAssetPlacements(
       flat.push({ pi, si });
     }
   }
-  const k = Math.min(3, flat.length);
+  const k = Math.min(initialRevealedAssetSlots, flat.length);
   if (k > 0) {
     shuffleInPlace(flat, rng);
     for (let i = 0; i < k; i += 1) {
@@ -578,15 +579,15 @@ export function createInitialGameState(
     }
   }
   const player: PlayerState = {
-    commandPoints: 5,
-    maxCommandPoints: 5,
+    commandPoints: catalog.balance.startingMaxCommandPoints,
+    maxCommandPoints: catalog.balance.startingMaxCommandPoints,
     infamy: 0,
     minions: [],
     assets: assetsFromLair,
-    maxRosterSize: DEFAULT_MAX_ROSTER_SIZE,
-    maxHireOffers: DEFAULT_MAX_HIRE_OFFERS,
-    maxConcurrentMissions: DEFAULT_MAX_CONCURRENT_MISSIONS,
-    maxParticipantsPerMission: DEFAULT_MAX_PARTICIPANTS_PER_MISSION,
+    maxRosterSize: catalog.balance.startingMaxRosterSize,
+    maxHireOffers: catalog.balance.startingMaxHireOffers,
+    maxConcurrentMissions: catalog.balance.startingMaxConcurrentMissions,
+    maxParticipantsPerMission: catalog.balance.startingMaxParticipantsPerMission,
     pendingBonusCommandPoints: 0,
   };
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
@@ -763,6 +764,7 @@ export function hireMinion(
 
 export function fireMinion(
   state: GameState,
+  catalog: ContentCatalog,
   instanceId: string,
 ): Result<GameState, GameError> {
   if (state.phase !== "main") {
@@ -785,7 +787,7 @@ export function fireMinion(
       ...state.minionRehireQueue,
       {
         minion: { ...minion },
-        availableFromTurn: state.turnNumber + MINION_FIRE_REHIRE_COOLDOWN_TURNS,
+        availableFromTurn: state.turnNumber + catalog.balance.fireRehireCooldownTurns,
       },
     ],
   };
@@ -869,7 +871,7 @@ export function rerollHireOffers(
   if (state.phase !== "main") {
     return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
   }
-  const cost = REROLL_HIRE_OFFERS_CP;
+  const cost = catalog.balance.rerollHireOffersCp;
   if (state.player.commandPoints < cost) {
     return {
       ok: false,
@@ -1119,12 +1121,12 @@ export function assignMission(
   if (!canAssignParticipants(
     participants,
     missionSource === "event"
-      ? EVENT_MAX_PARTICIPANTS_PER_MISSION
+      ? catalog.balance.eventMaxParticipants
       : state.player.maxParticipantsPerMission,
   )) {
     const cap =
       missionSource === "event"
-        ? EVENT_MAX_PARTICIPANTS_PER_MISSION
+        ? catalog.balance.eventMaxParticipants
         : state.player.maxParticipantsPerMission;
     return {
       ok: false,
@@ -1409,7 +1411,7 @@ export function executePlan(
       !canAssignParticipants(
         participants,
         am.missionSource === "event"
-          ? EVENT_MAX_PARTICIPANTS_PER_MISSION
+          ? catalog.balance.eventMaxParticipants
           : player.maxParticipantsPerMission,
       )
     ) {
@@ -1456,6 +1458,7 @@ export function executePlan(
       Array.from(instanceById.values()),
       am.participantInstanceIds,
       missionLocId,
+      catalog.balance.dynamicTraitModifiers,
     );
 
     const eventSuccessModifierDelta = activeSuccessModifiers.reduce((s, m) => s + m.delta, 0);
@@ -1474,12 +1477,15 @@ export function executePlan(
         opposingAgentPenaltyCount,
         dynamicTraitDelta,
         eventSuccessModifierDelta,
+        balance: catalog.balance,
       },
     );
     const roll = Math.floor(rng() * 100);
     const success = roll < pct;
     const infamyBefore = player.infamy;
-    const baselineInfamy = success ? INFAMY_SUCCESS_DELTA : INFAMY_FAILURE_DELTA;
+    const baselineInfamy = success
+      ? catalog.balance.infamySuccessDelta
+      : catalog.balance.infamyFailureDelta;
     player = {
       ...player,
       infamy: player.infamy + baselineInfamy,
@@ -1513,6 +1519,7 @@ export function executePlan(
       success,
       am.target,
       rng,
+      catalog.balance.dynamicTraitRollPercent,
     );
     for (const m of dynamicRoll.nextMinions) {
       instanceById.set(m.instanceId, m);
@@ -1532,7 +1539,10 @@ export function executePlan(
     let criticalOpposingAgentCount: number | undefined;
     let criticalInjuryChancePercent: number | undefined;
     if (isCriticalFailure) {
-      const chance = Math.min(100, 20 * opposingAgentPenaltyCount);
+      const chance = Math.min(
+        100,
+        catalog.balance.injuryChancePerAgentPercent * opposingAgentPenaltyCount,
+      );
       const injury = applyCriticalFailureInjuryRolls(
         player,
         am.participantInstanceIds,
@@ -1634,7 +1644,7 @@ export function executePlan(
         continue;
       }
       const { instance: nextInst, leveledUp, traitUnlockedId } =
-        awardMissionResolutionExperience(inst, minionTpl);
+        awardMissionResolutionExperience(inst, minionTpl, catalog.balance);
       instanceById.set(iid, nextInst);
       if (leveledUp) {
         resolveEvents.push({

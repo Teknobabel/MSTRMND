@@ -29,3 +29,42 @@ export async function saveSlices(slices: RawContentSlices): Promise<SaveResult> 
   const body = (await res.json()) as { written: string[] };
   return { ok: true, written: body.written };
 }
+
+/* ---------- Uploaded card art (dev-server writes to public/assets/cards/custom/) ---------- */
+
+export type ArtFileEntry = { name: string; path: string; animated: boolean; bytes: number };
+
+export type ArtUploadResult =
+  | { ok: true; path: string; animated: boolean }
+  | { ok: false; status: number; error: string };
+
+export async function fetchArtList(): Promise<ArtFileEntry[]> {
+  const res = await fetch("/__content-api/art");
+  if (!res.ok) {
+    throw new Error(`Failed to list art files (HTTP ${res.status})`);
+  }
+  const body = (await res.json()) as { files: ArtFileEntry[] };
+  return body.files;
+}
+
+export async function uploadArt(
+  name: string,
+  bytes: ArrayBuffer,
+  overwrite: boolean,
+): Promise<ArtUploadResult> {
+  const params = new URLSearchParams({ name });
+  if (overwrite) {
+    params.set("overwrite", "1");
+  }
+  const res = await fetch(`/__content-api/art?${params.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: bytes,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, status: res.status, error: body.error ?? `HTTP ${res.status}` };
+  }
+  const body = (await res.json()) as { path: string; animated: boolean };
+  return { ok: true, path: body.path, animated: body.animated };
+}

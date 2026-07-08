@@ -292,6 +292,8 @@ export type OmegaPlanTemplate = {
   id: string;
   name: string;
   description: string;
+  /** Optional card art URL (site root path under `public/`). */
+  cardArt?: string;
   /** Map (`MapTemplate.id`) whose locations are playable for this plan. */
   mapId: string;
   stages: [OmegaPlanStage, OmegaPlanStage, OmegaPlanStage];
@@ -331,6 +333,96 @@ export type PlayerProfile = {
   profilePic: string;
 };
 
+/** Flat success % modifier per dynamic trait kind (applied when the bond/location matches). */
+export type DynamicTraitModifiers = {
+  friend: number;
+  lover: number;
+  rival: number;
+  hatred: number;
+  hero: number;
+  wanted: number;
+};
+
+/**
+ * Designer-tunable balance knobs (`content/balance.json`). Every field has a schema default
+ * equal to the pre-balance-slice constant (see {@link DEFAULT_BALANCE}), so a sparse or
+ * empty file changes nothing.
+ */
+export type BalanceConfig = {
+  /* Mission success formula */
+  /** Flat +% per status_positive trait occurrence on participants. */
+  statusPositiveBonus: number;
+  /** Flat −% per status_negative trait occurrence on participants (stored positive). */
+  statusNegativePenalty: number;
+  /** Flat −% per opposing agent at the mission's target site (stored positive). */
+  opposingAgentPenalty: number;
+  dynamicTraitModifiers: DynamicTraitModifiers;
+  /** Chance (%) per participant per resolve to gain/upgrade a dynamic trait. */
+  dynamicTraitRollPercent: number;
+  /* Infamy & risk */
+  /** Infamy change on mission success (typically negative). */
+  infamySuccessDelta: number;
+  /** Infamy change on mission failure (typically positive). */
+  infamyFailureDelta: number;
+  /** Injury chance % per opposing agent when a location-backed mission fails. */
+  injuryChancePerAgentPercent: number;
+  /* Turn economy */
+  startingMaxCommandPoints: number;
+  rerollHireOffersCp: number;
+  /* Roster & missions */
+  startingMaxRosterSize: number;
+  startingMaxHireOffers: number;
+  startingMaxConcurrentMissions: number;
+  startingMaxParticipantsPerMission: number;
+  /** Fixed participant cap for event missions (ignores the player's normal cap). */
+  eventMaxParticipants: number;
+  /** Turns before a fired minion reappears in the hire pool. */
+  fireRehireCooldownTurns: number;
+  /* Progression */
+  minionXpPerMission: number;
+  minionXpToLevel: number;
+  /* World generation & security */
+  assetsPerLocationMin: number;
+  assetsPerLocationMax: number;
+  /** Asset slots revealed globally at run start (capped by total slots). */
+  initialRevealedAssetSlots: number;
+  /** Security added at the target location when a mission resolves there. */
+  securityGainPerResolvedMission: number;
+};
+
+/** Pre-balance-slice values; the single source for schema defaults and code fallbacks. */
+export const DEFAULT_BALANCE: BalanceConfig = {
+  statusPositiveBonus: 10,
+  statusNegativePenalty: 20,
+  opposingAgentPenalty: 20,
+  dynamicTraitModifiers: {
+    friend: 5,
+    lover: 10,
+    rival: -5,
+    hatred: -10,
+    hero: 5,
+    wanted: -5,
+  },
+  dynamicTraitRollPercent: 10,
+  infamySuccessDelta: -3,
+  infamyFailureDelta: 5,
+  injuryChancePerAgentPercent: 20,
+  startingMaxCommandPoints: 5,
+  rerollHireOffersCp: 1,
+  startingMaxRosterSize: 5,
+  startingMaxHireOffers: 3,
+  startingMaxConcurrentMissions: 2,
+  startingMaxParticipantsPerMission: 3,
+  eventMaxParticipants: 3,
+  fireRehireCooldownTurns: 3,
+  minionXpPerMission: 1,
+  minionXpToLevel: 3,
+  assetsPerLocationMin: 1,
+  assetsPerLocationMax: 3,
+  initialRevealedAssetSlots: 3,
+  securityGainPerResolvedMission: 1,
+};
+
 export type ContentCatalog = {
   traits: Trait[];
   minions: MinionTemplate[];
@@ -350,4 +442,6 @@ export type ContentCatalog = {
   playerProfiles: PlayerProfile[];
   /** Ordered wanted tiers (ascending `minInfamy`); drives max opposing agents cap. */
   wantedLevels: WantedLevelTier[];
+  /** Designer-tunable gameplay knobs (`content/balance.json`); defaults preserve legacy values. */
+  balance: BalanceConfig;
 };

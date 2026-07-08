@@ -1,3 +1,4 @@
+import { artFieldRow } from "../artField";
 import type { FormCtx } from "./context";
 import {
   fieldset,
@@ -100,17 +101,10 @@ export function renderMinionForm(container: HTMLElement, ctx: FormCtx): void {
     ),
   );
   container.appendChild(
-    formRow(
-      "cardArt",
-      textInput(
-        str(ctx.row, "cardArt"),
-        (v) =>
-          ctx.update((row) => {
-            setOrDelete(row, "cardArt", v, true);
-          }),
-        "(optional)",
-      ),
-    ),
+    artFieldRow(ctx, "cardArt", {
+      optional: true,
+      suggestedName: `${ctx.slice === "agents" ? "agent" : "minion"}-${str(ctx.row, "id")}`,
+    }),
   );
   container.appendChild(
     formRow(

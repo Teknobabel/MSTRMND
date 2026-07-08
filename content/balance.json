@@ -1,0 +1,31 @@
+{
+  "statusPositiveBonus": 10,
+  "statusNegativePenalty": 20,
+  "opposingAgentPenalty": 20,
+  "dynamicTraitModifiers": {
+    "friend": 5,
+    "lover": 10,
+    "rival": -5,
+    "hatred": -10,
+    "hero": 5,
+    "wanted": -5
+  },
+  "dynamicTraitRollPercent": 10,
+  "infamySuccessDelta": -3,
+  "infamyFailureDelta": 5,
+  "injuryChancePerAgentPercent": 20,
+  "startingMaxCommandPoints": 5,
+  "rerollHireOffersCp": 1,
+  "startingMaxRosterSize": 5,
+  "startingMaxHireOffers": 3,
+  "startingMaxConcurrentMissions": 2,
+  "startingMaxParticipantsPerMission": 3,
+  "eventMaxParticipants": 3,
+  "fireRehireCooldownTurns": 3,
+  "minionXpPerMission": 1,
+  "minionXpToLevel": 3,
+  "assetsPerLocationMin": 1,
+  "assetsPerLocationMax": 3,
+  "initialRevealedAssetSlots": 3,
+  "securityGainPerResolvedMission": 1
+}

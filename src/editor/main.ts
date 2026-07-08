@@ -22,8 +22,10 @@ import {
 import { renderMinionForm } from "./forms/minionForm";
 import { renderMissionForm } from "./forms/missionForm";
 import { renderLairForm, renderOmegaPlanForm } from "./forms/lairOmegaForms";
+import { renderBalanceForm } from "./forms/balanceForm";
 
 const SLICE_ORDER: ContentSliceKey[] = [
+  "balance",
   "traits",
   "assets",
   "minions",
@@ -40,6 +42,7 @@ const SLICE_ORDER: ContentSliceKey[] = [
 ];
 
 const SLICE_LABELS: Record<ContentSliceKey, string> = {
+  balance: "Game Balance",
   traits: "Traits",
   assets: "Assets",
   minions: "Minions",
@@ -58,6 +61,7 @@ const SLICE_LABELS: Record<ContentSliceKey, string> = {
 type FormRenderer = (container: HTMLElement, ctx: FormCtx) => void;
 
 const FORM_RENDERERS: Record<ContentSliceKey, FormRenderer> = {
+  balance: renderBalanceForm,
   traits: renderTraitForm,
   assets: renderAssetForm,
   minions: renderMinionForm,
@@ -158,6 +162,9 @@ function defaultRowForSlice(
       return "New Organization";
     case "playerProfiles":
       return { name: "New Profile", profilePic: "/assets/profile.png" };
+    case "balance":
+      /* Singleton slice; never created from the entity list. */
+      return {};
   }
 }
 
@@ -167,6 +174,10 @@ function issuesForEntity(
   id: string | null,
   index: number,
 ): ContentIssue[] {
+  if (slice === "balance") {
+    /* Singleton object: every issue on the slice belongs to the one form. */
+    return issues.filter((i) => i.slice === slice);
+  }
   return issues.filter((i) => {
     if (i.slice !== slice) {
       return false;
@@ -334,7 +345,7 @@ function initEditor(store: EditorStore): void {
       const issueCount = store.issues.filter((i) => i.slice === slice).length;
       if (issueCount > 0) {
         btn.appendChild(el("span", "ed-badge", String(issueCount)));
-      } else {
+      } else if (slice !== "balance") {
         btn.appendChild(
           el("span", "ed-badge ed-badge--count", String(sliceArray(store.draft, slice).length)),
         );
@@ -351,6 +362,16 @@ function initEditor(store: EditorStore): void {
 
   function renderEntityList(): HTMLElement {
     const panel = el("section", "ed-entity-list");
+    if (selectedSlice === "balance") {
+      panel.appendChild(
+        el(
+          "p",
+          "ed-hint",
+          "One settings object, not a list. Every knob applies to new runs (and resolve-time rules apply immediately). Fields left at their default are written explicitly on save.",
+        ),
+      );
+      return panel;
+    }
     const head = el("div", "ed-entity-list-head");
     const newBtn = el("button", "ed-btn-small", "+ New");
     newBtn.addEventListener("click", createEntity);
@@ -384,6 +405,46 @@ function initEditor(store: EditorStore): void {
 
   function renderDetail(): HTMLElement {
     const panel = el("section", "ed-detail");
+
+    if (selectedSlice === "balance") {
+      panel.appendChild(el("h2", "", "Game Balance"));
+      const balanceIssues = issuesForEntity(store.issues, "balance", null, 0);
+      if (balanceIssues.length > 0) {
+        const box = el("div", "ed-entity-issues");
+        const ul = el("ul");
+        for (const issue of balanceIssues) {
+          ul.appendChild(el("li", "", `${issue.path}: ${issue.message}`));
+        }
+        box.appendChild(ul);
+        panel.appendChild(box);
+      }
+      const raw = store.draft.balance;
+      const balanceRow: Row =
+        raw !== null && typeof raw === "object" && !Array.isArray(raw) ? (raw as Row) : {};
+      const ctx: FormCtx = {
+        slice: "balance",
+        index: 0,
+        row: balanceRow,
+        draft: store.draft,
+        ids,
+        names,
+        update(mutate) {
+          statusOverride = null;
+          store.update((draft) => {
+            const cur = draft.balance;
+            const target: Row =
+              cur !== null && typeof cur === "object" && !Array.isArray(cur)
+                ? (cur as Row)
+                : {};
+            mutate(target);
+            draft.balance = target;
+          });
+        },
+      };
+      FORM_RENDERERS.balance(panel, ctx);
+      return panel;
+    }
+
     const rows = sliceArray(store.draft, selectedSlice);
     const row = rows[selectedIndex];
     if (row === undefined) {
@@ -485,6 +546,9 @@ function initEditor(store: EditorStore): void {
   /* ---------- Entity operations ---------- */
 
   function createEntity(): void {
+    if (selectedSlice === "balance") {
+      return;
+    }
     let id = "";
     if (RENAMABLE_SLICES.has(selectedSlice)) {
       const suggestion = `new-${selectedSlice.replace(/s$/, "")}`;
