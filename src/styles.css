@@ -326,6 +326,7 @@ body {
   inset: 0;
   z-index: 1;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0.5rem;
   padding: max(0.4rem, env(safe-area-inset-top)) max(0.6rem, env(safe-area-inset-right))
@@ -1705,6 +1706,18 @@ body {
 .assign-pick-embedded-card.card-with-art > .card-art {
   width: 44px;
   height: 44px;
+}
+
+.minions-card.card-with-art {
+  align-items: stretch;
+}
+
+.minions-card.card-with-art > .card-art {
+  width: 104px;
+  height: auto;
+  align-self: stretch;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .card-art--chip {
