@@ -18,6 +18,7 @@ import {
   type ActiveMission,
   type GameError,
   type GameState,
+  type Result,
 } from "./game/gameState";
 import type {
   DynamicTrait,
@@ -158,10 +159,11 @@ console.info(
   "wanted levels",
 );
 
-const canvas = document.getElementById("game-canvas");
-if (!(canvas instanceof HTMLCanvasElement)) {
+const canvasLookup = document.getElementById("game-canvas");
+if (!(canvasLookup instanceof HTMLCanvasElement)) {
   throw new Error("Expected #game-canvas to be an HTMLCanvasElement");
 }
+const canvas = canvasLookup;
 
 const ctx = setupCanvas(canvas);
 
@@ -651,7 +653,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const planColumnTabActivity = req<HTMLButtonElement>("plan-column-tab-activity");
   const planColumnPanelPlan = req<HTMLElement>("plan-column-panel-plan");
   const planColumnPanelActivity = req<HTMLElement>("plan-column-panel-activity");
-  const rightColumnsRowEl = document.querySelector<HTMLElement>(".game-ui-columns-row");
+  const rightColumnsRowElLookup = document.querySelector<HTMLElement>(".game-ui-columns-row");
+  if (rightColumnsRowElLookup === null) {
+    throw new Error("Missing .game-ui-columns-row");
+  }
+  const rightColumnsRowEl = rightColumnsRowElLookup;
   if (!rightColumnsRowEl) {
     throw new Error("Missing .game-ui-columns-row");
   }
@@ -2175,11 +2181,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           if (state.phase !== "main" || busy.has(inst.instanceId)) {
             return;
           }
-          const result = fireMinion(state, inst.instanceId);
-          if (result.ok) {
-            state = result.value;
-            refresh();
-          }
+          dispatch((s) => fireMinion(s, inst.instanceId));
         });
         fireBtn.addEventListener("mousedown", (ev) => {
           ev.stopPropagation();
@@ -2253,11 +2255,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         if (state.phase !== "main") {
           return;
         }
-        const result = hireMinion(state, content, tpl.id, crypto.randomUUID());
-        if (result.ok) {
-          state = result.value;
-          refresh();
-        }
+        dispatch((s) => hireMinion(s, content, tpl.id, crypto.randomUUID()));
       });
 
       actions.appendChild(hireBtn);
@@ -2316,11 +2314,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         if (state.phase !== "main") {
           return;
         }
-        const result = rehireMinion(state, content, rehireInst.instanceId);
-        if (result.ok) {
-          state = result.value;
-          refresh();
-        }
+        dispatch((s) => rehireMinion(s, content, rehireInst.instanceId));
       });
 
       actions.appendChild(hireBtn);
@@ -2837,11 +2831,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       if (state.phase !== "main") {
         return;
       }
-      const result = cancelMission(state, content, am.id);
-      if (result.ok) {
-        state = result.value;
-        refresh();
-      }
+      dispatch((s) => cancelMission(s, content, am.id));
     });
     actions.appendChild(cancelBtn);
     body.appendChild(actions);
@@ -3291,6 +3281,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           const place = formatMissionTargetSummary(ev.target);
           return `${m} cancelled at ${place}.`;
         }
+        case "mission_aborted": {
+          const m = missionName(ev.missionTemplateId);
+          const place = formatMissionTargetSummary(ev.target);
+          const why =
+            ev.reason === "missing_template"
+              ? "its mission template is no longer in the catalog"
+              : "its roster was invalid at resolve time";
+          return `${m} at ${place} could not resolve (${why}); committed assets refunded.`;
+        }
         case "asset_gained": {
           const a = assetDisplayName(ev.assetId);
           return `${state.organizationName} gained ${a} ×${ev.quantity}.`;
@@ -3635,6 +3634,27 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
+  /**
+   * Run a state transition and, on success, swap in the new state and re-render.
+   * Failures are logged and surfaced via `onError` (e.g. a button tooltip). This is the
+   * single seam every UI action goes through, so panels never own the state swap.
+   */
+  function dispatch(
+    action: (s: GameState) => Result<GameState, GameError>,
+    opts?: { onError?: (err: GameError) => void; onApplied?: () => void },
+  ): boolean {
+    const result = action(state);
+    if (!result.ok) {
+      console.warn("[Mastermind] action failed:", result.error);
+      opts?.onError?.(result.error);
+      return false;
+    }
+    state = result.value;
+    opts?.onApplied?.();
+    refresh();
+    return true;
+  }
+
   btnAssign.addEventListener("click", () => {
     if (state.phase !== "main") {
       return;
@@ -3662,46 +3682,45 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       { length: mt.requiredAssetIds.length },
       (_, i) => assignAssetSlotAssetIds[i] ?? null,
     );
-    const result = assignMission(
-      state,
-      content,
-      crypto.randomUUID(),
-      assignMissionTemplateId,
-      targetPayload,
-      assignMissionSource,
-      assignMissionSource === "omega" ? assignOmegaStageIndex : null,
-      assignMissionSource === "omega" ? assignOmegaSlotIndex : null,
-      checked,
-      plannedAssetIds,
+    const missionTemplateId = assignMissionTemplateId;
+    const missionSource = assignMissionSource;
+    dispatch(
+      (s) =>
+        assignMission(
+          s,
+          content,
+          crypto.randomUUID(),
+          missionTemplateId,
+          targetPayload,
+          missionSource,
+          missionSource === "omega" ? assignOmegaStageIndex : null,
+          missionSource === "omega" ? assignOmegaSlotIndex : null,
+          checked,
+          plannedAssetIds,
+        ),
+      {
+        onApplied: clearAllAssignSlots,
+        onError: (err) => {
+          btnAssign.title = formatAssignMissionError(err);
+        },
+      },
     );
-    if (result.ok) {
-      state = result.value;
-      clearAllAssignSlots();
-      refresh();
-    } else {
-      console.warn("[Mastermind] assignMission failed:", result.error);
-      btnAssign.title = formatAssignMissionError(result.error);
-    }
   });
 
   btnExec.addEventListener("click", () => {
-    const result = executePlan(state, content, rng);
-    if (result.ok) {
-      state = result.value;
-      const next = advanceToNextTurn(state);
-      if (next.ok) {
-        state = next.value;
+    /* advanceToNextTurn cannot fail after a successful executePlan (phase is "summary"),
+     * so the two run as one transition. */
+    dispatch((s) => {
+      const executed = executePlan(s, content, rng);
+      if (!executed.ok) {
+        return executed;
       }
-    }
-    refresh();
+      return advanceToNextTurn(executed.value);
+    });
   });
 
   btnRerollHire.addEventListener("click", () => {
-    const result = rerollHireOffers(state, content, rng);
-    if (result.ok) {
-      state = result.value;
-    }
-    refresh();
+    dispatch((s) => rerollHireOffers(s, content, rng));
   });
 
   minionsRosterEl.addEventListener("dragstart", (e) => {

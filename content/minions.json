@@ -4,38 +4,65 @@
     "name": "Operative Alpha",
     "description": "A field agent with a knack for systems.",
     "hireCommandPoints": 3,
-    "startingTraitIds": ["loyal"],
-    "levelUpTraitOrder": ["hacker", "tactician", "lucky", "burnout"]
+    "levelUpTraitOrder": [
+      "hacker",
+      "tactician",
+      "lucky",
+      "burnout"
+    ],
+    "startingTraitIds": [
+      "loyal"
+    ]
   },
   {
     "id": "asset_beta",
     "name": "Asset Beta",
     "description": "A local contact; fragile but insightful.",
     "hireCommandPoints": 2,
+    "levelUpTraitOrder": [
+      "hacker",
+      "loyal",
+      "tactician"
+    ],
     "startingLevel": 2,
-    "startingTraitIds": ["injured"],
-    "levelUpTraitOrder": ["hacker", "loyal", "tactician"]
+    "startingTraitIds": [
+      "injured"
+    ]
   },
   {
     "id": "courier_gamma",
     "name": "Courier Gamma",
     "description": "Dead drops and burned phones—gets packages where they need to go.",
     "hireCommandPoints": 2,
-    "startingTraitIds": ["tactician"],
-    "levelUpTraitOrder": ["hacker", "loyal", "lucky", "burnout"]
+    "levelUpTraitOrder": [
+      "hacker",
+      "loyal",
+      "lucky",
+      "burnout"
+    ],
+    "startingTraitIds": [
+      "tactician"
+    ]
   },
   {
     "id": "analyst_theta",
     "name": "Analyst Theta",
     "description": "Patterns in noise; spreadsheets where others see chaos.",
     "hireCommandPoints": 3,
-    "startingTraitIds": ["hacker"],
-    "levelUpTraitOrder": ["tactician", "loyal", "lucky", "burnout"],
+    "levelUpTraitOrder": [
+      "tactician",
+      "loyal",
+      "lucky",
+      "burnout"
+    ],
     "startingDynamicTraits": [
       {
         "kind": "hatred",
         "targetMinionTemplateId": "operative_alpha"
       }
+    ],
+    "startingTraitIds": [
+      "hacker"
     ]
   },
   {
@@ -43,37 +70,65 @@
     "name": "Muscle Kappa",
     "description": "When the plan needs someone to stand in the doorway.",
     "hireCommandPoints": 4,
-    "startingTraitIds": ["injured"],
-    "levelUpTraitOrder": ["loyal", "tactician", "hacker", "burnout"]
+    "levelUpTraitOrder": [
+      "loyal",
+      "tactician",
+      "hacker",
+      "burnout"
+    ],
+    "startingTraitIds": [
+      "injured"
+    ]
   },
   {
     "id": "ghost_delta",
     "name": "Ghost Delta",
     "description": "Insertion specialist; quiet footprints, loud results.",
     "hireCommandPoints": 4,
-    "startingTraitIds": ["loyal"],
-    "levelUpTraitOrder": ["hacker", "lucky", "tactician", "burnout"]
+    "levelUpTraitOrder": [
+      "hacker",
+      "lucky",
+      "tactician",
+      "burnout"
+    ],
+    "startingTraitIds": [
+      "loyal"
+    ]
   },
   {
     "id": "brass_liaison",
     "name": "Brass Liaison",
     "description": "Knows which desks need a smile and which need a folder.",
     "hireCommandPoints": 3,
-    "startingTraitIds": ["tactician"],
-    "levelUpTraitOrder": ["loyal", "hacker", "lucky", "burnout"]
+    "levelUpTraitOrder": [
+      "loyal",
+      "hacker",
+      "lucky",
+      "burnout"
+    ],
+    "startingTraitIds": [
+      "tactician"
+    ]
   },
   {
     "id": "wire_jockey",
     "name": "Wire Jockey",
     "description": "Builds bridges—digital ones—and burns them when paid.",
     "hireCommandPoints": 3,
-    "startingTraitIds": ["hacker"],
-    "levelUpTraitOrder": ["tactician", "lucky", "loyal", "burnout"],
+    "levelUpTraitOrder": [
+      "tactician",
+      "lucky",
+      "loyal",
+      "burnout"
+    ],
     "startingDynamicTraits": [
       {
         "kind": "wanted",
         "locationId": "abandoned_substation"
       }
+    ],
+    "startingTraitIds": [
+      "hacker"
     ]
   },
   {
@@ -81,7 +136,14 @@
     "name": "Mirror Guard",
     "description": "Personal protection with a talent for reading exits.",
     "hireCommandPoints": 4,
-    "startingTraitIds": ["loyal"],
-    "levelUpTraitOrder": ["lucky", "tactician", "hacker", "burnout"]
+    "levelUpTraitOrder": [
+      "lucky",
+      "tactician",
+      "hacker",
+      "burnout"
+    ],
+    "startingTraitIds": [
+      "loyal"
+    ]
   }
 ]

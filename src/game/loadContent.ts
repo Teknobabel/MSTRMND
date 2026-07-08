@@ -11,23 +11,29 @@ import playerProfilesJson from "../../content/playerProfiles.json";
 import omegaPlansJson from "../../content/omegaPlans.json";
 import traitsJson from "../../content/traits.json";
 import wantedLevelsJson from "../../content/wantedLevels.json";
-import { parseCatalog } from "./contentSchema";
+import { parseCatalog, type RawContentSlices } from "./contentSchema";
 import type { ContentCatalog } from "./types";
 
+/*
+ * Static imports keep the JSON bundled by Vite; the keys must cover every
+ * `ContentSliceKey` in `CONTENT_MANIFEST` (the compiler enforces the record shape).
+ */
+const rawContentSlices: RawContentSlices = {
+  traits: traitsJson,
+  minions: minionsJson,
+  agents: agentsJson,
+  missions: missionsJson,
+  locations: locationsJson,
+  maps: mapsJson,
+  assets: assetsJson,
+  omegaPlans: omegaPlansJson,
+  lairs: lairsJson,
+  events: eventsJson,
+  organizationNames: organizationNamesJson,
+  playerProfiles: playerProfilesJson,
+  wantedLevels: wantedLevelsJson,
+};
+
 export function loadContent(): ContentCatalog {
-  return parseCatalog(
-    traitsJson,
-    minionsJson,
-    agentsJson,
-    missionsJson,
-    locationsJson,
-    mapsJson,
-    assetsJson,
-    omegaPlansJson,
-    lairsJson,
-    eventsJson,
-    organizationNamesJson,
-    playerProfilesJson,
-    wantedLevelsJson,
-  );
+  return parseCatalog(rawContentSlices);
 }

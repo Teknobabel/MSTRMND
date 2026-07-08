@@ -6,13 +6,25 @@
     "mapId": "metro_night",
     "stages": [
       {
-        "missionIds": ["breach_server", "vector_null_infil", "cold_storage_placement"]
+        "missionIds": [
+          "breach_server",
+          "vector_null_infil",
+          "cold_storage_placement"
+        ]
       },
       {
-        "missionIds": ["kestrel_black_relay", "extract_asset", "phantom_reach_cartography"]
+        "missionIds": [
+          "kestrel_black_relay",
+          "extract_asset",
+          "phantom_reach_cartography"
+        ]
       },
       {
-        "missionIds": ["helix_sample_lift", "sigma_seven_exfil_window", "archive_seal_breach"]
+        "missionIds": [
+          "helix_sample_lift",
+          "sigma_seven_exfil_window",
+          "archive_seal_breach"
+        ]
       }
     ]
   },
@@ -23,13 +35,25 @@
     "mapId": "training_grid",
     "stages": [
       {
-        "missionIds": ["iron_veil_meet", "hollow_crown_social", "third_rail_distraction"]
+        "missionIds": [
+          "iron_veil_meet",
+          "hollow_crown_social",
+          "third_rail_distraction"
+        ]
       },
       {
-        "missionIds": ["viper_hand_corridor", "apex_contingency_overwatch", "nocturne_route_harden"]
+        "missionIds": [
+          "viper_hand_corridor",
+          "apex_contingency_overwatch",
+          "nocturne_route_harden"
+        ]
       },
       {
-        "missionIds": ["black_ledger_sweep", "extract_asset", "directive_null_intercept"]
+        "missionIds": [
+          "black_ledger_sweep",
+          "extract_asset",
+          "directive_null_intercept"
+        ]
       }
     ]
   }

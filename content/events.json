@@ -3,192 +3,319 @@
     "id": "evt_global_crackdown",
     "name": "Global crackdown",
     "description": "Coordinated sweeps spike heat everywhere. Lobby fast or take the hit.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["politician"],
-    "requiredAssetIds": [],
     "durationTurns": 1,
-    "expireEffects": [{ "kind": "security_level_delta_global", "delta": 2 }]
+    "expireEffects": [
+      {
+        "kind": "security_level_delta_global",
+        "delta": 2
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "politician"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_quiet_audit_window",
     "name": "Quiet audit window",
     "description": "Inspectors blink; a rare chance to cool the network before they look again.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["hacker", "clever"],
-    "requiredAssetIds": [],
     "durationTurns": 2,
-    "onSuccessEffects": [{ "kind": "security_level_delta_global", "delta": -2 }]
+    "onSuccessEffects": [
+      {
+        "kind": "security_level_delta_global",
+        "delta": -2
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "hacker",
+      "clever"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_military_lockdown",
     "name": "Military lockdown",
     "description": "Bases seal cordons; if nobody steadies the generals, bases stay hot.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["soldier"],
-    "requiredAssetIds": [],
     "durationTurns": 1,
     "expireEffects": [
-      { "kind": "security_level_delta_by_location_type", "delta": 2, "locationType": "military" }
-    ]
+      {
+        "kind": "security_level_delta_by_location_type",
+        "delta": 2,
+        "locationType": "military"
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "soldier"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_economic_panic",
     "name": "Economic panic",
     "description": "Markets seize; calm the floor or watch spreads widen into your shell companies.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["politician", "persuasive"],
-    "requiredAssetIds": [],
     "durationTurns": 2,
     "onSuccessEffects": [
-      { "kind": "security_level_delta_by_location_type", "delta": -1, "locationType": "economic" }
-    ]
+      {
+        "kind": "security_level_delta_by_location_type",
+        "delta": -1,
+        "locationType": "economic"
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "politician",
+      "persuasive"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_tier3_oversight_audit",
     "name": "Tier-3 oversight audit",
     "description": "Senior auditors descend on your hardest sites. Contain them or scrutiny climbs.",
-    "targetType": "none",
-    "startCommandPoints": 3,
-    "requiredTraitIds": ["spy", "intelligent"],
-    "requiredAssetIds": [],
     "durationTurns": 2,
     "expireEffects": [
-      { "kind": "security_level_delta_by_location_level", "delta": 1, "locationLevel": 3 }
-    ]
+      {
+        "kind": "security_level_delta_by_location_level",
+        "delta": 1,
+        "locationLevel": 3
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "spy",
+      "intelligent"
+    ],
+    "startCommandPoints": 3,
+    "targetType": "none"
   },
   {
     "id": "evt_intel_dump_leak",
     "name": "Intel dump leak",
     "description": "A rival cache surfaces in the wild. Beat analysts to the map or lose the window.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["hacker", "spy"],
-    "requiredAssetIds": [],
     "durationTurns": 2,
-    "onSuccessEffects": [{ "kind": "reveal_hidden_assets_global", "count": 3 }]
+    "onSuccessEffects": [
+      {
+        "kind": "reveal_hidden_assets_global",
+        "count": 3
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "hacker",
+      "spy"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_political_disclosure",
     "name": "Political disclosure",
     "description": "Committee staffers trade rumors; steer the leak toward visible political fronts.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["politician"],
-    "requiredAssetIds": [],
     "durationTurns": 1,
     "onSuccessEffects": [
-      { "kind": "reveal_hidden_assets_by_location_type", "count": 2, "locationType": "political" }
-    ]
+      {
+        "kind": "reveal_hidden_assets_by_location_type",
+        "count": 2,
+        "locationType": "political"
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "politician"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_tier1_clearance_lapse",
     "name": "Tier-1 clearance lapse",
     "description": "Low-clearance contractors gossip; exploit the soft perimeter before it patches.",
-    "targetType": "none",
-    "startCommandPoints": 1,
-    "requiredTraitIds": ["thief", "clever"],
-    "requiredAssetIds": [],
     "durationTurns": 1,
     "onSuccessEffects": [
-      { "kind": "reveal_hidden_assets_by_location_level", "count": 2, "locationLevel": 1 }
-    ]
+      {
+        "kind": "reveal_hidden_assets_by_location_level",
+        "count": 2,
+        "locationLevel": 1
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "thief",
+      "clever"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "none"
   },
   {
     "id": "evt_medical_rotation",
     "name": "Medical rotation",
     "description": "A friendly clinic rotation can scrub injuries off the roster—if you control intake.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["scientist"],
-    "requiredAssetIds": [],
     "durationTurns": 2,
-    "onSuccessEffects": [{ "kind": "remove_trait_from_all_minions", "traitId": "injured" }]
+    "onSuccessEffects": [
+      {
+        "kind": "remove_trait_from_all_minions",
+        "traitId": "injured"
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "scientist"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_gang_war",
     "name": "Gang war spillover",
     "description": "Street war spills into your logistics. Break it up or your people catch stray fire.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["bodyguard", "tactician"],
-    "requiredAssetIds": [],
     "durationTurns": 1,
     "expireEffects": [
-      { "kind": "add_trait_to_random_minions", "traitId": "injured", "count": 2 }
-    ]
+      {
+        "kind": "add_trait_to_random_minions",
+        "count": 2,
+        "traitId": "injured"
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "bodyguard",
+      "tactician"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_propaganda_tailwind",
     "name": "Propaganda tailwind",
     "description": "Spin buys breathing room on every op—for a few resolves, anyway.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["politician", "charismatic"],
-    "requiredAssetIds": [],
     "durationTurns": 2,
-    "onSuccessEffects": [{ "kind": "add_success_chance_modifier", "delta": 10, "turns": 3 }]
+    "onSuccessEffects": [
+      {
+        "kind": "add_success_chance_modifier",
+        "delta": 10,
+        "turns": 3
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "politician",
+      "charismatic"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_oversight_pressure",
     "name": "Oversight pressure",
     "description": "Watchdogs circle; miss the charm offensive and every plan feels tighter.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["politician", "persuasive"],
-    "requiredAssetIds": [],
     "durationTurns": 1,
-    "expireEffects": [{ "kind": "add_success_chance_modifier", "delta": -10, "turns": 2 }]
+    "expireEffects": [
+      {
+        "kind": "add_success_chance_modifier",
+        "delta": -10,
+        "turns": 2
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "politician",
+      "persuasive"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_emergency_funding",
     "name": "Emergency funding",
     "description": "A back-channel appropriations rider can refill your war chest next tick.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["politician", "clever"],
-    "requiredAssetIds": [],
     "durationTurns": 1,
-    "onSuccessEffects": [{ "kind": "grant_command_points_next_turn", "amount": 3 }]
+    "onSuccessEffects": [
+      {
+        "kind": "grant_command_points_next_turn",
+        "amount": 3
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "politician",
+      "clever"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   },
   {
     "id": "evt_recruitment_drive",
     "name": "Recruitment drive",
     "description": "Charisma opens wallets and widens the hiring pool—if you stage the rally.",
-    "targetType": "none",
-    "startCommandPoints": 1,
-    "requiredTraitIds": ["charismatic"],
-    "requiredAssetIds": [],
     "durationTurns": 2,
-    "onSuccessEffects": [{ "kind": "max_hire_offers_delta", "delta": 1 }]
+    "onSuccessEffects": [
+      {
+        "kind": "max_hire_offers_delta",
+        "delta": 1
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "charismatic"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "none"
   },
   {
     "id": "evt_finance_hearing_prep",
     "name": "Finance hearing prep",
     "description": "Binders full of leverage: walk the committee with documents or eat the subpoena.",
-    "targetType": "none",
-    "startCommandPoints": 3,
-    "requiredTraitIds": ["politician", "clever"],
-    "requiredAssetIds": ["classified_documents"],
     "durationTurns": 2,
-    "onSuccessEffects": [{ "kind": "security_level_delta_global", "delta": -1 }]
+    "onSuccessEffects": [
+      {
+        "kind": "security_level_delta_global",
+        "delta": -1
+      }
+    ],
+    "requiredAssetIds": [
+      "classified_documents"
+    ],
+    "requiredTraitIds": [
+      "politician",
+      "clever"
+    ],
+    "startCommandPoints": 3,
+    "targetType": "none"
   },
   {
     "id": "evt_infiltrator_warning",
     "name": "Infiltrator warning",
     "description": "A mole tips both ways—move on it or the crackdown finds you first.",
-    "targetType": "none",
-    "startCommandPoints": 2,
-    "requiredTraitIds": ["hacker", "spy"],
-    "requiredAssetIds": [],
     "durationTurns": 2,
-    "onSuccessEffects": [
-      { "kind": "reveal_hidden_assets_global", "count": 1 },
-      { "kind": "security_level_delta_global", "delta": -1 }
+    "expireEffects": [
+      {
+        "kind": "security_level_delta_global",
+        "delta": 1
+      }
     ],
-    "expireEffects": [{ "kind": "security_level_delta_global", "delta": 1 }]
+    "onSuccessEffects": [
+      {
+        "kind": "reveal_hidden_assets_global",
+        "count": 1
+      },
+      {
+        "kind": "security_level_delta_global",
+        "delta": -1
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "hacker",
+      "spy"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
   }
 ]

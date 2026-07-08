@@ -1,47 +1,35 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseCatalog } from "../src/game/contentSchema.ts";
+import {
+  CONTENT_MANIFEST,
+  parseContentCatalog,
+  type ContentSliceKey,
+} from "../src/game/contentSchema.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-try {
-  const traits = JSON.parse(readFileSync(join(root, "content/traits.json"), "utf8"));
-  const minions = JSON.parse(readFileSync(join(root, "content/minions.json"), "utf8"));
-  const agents = JSON.parse(readFileSync(join(root, "content/agents.json"), "utf8"));
-  const missions = JSON.parse(readFileSync(join(root, "content/missions.json"), "utf8"));
-  const organizationNames = JSON.parse(
-    readFileSync(join(root, "content/organizationNames.json"), "utf8"),
-  );
-  const playerProfiles = JSON.parse(
-    readFileSync(join(root, "content/playerProfiles.json"), "utf8"),
-  );
-  const locations = JSON.parse(readFileSync(join(root, "content/locations.json"), "utf8"));
-  const maps = JSON.parse(readFileSync(join(root, "content/maps.json"), "utf8"));
-  const assets = JSON.parse(readFileSync(join(root, "content/assets.json"), "utf8"));
-  const omegaPlans = JSON.parse(readFileSync(join(root, "content/omegaPlans.json"), "utf8"));
-  const lairs = JSON.parse(readFileSync(join(root, "content/lairs.json"), "utf8"));
-  const events = JSON.parse(readFileSync(join(root, "content/events.json"), "utf8"));
-  const wantedLevels = JSON.parse(readFileSync(join(root, "content/wantedLevels.json"), "utf8"));
-  const catalog = parseCatalog(
-    traits,
-    minions,
-    agents,
-    missions,
-    locations,
-    maps,
-    assets,
-    omegaPlans,
-    lairs,
-    events,
-    organizationNames,
-    playerProfiles,
-    wantedLevels,
-  );
-  console.log(
-    `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.agents.length} agent templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.events.length} events, ${catalog.organizationNames.length} organization names, ${catalog.playerProfiles.length} player profiles, ${catalog.wantedLevels.length} wanted levels`,
-  );
-} catch (e) {
-  console.error(e);
+const raw = {} as Record<ContentSliceKey, unknown>;
+for (const entry of CONTENT_MANIFEST) {
+  try {
+    raw[entry.key] = JSON.parse(readFileSync(join(root, entry.fileName), "utf8"));
+  } catch (e) {
+    console.error(`Failed to read/parse ${entry.fileName}: ${String(e)}`);
+    process.exit(1);
+  }
+}
+
+const { catalog, issues } = parseContentCatalog(raw);
+
+if (catalog === null) {
+  console.error(`Content validation failed with ${issues.length} issue(s):`);
+  for (const issue of issues) {
+    const where = `${issue.entityId ?? "(slice)"}${issue.path ? ` ${issue.path}` : ""}`;
+    console.error(`- [${issue.slice}] ${where}: ${issue.message}`);
+  }
   process.exit(1);
 }
+
+console.log(
+  `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.agents.length} agent templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.events.length} events, ${catalog.organizationNames.length} organization names, ${catalog.playerProfiles.length} player profiles, ${catalog.wantedLevels.length} wanted levels`,
+);

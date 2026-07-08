@@ -15,11 +15,13 @@
       "redline_directive_cut",
       "counterweight_diversion"
     ],
-    "upgradeMissionIds": ["hub_rig_upgrade"],
     "startingAssets": {
       "burner_network": 1,
       "classified_documents": 1
-    }
+    },
+    "upgradeMissionIds": [
+      "hub_rig_upgrade"
+    ]
   },
   {
     "id": "penthouse_safehouse",

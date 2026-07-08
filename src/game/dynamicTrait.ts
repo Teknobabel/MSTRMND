@@ -215,8 +215,6 @@ export function dynamicTraitDisplayLabel(
         return `Rival of ${name}`;
       case "hatred":
         return `Hatred for ${name}`;
-      default:
-        return dt.kind;
     }
   }
   const locName =
@@ -507,8 +505,6 @@ export function formatStartingDynamicTraitsPreview(
           return `Rival of ${n}`;
         case "hatred":
           return `Hatred for ${n}`;
-        default:
-          return s.kind;
       }
     }
     const locName =

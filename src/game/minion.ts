@@ -17,12 +17,7 @@ function dynamicTraitsFromStarting(
   }
   const out: DynamicTrait[] = [];
   for (const s of traits) {
-    if (
-      s.kind === "friend" ||
-      s.kind === "lover" ||
-      s.kind === "rival" ||
-      s.kind === "hatred"
-    ) {
+    if ("targetMinionTemplateId" in s) {
       out.push({
         kind: s.kind,
         targetMinionInstanceId: "",

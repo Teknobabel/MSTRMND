@@ -142,6 +142,18 @@ export type ActivityEvent =
       participantInstanceIds: string[];
     }
   | { kind: "mission_cancelled"; missionTemplateId: string; target: MissionTarget }
+  | {
+      /**
+       * A resolving mission could not run (template no longer in the catalog, or a participant
+       * missing / roster invalid at resolve time). Committed assets are refunded. Should be
+       * unreachable today; logged so future systems (minion death, content changes) fail loudly.
+       */
+      kind: "mission_aborted";
+      activeMissionId: string;
+      missionTemplateId: string;
+      target: MissionTarget;
+      reason: "missing_template" | "invalid_participants";
+    }
   | { kind: "event_rotated_in"; eventTemplateId: string }
   | {
       kind: "event_expired";
@@ -548,8 +560,14 @@ export function pickRandomEventTemplateId(catalog: ContentCatalog, rng: Rng): st
   return list[i]!.id;
 }
 
-export function createInitialGameState(catalog: ContentCatalog): GameState {
-  const rng: Rng = () => Math.random();
+/**
+ * Create a fresh run. Pass a seeded `rng` for deterministic runs (tests, replays);
+ * defaults to `Math.random` for normal play.
+ */
+export function createInitialGameState(
+  catalog: ContentCatalog,
+  rng: Rng = () => Math.random(),
+): GameState {
   const activeOmegaPlanId = pickRandomOmegaPlanId(catalog, rng);
   const activeLairId = pickRandomLairId(catalog, rng);
   const lairTemplate = activeLairId !== null ? getLairById(catalog, activeLairId) : undefined;
@@ -1323,11 +1341,14 @@ export function increaseMaxConcurrentMissions(state: GameState, delta: number): 
 /**
  * Main Phase → Resolve Phase work → Summary.
  * Each active mission decrements `turnsRemaining`; at 0, success is rolled vs {@link successChancePercent}.
+ * Pass `newInstanceId` alongside a seeded `rng` for fully deterministic resolves (it feeds
+ * opposing-agent spawns); defaults to `crypto.randomUUID`.
  */
 export function executePlan(
   state: GameState,
   catalog: ContentCatalog,
   rng: Rng,
+  newInstanceId: () => string = () => globalThis.crypto.randomUUID(),
 ): Result<GameState, GameError> {
   if (state.phase !== "main") {
     return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
@@ -1371,9 +1392,6 @@ export function executePlan(
     }
 
     const template = missionTemplateById(catalog, am.missionTemplateId);
-    if (!template) {
-      continue;
-    }
 
     const participants: MinionInstance[] = [];
     let missing = false;
@@ -1386,6 +1404,7 @@ export function executePlan(
       participants.push(inst);
     }
     if (
+      !template ||
       missing ||
       !canAssignParticipants(
         participants,
@@ -1394,6 +1413,31 @@ export function executePlan(
           : player.maxParticipantsPerMission,
       )
     ) {
+      /* Invariant breach (see `mission_aborted` docs): don't drop the mission silently —
+       * refund committed assets and log so the failure is visible in the Activity panel. */
+      const refund = new Map<string, number>();
+      for (const pa of am.plannedAssetIds) {
+        if (pa !== null) {
+          refund.set(pa, (refund.get(pa) ?? 0) + 1);
+        }
+      }
+      if (refund.size > 0) {
+        const nextAssets = { ...player.assets };
+        for (const [assetId, qty] of refund) {
+          nextAssets[assetId] = (nextAssets[assetId] ?? 0) + qty;
+        }
+        player = { ...player, assets: nextAssets };
+      }
+      resolveEvents.push({
+        kind: "mission_aborted",
+        activeMissionId: am.id,
+        missionTemplateId: am.missionTemplateId,
+        target: am.target,
+        reason: !template ? "missing_template" : "invalid_participants",
+      });
+      for (const [assetId, quantity] of refund) {
+        resolveEvents.push({ kind: "asset_gained", assetId, quantity });
+      }
       continue;
     }
 
@@ -1416,6 +1460,10 @@ export function executePlan(
 
     const eventSuccessModifierDelta = activeSuccessModifiers.reduce((s, m) => s + m.delta, 0);
 
+    /* Deliberate: site required/security traits come from the START-of-turn snapshot
+     * (`state`), not the in-loop locals — resolution is simultaneous, so an earlier
+     * mission's security bump this resolve must not change a later mission's requirements.
+     * Pinned by tests in gameState.test.ts ("simultaneous resolution snapshot"). */
     const pct = successChancePercent(
       template,
       participants,
@@ -1649,6 +1697,7 @@ export function executePlan(
       state.wantedLevelTierIndex,
       wantedLevelTierIndex,
       rng,
+      newInstanceId,
     );
     opposingAgentInstances = spawned.opposingAgentInstances;
     locationAgentPresence = spawned.locationAgentPresence;

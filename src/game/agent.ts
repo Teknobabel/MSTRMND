@@ -148,6 +148,7 @@ function countAgentsOnPresence(presence: readonly LocationAgentPresence[]): numb
  * When the wanted tier index increases at end of resolve, fill opposing agents up to the new
  * tier's {@link maxOpposingAgentsForWantedIndex}. Each spawn uses a random unused agent template
  * and a random playable location. At most one instance per template id at a time.
+ * Pass `newInstanceId` for deterministic runs; defaults to `crypto.randomUUID`.
  */
 export function spawnOpposingAgentsAfterWantedEscalation(
   opposingAgentInstances: readonly AgentInstance[],
@@ -157,6 +158,7 @@ export function spawnOpposingAgentsAfterWantedEscalation(
   prevTierIndex: number,
   newTierIndex: number,
   rng: () => number,
+  newInstanceId: () => string = () => globalThis.crypto.randomUUID(),
 ): { opposingAgentInstances: AgentInstance[]; locationAgentPresence: LocationAgentPresence[] } {
   const instances = [...opposingAgentInstances];
   const presence = locationAgentPresence.map((r) => ({
@@ -164,7 +166,12 @@ export function spawnOpposingAgentsAfterWantedEscalation(
     agentInstanceIds: [...r.agentInstanceIds],
   }));
 
-  if (newTierIndex <= prevTierIndex || playableLocationIds.length === 0) {
+  /* Spawn only into locations that have a presence row; a playable id without one would
+   * otherwise create an instance that exists nowhere on the map (orphan). */
+  const presenceLocationIds = new Set(presence.map((r) => r.locationId));
+  const spawnableLocationIds = playableLocationIds.filter((id) => presenceLocationIds.has(id));
+
+  if (newTierIndex <= prevTierIndex || spawnableLocationIds.length === 0) {
     return { opposingAgentInstances: instances, locationAgentPresence: presence };
   }
 
@@ -177,14 +184,12 @@ export function spawnOpposingAgentsAfterWantedEscalation(
       break;
     }
     const tpl = eligible[Math.floor(rng() * eligible.length)]!;
-    const locId = playableLocationIds[Math.floor(rng() * playableLocationIds.length)]!;
-    const instanceId = globalThis.crypto.randomUUID();
+    const locId = spawnableLocationIds[Math.floor(rng() * spawnableLocationIds.length)]!;
+    const row = presence.find((p) => p.locationId === locId)!;
+    const instanceId = newInstanceId();
     instances.push(createAgentFromTemplate(tpl, instanceId));
     usedTemplates.add(tpl.id);
-    const row = presence.find((p) => p.locationId === locId);
-    if (row !== undefined) {
-      row.agentInstanceIds.push(instanceId);
-    }
+    row.agentInstanceIds.push(instanceId);
   }
 
   return { opposingAgentInstances: instances, locationAgentPresence: presence };
