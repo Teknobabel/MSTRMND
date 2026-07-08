@@ -3,6 +3,7 @@
     "id": "operative_alpha",
     "name": "Operative Alpha",
     "description": "A field agent with a knack for systems.",
+    "cardArt": "/assets/cards/custom/minion-operative-alpha.webp",
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "hacker",
