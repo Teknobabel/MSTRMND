@@ -59,6 +59,7 @@ import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
 import { getOmegaPlanById } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation } from "./navigation";
+import { initStageScale } from "./ui/stageScale";
 import {
   appendCardArtShell,
   createCardArtImg,
@@ -3797,6 +3798,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 }
 
 initGameController(catalog);
+
+initStageScale();
 
 initNavigation({
   setGameLoopRunning(running: boolean): void {

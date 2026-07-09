@@ -1,3 +1,5 @@
+import { tryLockLandscape } from "./ui/stageScale";
+
 export type NavigationHooks = {
   setGameLoopRunning: (running: boolean) => void;
 };
@@ -56,6 +58,7 @@ export function initNavigation(hooks: NavigationHooks): void {
     paused = false;
     screen = "game";
     apply();
+    void tryLockLandscape();
   });
 
   btnMainSettings.addEventListener("click", () => {

@@ -29,6 +29,32 @@
   --cyan: #5ad7e8;
   --font-display: "Orbitron", "Segoe UI", sans-serif;
   --font-body: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  /* Chamfer sizes for clipped / faked corner cuts */
+  --cut: 12px;
+  --cut-sm: 7px;
+  /* Diagonal edge line drawn along a chamfered corner (transparent outside) */
+  --edge-line: linear-gradient(
+    135deg,
+    transparent calc(50% - 1px),
+    var(--line-2) calc(50% - 1px),
+    var(--line-2) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+  /* Same line but fills the outer triangle with page bg to fake a notch
+     on elements that cannot take clip-path */
+  --notch-line: linear-gradient(
+    135deg,
+    transparent calc(50% - 1px),
+    var(--line-2) calc(50% - 1px),
+    var(--line-2) calc(50% + 0.5px),
+    var(--bg-0) calc(50% + 0.5px)
+  );
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E");
+  /* Scaled-canvas stage: the game shell is authored at this fixed size and
+     uniformly scaled to fit the window (see src/ui/stageScale.ts) */
+  --stage-w: 1920px;
+  --stage-h: 1080px;
+  --ui-scale: 1;
 }
 
 *,
@@ -235,7 +261,9 @@ body {
   text-transform: uppercase;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.15s, border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: color 0.15s, border-color 0.15s, box-shadow 0.15s, background 0.15s,
+    filter 0.15s;
   clip-path: polygon(
     8px 0,
     100% 0,
@@ -249,7 +277,9 @@ body {
 .btn:hover:not(:disabled) {
   color: var(--text-0);
   border-color: var(--line-2);
-  box-shadow: 0 0 14px var(--red-glow-soft), inset 0 0 10px rgba(232, 17, 45, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 12px rgba(232, 17, 45, 0.12);
+  /* drop-shadow (not box-shadow) so the glow survives the clip-path */
+  filter: drop-shadow(0 0 8px rgba(232, 17, 45, 0.3));
 }
 
 .btn:active:not(:disabled) {
@@ -271,13 +301,15 @@ body {
   border-color: var(--red);
   color: #ffe9ec;
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
-  box-shadow: 0 0 18px var(--red-glow-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -8px 16px rgba(0, 0, 0, 0.3);
+  filter: drop-shadow(0 0 10px rgba(232, 17, 45, 0.35));
 }
 
 .btn-primary:hover:not(:disabled) {
   background: linear-gradient(180deg, #c41626, #75101a);
   border-color: var(--red-bright);
-  box-shadow: 0 0 26px var(--red-glow);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -8px 16px rgba(0, 0, 0, 0.25);
+  filter: drop-shadow(0 0 16px rgba(232, 17, 45, 0.55));
   color: #fff;
 }
 
@@ -289,7 +321,10 @@ body {
   padding: 0;
   align-items: stretch;
   justify-content: stretch;
-  background: var(--bg-0);
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 36%, rgba(120, 12, 24, 0.18), transparent 70%),
+    radial-gradient(ellipse 55% 45% at 50% 104%, rgba(96, 9, 19, 0.14), transparent 72%),
+    var(--bg-0);
 }
 
 /* CRT scanlines + vignette overlay across the whole console */
@@ -300,6 +335,7 @@ body {
   z-index: 4;
   pointer-events: none;
   background:
+    var(--noise),
     repeating-linear-gradient(
       0deg,
       rgba(0, 0, 0, 0.16) 0px,
@@ -323,14 +359,42 @@ body {
 
 .omega-shell {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
+  width: var(--stage-w);
+  height: var(--stage-h);
+  transform: translate(-50%, -50%) scale(var(--ui-scale));
+  transform-origin: center;
   z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0.5rem;
-  padding: max(0.4rem, env(safe-area-inset-top)) max(0.6rem, env(safe-area-inset-right))
-    max(0.5rem, env(safe-area-inset-bottom)) max(0.6rem, env(safe-area-inset-left));
+  padding: 0.4rem 0.6rem 0.5rem;
+}
+
+/* Touch devices held in portrait: rotate the stage to landscape
+   (class set by src/ui/stageScale.ts, which also swaps the scale axes) */
+:root.stage-rotated .omega-shell {
+  transform: translate(-50%, -50%) rotate(90deg) scale(var(--ui-scale));
+}
+
+:root.stage-rotated .pause-panel {
+  transform: rotate(90deg);
+}
+
+/* Keep the CRT scanlines aligned with the rotated UI */
+:root.stage-rotated .screen-game::after {
+  background:
+    var(--noise),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.16) 0px,
+      rgba(0, 0, 0, 0.16) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.5) 100%);
 }
 
 /* ---------------- Top bar ---------------- */
@@ -419,6 +483,7 @@ body {
 /* ---------------- Status bar ---------------- */
 
 .omega-statusbar {
+  position: relative;
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -427,8 +492,28 @@ body {
   gap: 0.4rem 1.25rem;
   padding: 0.45rem 0.9rem;
   border: 1px solid var(--line-1);
-  background: var(--panel-bg);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    linear-gradient(180deg, rgba(36, 11, 15, 0.55), transparent 60%),
+    var(--panel-bg);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.omega-statusbar::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(232, 17, 45, 0.55) 35%,
+    rgba(232, 17, 45, 0.55) 65%,
+    transparent
+  );
 }
 
 .omega-statusbar__right {
@@ -461,8 +546,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 1.95rem;
+  height: 1.95rem;
   flex-shrink: 0;
   color: var(--red-bright);
   filter: drop-shadow(0 0 5px var(--red-glow-soft));
@@ -503,7 +588,7 @@ body {
 
 .stat-block__value {
   font-family: var(--font-display);
-  font-size: 1.02rem;
+  font-size: 1.22rem;
   font-weight: 700;
   line-height: 1.1;
   color: var(--text-0);
@@ -518,7 +603,9 @@ body {
 
 .stat-block--progress .stat-block__value {
   color: var(--red-bright);
-  font-size: 1.3rem;
+  font-size: 1.9rem;
+  font-weight: 900;
+  text-shadow: 0 0 18px var(--red-glow);
 }
 
 /* Segmented Omega progress bar */
@@ -566,7 +653,9 @@ body {
   gap: 0.6rem;
   padding: 0.25rem 0.7rem;
   border: 1px solid var(--line-1);
-  background: rgba(28, 8, 11, 0.6);
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    rgba(28, 8, 11, 0.6);
 }
 
 .threat-meter__text {
@@ -680,7 +769,7 @@ body {
 
 .omega-body {
   display: grid;
-  grid-template-columns: clamp(230px, 19vw, 290px) minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 0.5rem;
   min-height: 0;
 }
@@ -738,15 +827,47 @@ body {
   overflow: auto;
   padding: 0.7rem 0.75rem;
   border: 1px solid var(--line-1);
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--cut)) 0,
+    100% var(--cut),
+    100% 100%,
+    var(--cut) 100%,
+    0 calc(100% - var(--cut))
+  );
   background:
-    linear-gradient(180deg, rgba(40, 12, 16, 0.35), transparent 18%),
+    var(--edge-line) top right / var(--cut) var(--cut) no-repeat,
+    var(--edge-line) bottom left / var(--cut) var(--cut) no-repeat,
+    linear-gradient(180deg, rgba(40, 12, 16, 0.5), transparent 22%),
     var(--panel-bg);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45), inset 0 0 40px rgba(120, 12, 24, 0.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 52px rgba(120, 12, 24, 0.09);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .game-panel:hover {
   border-color: var(--line-2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 0 52px rgba(120, 12, 24, 0.09),
+    inset 0 0 30px rgba(232, 17, 45, 0.06);
+}
+
+/* Subtle per-column tint variation so panels read as grouped modules */
+.game-panel--plan-column {
+  --panel-bg: rgba(19, 6, 9, 0.92);
+}
+
+.game-panel--omega,
+.game-panel--locations {
+  --panel-bg: rgba(16, 5, 8, 0.9);
+}
+
+.game-panel--missions,
+.game-panel--events,
+.game-panel--lair {
+  --panel-bg: rgba(12, 4, 7, 0.9);
 }
 
 /* Corner brackets */
@@ -788,12 +909,15 @@ body {
   color: var(--red-bright);
   text-shadow: 0 0 10px var(--red-glow-soft);
   background: linear-gradient(180deg, rgba(26, 8, 11, 0.97), rgba(16, 6, 8, 0.94));
-  border-bottom: 1px solid var(--line-1);
+  border-bottom: 1px solid var(--red-deep);
+  border-image: linear-gradient(90deg, var(--red), rgba(232, 17, 45, 0.35) 45%, transparent 92%) 1;
+  box-shadow: 0 10px 18px -12px var(--red-glow);
 }
 
 .game-panel-title::before {
-  content: "// ";
-  color: var(--text-3);
+  content: "◆ ";
+  color: var(--red);
+  text-shadow: 0 0 8px var(--red-glow);
 }
 
 /* ---------------- Sidebar ---------------- */
@@ -804,6 +928,7 @@ body {
 }
 
 .game-player-profile {
+  position: relative;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -812,7 +937,21 @@ body {
   padding: 0.5rem;
   flex-shrink: 0;
   border: 1px solid var(--line-1);
-  background: linear-gradient(135deg, rgba(60, 14, 19, 0.5), rgba(18, 6, 8, 0.7));
+  border-left: 2px solid var(--red-deep);
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    linear-gradient(135deg, rgba(60, 14, 19, 0.55), rgba(18, 6, 8, 0.75));
+}
+
+.game-player-profile::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 30%;
+  bottom: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(232, 17, 45, 0.6), transparent);
 }
 
 .game-player-profile__pic {
@@ -822,7 +961,8 @@ body {
   object-fit: cover;
   border: 1px solid var(--line-2);
   background: rgba(10, 4, 5, 0.8);
-  box-shadow: 0 0 12px var(--red-glow-soft);
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+  filter: drop-shadow(0 0 8px rgba(232, 17, 45, 0.25));
 }
 
 .game-player-profile__text {
@@ -1032,6 +1172,9 @@ body {
 }
 
 .game-controls-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin: 0;
   font-family: var(--font-display);
   font-size: 0.62rem;
@@ -1039,6 +1182,13 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.2em;
   color: var(--text-2);
+}
+
+.game-controls-heading::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line-1), transparent);
 }
 
 .game-controls-heading::before {
@@ -1108,14 +1258,34 @@ body {
 /* ---------------- Ticker bar ---------------- */
 
 .omega-ticker-bar {
+  position: relative;
   display: flex;
   flex-direction: row;
   align-items: stretch;
   gap: 0.5rem;
   min-height: 3.1rem;
   border: 1px solid var(--line-1);
-  background: var(--panel-bg);
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+  background:
+    linear-gradient(180deg, rgba(30, 9, 12, 0.6), transparent 55%),
+    var(--panel-bg);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.omega-ticker-bar::before {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(232, 17, 45, 0.6) 40%,
+    rgba(232, 17, 45, 0.6) 60%,
+    transparent
+  );
 }
 
 .omega-ticker__label {
@@ -1231,7 +1401,8 @@ body {
   align-self: stretch;
   min-width: 11rem;
   margin: 0.3rem 0.4rem;
-  font-size: 1rem;
+  font-size: 1.05rem;
+  font-weight: 900;
   letter-spacing: 0.3em;
   text-indent: 0.15em;
   animation: execute-pulse 2.6s ease-in-out infinite;
@@ -1245,10 +1416,10 @@ body {
 @keyframes execute-pulse {
   0%,
   100% {
-    box-shadow: 0 0 12px var(--red-glow-soft);
+    filter: drop-shadow(0 0 8px rgba(232, 17, 45, 0.3));
   }
   50% {
-    box-shadow: 0 0 30px var(--red-glow);
+    filter: drop-shadow(0 0 22px rgba(232, 17, 45, 0.65));
   }
 }
 
@@ -1423,10 +1594,20 @@ body {
 
 .omega-phase-progress {
   position: relative;
-  height: 7px;
+  height: 9px;
   border: 1px solid var(--line-1);
   background: rgba(10, 4, 5, 0.8);
   overflow: hidden;
+}
+
+/* Blocked / pip-style bars: dark separators sliced over the fill */
+.omega-phase-progress::after,
+.mission-progress__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 7px, rgba(5, 2, 3, 0.9) 7px 9px);
 }
 
 .omega-phase-progress__fill {
@@ -1569,17 +1750,25 @@ body {
   padding: 0.5rem 0.55rem;
   border: 1px solid var(--line-1);
   border-left: 2px solid var(--line-2);
-  background: var(--card-bg);
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 30%),
+    var(--card-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 
 .asset-card:hover,
 .location-card:hover,
 .minions-card:hover {
-  background: var(--card-bg-hover);
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 30%),
+    var(--card-bg-hover);
   border-color: var(--line-2);
   border-left-color: var(--red);
-  box-shadow: 0 0 14px rgba(0, 0, 0, 0.5), 0 0 10px var(--red-glow-soft);
+  box-shadow: 0 0 14px rgba(0, 0, 0, 0.5), 0 0 10px var(--red-glow-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .asset-card[draggable="true"],
@@ -1829,7 +2018,7 @@ body {
 
 .mission-progress__bar {
   position: relative;
-  height: 7px;
+  height: 9px;
   border: 1px solid var(--line-1);
   background: rgba(10, 4, 5, 0.8);
   overflow: hidden;
@@ -1923,6 +2112,9 @@ body {
 }
 
 .events-tab-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin: 0.15rem 0 0;
   font-family: var(--font-display);
   font-size: 0.6rem;
@@ -1930,6 +2122,13 @@ body {
   letter-spacing: 0.2em;
   color: var(--text-2);
   text-transform: uppercase;
+}
+
+.events-tab-section-title::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line-1), transparent);
 }
 
 .events-tab-section-title::before {
@@ -2002,12 +2201,6 @@ body {
   align-content: start;
   min-height: 0;
   overflow-y: auto;
-}
-
-@media (max-width: 560px) {
-  .assets-panel-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 .game-panel.game-panel--assets,
@@ -2603,43 +2796,6 @@ body {
 
 .activity-event::marker {
   color: var(--red);
-}
-
-/* ============================================================
-   Responsive
-   ============================================================ */
-
-@media (max-width: 860px) {
-  .omega-body {
-    grid-template-columns: minmax(0, 1fr);
-    overflow-y: auto;
-  }
-
-  .omega-sidebar {
-    max-height: min(48vh, 420px);
-  }
-
-  .game-ui-columns-row {
-    flex-direction: column;
-    overflow: visible;
-  }
-
-  .game-ui-columns-row > .game-ui-stack-column {
-    flex: 1 1 auto;
-    max-height: min(48vh, 420px);
-  }
-
-  .omega-main {
-    overflow-y: auto;
-  }
-
-  .omega-topbar__corner--right {
-    display: none;
-  }
-
-  .btn-execute {
-    min-width: 8rem;
-  }
 }
 
 /* ============================================================
