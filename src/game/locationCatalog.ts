@@ -1,6 +1,7 @@
 import type {
   ContentCatalog,
   LocationAgentPresence,
+  LocationIntelState,
   LocationSecurityState,
   LocationTemplate,
   MapTemplate,
@@ -96,10 +97,10 @@ export function getMapById(catalog: ContentCatalog, id: string): MapTemplate | u
 }
 
 /**
- * Pick up to `count` distinct trait ids from `pool` (without replacement). If the pool is
+ * Pick up to `count` distinct ids from `pool` (without replacement). If the pool is
  * smaller than `count`, returns as many distinct ids as exist.
  */
-function pickDistinctTraitIds(
+function pickDistinctIds(
   pool: string[],
   count: number,
   rng: () => number,
@@ -119,6 +120,32 @@ function pickDistinctTraitIds(
 }
 
 /**
+ * Opening intel for a run: `balance.initialIntelSitesAtOne` random playable sites start at
+ * intel **1** and `balance.initialIntelSitesAtTwo` further sites start at intel **2**; every
+ * other site starts dark. Picks are drawn without replacement across both tiers, so no site
+ * starts above 2 and the player always opens with that many distinct leads. This is the
+ * successor to the old global "reveal N asset slots" pass — assets themselves now all start
+ * hidden, and what the player can see comes from intel (see `intel.ts`).
+ */
+export function rollInitialLocationIntelStates(
+  catalog: ContentCatalog,
+  runLocations: LocationTemplate[],
+  rng: () => number,
+): LocationIntelState[] {
+  const { initialIntelSitesAtOne, initialIntelSitesAtTwo } = catalog.balance;
+  const ids = runLocations.map((l) => l.id);
+  const picked = pickDistinctIds(ids, initialIntelSitesAtOne + initialIntelSitesAtTwo, rng);
+  const seeded = new Map<string, 1 | 2>();
+  picked.forEach((id, i) => {
+    seeded.set(id, i < initialIntelSitesAtOne ? 1 : 2);
+  });
+  return runLocations.map((l) => ({
+    locationId: l.id,
+    intelLevel: seeded.get(l.id) ?? 0,
+  }));
+}
+
+/**
  * Per-run required traits for each map location (not in JSON).
  * Level 1 → 0 traits; level 2 → 1; level 3 → 2 distinct picks from primary + secondary only
  * (excludes status_positive / status_negative).
@@ -134,7 +161,7 @@ export function rollLocationRequiredTraits(
   const out: Record<string, string[]> = {};
   for (const loc of runLocations) {
     const n = loc.locationLevel === 1 ? 0 : loc.locationLevel === 2 ? 1 : 2;
-    out[loc.id] = pickDistinctTraitIds(eligible, n, rng);
+    out[loc.id] = pickDistinctIds(eligible, n, rng);
   }
   return out;
 }
@@ -154,7 +181,7 @@ export function rollLocationSecurityTraits(
     .map((t) => t.id);
   const out: Record<string, string[]> = {};
   for (const loc of runLocations) {
-    out[loc.id] = pickDistinctTraitIds(eligible, loc.locationLevel, rng);
+    out[loc.id] = pickDistinctIds(eligible, loc.locationLevel, rng);
   }
   return out;
 }

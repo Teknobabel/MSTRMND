@@ -43,6 +43,7 @@ const EFFECT_FIELD_DEFS: Record<EffectKind, FieldDef[]> = {
     { key: "gainAssetIds", input: "assetIds" },
   ],
   security_level_delta: [DELTA],
+  intel_level_delta: [DELTA],
   add_target_minion_traits: [{ key: "traitIds", input: "traitIds" }],
   add_random_participant_traits: [{ key: "traitIds", input: "traitIds" }],
   add_all_participant_traits: [{ key: "traitIds", input: "traitIds" }],
@@ -55,6 +56,9 @@ const EFFECT_FIELD_DEFS: Record<EffectKind, FieldDef[]> = {
   security_level_delta_global: [DELTA],
   security_level_delta_by_location_type: [DELTA, { key: "locationType", input: "locationType" }],
   security_level_delta_by_location_level: [DELTA, { key: "locationLevel", input: "locationLevel" }],
+  intel_level_delta_global: [DELTA],
+  intel_level_delta_by_location_type: [DELTA, { key: "locationType", input: "locationType" }],
+  intel_level_delta_by_location_level: [DELTA, { key: "locationLevel", input: "locationLevel" }],
   remove_trait_from_all_minions: [{ key: "traitId", input: "traitId" }],
   add_trait_to_random_minions: [
     { key: "traitId", input: "traitId" },

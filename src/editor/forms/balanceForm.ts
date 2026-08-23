@@ -196,10 +196,18 @@ const GROUPS: BalanceGroup[] = [
         max: 10,
       },
       {
-        key: "initialRevealedAssetSlots",
-        label: "Starting revealed assets",
+        key: "initialIntelSitesAtOne",
+        label: "Starting intel-1 sites",
         tooltip:
-          "How many asset slots across the WHOLE map start revealed instead of hidden, giving the player their opening targets.",
+          "How many map locations start at intel 1, where the player can see how many assets the site holds but not what they are. Every asset on the map starts hidden, so these picks plus the intel-2 sites below are the player's only opening leads.",
+        min: 0,
+        max: 99,
+      },
+      {
+        key: "initialIntelSitesAtTwo",
+        label: "Starting intel-2 sites",
+        tooltip:
+          "How many further map locations start at intel 2, where asset contents are identified and count as revealed for mission targeting. Drawn from the locations not already picked above, so no site starts higher than 2.",
         min: 0,
         max: 99,
       },

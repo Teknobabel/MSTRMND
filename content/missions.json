@@ -538,5 +538,49 @@
     ],
     "startCommandPoints": 4,
     "targetType": "location"
+  },
+  {
+    "id": "surveil_site",
+    "name": "Case the site",
+    "description": "Sit on the site long enough to learn what it is really holding.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "intel_level_delta",
+        "delta": 1
+      }
+    ],
+    "requiredTraitIds": [
+      "spy"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "location"
+  },
+  {
+    "id": "deep_surveillance_net",
+    "name": "Deep surveillance net",
+    "description": "Wire the block for sound and pictures, then read the whole site at leisure.",
+    "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "intel_level_delta",
+        "delta": -1
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "intel_level_delta",
+        "delta": 2
+      }
+    ],
+    "requiredAssetIds": [
+      "surveillance_archive"
+    ],
+    "requiredTraitIds": [
+      "spy",
+      "sneaky"
+    ],
+    "startCommandPoints": 3,
+    "targetType": "location"
   }
 ]

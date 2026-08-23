@@ -42,7 +42,11 @@ export function getOpposingAgentByInstanceId(
   return state.opposingAgentInstances.find((a) => a.instanceId === instanceId);
 }
 
-/** Count of opposing agents placed on any playable location (sum of `locationAgentPresence` lists). */
+/**
+ * Count of opposing agents placed on any playable location (sum of `locationAgentPresence`
+ * lists) — the true count, ignoring what the player is allowed to see. Player-facing surfaces
+ * want `totalPlayerVisibleOpposingAgents` in `intel.ts` instead.
+ */
 export function totalOpposingAgentsAcrossLocations(state: GameState): number {
   let n = 0;
   for (const row of state.locationAgentPresence) {
@@ -73,7 +77,10 @@ export function getOpposingAgentsAtLocation(
   return out;
 }
 
-/** Opposing agents at this location with {@link AgentInstance.catalogVisibility} `revealed` (for location UI). */
+/**
+ * Opposing agents at this location already uncovered by play. Site **intel** can also expose
+ * agents; UI should use `playerVisibleOpposingAgentsAtLocation` in `intel.ts`, which folds both in.
+ */
 export function getRevealedOpposingAgentsAtLocation(
   state: GameState,
   locationId: string,

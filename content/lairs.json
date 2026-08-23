@@ -6,6 +6,8 @@
     "availableMissionIds": [
       "breach_server",
       "extract_asset",
+      "surveil_site",
+      "deep_surveillance_net",
       "vector_null_infil",
       "black_ledger_sweep",
       "cold_storage_placement",
@@ -30,6 +32,8 @@
     "availableMissionIds": [
       "breach_server",
       "extract_asset",
+      "surveil_site",
+      "deep_surveillance_net",
       "iron_veil_meet",
       "hollow_crown_social",
       "grey_commission_witness",

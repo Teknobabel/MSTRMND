@@ -221,6 +221,10 @@ export const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnio
     delta: deltaSchema,
   }),
   z.object({
+    kind: z.literal("intel_level_delta"),
+    delta: deltaSchema,
+  }),
+  z.object({
     kind: z.literal("add_target_minion_traits"),
     traitIds: z.array(z.string().min(1)).min(1),
   }),
@@ -267,6 +271,20 @@ export const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnio
   }),
   z.object({
     kind: z.literal("security_level_delta_by_location_level"),
+    delta: deltaSchema,
+    locationLevel: locationLevelEffectSchema,
+  }),
+  z.object({
+    kind: z.literal("intel_level_delta_global"),
+    delta: deltaSchema,
+  }),
+  z.object({
+    kind: z.literal("intel_level_delta_by_location_type"),
+    delta: deltaSchema,
+    locationType: locationTypeSchema,
+  }),
+  z.object({
+    kind: z.literal("intel_level_delta_by_location_level"),
     delta: deltaSchema,
     locationLevel: locationLevelEffectSchema,
   }),
@@ -433,7 +451,8 @@ export const balanceConfigSchema = z.object({
   minionXpToLevel: balanceInt(1, 99, DEFAULT_BALANCE.minionXpToLevel),
   assetsPerLocationMin: balanceInt(0, 10, DEFAULT_BALANCE.assetsPerLocationMin),
   assetsPerLocationMax: balanceInt(0, 10, DEFAULT_BALANCE.assetsPerLocationMax),
-  initialRevealedAssetSlots: balanceInt(0, 99, DEFAULT_BALANCE.initialRevealedAssetSlots),
+  initialIntelSitesAtOne: balanceInt(0, 99, DEFAULT_BALANCE.initialIntelSitesAtOne),
+  initialIntelSitesAtTwo: balanceInt(0, 99, DEFAULT_BALANCE.initialIntelSitesAtTwo),
   securityGainPerResolvedMission: balanceInt(
     0,
     3,
@@ -835,6 +854,7 @@ const LOCATION_BACKED_EFFECT_KINDS: ReadonlySet<MissionEffect["kind"]> = new Set
   "steal_all_assets_at_location",
   "steal_all_revealed_assets_at_location",
   "security_level_delta",
+  "intel_level_delta",
 ]);
 /** Effect kinds that require a minion mission target. */
 const MINION_TARGET_ONLY_EFFECT_KINDS: ReadonlySet<MissionEffect["kind"]> = new Set([

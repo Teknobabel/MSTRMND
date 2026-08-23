@@ -317,5 +317,49 @@
     ],
     "startCommandPoints": 2,
     "targetType": "none"
+  },
+  {
+    "id": "evt_counterintel_sweep",
+    "name": "Counterintelligence sweep",
+    "description": "Their spooks are re-papering every site. Get inside the sweep or go blind.",
+    "durationTurns": 1,
+    "expireEffects": [
+      {
+        "kind": "intel_level_delta_global",
+        "delta": -1
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "intel_level_delta_global",
+        "delta": 1
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "spy",
+      "clever"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_harbor_manifest_leak",
+    "name": "Harbor manifest leak",
+    "description": "A clerk is selling dock paperwork cheap; economic sites are an open book for a week.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "intel_level_delta_by_location_type",
+        "delta": 2,
+        "locationType": "economic"
+      }
+    ],
+    "requiredAssetIds": [
+      "money"
+    ],
+    "requiredTraitIds": [],
+    "startCommandPoints": 1,
+    "targetType": "none"
   }
 ]

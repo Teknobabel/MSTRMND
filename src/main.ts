@@ -50,11 +50,16 @@ import { loadContent } from "./game/loadContent";
 import {
   locationTemplatesForOmegaPlan,
 } from "./game/locationCatalog";
+import { getAgentTemplateById } from "./game/agent";
 import {
-  countOpposingAgentsAtLocation,
-  getAgentTemplateById,
-  totalOpposingAgentsAcrossLocations,
-} from "./game/agent";
+  assetSlotKnowledge,
+  countPlayerVisibleOpposingAgentsAtLocation,
+  effectiveVisibilityOfSlot,
+  intelLevelAtLocation,
+  playerVisibleOpposingAgentsAtLocation,
+  totalPlayerVisibleOpposingAgents,
+  MAX_INTEL_LEVEL,
+} from "./game/intel";
 import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
 import { getOmegaPlanById } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
@@ -70,6 +75,14 @@ import {
   resolveMissionCardArt,
   resolveMinionCardArt,
 } from "./ui/cardArt";
+
+/** What each intel step unlocks at a site (hover text on the location card's Intel row). */
+const INTEL_LEVEL_TOOLTIP_LINES: readonly string[] = [
+  "0 — assets and agents here stay secret unless uncovered another way",
+  "1 — every asset slot is listed (contents still unknown)",
+  "2 — asset contents are identified and count as revealed for missions",
+  "3 — opposing agents here are visible, including any that arrive later",
+];
 
 /** Tabs left-to-right; locations filtered and sorted by name within each. */
 const LOCATION_CATEGORY_TAB_ORDER: readonly LocationType[] = [
@@ -1202,11 +1215,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         if (mt.kind === "asset") {
           const placement = state.locationAssetSlots.find((p) => p.locationId === mt.locationId);
           const slot = placement?.slots[mt.slotIndex];
-          if (
-            !slot ||
-            !isOccupiedAssetSlot(slot) ||
-            slot.visibility !== mt.visibilityAtAssign
-          ) {
+          const intel = intelLevelAtLocation(state, mt.locationId);
+          if (effectiveVisibilityOfSlot(slot, intel) !== mt.visibilityAtAssign) {
             return;
           }
         }
@@ -1560,6 +1570,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         const article = buildLocationCardArticle(
           loc,
           securityByLocationId.get(loc.id),
+          intelLevelAtLocation(state, loc.id),
           slots,
           assetNameById,
           false,
@@ -1591,10 +1602,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const dl = document.createElement("dl");
       dl.className = "location-card-stats";
       const visLabel = targetPick.visibilityAtAssign === "hidden" ? "Hidden" : "Revealed";
+      const targetIntel = intelLevelAtLocation(state, targetPick.locationId);
       let assetLabel = "Asset";
       if (slot?.kind === "empty") {
         assetLabel = "—";
-      } else if (slot && isOccupiedAssetSlot(slot) && slot.visibility === "revealed") {
+      } else if (
+        slot &&
+        isOccupiedAssetSlot(slot) &&
+        effectiveVisibilityOfSlot(slot, targetIntel) === "revealed"
+      ) {
         assetLabel =
           content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId;
       }
@@ -1615,6 +1631,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       appendMinionStatRows(dl, [
         { label: "Asset", value: `${visLabel} (${assetLabel})` },
         { label: "Slot", value: String(targetPick.slotIndex + 1) },
+        {
+          label: "Intel level",
+          value: `${targetIntel} / ${MAX_INTEL_LEVEL}`,
+          tooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
+        },
         { label: "Site traits", value: siteTraitsLabel },
         { label: "Security traits", value: securityTraitsLabel },
       ]);
@@ -1949,6 +1970,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   function buildLocationCardArticle(
     loc: (typeof content.locations)[number],
     securityLevel: number | undefined,
+    intelLevel: number,
     assetSlots: LocationAssetSlot[],
     assetNameById: Map<string, string>,
     enableAssignDrag: boolean,
@@ -1975,12 +1997,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     const dl = document.createElement("dl");
     dl.className = "location-card-stats";
-    const baseRows: Array<{ label: string; value: string }> = [
+    const baseRows: Array<{
+      label: string;
+      value: string;
+      tooltipLines?: readonly string[];
+    }> = [
       { label: "Location type", value: formatLocationTypeLabel(loc.locationType) },
       { label: "Location level", value: String(loc.locationLevel) },
       {
         label: "Security level",
         value: securityLevel !== undefined ? String(securityLevel) : "—",
+      },
+      {
+        label: "Intel level",
+        value: `${intelLevel} / ${MAX_INTEL_LEVEL}`,
+        tooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
       },
       {
         label: "Site traits",
@@ -2002,28 +2033,16 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       },
     ];
     appendMinionStatRows(dl, baseRows);
-    const agentIdsAtSite =
-      state.locationAgentPresence.find((p) => p.locationId === loc.id)?.agentInstanceIds ?? [];
-    if (agentIdsAtSite.length > 0) {
-      const byInstanceId = new Map(
-        state.opposingAgentInstances.map((a) => [a.instanceId, a] as const),
-      );
+    /* Agents the player has not uncovered (by play or by intel 3) are omitted entirely —
+     * listing them at all would leak that the site is occupied. */
+    const visibleAgents = playerVisibleOpposingAgentsAtLocation(state, loc.id);
+    if (visibleAgents.length > 0) {
       const dt = document.createElement("dt");
       dt.textContent = "Agents";
       const dd = document.createElement("dd");
-      for (const id of agentIdsAtSite) {
-        const a = byInstanceId.get(id);
-        if (a === undefined) {
-          dd.appendChild(document.createTextNode("(?) "));
-          continue;
-        }
+      for (const a of visibleAgents) {
         const template = getAgentTemplateById(content, a.templateId);
         const name = template?.name ?? a.templateId;
-        if (a.catalogVisibility === "hidden") {
-          /* Hidden agents stay text-only: showing their portrait would leak who they are. */
-          dd.appendChild(document.createTextNode(`(${name}) `));
-          continue;
-        }
         const chip = document.createElement("span");
         chip.className = "location-agent-chip";
         chip.appendChild(createCardArtImg(resolveAgentCardArt(template), "card-art--chip"));
@@ -2036,6 +2055,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     for (let si = 0; si < assetSlots.length; si += 1) {
       const slot = assetSlots[si]!;
+      const knowledge = assetSlotKnowledge(slot, intelLevel);
+      if (knowledge === "unknown") {
+        /* Intel 0: the player cannot even count the assets stored here. */
+        continue;
+      }
       const dt = document.createElement("dt");
       dt.textContent = "Asset";
       const dd = document.createElement("dd");
@@ -2055,10 +2079,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         continue;
       }
       const displayValue =
-        slot.visibility === "revealed"
+        knowledge === "identified"
           ? (assetNameById.get(slot.assetId) ?? slot.assetId)
           : "Asset";
       if (enableAssignDrag) {
+        const targetVisibility = knowledge === "identified" ? "revealed" : "hidden";
         const chip = document.createElement("span");
         chip.className = "location-asset-drag-chip";
         chip.draggable = true;
@@ -2068,11 +2093,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           e.stopPropagation();
           e.dataTransfer?.setData(
             "text/plain",
-            assetDragJson(
-              loc.id,
-              si,
-              slot.visibility === "hidden" ? "hidden" : "revealed",
-            ),
+            assetDragJson(loc.id, si, targetVisibility),
           );
           e.dataTransfer!.effectAllowed = "copy";
         });
@@ -2644,7 +2665,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         let an = "Asset";
         if (slot?.kind === "empty") {
           an = "—";
-        } else if (slot && isOccupiedAssetSlot(slot) && slot.visibility === "revealed") {
+        } else if (
+          slot &&
+          isOccupiedAssetSlot(slot) &&
+          effectiveVisibilityOfSlot(slot, intelLevelAtLocation(state, target.locationId)) ===
+            "revealed"
+        ) {
           an = content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId;
         }
         return `${vis} (${an}) @ ${locName}`;
@@ -2719,7 +2745,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (mission) {
       const lid = getMissionTargetLocationId(am.target);
       const opposingAgentPenaltyCount =
-        lid === null ? 0 : countOpposingAgentsAtLocation(state, lid, "revealed");
+        lid === null ? 0 : countPlayerVisibleOpposingAgentsAtLocation(state, lid);
       const dynamicTraitDelta = dynamicTraitSuccessModifierFromFullRoster(
         state.player.minions,
         am.participantInstanceIds,
@@ -2933,6 +2959,9 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     const securityByLocationId = new Map(
       state.locationSecurityStates.map((s) => [s.locationId, s.securityLevel]),
     );
+    const intelByLocationId = new Map(
+      state.locationIntelStates.map((s) => [s.locationId, s.intelLevel]),
+    );
     const assetSlotsByLocationId = new Map(
       state.locationAssetSlots.map((p) => [p.locationId, p.slots]),
     );
@@ -2965,6 +2994,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         const article = buildLocationCardArticle(
           loc,
           sec,
+          intelByLocationId.get(loc.id) ?? 0,
           slots,
           assetNameById,
           mainOnly,
@@ -3480,7 +3510,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       statBlockHtml(
         ICON_CROSSHAIR,
         "Agents",
-        String(totalOpposingAgentsAcrossLocations(state)),
+        String(totalPlayerVisibleOpposingAgents(state)),
       );
   }
 

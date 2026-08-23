@@ -134,6 +134,8 @@ export type MissionEffect =
   | { kind: "exchange_assets"; removeAssetIds: string[]; gainAssetIds: string[] }
   /** Adds delta to security at the mission location (negative reduces); clamped to [0, locationLevel]. */
   | { kind: "security_level_delta"; delta: number }
+  /** Adds delta to intel at the mission location (negative reduces); clamped to [0, 3]. */
+  | { kind: "intel_level_delta"; delta: number }
   /**
    * Grants the listed trait ids to the minion identified by the active mission's `target`
    * (which must be `kind: "minion"`). Existing traits on that minion are not duplicated.
@@ -160,6 +162,10 @@ export type MissionEffect =
   | { kind: "security_level_delta_global"; delta: number }
   | { kind: "security_level_delta_by_location_type"; delta: number; locationType: LocationType }
   | { kind: "security_level_delta_by_location_level"; delta: number; locationLevel: 1 | 2 | 3 }
+  /** Adds delta to intel at every playable location; clamped per-site to [0, 3]. */
+  | { kind: "intel_level_delta_global"; delta: number }
+  | { kind: "intel_level_delta_by_location_type"; delta: number; locationType: LocationType }
+  | { kind: "intel_level_delta_by_location_level"; delta: number; locationLevel: 1 | 2 | 3 }
   /** Removes trait id from every hired roster minion (no-op if none have it). */
   | { kind: "remove_trait_from_all_minions"; traitId: string }
   /**
@@ -267,6 +273,19 @@ export type LocationSecurityState = {
   locationId: string;
   /** Rises after missions resolve at this site; new runs start at 0, capped at 3. */
   securityLevel: 0 | 1 | 2 | 3;
+};
+
+/** How much the player knows about a site; each step unlocks a fixed kind of knowledge. */
+export type IntelLevel = 0 | 1 | 2 | 3;
+
+/**
+ * Per-run intel at a location (not in catalog JSON). Gates what the player may see at the site:
+ * 1 lists every asset slot, 2 identifies their contents, 3 shows opposing agents. Raised by
+ * surveillance missions; events may raise or lower it. New runs start at 0.
+ */
+export type LocationIntelState = {
+  locationId: string;
+  intelLevel: IntelLevel;
 };
 
 export type MapTemplate = {
@@ -384,8 +403,10 @@ export type BalanceConfig = {
   /* World generation & security */
   assetsPerLocationMin: number;
   assetsPerLocationMax: number;
-  /** Asset slots revealed globally at run start (capped by total slots). */
-  initialRevealedAssetSlots: number;
+  /** Playable sites that start at intel 1 (asset slots listed, contents unknown). */
+  initialIntelSitesAtOne: number;
+  /** Further playable sites that start at intel 2 (asset contents identified); distinct from the above. */
+  initialIntelSitesAtTwo: number;
   /** Security added at the target location when a mission resolves there. */
   securityGainPerResolvedMission: number;
 };
@@ -419,7 +440,8 @@ export const DEFAULT_BALANCE: BalanceConfig = {
   minionXpToLevel: 3,
   assetsPerLocationMin: 1,
   assetsPerLocationMax: 3,
-  initialRevealedAssetSlots: 3,
+  initialIntelSitesAtOne: 2,
+  initialIntelSitesAtTwo: 1,
   securityGainPerResolvedMission: 1,
 };
 

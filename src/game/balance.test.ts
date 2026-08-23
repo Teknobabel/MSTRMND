@@ -139,14 +139,33 @@ describe("balance knobs steer executePlan and run setup", () => {
     const catalog = catalogWithBalance({
       assetsPerLocationMin: 2,
       assetsPerLocationMax: 2,
-      initialRevealedAssetSlots: 0,
     });
     const state = createInitialGameState(catalog, seededRng(3));
     for (const placement of state.locationAssetSlots) {
       expect(placement.slots).toHaveLength(2);
+      /* Every asset starts hidden now; opening visibility comes from seeded intel. */
       for (const slot of placement.slots) {
         expect(slot.kind === "occupied" && slot.visibility).toBe("hidden");
       }
     }
+  });
+
+  it("seeds opening intel from initialIntelSitesAtOne / AtTwo", () => {
+    const catalog = catalogWithBalance({
+      initialIntelSitesAtOne: 1,
+      initialIntelSitesAtTwo: 1,
+    });
+    const state = createInitialGameState(catalog, seededRng(3));
+    /* The fixture map has exactly two sites, so one lands on each tier. */
+    expect(state.locationIntelStates.map((s) => s.intelLevel).sort()).toEqual([1, 2]);
+  });
+
+  it("leaves every site dark when both intel knobs are 0", () => {
+    const catalog = catalogWithBalance({
+      initialIntelSitesAtOne: 0,
+      initialIntelSitesAtTwo: 0,
+    });
+    const state = createInitialGameState(catalog, seededRng(3));
+    expect(state.locationIntelStates.every((s) => s.intelLevel === 0)).toBe(true);
   });
 });

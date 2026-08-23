@@ -6,6 +6,7 @@ import type {
   LocationAssetPlacement,
   LocationAssetSlot,
   LocationAgentPresence,
+  LocationIntelState,
   LocationSecurityState,
   LocationTemplate,
   MinionInstance,
@@ -22,11 +23,17 @@ import {
   spawnOpposingAgentsAfterWantedEscalation,
 } from "./agent";
 import {
+  clampIntelLevel,
+  effectiveAssetSlotVisibility,
+  intelLevelForLocation,
+} from "./intel";
+import {
   activeLocationIds,
   initialLocationAgentPresenceForLocations,
   initialLocationSecurityStatesForLocations,
   locationTemplatesForOmegaPlan,
   maxSecurityLevelForLocation,
+  rollInitialLocationIntelStates,
   rollLocationRequiredTraits,
   rollLocationSecurityTraits,
 } from "./locationCatalog";
@@ -208,6 +215,11 @@ export type GameState = {
   activeOmegaPlanId: string | null;
   /** Per-location security (runtime); initialized from `initialLocationSecurityStates`. */
   locationSecurityStates: LocationSecurityState[];
+  /**
+   * Per-location intel (runtime); every playable site starts at 0. Gates what the player may
+   * see at a site — see `intel.ts` for the visibility rules.
+   */
+  locationIntelStates: LocationIntelState[];
   /** Random catalog assets per location; 1–3 slots each, exactly three slots revealed globally when possible. */
   locationAssetSlots: LocationAssetPlacement[];
   /**
@@ -432,6 +444,24 @@ export function setLocationSecurityLevel(
   };
 }
 
+/**
+ * Set a site's intel outright (clamped to `[0, MAX_INTEL_LEVEL]`). Missions and events normally
+ * move intel through `intel_level_delta*` effects; this is the direct seam for other systems.
+ */
+export function setLocationIntelLevel(
+  state: GameState,
+  locationId: string,
+  level: number,
+): GameState {
+  const clamped = clampIntelLevel(level);
+  return {
+    ...state,
+    locationIntelStates: state.locationIntelStates.map((s) =>
+      s.locationId === locationId ? { ...s, intelLevel: clamped } : s,
+    ),
+  };
+}
+
 export type Rng = () => number;
 
 function shuffleInPlace<T>(arr: T[], rng: Rng): void {
@@ -458,17 +488,15 @@ function pickDistinctRandomAssetIds(
 
 /**
  * For each location: `balance.assetsPerLocationMin`–`Max` random distinct catalog assets
- * (none if `catalog.assets` is empty), all hidden. Then
- * `min(balance.initialRevealedAssetSlots, total slots)` slots chosen uniformly at random
- * are revealed.
+ * (none if `catalog.assets` is empty), **all hidden**. Nothing is revealed up front — what the
+ * player can see at run start comes from `rollInitialLocationIntelStates` instead.
  */
 function initializeLocationAssetPlacements(
   catalog: ContentCatalog,
   rng: Rng,
   runLocations: LocationTemplate[],
 ): LocationAssetPlacement[] {
-  const { assetsPerLocationMin, assetsPerLocationMax, initialRevealedAssetSlots } =
-    catalog.balance;
+  const { assetsPerLocationMin, assetsPerLocationMax } = catalog.balance;
   const spread = Math.max(0, assetsPerLocationMax - assetsPerLocationMin);
   const placements: LocationAssetPlacement[] = [];
   for (const loc of runLocations) {
@@ -487,25 +515,6 @@ function initializeLocationAssetPlacements(
       }));
     }
     placements.push({ locationId: loc.id, slots });
-  }
-
-  const flat: { pi: number; si: number }[] = [];
-  for (let pi = 0; pi < placements.length; pi += 1) {
-    const { slots } = placements[pi]!;
-    for (let si = 0; si < slots.length; si += 1) {
-      flat.push({ pi, si });
-    }
-  }
-  const k = Math.min(initialRevealedAssetSlots, flat.length);
-  if (k > 0) {
-    shuffleInPlace(flat, rng);
-    for (let i = 0; i < k; i += 1) {
-      const ref = flat[i]!;
-      const cell = placements[ref.pi]!.slots[ref.si]!;
-      if (isOccupiedAssetSlot(cell)) {
-        placements[ref.pi]!.slots[ref.si] = { ...cell, visibility: "revealed" };
-      }
-    }
   }
   return placements;
 }
@@ -593,6 +602,7 @@ export function createInitialGameState(
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
   const locationRequiredTraits = rollLocationRequiredTraits(catalog, runLocations, rng);
   const locationSecurityTraits = rollLocationSecurityTraits(catalog, runLocations, rng);
+  const locationIntelStates = rollInitialLocationIntelStates(catalog, runLocations, rng);
   const lairMissionIds = lairTemplate ? [...lairTemplate.availableMissionIds] : [];
   const playerProfile = pickRandomPlayerProfile(catalog, rng);
   const base: GameState = {
@@ -613,6 +623,7 @@ export function createInitialGameState(
     activityLog: [],
     activeOmegaPlanId,
     locationSecurityStates: initialLocationSecurityStatesForLocations(runLocations),
+    locationIntelStates,
     locationAssetSlots: initializeLocationAssetPlacements(catalog, rng, runLocations),
     locationRequiredTraits,
     locationSecurityTraits,
@@ -1072,7 +1083,10 @@ export function assignMission(
         },
       };
     }
-    if (slot.visibility !== target.visibilityAtAssign) {
+    /* Intel-aware: at intel ≥ 2 the site's assets read as revealed for targeting, so an
+     * `asset_revealed` mission may be aimed at a slot whose stored visibility is still hidden. */
+    const intelLevel = intelLevelForLocation(state.locationIntelStates, target.locationId);
+    if (effectiveAssetSlotVisibility(slot, intelLevel) !== target.visibilityAtAssign) {
       return {
         ok: false,
         error: {
@@ -1360,6 +1374,7 @@ export function executePlan(
   const resolveEvents: ActivityEvent[] = [];
   const remaining: ActiveMission[] = [];
   let locationSecurityStates = state.locationSecurityStates;
+  let locationIntelStates = state.locationIntelStates;
   let locationAssetSlots = state.locationAssetSlots;
   let lairMissionIds = [...state.lairMissionIds];
   let completedLairUpgradeMissionIds = [...state.completedLairUpgradeMissionIds];
@@ -1499,12 +1514,14 @@ export function executePlan(
       player,
       locationAssetSlots,
       locationSecurityStates,
+      locationIntelStates,
       activeSuccessModifiers,
     };
     const applied = applyMissionEffects(effectState, effectList, am, catalog, rng);
     player = applied.player;
     locationAssetSlots = applied.locationAssetSlots;
     locationSecurityStates = applied.locationSecurityStates;
+    locationIntelStates = applied.locationIntelStates;
     activeSuccessModifiers = applied.activeSuccessModifiers;
     /* Sync the lookup with any minion mutations from applyMissionEffects
      * (e.g. add_target_minion_traits, add_random_participant_traits, add_all_participant_traits) so the XP pass and final merge below see them. */
@@ -1736,12 +1753,14 @@ export function executePlan(
           player,
           locationAssetSlots,
           locationSecurityStates,
+          locationIntelStates,
           activeSuccessModifiers,
         };
         const expired = applyMissionEffects(expireState, expireList, stubAm, catalog, rng);
         player = expired.player;
         locationAssetSlots = expired.locationAssetSlots;
         locationSecurityStates = expired.locationSecurityStates;
+        locationIntelStates = expired.locationIntelStates;
         activeSuccessModifiers = expired.activeSuccessModifiers;
         resolveEvents.push({
           kind: "event_expired",
@@ -1783,6 +1802,7 @@ export function executePlan(
       activeOmegaStageIndex,
       omegaRowProgress,
       locationSecurityStates,
+      locationIntelStates,
       locationAssetSlots,
       lairMissionIds,
       completedLairUpgradeMissionIds,

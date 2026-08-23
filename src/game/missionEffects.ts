@@ -6,10 +6,19 @@ import type {
   Rng,
 } from "./gameState";
 import { maxSecurityLevelForLocation } from "./locationCatalog";
+import {
+  applyIntelLevelDelta,
+  applyIntelLevelDeltaByLocationLevel,
+  applyIntelLevelDeltaByLocationType,
+  applyIntelLevelDeltaGlobal,
+  effectiveAssetSlotVisibility,
+  intelLevelForLocation,
+} from "./intel";
 import type {
   ContentCatalog,
   LocationAssetPlacement,
   LocationAssetSlot,
+  LocationIntelState,
   LocationSecurityState,
   LocationType,
   MissionEffect,
@@ -41,6 +50,14 @@ function describeMissionEffect(effect: MissionEffect): string {
       return `Removed up to ${effect.removeAssetIds.length} asset unit(s) from inventory (capped by holdings), then gained ${effect.gainAssetIds.length} unit(s)`;
     case "security_level_delta":
       return `Security level at target location ${signedInt(effect.delta)}`;
+    case "intel_level_delta":
+      return `Intel level at target location ${signedInt(effect.delta)}`;
+    case "intel_level_delta_global":
+      return `Intel level globally ${signedInt(effect.delta)} (all playable locations)`;
+    case "intel_level_delta_by_location_type":
+      return `Intel level ${signedInt(effect.delta)} at all ${effect.locationType} locations`;
+    case "intel_level_delta_by_location_level":
+      return `Intel level ${signedInt(effect.delta)} at all level-${effect.locationLevel} locations`;
     case "add_target_minion_traits":
       return `Granted ${effect.traitIds.length} trait(s) to the target minion`;
     case "add_random_participant_traits":
@@ -432,6 +449,7 @@ function applyStealAllRevealedAssetsAtLocation(
   placements: LocationAssetPlacement[],
   target: MissionTarget,
   player: PlayerState,
+  intelLevel: number,
 ): { placements: LocationAssetPlacement[]; player: PlayerState; events: ActivityEvent[] } {
   const events: ActivityEvent[] = [];
   const locationId = missionTargetLocationId(target);
@@ -445,7 +463,9 @@ function applyStealAllRevealedAssetsAtLocation(
   const placement = placements[pIdx];
   const gained = new Map<string, number>();
   const nextSlots = placement.slots.map((slot) => {
-    if (!isOccupiedAssetSlot(slot) || slot.visibility !== "revealed") {
+    /* "Revealed" here is the player-facing visibility, so intel 2 at the site puts every
+     * asset within reach of this effect. */
+    if (!isOccupiedAssetSlot(slot) || effectiveAssetSlotVisibility(slot, intelLevel) !== "revealed") {
       return slot;
     }
     gained.set(slot.assetId, (gained.get(slot.assetId) ?? 0) + 1);
@@ -753,6 +773,7 @@ export function applyMissionEffects(
   player: PlayerState;
   locationAssetSlots: LocationAssetPlacement[];
   locationSecurityStates: LocationSecurityState[];
+  locationIntelStates: LocationIntelState[];
   events: ActivityEvent[];
   activeSuccessModifiers: { delta: number; turnsRemaining: number }[];
 } {
@@ -764,6 +785,7 @@ export function applyMissionEffects(
     slots: [...p.slots],
   }));
   let locationSecurityStates = state.locationSecurityStates.map((s) => ({ ...s }));
+  let locationIntelStates = state.locationIntelStates.map((s) => ({ ...s }));
   const events: ActivityEvent[] = [];
   let activeSuccessModifiers = state.activeSuccessModifiers.map((m) => ({ ...m }));
 
@@ -806,7 +828,12 @@ export function applyMissionEffects(
       player = r.player;
       events.push(...r.events);
     } else if (effect.kind === "steal_all_revealed_assets_at_location") {
-      const r = applyStealAllRevealedAssetsAtLocation(locationAssetSlots, target, player);
+      const r = applyStealAllRevealedAssetsAtLocation(
+        locationAssetSlots,
+        target,
+        player,
+        intelLevelForLocation(locationIntelStates, missionTargetLocationId(target) ?? ""),
+      );
       locationAssetSlots = r.placements;
       player = r.player;
       events.push(...r.events);
@@ -845,6 +872,28 @@ export function applyMissionEffects(
         effect.delta,
         effect.locationLevel,
       );
+    } else if (effect.kind === "intel_level_delta") {
+      locationIntelStates = applyIntelLevelDelta(
+        locationIntelStates,
+        missionTargetLocationId(target),
+        effect.delta,
+      );
+    } else if (effect.kind === "intel_level_delta_global") {
+      locationIntelStates = applyIntelLevelDeltaGlobal(locationIntelStates, effect.delta);
+    } else if (effect.kind === "intel_level_delta_by_location_type") {
+      locationIntelStates = applyIntelLevelDeltaByLocationType(
+        catalog,
+        locationIntelStates,
+        effect.delta,
+        effect.locationType,
+      );
+    } else if (effect.kind === "intel_level_delta_by_location_level") {
+      locationIntelStates = applyIntelLevelDeltaByLocationLevel(
+        catalog,
+        locationIntelStates,
+        effect.delta,
+        effect.locationLevel,
+      );
     } else if (effect.kind === "remove_trait_from_all_minions") {
       player = applyRemoveTraitFromAllMinions(player, effect.traitId);
     } else if (effect.kind === "add_trait_to_random_minions") {
@@ -874,5 +923,12 @@ export function applyMissionEffects(
   }
 
   player = { ...player, infamy: clampInfamy(player.infamy) };
-  return { player, locationAssetSlots, locationSecurityStates, events, activeSuccessModifiers };
+  return {
+    player,
+    locationAssetSlots,
+    locationSecurityStates,
+    locationIntelStates,
+    events,
+    activeSuccessModifiers,
+  };
 }
