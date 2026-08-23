@@ -306,6 +306,11 @@ export type Asset = {
 
 export type OmegaPlanStage = {
   missionIds: [string, string, string];
+  /**
+   * How many of this phase's three missions must succeed before the phase completes
+   * (designer-authored, 1–3). Absent in JSON means all three (legacy behavior).
+   */
+  requiredMissions: number;
 };
 
 export type OmegaPlanTemplate = {

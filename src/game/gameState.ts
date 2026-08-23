@@ -57,7 +57,12 @@ import {
   describeMissionTemplateEffects,
   orderedMissionEffects,
 } from "./missionEffects";
-import { getOmegaPlanById, omegaSlotMissionId, pickRandomOmegaPlanId } from "./omegaPlan";
+import {
+  getOmegaPlanById,
+  isOmegaStageComplete,
+  omegaSlotMissionId,
+  pickRandomOmegaPlanId,
+} from "./omegaPlan";
 import { getLairById, pendingLairUpgradeMissionIds, pickRandomLairId } from "./lair";
 import { nextMonotonicWantedTierIndex } from "./wantedLevel";
 
@@ -204,6 +209,9 @@ export type MinionRehireQueueEntry = {
   availableFromTurn: number;
 };
 
+/** Per-slot success flags for one Omega phase row (three mission slots). */
+export type OmegaSlotFlags = [boolean, boolean, boolean];
+
 export type GameState = {
   phase: TurnPhase;
   turnNumber: number;
@@ -263,8 +271,11 @@ export type GameState = {
   completedLairUpgradeMissionIds: string[];
   /** Current Omega plan phase row (0–2) used for which missions may be assigned from the plan. */
   activeOmegaStageIndex: number;
-  /** Per-slot success flags for the current row (reset when the row completes and the stage advances). */
-  omegaRowProgress: [boolean, boolean, boolean];
+  /**
+   * Per-slot success flags for every Omega phase (`[stage][slot]`). Kept for the whole run so
+   * a phase cleared with fewer than three successes still shows which slots were actually done.
+   */
+  omegaStageProgress: [OmegaSlotFlags, OmegaSlotFlags, OmegaSlotFlags];
   /**
    * Index into `ContentCatalog.wantedLevels`; only increases (monotonic with heat exposure).
    * Recomputed at end of each `executePlan` from final `player.heat`.
@@ -661,7 +672,11 @@ export function createInitialGameState(
     lairMissionIds,
     completedLairUpgradeMissionIds: [],
     activeOmegaStageIndex: 0,
-    omegaRowProgress: [false, false, false],
+    omegaStageProgress: [
+      [false, false, false],
+      [false, false, false],
+      [false, false, false],
+    ],
     wantedLevelTierIndex: 0,
     currentEventTemplateId: pickRandomEventTemplateId(catalog, rng),
     activeSuccessModifiers: [],
@@ -1423,11 +1438,9 @@ export function executePlan(
   }));
 
   const stageAtExecute = state.activeOmegaStageIndex;
-  let omegaRowProgress: [boolean, boolean, boolean] = [
-    state.omegaRowProgress[0],
-    state.omegaRowProgress[1],
-    state.omegaRowProgress[2],
-  ];
+  const omegaStageProgress = state.omegaStageProgress.map(
+    (row) => [row[0], row[1], row[2]] as OmegaSlotFlags,
+  ) as [OmegaSlotFlags, OmegaSlotFlags, OmegaSlotFlags];
 
   for (const am of updated) {
     if (am.turnsRemaining > 0) {
@@ -1709,22 +1722,32 @@ export function executePlan(
       }
     }
 
+    /* Credit the mission's own phase: a phase can clear before its slower slots resolve. */
     if (
       success &&
       am.missionSource === "omega" &&
-      am.omegaStageIndex === stageAtExecute &&
+      am.omegaStageIndex !== null &&
+      am.omegaStageIndex >= 0 &&
+      am.omegaStageIndex <= 2 &&
       am.omegaSlotIndex !== null &&
       am.omegaSlotIndex >= 0 &&
       am.omegaSlotIndex <= 2
     ) {
-      omegaRowProgress[am.omegaSlotIndex] = true;
+      omegaStageProgress[am.omegaStageIndex]![am.omegaSlotIndex] = true;
     }
   }
 
+  /* A phase clears at its designer-authored `requiredMissions`, not always all three. */
   let activeOmegaStageIndex = state.activeOmegaStageIndex;
-  if (omegaRowProgress[0] && omegaRowProgress[1] && omegaRowProgress[2]) {
+  const activePlan =
+    state.activeOmegaPlanId !== null
+      ? getOmegaPlanById(catalog, state.activeOmegaPlanId)
+      : undefined;
+  if (
+    activePlan !== undefined &&
+    isOmegaStageComplete(activePlan, stageAtExecute, omegaStageProgress[stageAtExecute]!)
+  ) {
     activeOmegaStageIndex = Math.min(2, stageAtExecute + 1);
-    omegaRowProgress = [false, false, false];
   }
 
   player = {
@@ -1835,7 +1858,7 @@ export function executePlan(
       availableMinionTemplateIds,
       activityLog,
       activeOmegaStageIndex,
-      omegaRowProgress,
+      omegaStageProgress,
       locationSecurityStates,
       locationIntelStates,
       locationAssetSlots,

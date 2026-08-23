@@ -20,6 +20,7 @@ import type {
   WantedLevelTier,
 } from "./types";
 import { DEFAULT_BALANCE } from "./types";
+import { OMEGA_MISSIONS_PER_STAGE } from "./omegaPlan";
 
 /* ------------------------------------------------------------------------------------------------
  * Content manifest — the single source of truth for which slices exist and where they live.
@@ -384,6 +385,8 @@ export const mapTemplateSchema: z.ZodType<MapTemplate> = z.object({
 
 const omegaPlanStageSchema = z.object({
   missionIds: z.array(z.string().min(1)).length(3),
+  /** Omitted means all three missions are required (pre-`requiredMissions` content). */
+  requiredMissions: z.number().int().min(1).max(3).optional(),
 });
 
 export const omegaPlanTemplateSchema = z.object({
@@ -589,6 +592,7 @@ function assertOmegaPlanStages(
     const s = stages[i]!;
     return {
       missionIds: [s.missionIds[0]!, s.missionIds[1]!, s.missionIds[2]!],
+      requiredMissions: s.requiredMissions ?? OMEGA_MISSIONS_PER_STAGE,
     };
   };
   return [tuple(0), tuple(1), tuple(2)];

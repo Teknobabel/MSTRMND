@@ -6,7 +6,15 @@ import {
   createInitialGameState,
   executePlan,
 } from "./gameState";
-import { fixtureCatalog, makeMinionInstance, seededRng, sequentialIds } from "./testFixtures";
+import { parseCatalog } from "./contentSchema";
+import type { ContentCatalog } from "./types";
+import {
+  fixtureCatalog,
+  makeMinionInstance,
+  rawFixtureSlices,
+  seededRng,
+  sequentialIds,
+} from "./testFixtures";
 
 const catalog = fixtureCatalog();
 
@@ -378,5 +386,131 @@ describe("assignMission / cancelMission", () => {
     if (result.ok) {
       expect(result.value.eventOfferEngagedThisTurn).toBe(true);
     }
+  });
+});
+
+describe("omega phase completion", () => {
+  /** Catalog whose omega plan phases each clear at `requiredMissions` successes. */
+  function catalogWithRequired(required: number | undefined): ContentCatalog {
+    const raw = rawFixtureSlices();
+    const plan = raw.omegaPlans[0] as Record<string, unknown>;
+    plan.stages = (plan.stages as Record<string, unknown>[]).map((stage) => ({
+      ...stage,
+      ...(required === undefined ? {} : { requiredMissions: required }),
+    }));
+    return parseCatalog(raw);
+  }
+
+  /** State with `count` omega missions from phase 0 about to resolve successfully. */
+  function stateWithOmegaMissions(cat: ContentCatalog, count: number): GameState {
+    const state = createInitialGameState(cat, seededRng(1));
+    return {
+      ...state,
+      locationRequiredTraits: { "loc-a": [], "loc-b": [] },
+      locationSecurityTraits: { "loc-a": [], "loc-b": [] },
+      player: {
+        ...state.player,
+        maxConcurrentMissions: 3,
+        minions: Array.from({ length: count }, (_, i) =>
+          makeMinionInstance(`mi-${i}`, "m-hero", ["t-req"]),
+        ),
+      },
+      activeMissions: Array.from({ length: count }, (_, i) =>
+        activeMission({
+          id: `am-${i}`,
+          missionSource: "omega",
+          omegaStageIndex: 0,
+          omegaSlotIndex: i,
+          participantInstanceIds: [`mi-${i}`],
+        }),
+      ),
+    };
+  }
+
+  it("defaults to requiring all three missions when content omits requiredMissions", () => {
+    const cat = catalogWithRequired(undefined);
+    expect(cat.omegaPlans[0]!.stages.map((s) => s.requiredMissions)).toEqual([3, 3, 3]);
+
+    const twoDone = executePlan(stateWithOmegaMissions(cat, 2), cat, () => 0);
+    expect(twoDone.ok).toBe(true);
+    if (twoDone.ok) {
+      expect(twoDone.value.activeOmegaStageIndex).toBe(0);
+      expect(twoDone.value.omegaStageProgress[0]).toEqual([true, true, false]);
+    }
+
+    const allDone = executePlan(stateWithOmegaMissions(cat, 3), cat, () => 0);
+    expect(allDone.ok).toBe(true);
+    if (allDone.ok) {
+      expect(allDone.value.activeOmegaStageIndex).toBe(1);
+    }
+  });
+
+  it("advances the phase at requiredMissions successes", () => {
+    const cat = catalogWithRequired(2);
+    const result = executePlan(stateWithOmegaMissions(cat, 2), cat, () => 0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.activeOmegaStageIndex).toBe(1);
+    /* Per-slot flags persist so the UI can tell a cleared slot from a skipped one. */
+    expect(result.value.omegaStageProgress[0]).toEqual([true, true, false]);
+    expect(result.value.omegaStageProgress[1]).toEqual([false, false, false]);
+  });
+
+  it("does not advance when fewer than requiredMissions succeed", () => {
+    const cat = catalogWithRequired(2);
+    const result = executePlan(stateWithOmegaMissions(cat, 1), cat, () => 0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.activeOmegaStageIndex).toBe(0);
+    expect(result.value.omegaStageProgress[0]).toEqual([true, false, false]);
+  });
+
+  it("credits a late mission to its own phase without re-advancing", () => {
+    const cat = catalogWithRequired(2);
+    const state = stateWithOmegaMissions(cat, 1);
+    const carried: GameState = {
+      ...state,
+      activeOmegaStageIndex: 1,
+      omegaStageProgress: [[true, true, false], [false, false, false], [false, false, false]],
+      activeMissions: [
+        activeMission({
+          id: "am-late",
+          missionSource: "omega",
+          omegaStageIndex: 0,
+          omegaSlotIndex: 2,
+          participantInstanceIds: ["mi-0"],
+        }),
+      ],
+    };
+    const result = executePlan(carried, cat, () => 0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.omegaStageProgress[0]).toEqual([true, true, true]);
+    expect(result.value.activeOmegaStageIndex).toBe(1);
+  });
+
+  it("ignores failed omega missions", () => {
+    const cat = catalogWithRequired(1);
+    const state = stateWithOmegaMissions(cat, 1);
+    const failing: GameState = {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [makeMinionInstance("mi-0", "m-buddy", [])],
+      },
+    };
+    const result = executePlan(failing, cat, () => 0.99);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.activeOmegaStageIndex).toBe(0);
+    expect(result.value.omegaStageProgress[0]).toEqual([false, false, false]);
   });
 });
