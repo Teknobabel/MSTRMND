@@ -1,9 +1,21 @@
 import { DEFAULT_BALANCE } from "../../game/types";
 import type { DynamicTraitModifiers } from "../../game/types";
 import type { FormCtx } from "./context";
-import { el, fieldset, formRow, hint, numberInput, num, type Row } from "../widgets";
+import {
+  el,
+  fieldset,
+  formRow,
+  hint,
+  listEditor,
+  numberInput,
+  num,
+  type Row,
+} from "../widgets";
 
-type ScalarKey = Exclude<keyof typeof DEFAULT_BALANCE, "dynamicTraitModifiers">;
+type ScalarKey = Exclude<
+  keyof typeof DEFAULT_BALANCE,
+  "dynamicTraitModifiers" | "hireLevelInfamyThresholds"
+>;
 
 type BalanceFieldDef = {
   key: ScalarKey;
@@ -55,13 +67,13 @@ const GROUPS: BalanceGroup[] = [
     ],
   },
   {
-    legend: "Infamy & risk",
+    legend: "Infamy, heat & risk",
     fields: [
       {
         key: "infamySuccessDelta",
         label: "Infamy on success",
         tooltip:
-          "Infamy change when a mission SUCCEEDS. Keep it negative so clean operations lower the heat; set it to 0 (or positive) to make every action raise the organization's profile.",
+          "Infamy change when a mission SUCCEEDS. Infamy is the score the player is building — keep it positive so successful operations grow the organization's legend.",
         min: -100,
         max: 100,
       },
@@ -69,7 +81,23 @@ const GROUPS: BalanceGroup[] = [
         key: "infamyFailureDelta",
         label: "Infamy on failure",
         tooltip:
-          "Infamy gained when a mission FAILS. Higher values escalate the wanted level faster, which spawns opposing agents sooner. The wanted level never goes back down.",
+          "Infamy change when a mission FAILS. Usually 0; make it negative if botched jobs should cost the organization its reputation.",
+        min: -100,
+        max: 100,
+      },
+      {
+        key: "heatSuccessDelta",
+        label: "Heat on success",
+        tooltip:
+          "Heat change when a mission SUCCEEDS. Usually 0 so clean operations stay quiet; make it positive if even successful jobs should attract attention, or negative to let wins cool things off.",
+        min: -100,
+        max: 100,
+      },
+      {
+        key: "heatFailureDelta",
+        label: "Heat on failure",
+        tooltip:
+          "Heat gained when a mission FAILS. Heat drives the wanted level, so higher values escalate it faster and spawn opposing agents sooner. The wanted level never goes back down.",
         min: -100,
         max: 100,
       },
@@ -223,6 +251,56 @@ const GROUPS: BalanceGroup[] = [
   },
 ];
 
+const HIRE_THRESHOLDS_HINT =
+  "Infamy the player must reach before the hire pool starts offering minions of each level. " +
+  "Level 1 recruits are always on offer; the first row unlocks level 2, the second level 3, and " +
+  "so on. Values must ascend. A minion whose Starting level sits above the last row can never be " +
+  "offered — add another row for it.";
+
+/** Ascending infamy gates for hire-pool `startingLevel`; row i unlocks level i + 2. */
+function hireThresholdRows(ctx: FormCtx): HTMLElement {
+  const raw = ctx.row.hireLevelInfamyThresholds;
+  const values = Array.isArray(raw)
+    ? raw.filter((v): v is number => typeof v === "number")
+    : [...DEFAULT_BALANCE.hireLevelInfamyThresholds];
+
+  /* listEditor builds rows in order, so a counter labels them even when values repeat. */
+  let rowIndex = 0;
+  const editor = listEditor(
+    values,
+    (next) =>
+      ctx.update((row) => {
+        row.hireLevelInfamyThresholds = next;
+      }),
+    (item, replace) => {
+      const level = rowIndex + 2;
+      rowIndex += 1;
+      const wrap = el("span", "ed-inline-field");
+      wrap.appendChild(el("span", "", `Level ${level} at infamy`));
+      wrap.appendChild(numberInput(item, replace, { min: 1, max: 100 }));
+      return wrap;
+    },
+    () => {
+      const last = values.length > 0 ? values[values.length - 1]! : 0;
+      return Math.min(100, last + 20);
+    },
+    "+ Add level",
+  );
+
+  const cap = values.length + 1;
+  const summary = el(
+    "div",
+    "ed-preview-result",
+    values.length === 0
+      ? "no thresholds → only level 1 minions are ever offered"
+      : `infamy 0 → level 1 · ${values
+          .map((v, i) => `infamy ${v} → level ${i + 2}`)
+          .join(" · ")}   (cap: level ${cap})`,
+  );
+
+  return fieldset("Hire pool level gates (infamy)", editor, summary, hint(HIRE_THRESHOLDS_HINT));
+}
+
 const DYNAMIC_MODIFIER_TOOLTIPS: Record<keyof DynamicTraitModifiers, string> = {
   friend: "Success bonus when a minion's Friend is on the same mission.",
   lover: "Success bonus when a minion's Lover is on the same mission (upgraded from Friend).",
@@ -277,6 +355,8 @@ export function renderBalanceForm(container: HTMLElement, ctx: FormCtx): void {
     }
     container.appendChild(fieldset(group.legend, ...rows));
   }
+
+  container.appendChild(hireThresholdRows(ctx));
 
   /* Relationship modifiers (nested object). */
   const modifiers = ctx.row.dynamicTraitModifiers;

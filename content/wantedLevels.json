@@ -2,31 +2,31 @@
   {
     "name": "Unknown",
     "maxAgents": 0,
-    "minInfamy": 0
+    "minHeat": 0
   },
   {
     "name": "Nuisance",
     "maxAgents": 1,
-    "minInfamy": 20
+    "minHeat": 20
   },
   {
     "name": "Menace",
     "maxAgents": 2,
-    "minInfamy": 40
+    "minHeat": 40
   },
   {
     "name": "Wanted",
     "maxAgents": 3,
-    "minInfamy": 60
+    "minHeat": 60
   },
   {
     "name": "Villain",
     "maxAgents": 4,
-    "minInfamy": 80
+    "minHeat": 80
   },
   {
     "name": "Mastermind",
     "maxAgents": 5,
-    "minInfamy": 99
+    "minHeat": 99
   }
 ]

@@ -84,8 +84,12 @@ describe("balance knobs steer the success formula", () => {
 });
 
 describe("balance knobs steer executePlan and run setup", () => {
-  it("applies modified infamy deltas and XP pacing", () => {
-    const catalog = catalogWithBalance({ infamyFailureDelta: 25, minionXpToLevel: 1 });
+  it("applies modified infamy/heat deltas and XP pacing", () => {
+    const catalog = catalogWithBalance({
+      infamyFailureDelta: 25,
+      heatFailureDelta: 30,
+      minionXpToLevel: 1,
+    });
     let state = createInitialGameState(catalog, seededRng(1));
     const am: ActiveMission = {
       id: "am-1",
@@ -116,6 +120,7 @@ describe("balance knobs steer executePlan and run setup", () => {
       return;
     }
     expect(result.value.player.infamy).toBe(25);
+    expect(result.value.player.heat).toBe(30);
     /* minionXpToLevel 1 ⇒ a single mission levels the participant up. */
     const mi1 = result.value.player.minions.find((m) => m.instanceId === "mi-1");
     expect(mi1?.currentLevel).toBe(2);

@@ -153,8 +153,8 @@ export function rawFixtureSlices(): FixtureSlices {
     organizationNames: ["Test Syndicate"],
     playerProfiles: [{ name: "Tester", profilePic: "/assets/test.png" }],
     wantedLevels: [
-      { minInfamy: 0, name: "Shadow", maxAgents: 0 },
-      { minInfamy: 5, name: "Noticed", maxAgents: 2 },
+      { minHeat: 0, name: "Shadow", maxAgents: 0 },
+      { minHeat: 5, name: "Noticed", maxAgents: 2 },
     ],
     /* Empty ⇒ every knob takes its DEFAULT_BALANCE value (legacy behavior). */
     balance: {},

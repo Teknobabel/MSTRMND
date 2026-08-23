@@ -16,7 +16,12 @@ import type {
   MissionTemplate,
 } from "./types";
 import { DEFAULT_BALANCE, isOccupiedAssetSlot } from "./types";
-import { awardMissionResolutionExperience, createMinionFromTemplate } from "./minion";
+import {
+  awardMissionResolutionExperience,
+  createMinionFromTemplate,
+  maxHireableStartingLevel,
+  templateStartingLevel,
+} from "./minion";
 import {
   countOpposingAgentsAtLocationFromData,
   revealAllOpposingAgentsAtLocation,
@@ -61,8 +66,10 @@ export type TurnPhase = "main" | "resolve" | "summary";
 export type PlayerState = {
   commandPoints: number;
   maxCommandPoints: number;
-  /** 0–100 */
+  /** 0–100; the reputation the player builds (raised by mission success). */
   infamy: number;
+  /** 0–100; law-enforcement attention (raised by mission failure). Drives the wanted level. */
+  heat: number;
   minions: MinionInstance[];
   /** Asset catalog id → quantity owned */
   assets: Record<string, number>;
@@ -114,6 +121,9 @@ export type ActivityEventMissionCompleted = {
   infamyDelta: number;
   /** Baseline infamy from success/failure before template effects. */
   baselineInfamyDelta: number;
+  heatDelta: number;
+  /** Baseline heat from success/failure before template effects. */
+  baselineHeatDelta: number;
   /** Template effect lines in resolution order (reveal/steal first, then the rest). */
   templateEffectDescriptions: string[];
   /**
@@ -256,8 +266,8 @@ export type GameState = {
   /** Per-slot success flags for the current row (reset when the row completes and the stage advances). */
   omegaRowProgress: [boolean, boolean, boolean];
   /**
-   * Index into `ContentCatalog.wantedLevels`; only increases (monotonic with infamy exposure).
-   * Recomputed at end of each `executePlan` from final `player.infamy`.
+   * Index into `ContentCatalog.wantedLevels`; only increases (monotonic with heat exposure).
+   * Recomputed at end of each `executePlan` from final `player.heat`.
    */
   wantedLevelTierIndex: number;
   /** Rotating global event offer (`EventTemplate.id`); null when `catalog.events` is empty. */
@@ -403,6 +413,10 @@ export function clampInfamy(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
+export function clampHeat(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
 /**
  * After a mission finishes at `locationId`, raise that location's security by
  * `catalog.balance.securityGainPerResolvedMission` (cap = location level).
@@ -520,22 +534,35 @@ function initializeLocationAssetPlacements(
 }
 
 /**
- * Random distinct minion template ids (without replacement), up to `count`.
- * Optionally excludes ids (e.g. templates already on the roster).
+ * Hire offers for the Main Phase: distinct templates the player does not already have, gated to
+ * `maxHireableStartingLevel(player.infamy, ...)`, shuffled and cut to `count`. Infamy is the
+ * player's rising reputation, so better recruits come looking as it climbs.
+ *
+ * The gate never starves the pool: if nothing sits at or under the cap (every low-level template
+ * is already hired), the draw falls back to the lowest `startingLevel` still unhired so the
+ * player can always recruit someone.
  */
-export function pickRandomMinionTemplateIds(
+export function pickHireOfferTemplateIds(
   catalog: ContentCatalog,
   count: number,
   rng: Rng,
-  excludeTemplateIds?: ReadonlySet<string>,
+  player: PlayerState,
 ): string[] {
-  let ids = catalog.minions.map((m) => m.id);
-  if (excludeTemplateIds && excludeTemplateIds.size > 0) {
-    ids = ids.filter((id) => !excludeTemplateIds.has(id));
-  }
-  if (ids.length === 0 || count <= 0) {
+  const owned = ownedMinionTemplateIds(player);
+  const candidates = catalog.minions.filter((m) => !owned.has(m.id));
+  if (candidates.length === 0 || count <= 0) {
     return [];
   }
+  const cap = maxHireableStartingLevel(
+    player.infamy,
+    catalog.balance.hireLevelInfamyThresholds,
+  );
+  let eligible = candidates.filter((m) => templateStartingLevel(m) <= cap);
+  if (eligible.length === 0) {
+    const lowest = Math.min(...candidates.map(templateStartingLevel));
+    eligible = candidates.filter((m) => templateStartingLevel(m) === lowest);
+  }
+  const ids = eligible.map((m) => m.id);
   shuffleInPlace(ids, rng);
   return ids.slice(0, Math.min(count, ids.length));
 }
@@ -591,6 +618,7 @@ export function createInitialGameState(
     commandPoints: catalog.balance.startingMaxCommandPoints,
     maxCommandPoints: catalog.balance.startingMaxCommandPoints,
     infamy: 0,
+    heat: 0,
     minions: [],
     assets: assetsFromLair,
     maxRosterSize: catalog.balance.startingMaxRosterSize,
@@ -613,11 +641,11 @@ export function createInitialGameState(
     playerProfilePic: playerProfile.profilePic,
     player,
     activeMissions: [],
-    availableMinionTemplateIds: pickRandomMinionTemplateIds(
+    availableMinionTemplateIds: pickHireOfferTemplateIds(
       catalog,
-      Math.min(player.maxHireOffers, catalog.minions.length),
+      player.maxHireOffers,
       rng,
-      ownedMinionTemplateIds(player),
+      player,
     ),
     minionRehireQueue: [],
     activityLog: [],
@@ -893,12 +921,11 @@ export function rerollHireOffers(
       },
     };
   }
-  const ownedIds = ownedMinionTemplateIds(state.player);
-  const availableMinionTemplateIds = pickRandomMinionTemplateIds(
+  const availableMinionTemplateIds = pickHireOfferTemplateIds(
     catalog,
     state.player.maxHireOffers,
     rng,
-    ownedIds,
+    state.player,
   );
   return {
     ok: true,
@@ -1498,12 +1525,17 @@ export function executePlan(
     const roll = Math.floor(rng() * 100);
     const success = roll < pct;
     const infamyBefore = player.infamy;
+    const heatBefore = player.heat;
     const baselineInfamy = success
       ? catalog.balance.infamySuccessDelta
       : catalog.balance.infamyFailureDelta;
+    const baselineHeat = success
+      ? catalog.balance.heatSuccessDelta
+      : catalog.balance.heatFailureDelta;
     player = {
       ...player,
       infamy: player.infamy + baselineInfamy,
+      heat: player.heat + baselineHeat,
     };
 
     const effectList = success
@@ -1577,6 +1609,7 @@ export function executePlan(
     }
 
     const infamyDeltaTotal = player.infamy - infamyBefore;
+    const heatDeltaTotal = player.heat - heatBefore;
 
     const templateEffectDescriptions = describeMissionTemplateEffects(effectList);
 
@@ -1591,6 +1624,8 @@ export function executePlan(
       successChancePercent: pct,
       infamyDelta: infamyDeltaTotal,
       baselineInfamyDelta: baselineInfamy,
+      heatDelta: heatDeltaTotal,
+      baselineHeatDelta: baselineHeat,
       templateEffectDescriptions,
       criticalFailure: isCriticalFailure,
       ...(dynamicTraitChanges !== undefined
@@ -1697,17 +1732,17 @@ export function executePlan(
     minions: state.player.minions.map((m) => instanceById.get(m.instanceId) ?? m),
   };
 
-  const ownedIds = ownedMinionTemplateIds(player);
-  const availableMinionTemplateIds = pickRandomMinionTemplateIds(
+  /* Uses post-resolve infamy, so a mission that crosses a threshold widens this same draw. */
+  const availableMinionTemplateIds = pickHireOfferTemplateIds(
     catalog,
     player.maxHireOffers,
     rng,
-    ownedIds,
+    player,
   );
 
   const wantedLevelTierIndex = nextMonotonicWantedTierIndex(
     state.wantedLevelTierIndex,
-    player.infamy,
+    player.heat,
     catalog.wantedLevels,
   );
 

@@ -48,6 +48,7 @@ const EFFECT_FIELD_DEFS: Record<EffectKind, FieldDef[]> = {
   add_random_participant_traits: [{ key: "traitIds", input: "traitIds" }],
   add_all_participant_traits: [{ key: "traitIds", input: "traitIds" }],
   infamy_delta: [{ key: "amount", input: "int", min: -100, max: 100, def: 5 }],
+  heat_delta: [{ key: "amount", input: "int", min: -100, max: 100, def: 5 }],
   max_concurrent_missions_delta: [DELTA],
   max_roster_size_delta: [DELTA],
   max_hire_offers_delta: [DELTA],

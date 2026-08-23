@@ -241,6 +241,10 @@ export const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnio
     amount: z.number().int().min(-100).max(100),
   }),
   z.object({
+    kind: z.literal("heat_delta"),
+    amount: z.number().int().min(-100).max(100),
+  }),
+  z.object({
     kind: z.literal("max_concurrent_missions_delta"),
     delta: deltaSchema,
   }),
@@ -404,7 +408,7 @@ export const playerProfileSchema: z.ZodType<PlayerProfile> = z.object({
 });
 
 export const wantedLevelTierSchema: z.ZodType<WantedLevelTier> = z.object({
-  minInfamy: z.number().int().min(0).max(100),
+  minHeat: z.number().int().min(0).max(100),
   name: z.string().min(1),
   maxAgents: z.number().int().min(0),
 });
@@ -434,6 +438,8 @@ export const balanceConfigSchema = z.object({
   dynamicTraitRollPercent: balanceInt(0, 100, DEFAULT_BALANCE.dynamicTraitRollPercent),
   infamySuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamySuccessDelta),
   infamyFailureDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamyFailureDelta),
+  heatSuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.heatSuccessDelta),
+  heatFailureDelta: balanceInt(-100, 100, DEFAULT_BALANCE.heatFailureDelta),
   injuryChancePerAgentPercent: balanceInt(0, 100, DEFAULT_BALANCE.injuryChancePerAgentPercent),
   startingMaxCommandPoints: balanceInt(1, 99, DEFAULT_BALANCE.startingMaxCommandPoints),
   rerollHireOffersCp: balanceInt(0, 99, DEFAULT_BALANCE.rerollHireOffersCp),
@@ -447,6 +453,10 @@ export const balanceConfigSchema = z.object({
   ),
   eventMaxParticipants: balanceInt(1, 12, DEFAULT_BALANCE.eventMaxParticipants),
   fireRehireCooldownTurns: balanceInt(0, 99, DEFAULT_BALANCE.fireRehireCooldownTurns),
+  hireLevelInfamyThresholds: z
+    .array(z.number().int().min(1).max(100))
+    .max(20)
+    .default([...DEFAULT_BALANCE.hireLevelInfamyThresholds]),
   minionXpPerMission: balanceInt(0, 99, DEFAULT_BALANCE.minionXpPerMission),
   minionXpToLevel: balanceInt(1, 99, DEFAULT_BALANCE.minionXpToLevel),
   assetsPerLocationMin: balanceInt(0, 10, DEFAULT_BALANCE.assetsPerLocationMin),
@@ -1345,23 +1355,52 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
     });
   }
 
+  if (s.balance !== null) {
+    const thresholds = s.balance.hireLevelInfamyThresholds;
+    for (let i = 1; i < thresholds.length; i += 1) {
+      if (thresholds[i]! <= thresholds[i - 1]!) {
+        issues.push({
+          slice: "balance",
+          entityId: null,
+          path: `hireLevelInfamyThresholds[${i}]`,
+          message: `hireLevelInfamyThresholds must be strictly ascending (${thresholds[i]} vs prior ${thresholds[i - 1]})`,
+        });
+      }
+    }
+    /* A template above the top gated level is unreachable: no infamy ever unlocks it. */
+    if (s.minions !== null) {
+      const maxGatedLevel = 1 + thresholds.length;
+      for (const m of s.minions) {
+        const level = m.startingLevel ?? 1;
+        if (level > maxGatedLevel) {
+          issues.push({
+            slice: "minions",
+            entityId: m.id,
+            path: "startingLevel",
+            message: `startingLevel ${level} can never be offered: hireLevelInfamyThresholds only unlocks up to level ${maxGatedLevel} (add ${level - maxGatedLevel} more threshold(s))`,
+          });
+        }
+      }
+    }
+  }
+
   if (s.wantedLevels !== null && s.wantedLevels.length > 0) {
     const arr = s.wantedLevels;
-    if (arr[0]!.minInfamy !== 0) {
+    if (arr[0]!.minHeat !== 0) {
       issues.push({
         slice: "wantedLevels",
         entityId: null,
-        path: "[0].minInfamy",
-        message: `First tier must have minInfamy 0 (got ${arr[0]!.minInfamy})`,
+        path: "[0].minHeat",
+        message: `First tier must have minHeat 0 (got ${arr[0]!.minHeat})`,
       });
     }
     for (let i = 1; i < arr.length; i += 1) {
-      if (arr[i]!.minInfamy <= arr[i - 1]!.minInfamy) {
+      if (arr[i]!.minHeat <= arr[i - 1]!.minHeat) {
         issues.push({
           slice: "wantedLevels",
           entityId: null,
-          path: `[${i}].minInfamy`,
-          message: `minInfamy must be strictly ascending (${arr[i]!.minInfamy} vs prior ${arr[i - 1]!.minInfamy})`,
+          path: `[${i}].minHeat`,
+          message: `minHeat must be strictly ascending (${arr[i]!.minHeat} vs prior ${arr[i - 1]!.minHeat})`,
         });
       }
       if (arr[i]!.maxAgents < arr[i - 1]!.maxAgents) {

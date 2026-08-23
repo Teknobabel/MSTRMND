@@ -327,6 +327,20 @@ textarea {
   flex: 1;
 }
 
+/* Label + number input sharing one list row (e.g. hire-pool level gates). */
+.ed-inline-field {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.ed-inline-field > input {
+  flex: 1;
+  min-width: 0;
+}
+
 .ed-entity-issues {
   border: 1px solid var(--err);
   border-radius: 6px;

@@ -32,6 +32,43 @@ function dynamicTraitsFromStarting(
   return out;
 }
 
+/** Level a template's hires start at (`startingLevel`, floored at 1). */
+export function templateStartingLevel(template: MinionTemplate): number {
+  return Math.max(1, template.startingLevel ?? 1);
+}
+
+/**
+ * Highest `startingLevel` the hire pool will offer at `infamy`. Level 1 is always available;
+ * each threshold the player has reached unlocks one more level, so with `[15, 35, 60, 85]`
+ * an infamy of 40 offers templates up to level 3.
+ */
+export function maxHireableStartingLevel(
+  infamy: number,
+  thresholds: readonly number[],
+): number {
+  let level = 1;
+  for (const t of thresholds) {
+    if (infamy >= t) {
+      level += 1;
+    }
+  }
+  return level;
+}
+
+/** Infamy needed for the next `startingLevel` to unlock, or null when all levels are unlocked. */
+export function nextHireLevelInfamyThreshold(
+  infamy: number,
+  thresholds: readonly number[],
+): number | null {
+  let best: number | null = null;
+  for (const t of thresholds) {
+    if (infamy < t && (best === null || t < best)) {
+      best = t;
+    }
+  }
+  return best;
+}
+
 export function createMinionFromTemplate(
   template: MinionTemplate,
   instanceId: string,

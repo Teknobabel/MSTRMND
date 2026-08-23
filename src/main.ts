@@ -63,6 +63,7 @@ import {
 import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
 import { getOmegaPlanById } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
+import { maxHireableStartingLevel, nextHireLevelInfamyThreshold } from "./game/minion";
 import { initNavigation } from "./navigation";
 import { initStageScale } from "./ui/stageScale";
 import {
@@ -120,6 +121,8 @@ const ICON_EYE =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
 const ICON_PERSON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4.5 21v-1.5a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6V21"/></svg>';
+const ICON_FLAME =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5s5.5 4.4 5.5 9.4a5.5 5.5 0 0 1-11 0c0-2 1-3.6 2-4.8.3 1.4 1.1 2.3 2 2.3 1.3 0 1.8-1.3 1.8-3 0-1.4-.3-2.7-.3-3.9Z"/></svg>';
 const ICON_CROSSHAIR =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>';
 const ICON_SKULL_FILLED =
@@ -642,6 +645,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const minionsAvailableEl = req<HTMLElement>("minions-available-list");
   const minionsRosterHeading = req<HTMLElement>("minions-roster-heading");
   const minionsAvailableHeading = req<HTMLElement>("minions-available-heading");
+  const minionsHireGateEl = req<HTMLElement>("minions-hire-gate");
   const assignMissionSlotEl = req<HTMLElement>("assign-mission-slot");
   const assignTargetSlotEl = req<HTMLElement>("assign-target-slot");
   const assignTargetFieldEl = req<HTMLElement>("assign-target-field");
@@ -2141,6 +2145,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     minionsRosterHeading.textContent = `Your roster (${p.minions.length}/${p.maxRosterSize})`;
     minionsAvailableHeading.textContent = `Available to hire (${hireOfferCount})`;
 
+    /* Infamy gates which startingLevel templates the pool will offer (see pickHireOfferTemplateIds). */
+    const thresholds = content.balance.hireLevelInfamyThresholds;
+    const levelCap = maxHireableStartingLevel(p.infamy, thresholds);
+    const nextGate = nextHireLevelInfamyThreshold(p.infamy, thresholds);
+    minionsHireGateEl.textContent =
+      nextGate === null
+        ? `Recruiting up to level ${levelCap} — every tier unlocked.`
+        : `Recruiting up to level ${levelCap}. Level ${levelCap + 1} recruits appear at ${nextGate} infamy (now ${p.infamy}).`;
+
     minionsRosterEl.innerHTML = "";
     if (state.player.minions.length === 0) {
       const empty = document.createElement("p");
@@ -3275,22 +3288,24 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       return names.join(", ");
     }
 
+    function signedDelta(value: number): string {
+      return value >= 0 ? `+${value}` : String(value);
+    }
+
     function formatActivityEvent(ev: (typeof log)[number]["events"][number]): string {
       switch (ev.kind) {
         case "mission_completed": {
-          const inf =
-            ev.infamyDelta >= 0 ? `+${ev.infamyDelta}` : String(ev.infamyDelta);
+          const inf = signedDelta(ev.infamyDelta);
           const whereLabel = formatMissionTargetSummary(ev.target);
-          const baseline =
-            ev.baselineInfamyDelta >= 0
-              ? `+${ev.baselineInfamyDelta}`
-              : String(ev.baselineInfamyDelta);
+          const baseline = signedDelta(ev.baselineInfamyDelta);
+          const heat = signedDelta(ev.heatDelta);
+          const baselineHeat = signedDelta(ev.baselineHeatDelta);
           const templateFx =
             ev.templateEffectDescriptions.length > 0
               ? ev.templateEffectDescriptions.join("; ")
               : "none";
           const outcomeLabel = ev.success ? "Success" : "Failure";
-          let line = `${ev.missionName} @ ${whereLabel}: ${outcomeLabel} (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}. Outcome: baseline infamy ${baseline}. Mission effects: ${templateFx}.`;
+          let line = `${ev.missionName} @ ${whereLabel}: ${outcomeLabel} (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}, total heat change ${heat}. Outcome: baseline infamy ${baseline}, baseline heat ${baselineHeat}. Mission effects: ${templateFx}.`;
           if (ev.dynamicTraitChanges !== undefined && ev.dynamicTraitChanges.length > 0) {
             const dynParts = ev.dynamicTraitChanges.map((c) =>
               formatDynamicTraitActivityChange(content, state.player.minions, c),
@@ -3502,6 +3517,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         `${p.commandPoints} <small>/ ${p.maxCommandPoints}</small>`,
       ) +
       statBlockHtml(ICON_EYE, "Infamy", String(p.infamy)) +
+      statBlockHtml(ICON_FLAME, "Heat", String(p.heat), "stat-block--heat") +
       statBlockHtml(
         ICON_PERSON,
         "Minions",

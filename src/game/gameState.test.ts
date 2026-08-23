@@ -60,7 +60,7 @@ describe("executePlan", () => {
     }
   });
 
-  it("resolves a fully-matched mission: success, XP, +1 security, clamped infamy", () => {
+  it("resolves a fully-matched mission: success, XP, +1 security, +infamy, no heat", () => {
     let state = baseState(1);
     state = {
       ...state,
@@ -80,8 +80,11 @@ describe("executePlan", () => {
     expect(done).toHaveLength(1);
     expect(done[0]!.success).toBe(true);
     expect(done[0]!.successChancePercent).toBe(100);
-    expect(done[0]!.baselineInfamyDelta).toBe(-3);
-    expect(next.player.infamy).toBe(0); /* 0 − 3 clamped */
+    expect(done[0]!.baselineInfamyDelta).toBe(5);
+    expect(done[0]!.baselineHeatDelta).toBe(0);
+    expect(next.player.infamy).toBe(5);
+    expect(next.player.heat).toBe(0); /* success is clean: no heat */
+    expect(next.wantedLevelTierIndex).toBe(0); /* wanted level tracks heat, not infamy */
     expect(next.activeMissions).toHaveLength(0);
     const mi1 = next.player.minions.find((m) => m.instanceId === "mi-1");
     expect(mi1?.currentExperience).toBe(1);
@@ -90,7 +93,7 @@ describe("executePlan", () => {
     expect(next.phase).toBe("summary");
   });
 
-  it("on failure adds infamy and a tier increase spawns hidden opposing agents", () => {
+  it("on failure adds heat and a tier increase spawns hidden opposing agents", () => {
     let state = baseState(2);
     state = {
       ...state,
@@ -108,8 +111,9 @@ describe("executePlan", () => {
     }
     const next = result.value;
     expect(completedEvents(next)[0]!.success).toBe(false);
-    expect(next.player.infamy).toBe(5);
-    /* Tier 1 starts at minInfamy 5, maxAgents 2 → two hidden spawns, one per template. */
+    expect(next.player.heat).toBe(5);
+    expect(next.player.infamy).toBe(0); /* failure grants no infamy */
+    /* Tier 1 starts at minHeat 5, maxAgents 2 → two hidden spawns, one per template. */
     expect(next.wantedLevelTierIndex).toBe(1);
     expect(next.opposingAgentInstances).toHaveLength(2);
     expect(next.opposingAgentInstances.every((a) => a.catalogVisibility === "hidden")).toBe(true);

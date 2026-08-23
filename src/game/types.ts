@@ -153,6 +153,7 @@ export type MissionEffect =
    */
   | { kind: "add_all_participant_traits"; traitIds: string[] }
   | { kind: "infamy_delta"; amount: number }
+  | { kind: "heat_delta"; amount: number }
   | { kind: "max_concurrent_missions_delta"; delta: number }
   | { kind: "max_roster_size_delta"; delta: number }
   | { kind: "max_hire_offers_delta"; delta: number }
@@ -318,10 +319,10 @@ export type OmegaPlanTemplate = {
   stages: [OmegaPlanStage, OmegaPlanStage, OmegaPlanStage];
 };
 
-/** Infamy tier for wanted level (designer-authored); monotonic escalation at runtime. */
+/** Heat tier for wanted level (designer-authored); monotonic escalation at runtime. */
 export type WantedLevelTier = {
-  /** Inclusive minimum infamy for this tier (0–100). */
-  minInfamy: number;
+  /** Inclusive minimum heat for this tier (0–100). */
+  minHeat: number;
   name: string;
   /** Max opposing agents allowed in play when this tier applies (spawn logic uses this later). */
   maxAgents: number;
@@ -378,11 +379,15 @@ export type BalanceConfig = {
   dynamicTraitModifiers: DynamicTraitModifiers;
   /** Chance (%) per participant per resolve to gain/upgrade a dynamic trait. */
   dynamicTraitRollPercent: number;
-  /* Infamy & risk */
-  /** Infamy change on mission success (typically negative). */
+  /* Infamy, heat & risk */
+  /** Infamy change on mission success (typically positive — the reputation the player builds). */
   infamySuccessDelta: number;
-  /** Infamy change on mission failure (typically positive). */
+  /** Infamy change on mission failure (typically 0). */
   infamyFailureDelta: number;
+  /** Heat change on mission success (typically 0 — clean jobs draw no attention). */
+  heatSuccessDelta: number;
+  /** Heat change on mission failure (typically positive; drives the wanted level). */
+  heatFailureDelta: number;
   /** Injury chance % per opposing agent when a location-backed mission fails. */
   injuryChancePerAgentPercent: number;
   /* Turn economy */
@@ -400,6 +405,12 @@ export type BalanceConfig = {
   /* Progression */
   minionXpPerMission: number;
   minionXpToLevel: number;
+  /**
+   * Infamy needed for the hire pool to start offering each `startingLevel` above 1, ascending.
+   * `[15, 35, 60, 85]` means level 2 unlocks at 15 infamy, level 3 at 35, and so on; level 1 is
+   * always on offer. A template whose `startingLevel` exceeds `1 + length` can never be drawn.
+   */
+  hireLevelInfamyThresholds: number[];
   /* World generation & security */
   assetsPerLocationMin: number;
   assetsPerLocationMax: number;
@@ -425,8 +436,10 @@ export const DEFAULT_BALANCE: BalanceConfig = {
     wanted: -5,
   },
   dynamicTraitRollPercent: 10,
-  infamySuccessDelta: -3,
-  infamyFailureDelta: 5,
+  infamySuccessDelta: 5,
+  infamyFailureDelta: 0,
+  heatSuccessDelta: 0,
+  heatFailureDelta: 5,
   injuryChancePerAgentPercent: 20,
   startingMaxCommandPoints: 5,
   rerollHireOffersCp: 1,
@@ -438,6 +451,7 @@ export const DEFAULT_BALANCE: BalanceConfig = {
   fireRehireCooldownTurns: 3,
   minionXpPerMission: 1,
   minionXpToLevel: 3,
+  hireLevelInfamyThresholds: [15, 35, 60, 85],
   assetsPerLocationMin: 1,
   assetsPerLocationMax: 3,
   initialIntelSitesAtOne: 2,
@@ -462,7 +476,7 @@ export type ContentCatalog = {
   organizationNames: string[];
   /** Player mastermind profiles; one chosen per run for name + portrait. */
   playerProfiles: PlayerProfile[];
-  /** Ordered wanted tiers (ascending `minInfamy`); drives max opposing agents cap. */
+  /** Ordered wanted tiers (ascending `minHeat`); drives max opposing agents cap. */
   wantedLevels: WantedLevelTier[];
   /** Designer-tunable gameplay knobs (`content/balance.json`); defaults preserve legacy values. */
   balance: BalanceConfig;

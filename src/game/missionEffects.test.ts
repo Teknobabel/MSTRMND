@@ -68,6 +68,27 @@ describe("applyMissionEffects", () => {
     expect(appliedDown.player.infamy).toBe(0);
   });
 
+  it("clamps heat to [0, 100] after all effects", () => {
+    const state = createInitialGameState(catalog, seededRng(1));
+    const applied = applyMissionEffects(
+      { ...state, player: { ...state.player, heat: 98 } },
+      [{ kind: "heat_delta", amount: 50 }],
+      stubMission(),
+      catalog,
+      seededRng(2),
+    );
+    expect(applied.player.heat).toBe(100);
+
+    const appliedDown = applyMissionEffects(
+      { ...state, player: { ...state.player, heat: 1 } },
+      [{ kind: "heat_delta", amount: -50 }],
+      stubMission(),
+      catalog,
+      seededRng(2),
+    );
+    expect(appliedDown.player.heat).toBe(0);
+  });
+
   it("caps exchange_assets removals at current holdings and applies gains", () => {
     const state = createInitialGameState(catalog, seededRng(1));
     const applied = applyMissionEffects(

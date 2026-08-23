@@ -91,10 +91,10 @@ describe("parseContentCatalog", () => {
 
   it("enforces wanted level ordering rules", () => {
     const raw = rawFixtureSlices();
-    raw.wantedLevels[1]! = { minInfamy: 0, name: "Broken", maxAgents: 2 };
+    raw.wantedLevels[1]! = { minHeat: 0, name: "Broken", maxAgents: 2 };
     const { issues } = parseContentCatalog(raw);
     expect(
-      issues.some((i) => i.slice === "wantedLevels" && i.path === "[1].minInfamy"),
+      issues.some((i) => i.slice === "wantedLevels" && i.path === "[1].minHeat"),
     ).toBe(true);
   });
 

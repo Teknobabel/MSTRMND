@@ -66,6 +66,8 @@ function describeMissionEffect(effect: MissionEffect): string {
       return `Granted ${effect.traitIds.length} trait(s) to all participants`;
     case "infamy_delta":
       return `Infamy ${signedInt(effect.amount)} (mission effect)`;
+    case "heat_delta":
+      return `Heat ${signedInt(effect.amount)} (mission effect)`;
     case "max_concurrent_missions_delta":
       return `Max concurrent missions ${signedInt(effect.delta)}`;
     case "max_roster_size_delta":
@@ -104,6 +106,10 @@ function describeMissionEffect(effect: MissionEffect): string {
 }
 
 function clampInfamy(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+function clampHeat(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
@@ -720,6 +726,8 @@ function applyPlayerStatDeltas(player: PlayerState, effect: MissionEffect): Play
   switch (effect.kind) {
     case "infamy_delta":
       return { ...player, infamy: player.infamy + effect.amount };
+    case "heat_delta":
+      return { ...player, heat: player.heat + effect.amount };
     case "max_concurrent_missions_delta": {
       const next = Math.max(MIN_STAT_CAP, player.maxConcurrentMissions + effect.delta);
       return { ...player, maxConcurrentMissions: next };
@@ -757,9 +765,9 @@ function applyPlayerStatDeltas(player: PlayerState, effect: MissionEffect): Play
 }
 
 /**
- * Applies completion effects after baseline infamy has been added to `state.player.infamy`
- * (uncapped). Mutates infamy further for `infamy_delta` entries, then clamps infamy once at
- * the end. Returns updated player, placements, security states, and activity rows (e.g. `asset_gained`).
+ * Applies completion effects after baseline infamy/heat has been added to `state.player`
+ * (uncapped). Mutates them further for `infamy_delta` / `heat_delta` entries, then clamps both
+ * once at the end. Returns updated player, placements, security states, and activity rows (e.g. `asset_gained`).
  * `rng` is used for {@link MissionEffect} kinds that pick randomly (e.g. `add_random_participant_traits`).
  * Non-random participant trait effects (e.g. `add_all_participant_traits`) ignore `rng`.
  */
@@ -922,7 +930,7 @@ export function applyMissionEffects(
     }
   }
 
-  player = { ...player, infamy: clampInfamy(player.infamy) };
+  player = { ...player, infamy: clampInfamy(player.infamy), heat: clampHeat(player.heat) };
   return {
     player,
     locationAssetSlots,

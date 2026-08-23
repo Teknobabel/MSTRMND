@@ -1,13 +1,13 @@
 import type { ContentCatalog, WantedLevelTier } from "./types";
 
 /**
- * Highest tier index such that `infamy >= tiers[i].minInfamy`.
- * Assumes `tiers` is non-empty and sorted by ascending `minInfamy`.
+ * Highest tier index such that `heat >= tiers[i].minHeat`.
+ * Assumes `tiers` is non-empty and sorted by ascending `minHeat`.
  */
-export function tierIndexForInfamy(infamy: number, tiers: readonly WantedLevelTier[]): number {
+export function tierIndexForHeat(heat: number, tiers: readonly WantedLevelTier[]): number {
   let best = 0;
   for (let i = 0; i < tiers.length; i += 1) {
-    if (infamy >= tiers[i]!.minInfamy) {
+    if (heat >= tiers[i]!.minHeat) {
       best = i;
     }
   }
@@ -17,15 +17,15 @@ export function tierIndexForInfamy(infamy: number, tiers: readonly WantedLevelTi
 /** Monotonic wanted tier: never lower than `prevIndex`. */
 export function nextMonotonicWantedTierIndex(
   prevIndex: number,
-  infamy: number,
+  heat: number,
   tiers: readonly WantedLevelTier[],
 ): number {
   if (tiers.length === 0) {
     return 0;
   }
-  const fromInfamy = tierIndexForInfamy(infamy, tiers);
+  const fromHeat = tierIndexForHeat(heat, tiers);
   const cappedPrev = Math.max(0, Math.min(prevIndex, tiers.length - 1));
-  return Math.max(cappedPrev, fromInfamy);
+  return Math.max(cappedPrev, fromHeat);
 }
 
 export function wantedTierAtIndex(

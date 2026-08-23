@@ -195,12 +195,12 @@ export function renderWantedLevelForm(container: HTMLElement, ctx: FormCtx): voi
   );
   container.appendChild(
     formRow(
-      "minInfamy",
+      "minHeat",
       numberInput(
-        num(ctx.row, "minInfamy"),
+        num(ctx.row, "minHeat"),
         (v) =>
           ctx.update((row) => {
-            row.minInfamy = v;
+            row.minHeat = v;
           }),
         { min: 0, max: 100 },
       ),
@@ -221,7 +221,7 @@ export function renderWantedLevelForm(container: HTMLElement, ctx: FormCtx): voi
   );
   container.appendChild(
     hint(
-      "Tiers are ordered: minInfamy must be strictly ascending (first tier 0) and maxAgents non-decreasing.",
+      "Tiers are ordered: minHeat must be strictly ascending (first tier 0) and maxAgents non-decreasing.",
     ),
   );
   container.appendChild(el("div"));

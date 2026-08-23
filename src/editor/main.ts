@@ -96,7 +96,7 @@ function entityLabel(slice: ContentSliceKey, row: unknown, index: number): strin
   }
   const r = row as Row;
   if (slice === "wantedLevels") {
-    return `${String(r.minInfamy ?? "?")}+ · ${str(r, "name") || `#${index}`}`;
+    return `${String(r.minHeat ?? "?")}+ · ${str(r, "name") || `#${index}`}`;
   }
   return str(r, "name") || str(r, "id") || `#${index}`;
 }
@@ -157,7 +157,7 @@ function defaultRowForSlice(
     case "lairs":
       return { id, name: "New Lair", availableMissionIds: [] };
     case "wantedLevels":
-      return { minInfamy: 0, name: "New Tier", maxAgents: 0 };
+      return { minHeat: 0, name: "New Tier", maxAgents: 0 };
     case "organizationNames":
       return "New Organization";
     case "playerProfiles":

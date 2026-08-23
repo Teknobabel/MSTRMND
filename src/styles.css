@@ -563,6 +563,16 @@ body {
   stroke-linejoin: round;
 }
 
+/* Heat reads as the stat to keep DOWN: amber instead of the red accent. */
+.stat-block--heat .stat-block__icon {
+  color: var(--warn);
+  filter: drop-shadow(0 0 5px rgba(255, 176, 32, 0.22));
+}
+
+.stat-block--heat .stat-block__value {
+  text-shadow: 0 0 10px rgba(255, 176, 32, 0.25);
+}
+
 .stat-block__icon--text {
   font-family: var(--font-display);
   font-size: 1.35rem;
@@ -2341,6 +2351,14 @@ body {
   margin: 0;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* Infamy gate on the hire pool: which recruit levels are currently on offer. */
+.minions-hire-gate {
+  margin: 0.15rem 0 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--text-2);
 }
 
 .btn-reroll-hire {
