@@ -61,7 +61,13 @@ import {
   MAX_INTEL_LEVEL,
 } from "./game/intel";
 import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
-import { getOmegaPlanById } from "./game/omegaPlan";
+import {
+  getOmegaPlanById,
+  OMEGA_MISSIONS_PER_STAGE,
+  OMEGA_STAGE_COUNT,
+  omegaPlanRequiredMissionTotal,
+  omegaStageRequiredMissions,
+} from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { maxHireableStartingLevel, nextHireLevelInfamyThreshold } from "./game/minion";
 import { initNavigation } from "./navigation";
@@ -2450,7 +2456,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
     const stageHint = document.createElement("p");
     stageHint.className = "omega-plan-stage-hint";
-    stageHint.textContent = `Active phase: ${state.activeOmegaStageIndex + 1} · Row successes: ${state.omegaRowProgress.filter(Boolean).length}/3`;
+    const activeStageRequired = omegaStageRequiredMissions(plan, state.activeOmegaStageIndex);
+    const activeStageDone = Math.min(
+      activeStageRequired,
+      state.omegaStageProgress[state.activeOmegaStageIndex]!.filter(Boolean).length,
+    );
+    stageHint.textContent = `Active phase: ${state.activeOmegaStageIndex + 1} · Missions complete: ${activeStageDone} of ${activeStageRequired}`;
     headerBody.appendChild(stageHint);
 
     omegaPlanPanelEl.appendChild(header);
@@ -2481,6 +2492,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         section.classList.add("omega-plan-phase--locked");
       }
 
+      const stageRequired = omegaStageRequiredMissions(plan, stageIndex);
+
       const phaseHeader = document.createElement("div");
       phaseHeader.className = "omega-phase-header";
       const headerText = document.createElement("div");
@@ -2491,8 +2504,16 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const heading = document.createElement("h3");
       heading.className = "omega-plan-phase-title";
       heading.textContent = PHASE_NAMES[stageIndex]!;
+      const requirement = document.createElement("p");
+      requirement.className = "omega-phase-requirement";
+      requirement.textContent = `Complete ${stageRequired} of ${stage.missionIds.length}`;
+      requirement.title =
+        stageRequired < stage.missionIds.length
+          ? `Any ${stageRequired} of this phase's ${stage.missionIds.length} missions must succeed to advance.`
+          : "Every mission in this phase must succeed to advance.";
       headerText.appendChild(kicker);
       headerText.appendChild(heading);
+      headerText.appendChild(requirement);
       phaseHeader.appendChild(headerText);
 
       const phaseBadge = document.createElement("span");
@@ -2509,11 +2530,8 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       phaseHeader.appendChild(phaseBadge);
       section.appendChild(phaseHeader);
 
-      const phaseSuccesses = isComplete
-        ? 3
-        : isCurrent
-          ? state.omegaRowProgress.filter(Boolean).length
-          : 0;
+      const stageProgress = state.omegaStageProgress[stageIndex]!;
+      const phaseSuccesses = Math.min(stageRequired, stageProgress.filter(Boolean).length);
       const progress = document.createElement("div");
       progress.className = "omega-phase-progress";
       const fill = document.createElement("div");
@@ -2521,7 +2539,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       if (isComplete) {
         fill.classList.add("omega-phase-progress__fill--complete");
       }
-      fill.style.width = `${Math.round((phaseSuccesses / 3) * 100)}%`;
+      fill.style.width = `${Math.round((phaseSuccesses / stageRequired) * 100)}%`;
       progress.appendChild(fill);
       section.appendChild(progress);
 
@@ -2542,7 +2560,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
             : undefined,
         );
 
-        const slotDone = isComplete || (isCurrent && state.omegaRowProgress[mi] === true);
+        const slotDone = stageProgress[mi] === true;
         const slotRunning =
           isCurrent &&
           !slotDone &&
@@ -2563,6 +2581,10 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         } else if (isCurrent) {
           badge.classList.add("status-badge--pending");
           badge.textContent = "Pending";
+        } else if (isComplete) {
+          /* Phase cleared without this slot — it was never required. */
+          badge.classList.add("status-badge--locked");
+          badge.textContent = "Skipped";
         } else {
           badge.classList.add("status-badge--locked");
           badge.textContent = "Locked";
@@ -3507,13 +3529,37 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
 
   function renderStatusBar(): void {
     const p = state.player;
-    const omegaFilled = Math.min(
-      9,
-      state.activeOmegaStageIndex * 3 + state.omegaRowProgress.filter(Boolean).length,
+    /* Segment count tracks the plan's required missions, which may be fewer than the 3x3 grid. */
+    const statusPlan =
+      state.activeOmegaPlanId !== null
+        ? getOmegaPlanById(content, state.activeOmegaPlanId)
+        : undefined;
+    const omegaTotal =
+      statusPlan !== undefined
+        ? omegaPlanRequiredMissionTotal(statusPlan)
+        : OMEGA_STAGE_COUNT * OMEGA_MISSIONS_PER_STAGE;
+    let omegaFilled = 0;
+    for (let si = 0; si < state.activeOmegaStageIndex; si += 1) {
+      omegaFilled +=
+        statusPlan !== undefined
+          ? omegaStageRequiredMissions(statusPlan, si)
+          : OMEGA_MISSIONS_PER_STAGE;
+    }
+    const activeStageRequired =
+      statusPlan !== undefined
+        ? omegaStageRequiredMissions(statusPlan, state.activeOmegaStageIndex)
+        : OMEGA_MISSIONS_PER_STAGE;
+    omegaFilled = Math.min(
+      omegaTotal,
+      omegaFilled +
+        Math.min(
+          activeStageRequired,
+          state.omegaStageProgress[state.activeOmegaStageIndex]!.filter(Boolean).length,
+        ),
     );
-    const omegaPct = Math.round((omegaFilled / 9) * 100);
+    const omegaPct = omegaTotal > 0 ? Math.round((omegaFilled / omegaTotal) * 100) : 0;
     let segs = "";
-    for (let i = 0; i < 9; i += 1) {
+    for (let i = 0; i < omegaTotal; i += 1) {
       const mod =
         i < omegaFilled
           ? " omega-progress__seg--filled"

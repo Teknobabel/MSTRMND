@@ -120,6 +120,24 @@ describe("parseContentCatalog", () => {
     });
   });
 
+  it("defaults omega phase requiredMissions to all three and rejects out-of-range counts", () => {
+    const { catalog } = parseContentCatalog(rawFixtureSlices());
+    expect(catalog?.omegaPlans[0]?.stages.map((s) => s.requiredMissions)).toEqual([3, 3, 3]);
+
+    const withTwo = rawFixtureSlices();
+    (withTwo.omegaPlans[0]!.stages as Record<string, unknown>[])[0]!.requiredMissions = 2;
+    expect(parseCatalog(withTwo).omegaPlans[0]?.stages[0]?.requiredMissions).toBe(2);
+
+    const tooMany = rawFixtureSlices();
+    (tooMany.omegaPlans[0]!.stages as Record<string, unknown>[])[0]!.requiredMissions = 4;
+    const { issues } = parseContentCatalog(tooMany);
+    expect(issues.some((i) => i.slice === "omegaPlans")).toBe(true);
+
+    const zero = rawFixtureSlices();
+    (zero.omegaPlans[0]!.stages as Record<string, unknown>[])[0]!.requiredMissions = 0;
+    expect(parseContentCatalog(zero).issues.some((i) => i.slice === "omegaPlans")).toBe(true);
+  });
+
   it("requires missions (but not events) to have at least one requirement", () => {
     const raw = rawFixtureSlices();
     raw.missions[0]!.requiredTraitIds = [];

@@ -1,5 +1,11 @@
 import type { ContentCatalog, OmegaPlanTemplate } from "./types";
 
+/** Mission slots per omega phase — the grid is always 3 wide. */
+export const OMEGA_MISSIONS_PER_STAGE = 3;
+
+/** Omega phases per plan — the grid is always 3 tall. */
+export const OMEGA_STAGE_COUNT = 3;
+
 export function getOmegaPlanById(
   catalog: ContentCatalog,
   id: string,
@@ -43,4 +49,39 @@ export function omegaSlotMissionId(
   slotIndex: number,
 ): string | undefined {
   return missionIdAt(plan, stageIndex, slotIndex);
+}
+
+/**
+ * How many of a phase's missions must succeed for it to complete (designer-authored
+ * `requiredMissions`, clamped to 1–3). Out-of-range stage indices fall back to all three.
+ */
+export function omegaStageRequiredMissions(
+  plan: OmegaPlanTemplate,
+  stageIndex: number,
+): number {
+  const stage = plan.stages[stageIndex];
+  if (stage === undefined) {
+    return OMEGA_MISSIONS_PER_STAGE;
+  }
+  return Math.min(OMEGA_MISSIONS_PER_STAGE, Math.max(1, stage.requiredMissions));
+}
+
+/** Total mission successes needed to finish every phase of a plan. */
+export function omegaPlanRequiredMissionTotal(plan: OmegaPlanTemplate): number {
+  let total = 0;
+  for (let i = 0; i < OMEGA_STAGE_COUNT; i += 1) {
+    total += omegaStageRequiredMissions(plan, i);
+  }
+  return total;
+}
+
+/** True once enough slots in `stageIndex` have succeeded to advance the plan. */
+export function isOmegaStageComplete(
+  plan: OmegaPlanTemplate,
+  stageIndex: number,
+  rowProgress: readonly boolean[],
+): boolean {
+  return (
+    rowProgress.filter(Boolean).length >= omegaStageRequiredMissions(plan, stageIndex)
+  );
 }

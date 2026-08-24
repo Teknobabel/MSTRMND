@@ -1602,6 +1602,21 @@ body {
   content: none;
 }
 
+/* "Complete X of Y" — the phase's designer-authored mission requirement. */
+.omega-phase-requirement {
+  margin: 0.15rem 0 0;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.omega-plan-phase--current .omega-phase-requirement {
+  color: var(--text-1);
+}
+
 .omega-phase-progress {
   position: relative;
   height: 9px;

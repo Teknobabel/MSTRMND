@@ -159,9 +159,9 @@ function defaultRowForSlice(
         description: "",
         mapId: firstId("maps"),
         stages: [
-          { missionIds: [m, m, m] },
-          { missionIds: [m, m, m] },
-          { missionIds: [m, m, m] },
+          { missionIds: [m, m, m], requiredMissions: 3 },
+          { missionIds: [m, m, m], requiredMissions: 3 },
+          { missionIds: [m, m, m], requiredMissions: 3 },
         ],
       };
     }

@@ -10,21 +10,24 @@
           "breach_server",
           "vector_null_infil",
           "cold_storage_placement"
-        ]
+        ],
+        "requiredMissions": 3
       },
       {
         "missionIds": [
           "kestrel_black_relay",
           "extract_asset",
           "phantom_reach_cartography"
-        ]
+        ],
+        "requiredMissions": 3
       },
       {
         "missionIds": [
           "helix_sample_lift",
           "sigma_seven_exfil_window",
           "archive_seal_breach"
-        ]
+        ],
+        "requiredMissions": 3
       }
     ]
   },
@@ -39,21 +42,24 @@
           "iron_veil_meet",
           "hollow_crown_social",
           "third_rail_distraction"
-        ]
+        ],
+        "requiredMissions": 3
       },
       {
         "missionIds": [
           "viper_hand_corridor",
           "apex_contingency_overwatch",
           "nocturne_route_harden"
-        ]
+        ],
+        "requiredMissions": 3
       },
       {
         "missionIds": [
           "black_ledger_sweep",
           "extract_asset",
           "directive_null_intercept"
-        ]
+        ],
+        "requiredMissions": 3
       }
     ]
   }

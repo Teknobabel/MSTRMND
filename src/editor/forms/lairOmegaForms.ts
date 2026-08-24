@@ -7,6 +7,7 @@ import {
   hint,
   idOptions,
   listEditor,
+  num,
   numberInput,
   selectInput,
   setOrDelete,
@@ -173,7 +174,30 @@ export function renderOmegaPlanForm(container: HTMLElement, ctx: FormCtx): void 
   const missionNames = ctx.names("missions");
   const grid = el("div", "ed-omega-grid");
   for (let si = 0; si < stages.length; si += 1) {
-    grid.appendChild(el("div", "ed-omega-stage-label", `Stage ${si + 1}`));
+    const stageLabel = el("div", "ed-omega-stage-label", `Stage ${si + 1}`);
+    const requiredWrap = el("label", "ed-omega-required");
+    requiredWrap.appendChild(document.createTextNode("must complete"));
+    const requiredValue = num(stages[si]!, "requiredMissions", 3);
+    const requiredField = numberInput(
+      requiredValue,
+      (v) =>
+        ctx.update((row) => {
+          const rowStages = rowArray(row, "stages");
+          const stage = rowStages[si];
+          if (stage === undefined) {
+            return;
+          }
+          (stage as Row).requiredMissions = Math.min(3, Math.max(1, Math.round(v)));
+          row.stages = rowStages;
+        }),
+      { min: 1, max: 3 },
+    );
+    requiredField.title =
+      "How many of this phase's 3 missions must succeed before the phase completes (1–3).";
+    requiredWrap.appendChild(requiredField);
+    requiredWrap.appendChild(document.createTextNode("of 3"));
+    stageLabel.appendChild(requiredWrap);
+    grid.appendChild(stageLabel);
     const ids = strArray(stages[si]!, "missionIds");
     for (let mi = 0; mi < Math.max(3, ids.length); mi += 1) {
       grid.appendChild(
@@ -197,6 +221,11 @@ export function renderOmegaPlanForm(container: HTMLElement, ctx: FormCtx): void 
     }
   }
   container.appendChild(fieldset("Stages (3 × 3 mission grid; same mission may repeat)", grid));
+  container.appendChild(
+    hint(
+      "Each stage's “must complete” count is how many of its 3 missions must succeed to clear the phase.",
+    ),
+  );
   if (stages.length !== 3) {
     container.appendChild(
       hint("An omega plan must have exactly 3 stages of 3 missions — fix via issues panel if malformed."),

@@ -413,11 +413,27 @@ textarea {
 
 .ed-omega-stage-label {
   grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text-dim);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: 6px;
+}
+
+/* "must complete N of 3" control sitting next to each stage label. */
+.ed-omega-required {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.ed-omega-required input {
+  width: 56px;
 }
 
 /* ---------- Card art field ---------- */
