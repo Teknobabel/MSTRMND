@@ -204,6 +204,23 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
     ),
   );
 
+  if (isEvent) {
+    container.appendChild(
+      formRow(
+        "lifetimeTurns",
+        numberInput(num(ctx.row, "lifetimeTurns", 3), (v) =>
+          ctx.update((row) => {
+            row.lifetimeTurns = v;
+          }),
+          { min: 1 },
+        ),
+      ),
+    );
+    container.appendChild(
+      hint("Turns the offer stays on the table. Not started in time ⇒ expireEffects fire."),
+    );
+  }
+
   const traitIds = ctx.ids("traits");
   const traitNames = ctx.names("traits");
   container.appendChild(
@@ -245,7 +262,11 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
   container.appendChild(effectsListFieldset("onFailureEffects", "onFailureEffects", ctx));
   if (isEvent) {
     container.appendChild(
-      effectsListFieldset("expireEffects (fires if the offer is ignored)", "expireEffects", ctx),
+      effectsListFieldset(
+        "expireEffects (fires when lifetimeTurns runs out unstarted)",
+        "expireEffects",
+        ctx,
+      ),
     );
   }
 

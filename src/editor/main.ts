@@ -125,7 +125,6 @@ function defaultRowForSlice(
     case "agents":
       return { id, name: "New Template", description: "", hireCommandPoints: 0, levelUpTraitOrder: [] };
     case "missions":
-    case "events":
       return {
         id,
         name: "New Mission",
@@ -135,6 +134,18 @@ function defaultRowForSlice(
         requiredTraitIds: [],
         requiredAssetIds: [],
         durationTurns: 1,
+      };
+    case "events":
+      return {
+        id,
+        name: "New Event",
+        description: "",
+        targetType: "none",
+        startCommandPoints: 0,
+        requiredTraitIds: [],
+        requiredAssetIds: [],
+        durationTurns: 1,
+        lifetimeTurns: 3,
       };
     case "locations":
       return { id, name: "New Location", description: "", locationType: "economic", locationLevel: 1 };

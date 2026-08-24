@@ -206,17 +206,39 @@ describe("executePlan", () => {
     expect(aborted?.kind === "mission_aborted" && aborted.reason).toBe("missing_template");
   });
 
-  it("fires expire effects for an unengaged event offer, then decays modifiers, then rotates", () => {
-    let state = baseState(6);
-    state = {
-      ...state,
+  it("counts the offer's lifetime down and keeps the same offer on the table", () => {
+    const state: GameState = {
+      ...baseState(6),
       currentEventTemplateId: "ev-1",
-      eventOfferEngagedThisTurn: false,
+      currentEventTurnsRemaining: 2,
+      eventCooldownTurnsRemaining: 0,
+    };
+    const result = executePlan(state, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const next = result.value;
+    expect(next.currentEventTemplateId).toBe("ev-1");
+    expect(next.currentEventTurnsRemaining).toBe(1);
+    expect(next.player.pendingBonusCommandPoints).toBe(0); /* nothing expired yet */
+    const kinds = next.activityLog.flatMap((e) => e.events).map((e) => e.kind);
+    expect(kinds).not.toContain("event_expired");
+    expect(kinds).not.toContain("event_rotated_in");
+  });
+
+  it("fires expire effects when the lifetime runs out unstarted, then decays modifiers", () => {
+    const state: GameState = {
+      ...baseState(6),
+      currentEventTemplateId: "ev-1",
+      currentEventTurnsRemaining: 1,
+      eventCooldownTurnsRemaining: 0,
       activeSuccessModifiers: [
         { delta: 10, turnsRemaining: 1 },
         { delta: 5, turnsRemaining: 2 },
       ],
     };
+    /* rng 0 ⇒ cooldown rolls the minimum (0), so the next offer lands the same resolve. */
     const result = executePlan(state, catalog, () => 0, sequentialIds("ag"));
     expect(result.ok).toBe(true);
     if (!result.ok) {
@@ -228,23 +250,93 @@ describe("executePlan", () => {
     const kinds = next.activityLog.flatMap((e) => e.events).map((e) => e.kind);
     expect(kinds).toContain("event_expired");
     expect(kinds).toContain("event_rotated_in");
-    expect(next.eventOfferEngagedThisTurn).toBe(false);
+    expect(next.currentEventTemplateId).toBe("ev-1"); /* only one event in the fixture catalog */
+    expect(next.currentEventTurnsRemaining).toBe(2); /* fresh lifetime from the template */
+    expect(next.eventCooldownTurnsRemaining).toBe(0);
   });
 
-  it("skips expire effects when the offer was engaged this turn", () => {
-    let state = baseState(7);
-    state = {
-      ...state,
+  it("holds the slot empty for the rolled cooldown, then draws the next offer", () => {
+    const state: GameState = {
+      ...baseState(6),
       currentEventTemplateId: "ev-1",
-      eventOfferEngagedThisTurn: true,
+      currentEventTurnsRemaining: 1,
+      eventCooldownTurnsRemaining: 0,
     };
-    const result = executePlan(state, catalog, () => 0, sequentialIds("ag"));
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
+    /* rng 0.99 ⇒ cooldown rolls the maximum (3). */
+    const rngHigh = () => 0.99;
+    const first = executePlan(state, catalog, rngHigh, sequentialIds("ag"));
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
       return;
     }
-    expect(result.value.player.pendingBonusCommandPoints).toBe(0);
-    const kinds = result.value.activityLog.flatMap((e) => e.events).map((e) => e.kind);
+    expect(first.value.currentEventTemplateId).toBeNull();
+    expect(first.value.eventCooldownTurnsRemaining).toBe(3);
+
+    let cur: GameState = { ...first.value, phase: "main" };
+    const offersSeen: (string | null)[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const r = executePlan(cur, catalog, rngHigh, sequentialIds("ag"));
+      expect(r.ok).toBe(true);
+      if (!r.ok) {
+        return;
+      }
+      cur = { ...r.value, phase: "main" };
+      offersSeen.push(cur.currentEventTemplateId);
+    }
+    expect(offersSeen).toEqual([null, null, "ev-1"]);
+    expect(cur.currentEventTurnsRemaining).toBe(2);
+  });
+
+  it("suspends the lifetime while the event mission runs, and cools down once it resolves", () => {
+    const started: GameState = {
+      ...baseState(7),
+      currentEventTemplateId: "ev-1",
+      currentEventTurnsRemaining: 1,
+      eventCooldownTurnsRemaining: 0,
+      player: {
+        ...baseState(7).player,
+        minions: [makeMinionInstance("mi-1", "m-hero", ["t-req"])],
+      },
+      activeMissions: [
+        activeMission({
+          id: "am-e",
+          missionTemplateId: "ev-1",
+          missionSource: "event",
+          target: { kind: "none" },
+          turnsRemaining: 2,
+          participantInstanceIds: ["mi-1"],
+        }),
+      ],
+    };
+    const inFlight = executePlan(started, catalog, () => 0, sequentialIds("ag"));
+    expect(inFlight.ok).toBe(true);
+    if (!inFlight.ok) {
+      return;
+    }
+    /* Offer left the table when it was started; nothing expires and nothing new is drawn. */
+    expect(inFlight.value.currentEventTemplateId).toBeNull();
+    expect(inFlight.value.activeMissions).toHaveLength(1);
+    expect(inFlight.value.player.pendingBonusCommandPoints).toBe(0);
+    const midKinds = inFlight.value.activityLog.flatMap((e) => e.events).map((e) => e.kind);
+    expect(midKinds).not.toContain("event_expired");
+    expect(midKinds).not.toContain("event_rotated_in");
+
+    const resolved = executePlan(
+      { ...inFlight.value, phase: "main" },
+      catalog,
+      () => 0,
+      sequentialIds("ag"),
+    );
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    expect(resolved.value.activeMissions).toHaveLength(0);
+    /* rng 0 ⇒ zero-turn cooldown, so the next offer appears at this same resolve. */
+    expect(resolved.value.currentEventTemplateId).toBe("ev-1");
+    expect(resolved.value.currentEventTurnsRemaining).toBe(2);
+    const kinds = resolved.value.activityLog.flatMap((e) => e.events).map((e) => e.kind);
+    expect(kinds).toContain("event_rotated_in");
     expect(kinds).not.toContain("event_expired");
   });
 });
@@ -360,8 +452,12 @@ describe("assignMission / cancelMission", () => {
     }
   });
 
-  it("marks the event offer engaged when assigning the current event", () => {
-    const state = { ...stateWithRoster(), currentEventTemplateId: "ev-1" };
+  it("allows only one event mission at a time from the current offer", () => {
+    const state = {
+      ...stateWithRoster(),
+      currentEventTemplateId: "ev-1",
+      currentEventTurnsRemaining: 2,
+    };
     const result = assignMission(
       state,
       catalog,
@@ -375,8 +471,26 @@ describe("assignMission / cancelMission", () => {
       [],
     );
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.eventOfferEngagedThisTurn).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    /* The offer stays addressable until Execute Plan, so cancelling gives the turn back. */
+    expect(result.value.currentEventTemplateId).toBe("ev-1");
+    const second = assignMission(
+      result.value,
+      catalog,
+      "am-e2",
+      "ev-1",
+      { kind: "none" },
+      "event",
+      null,
+      null,
+      ["mi-1"],
+      [],
+    );
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.error.code).toBe("invalid_mission_source_binding");
     }
   });
 });

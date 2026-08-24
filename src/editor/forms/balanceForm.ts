@@ -175,6 +175,22 @@ const GROUPS: BalanceGroup[] = [
         max: 12,
       },
       {
+        key: "eventCooldownTurnsMin",
+        label: "Event cooldown min (turns)",
+        tooltip:
+          "Fewest quiet turns after a global event leaves the slot (expired, resolved, or cancelled) before the next offer appears. 0 means a new event can arrive the same turn the last one ended.",
+        min: 0,
+        max: 99,
+      },
+      {
+        key: "eventCooldownTurnsMax",
+        label: "Event cooldown max (turns)",
+        tooltip:
+          "Most quiet turns between global events; the actual gap is rolled uniformly between the min and this. Must be ≥ the min.",
+        min: 0,
+        max: 99,
+      },
+      {
         key: "fireRehireCooldownTurns",
         label: "Rehire cooldown (turns)",
         tooltip:

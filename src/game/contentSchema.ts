@@ -350,7 +350,10 @@ export const missionTemplateSchema = z
     }
   });
 
-/** Events: mission shape + optional expire effects; requirements MAY both be empty. */
+/**
+ * Events: mission shape + required `lifetimeTurns` + optional expire effects; requirements MAY
+ * both be empty.
+ */
 export const eventTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -361,6 +364,8 @@ export const eventTemplateSchema = z.object({
   requiredTraitIds: z.array(z.string().min(1)).default([]),
   requiredAssetIds: z.array(z.string().min(1)).default([]),
   durationTurns: z.coerce.number().int().min(1),
+  /** Turns the offer stays on the table before `expireEffects` fire (designer-set, ≥ 1). */
+  lifetimeTurns: z.coerce.number().int().min(1).max(99),
   onSuccessEffects: z.array(missionEffectSchema).optional(),
   onFailureEffects: z.array(missionEffectSchema).optional(),
   expireEffects: z.array(missionEffectSchema).optional(),
@@ -452,6 +457,8 @@ export const balanceConfigSchema = z.object({
     DEFAULT_BALANCE.startingMaxParticipantsPerMission,
   ),
   eventMaxParticipants: balanceInt(1, 12, DEFAULT_BALANCE.eventMaxParticipants),
+  eventCooldownTurnsMin: balanceInt(0, 99, DEFAULT_BALANCE.eventCooldownTurnsMin),
+  eventCooldownTurnsMax: balanceInt(0, 99, DEFAULT_BALANCE.eventCooldownTurnsMax),
   fireRehireCooldownTurns: balanceInt(0, 99, DEFAULT_BALANCE.fireRehireCooldownTurns),
   hireLevelInfamyThresholds: z
     .array(z.number().int().min(1).max(100))
@@ -565,6 +572,7 @@ function normalizeEventTemplates(arr: z.infer<typeof eventTemplateSchema>[]): Ev
       requiredTraitIds: [...m.requiredTraitIds],
       requiredAssetIds: [...m.requiredAssetIds],
       durationTurns: m.durationTurns,
+      lifetimeTurns: m.lifetimeTurns,
     };
     if (m.cardArt !== undefined) {
       base.cardArt = m.cardArt;
@@ -1352,6 +1360,18 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
       entityId: null,
       path: "assetsPerLocationMin",
       message: `assetsPerLocationMin (${s.balance.assetsPerLocationMin}) must be ≤ assetsPerLocationMax (${s.balance.assetsPerLocationMax})`,
+    });
+  }
+
+  if (
+    s.balance !== null &&
+    s.balance.eventCooldownTurnsMin > s.balance.eventCooldownTurnsMax
+  ) {
+    issues.push({
+      slice: "balance",
+      entityId: null,
+      path: "eventCooldownTurnsMin",
+      message: `eventCooldownTurnsMin (${s.balance.eventCooldownTurnsMin}) must be ≤ eventCooldownTurnsMax (${s.balance.eventCooldownTurnsMax})`,
     });
   }
 

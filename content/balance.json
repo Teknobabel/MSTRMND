@@ -10,6 +10,8 @@
     "wanted": -5
   },
   "dynamicTraitRollPercent": 10,
+  "eventCooldownTurnsMax": 3,
+  "eventCooldownTurnsMin": 0,
   "eventMaxParticipants": 3,
   "fireRehireCooldownTurns": 3,
   "heatFailureDelta": 5,

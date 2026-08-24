@@ -212,7 +212,14 @@ export type MissionTemplate = {
  * Stored in `content/events.json`.
  */
 export type EventTemplate = MissionTemplate & {
-  /** Applied automatically if this event is never started before the next event is rolled. */
+  /**
+   * Turns this event stays on the table as the current offer — the window the player has to
+   * start it. Counts down once per `executePlan`; hitting 0 without the event having been
+   * started fires `expireEffects` and clears the offer. Starting it stops the countdown:
+   * the mission then decides the outcome via `onSuccessEffects` / `onFailureEffects`.
+   */
+  lifetimeTurns: number;
+  /** Applied automatically if the offer's lifetime runs out before the player starts it. */
   expireEffects?: MissionEffect[];
 };
 
@@ -400,6 +407,13 @@ export type BalanceConfig = {
   startingMaxParticipantsPerMission: number;
   /** Fixed participant cap for event missions (ignores the player's normal cap). */
   eventMaxParticipants: number;
+  /**
+   * Turns with no event offer after one leaves the slot (expired, resolved, or cancelled),
+   * rolled uniformly in `[eventCooldownTurnsMin, eventCooldownTurnsMax]`. `0` means the next
+   * offer appears immediately at that same resolve.
+   */
+  eventCooldownTurnsMin: number;
+  eventCooldownTurnsMax: number;
   /** Turns before a fired minion reappears in the hire pool. */
   fireRehireCooldownTurns: number;
   /* Progression */
@@ -448,6 +462,8 @@ export const DEFAULT_BALANCE: BalanceConfig = {
   startingMaxConcurrentMissions: 2,
   startingMaxParticipantsPerMission: 3,
   eventMaxParticipants: 3,
+  eventCooldownTurnsMin: 0,
+  eventCooldownTurnsMax: 3,
   fireRehireCooldownTurns: 3,
   minionXpPerMission: 1,
   minionXpToLevel: 3,

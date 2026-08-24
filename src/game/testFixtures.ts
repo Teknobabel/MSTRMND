@@ -147,6 +147,7 @@ export function rawFixtureSlices(): FixtureSlices {
         targetType: "none",
         startCommandPoints: 0,
         durationTurns: 1,
+        lifetimeTurns: 2,
         expireEffects: [{ kind: "grant_command_points_next_turn", amount: 2 }],
       },
     ],

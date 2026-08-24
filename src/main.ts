@@ -842,7 +842,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     clearAssignMissionTarget();
   }
 
-  /** Rotating event offers replace `currentEventTemplateId` each resolve; drop stale staged plans. */
+  /** An offer that expired or was started clears `currentEventTemplateId`; drop stale staged plans. */
   function reconcileStagedEventMissionWithState(): void {
     if (assignMissionSource !== "event" || assignMissionTemplateId === null) {
       return;
@@ -2928,16 +2928,29 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     panel.appendChild(offerHeading);
 
     const curId = state.currentEventTemplateId;
+    const activeEventMission = state.activeMissions.find((am) => am.missionSource === "event");
     if (curId === null || content.events.length === 0) {
       const empty = document.createElement("p");
       empty.className = "assets-panel-empty";
-      empty.textContent =
-        content.events.length === 0 ? "No events in this catalog." : "No current event offer.";
+      if (content.events.length === 0) {
+        empty.textContent = "No events in this catalog.";
+      } else if (activeEventMission) {
+        const n =
+          content.events.find((e) => e.id === activeEventMission.missionTemplateId)?.name ??
+          activeEventMission.missionTemplateId;
+        empty.textContent = `"${n}" is under way — its effects land when the mission resolves.`;
+      } else if (state.eventCooldownTurnsRemaining > 0) {
+        const t = state.eventCooldownTurnsRemaining;
+        empty.textContent = `No event on the table. Next opportunity in ${t} ${t === 1 ? "turn" : "turns"}.`;
+      } else {
+        empty.textContent = "No event on the table. A new opportunity is due next turn.";
+      }
       panel.appendChild(empty);
     } else {
       const et = content.events.find((e) => e.id === curId);
       const article = buildMissionCatalogArticle(curId);
-      if (mainOnly && et) {
+      /* One event mission at a time — once started, the offer is no longer draggable. */
+      if (mainOnly && et && !activeEventMission) {
         article.draggable = true;
         article.classList.add("assign-draggable-mission");
         article.addEventListener("dragstart", (e) => {
@@ -2952,8 +2965,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       const note = document.createElement("p");
       note.className = "assets-panel-empty";
       note.style.marginTop = "0.25rem";
-      note.textContent =
-        "Drag the offer to Plan mission to start it. If you do not, it expires when you Execute Plan.";
+      const left = state.currentEventTurnsRemaining;
+      if (activeEventMission) {
+        note.textContent = "Started this turn — Execute Plan takes the offer off the table.";
+      } else if (left <= 1) {
+        note.textContent =
+          "Last turn to act: drag the offer to Plan mission, or it expires when you Execute Plan.";
+      } else {
+        note.textContent = `Drag the offer to Plan mission to start it. ${left} turns left before it expires.`;
+      }
       panel.appendChild(note);
     }
   }
@@ -3370,13 +3390,15 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
         }
         case "event_rotated_in": {
           const n = missionName(ev.eventTemplateId);
-          return `Event "${n}".`;
+          const t = ev.lifetimeTurns;
+          return `Event "${n}" — ${t} ${t === 1 ? "turn" : "turns"} to act.`;
         }
         case "event_expired": {
           const n = missionName(ev.eventTemplateId);
-          const fx =
-            ev.effectDescriptions.length > 0 ? ev.effectDescriptions.join("; ") : "no listed effects";
-          return `Event "${n}" expired — ${fx}.`;
+          if (ev.effectDescriptions.length === 0) {
+            return `Event "${n}" expired unclaimed.`;
+          }
+          return `Event "${n}" expired — ${ev.effectDescriptions.join("; ")}.`;
         }
         default: {
           const _exhaustive: never = ev;
@@ -3618,7 +3640,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (state.currentEventTemplateId !== null) {
       const et = content.events.find((e) => e.id === state.currentEventTemplateId);
       if (et) {
-        items.push({ title: "Incoming event", detail: et.name });
+        const left = state.currentEventTurnsRemaining;
+        items.push({
+          title: "Incoming event",
+          detail: `${et.name} — ${left} ${left === 1 ? "turn" : "turns"} to act`,
+        });
       }
     }
     for (const entry of state.activityLog.slice(-2)) {

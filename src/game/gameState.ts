@@ -171,7 +171,12 @@ export type ActivityEvent =
       target: MissionTarget;
       reason: "missing_template" | "invalid_participants";
     }
-  | { kind: "event_rotated_in"; eventTemplateId: string }
+  | {
+      /** A new global event offer went on the table with `lifetimeTurns` turns to act. */
+      kind: "event_rotated_in";
+      eventTemplateId: string;
+      lifetimeTurns: number;
+    }
   | {
       kind: "event_expired";
       eventTemplateId: string;
@@ -270,15 +275,25 @@ export type GameState = {
    * Recomputed at end of each `executePlan` from final `player.heat`.
    */
   wantedLevelTierIndex: number;
-  /** Rotating global event offer (`EventTemplate.id`); null when `catalog.events` is empty. */
+  /**
+   * Global event offer on the table (`EventTemplate.id`), or null when there is none: the
+   * catalog has no events, the offer was started and its mission is still running, or the
+   * slot is cooling down (see {@link eventCooldownTurnsRemaining}).
+   */
   currentEventTemplateId: string | null;
+  /**
+   * Turns of offer lifetime left for {@link currentEventTemplateId}; decremented once per
+   * `executePlan`, and at 0 the offer expires (its `expireEffects` fire). 0 when no offer.
+   */
+  currentEventTurnsRemaining: number;
+  /**
+   * Turns of quiet left before the next offer may be drawn, rolled from
+   * `balance.eventCooldownTurns{Min,Max}` when an event leaves the slot. 0 means the next
+   * `executePlan` draws a new offer (no event mission being in progress).
+   */
+  eventCooldownTurnsRemaining: number;
   /** Flat success % modifiers from event effects; each entry decays once per `executePlan`. */
   activeSuccessModifiers: { delta: number; turnsRemaining: number }[];
-  /**
-   * True when the player assigned the current event offer this turn (Main Phase); used so
-   * `expireEffects` do not fire when the offer was engaged, including same-turn completion.
-   */
-  eventOfferEngagedThisTurn: boolean;
 };
 
 export type GameError =
@@ -597,6 +612,33 @@ export function pickRandomEventTemplateId(catalog: ContentCatalog, rng: Rng): st
   return list[i]!.id;
 }
 
+/** A freshly drawn global event offer: which event, and how many turns the player has to start it. */
+export type EventOfferDraw = { eventTemplateId: string; lifetimeTurns: number };
+
+/**
+ * Draw the next global event offer (uniform over `catalog.events`, with replacement), carrying
+ * the template's designer-set `lifetimeTurns`. Null when the catalog has no events.
+ */
+export function drawEventOffer(catalog: ContentCatalog, rng: Rng): EventOfferDraw | null {
+  const id = pickRandomEventTemplateId(catalog, rng);
+  if (id === null) {
+    return null;
+  }
+  const template = catalog.events.find((e) => e.id === id);
+  return { eventTemplateId: id, lifetimeTurns: Math.max(1, template?.lifetimeTurns ?? 1) };
+}
+
+/**
+ * Turns of quiet after an event leaves the slot, uniform in
+ * `[balance.eventCooldownTurnsMin, balance.eventCooldownTurnsMax]` (0 ⇒ the next offer appears
+ * at that same resolve).
+ */
+export function rollEventCooldownTurns(catalog: ContentCatalog, rng: Rng): number {
+  const min = Math.max(0, catalog.balance.eventCooldownTurnsMin);
+  const max = Math.max(min, catalog.balance.eventCooldownTurnsMax);
+  return Math.min(max, min + Math.floor(rng() * (max - min + 1)));
+}
+
 /**
  * Create a fresh run. Pass a seeded `rng` for deterministic runs (tests, replays);
  * defaults to `Math.random` for normal play.
@@ -633,26 +675,32 @@ export function createInitialGameState(
   const locationIntelStates = rollInitialLocationIntelStates(catalog, runLocations, rng);
   const lairMissionIds = lairTemplate ? [...lairTemplate.availableMissionIds] : [];
   const playerProfile = pickRandomPlayerProfile(catalog, rng);
+  /* Draw order is fixed so seeded runs stay reproducible: org name → hire offers → asset
+   * placements → opening event offer. */
+  const organizationName = pickRandomOrganizationName(catalog, rng);
+  const availableMinionTemplateIds = pickHireOfferTemplateIds(
+    catalog,
+    player.maxHireOffers,
+    rng,
+    player,
+  );
+  const locationAssetSlots = initializeLocationAssetPlacements(catalog, rng, runLocations);
+  const openingEventOffer = drawEventOffer(catalog, rng);
   const base: GameState = {
     phase: "main",
     turnNumber: 1,
-    organizationName: pickRandomOrganizationName(catalog, rng),
+    organizationName,
     playerName: playerProfile.name,
     playerProfilePic: playerProfile.profilePic,
     player,
     activeMissions: [],
-    availableMinionTemplateIds: pickHireOfferTemplateIds(
-      catalog,
-      player.maxHireOffers,
-      rng,
-      player,
-    ),
+    availableMinionTemplateIds,
     minionRehireQueue: [],
     activityLog: [],
     activeOmegaPlanId,
     locationSecurityStates: initialLocationSecurityStatesForLocations(runLocations),
     locationIntelStates,
-    locationAssetSlots: initializeLocationAssetPlacements(catalog, rng, runLocations),
+    locationAssetSlots,
     locationRequiredTraits,
     locationSecurityTraits,
     opposingAgentInstances: [],
@@ -663,9 +711,10 @@ export function createInitialGameState(
     activeOmegaStageIndex: 0,
     omegaRowProgress: [false, false, false],
     wantedLevelTierIndex: 0,
-    currentEventTemplateId: pickRandomEventTemplateId(catalog, rng),
+    currentEventTemplateId: openingEventOffer?.eventTemplateId ?? null,
+    currentEventTurnsRemaining: openingEventOffer?.lifetimeTurns ?? 0,
+    eventCooldownTurnsRemaining: 0,
     activeSuccessModifiers: [],
-    eventOfferEngagedThisTurn: false,
   };
 
   const assetEvents: ActivityEvent[] = [];
@@ -1065,6 +1114,17 @@ export function assignMission(
         },
       };
     }
+    /* One global event occupies the slot at a time — the offer is off the table until the
+     * mission it started resolves. */
+    if (state.activeMissions.some((am) => am.missionSource === "event")) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid_mission_source_binding",
+          reason: "An event mission is already in progress",
+        },
+      };
+    }
   } else {
     return {
       ok: false,
@@ -1262,8 +1322,6 @@ export function assignMission(
   const next: GameState = {
     ...state,
     activeMissions: [...state.activeMissions, activeMission],
-    eventOfferEngagedThisTurn:
-      missionSource === "event" ? true : state.eventOfferEngagedThisTurn,
     player: {
       ...state.player,
       commandPoints: state.player.commandPoints - cost,
@@ -1414,8 +1472,9 @@ export function executePlan(
   const instanceById = new Map(state.player.minions.map((m) => [m.instanceId, m]));
 
   let activeSuccessModifiers = state.activeSuccessModifiers.map((m) => ({ ...m }));
-  const offerAtStart = state.currentEventTemplateId;
-  const engagedAtStart = state.eventOfferEngagedThisTurn;
+  /* The offer is "engaged" once its mission exists — started this Main Phase or still running
+   * from an earlier one. Cancelling before Execute Plan leaves the offer on the table. */
+  const eventMissionAtStart = state.activeMissions.some((am) => am.missionSource === "event");
 
   const updated = state.activeMissions.map((am) => ({
     ...am,
@@ -1765,44 +1824,74 @@ export function executePlan(
     locationAgentPresence = spawned.locationAgentPresence;
   }
 
-  let nextCurrentEventTemplateId: string | null = null;
-  if (catalog.events.length > 0) {
-    if (offerAtStart !== null && !engagedAtStart) {
-      const et = eventTemplateById(catalog, offerAtStart);
-      const expireList = et?.expireEffects ?? [];
-      if (expireList.length > 0) {
-        const stubAm: ActiveMission = {
-          id: "__event_expire__",
-          missionTemplateId: offerAtStart,
-          target: { kind: "none" },
-          missionSource: "event",
-          omegaStageIndex: null,
-          omegaSlotIndex: null,
-          participantInstanceIds: [],
-          plannedAssetIds: [],
-          turnsRemaining: 0,
-          startedOnTurn: state.turnNumber,
-        };
-        const expireState: GameState = {
-          ...state,
-          player,
-          locationAssetSlots,
-          locationSecurityStates,
-          locationIntelStates,
-          activeSuccessModifiers,
-        };
-        const expired = applyMissionEffects(expireState, expireList, stubAm, catalog, rng);
-        player = expired.player;
-        locationAssetSlots = expired.locationAssetSlots;
-        locationSecurityStates = expired.locationSecurityStates;
-        locationIntelStates = expired.locationIntelStates;
-        activeSuccessModifiers = expired.activeSuccessModifiers;
-        resolveEvents.push({
-          kind: "event_expired",
-          eventTemplateId: offerAtStart,
-          effectDescriptions: describeMissionTemplateEffects(expireList),
-        });
-        resolveEvents.push(...expired.events);
+  /* ---------------------------------------------------------------------------------------
+   * Global event slot. Exactly one event occupies it at a time, in one of three states:
+   *   offer      — on the table, `currentEventTurnsRemaining` turns left to start it
+   *   in progress— the player started it; the mission decides the outcome, nothing expires
+   *   cooldown   — `eventCooldownTurnsRemaining` quiet turns before the next offer is drawn
+   * ------------------------------------------------------------------------------------- */
+  let nextCurrentEventTemplateId = state.currentEventTemplateId;
+  let nextCurrentEventTurnsRemaining = state.currentEventTurnsRemaining;
+  let nextEventCooldownTurnsRemaining = state.eventCooldownTurnsRemaining;
+  const eventMissionStillActive = remaining.some((am) => am.missionSource === "event");
+  /* Resolved, aborted, or cancelled during Main — either way the slot is free again. */
+  let eventSlotFreedThisTurn = eventMissionAtStart && !eventMissionStillActive;
+
+  if (nextCurrentEventTemplateId !== null) {
+    if (eventMissionAtStart) {
+      /* Engaged: the offer leaves the table, its lifetime stops, and no effects fire now —
+       * the mission's own success / failure effects apply when it resolves. */
+      nextCurrentEventTemplateId = null;
+      nextCurrentEventTurnsRemaining = 0;
+    } else {
+      nextCurrentEventTurnsRemaining -= 1;
+      if (nextCurrentEventTurnsRemaining <= 0) {
+        /* Lifetime ran out unstarted: the player takes the consequences. */
+        const et = eventTemplateById(catalog, nextCurrentEventTemplateId);
+        const expireList = et?.expireEffects ?? [];
+        if (expireList.length > 0) {
+          const stubAm: ActiveMission = {
+            id: "__event_expire__",
+            missionTemplateId: nextCurrentEventTemplateId,
+            target: { kind: "none" },
+            missionSource: "event",
+            omegaStageIndex: null,
+            omegaSlotIndex: null,
+            participantInstanceIds: [],
+            plannedAssetIds: [],
+            turnsRemaining: 0,
+            startedOnTurn: state.turnNumber,
+          };
+          const expireState: GameState = {
+            ...state,
+            player,
+            locationAssetSlots,
+            locationSecurityStates,
+            locationIntelStates,
+            activeSuccessModifiers,
+          };
+          const expired = applyMissionEffects(expireState, expireList, stubAm, catalog, rng);
+          player = expired.player;
+          locationAssetSlots = expired.locationAssetSlots;
+          locationSecurityStates = expired.locationSecurityStates;
+          locationIntelStates = expired.locationIntelStates;
+          activeSuccessModifiers = expired.activeSuccessModifiers;
+          resolveEvents.push({
+            kind: "event_expired",
+            eventTemplateId: nextCurrentEventTemplateId,
+            effectDescriptions: describeMissionTemplateEffects(expireList),
+          });
+          resolveEvents.push(...expired.events);
+        } else {
+          resolveEvents.push({
+            kind: "event_expired",
+            eventTemplateId: nextCurrentEventTemplateId,
+            effectDescriptions: [],
+          });
+        }
+        nextCurrentEventTemplateId = null;
+        nextCurrentEventTurnsRemaining = 0;
+        eventSlotFreedThisTurn = true;
       }
     }
   }
@@ -1811,12 +1900,25 @@ export function executePlan(
     .map((m) => ({ ...m, turnsRemaining: m.turnsRemaining - 1 }))
     .filter((m) => m.turnsRemaining > 0);
 
-  if (catalog.events.length > 0) {
-    nextCurrentEventTemplateId = pickRandomEventTemplateId(catalog, rng);
-    resolveEvents.push({
-      kind: "event_rotated_in",
-      eventTemplateId: nextCurrentEventTemplateId ?? "",
-    });
+  /* Nothing is drawn while an event mission is still running. */
+  if (nextCurrentEventTemplateId === null && !eventMissionStillActive) {
+    if (eventSlotFreedThisTurn) {
+      nextEventCooldownTurnsRemaining = rollEventCooldownTurns(catalog, rng);
+    } else if (nextEventCooldownTurnsRemaining > 0) {
+      nextEventCooldownTurnsRemaining -= 1;
+    }
+    if (nextEventCooldownTurnsRemaining === 0) {
+      const draw = drawEventOffer(catalog, rng);
+      if (draw !== null) {
+        nextCurrentEventTemplateId = draw.eventTemplateId;
+        nextCurrentEventTurnsRemaining = draw.lifetimeTurns;
+        resolveEvents.push({
+          kind: "event_rotated_in",
+          eventTemplateId: draw.eventTemplateId,
+          lifetimeTurns: draw.lifetimeTurns,
+        });
+      }
+    }
   }
 
   const activityLog = mergeResolveActivityEventsIntoActivityLog(
@@ -1845,8 +1947,9 @@ export function executePlan(
       opposingAgentInstances,
       locationAgentPresence,
       currentEventTemplateId: nextCurrentEventTemplateId,
+      currentEventTurnsRemaining: nextCurrentEventTurnsRemaining,
+      eventCooldownTurnsRemaining: nextEventCooldownTurnsRemaining,
       activeSuccessModifiers,
-      eventOfferEngagedThisTurn: false,
     },
   };
 }
@@ -1870,7 +1973,6 @@ export function advanceToNextTurn(state: GameState): Result<GameState, GameError
           state.player.maxCommandPoints + state.player.pendingBonusCommandPoints,
         pendingBonusCommandPoints: 0,
       },
-      eventOfferEngagedThisTurn: false,
     },
   };
 }

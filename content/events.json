@@ -10,6 +10,7 @@
         "delta": 2
       }
     ],
+    "lifetimeTurns": 3,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "politician"
@@ -22,6 +23,7 @@
     "name": "Quiet audit window",
     "description": "Inspectors blink; a rare chance to cool the network before they look again.",
     "durationTurns": 2,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "security_level_delta_global",
@@ -48,6 +50,7 @@
         "locationType": "military"
       }
     ],
+    "lifetimeTurns": 3,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "soldier"
@@ -60,6 +63,7 @@
     "name": "Economic panic",
     "description": "Markets seize; calm the floor or watch spreads widen into your shell companies.",
     "durationTurns": 2,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "security_level_delta_by_location_type",
@@ -87,6 +91,7 @@
         "locationLevel": 3
       }
     ],
+    "lifetimeTurns": 3,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "spy",
@@ -100,6 +105,7 @@
     "name": "Intel dump leak",
     "description": "A rival cache surfaces in the wild. Beat analysts to the map or lose the window.",
     "durationTurns": 2,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "reveal_hidden_assets_global",
@@ -119,6 +125,7 @@
     "name": "Political disclosure",
     "description": "Committee staffers trade rumors; steer the leak toward visible political fronts.",
     "durationTurns": 1,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "reveal_hidden_assets_by_location_type",
@@ -138,6 +145,7 @@
     "name": "Tier-1 clearance lapse",
     "description": "Low-clearance contractors gossip; exploit the soft perimeter before it patches.",
     "durationTurns": 1,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "reveal_hidden_assets_by_location_level",
@@ -158,6 +166,7 @@
     "name": "Medical rotation",
     "description": "A friendly clinic rotation can scrub injuries off the roster—if you control intake.",
     "durationTurns": 2,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "remove_trait_from_all_minions",
@@ -183,6 +192,7 @@
         "traitId": "injured"
       }
     ],
+    "lifetimeTurns": 3,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "bodyguard",
@@ -196,6 +206,7 @@
     "name": "Propaganda tailwind",
     "description": "Spin buys breathing room on every op—for a few resolves, anyway.",
     "durationTurns": 2,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "add_success_chance_modifier",
@@ -223,6 +234,7 @@
         "turns": 2
       }
     ],
+    "lifetimeTurns": 3,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "politician",
@@ -236,6 +248,7 @@
     "name": "Emergency funding",
     "description": "A back-channel appropriations rider can refill your war chest next tick.",
     "durationTurns": 1,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "grant_command_points_next_turn",
@@ -255,6 +268,7 @@
     "name": "Recruitment drive",
     "description": "Charisma opens wallets and widens the hiring pool—if you stage the rally.",
     "durationTurns": 2,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "max_hire_offers_delta",
@@ -273,6 +287,7 @@
     "name": "Finance hearing prep",
     "description": "Binders full of leverage: walk the committee with documents or eat the subpoena.",
     "durationTurns": 2,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "security_level_delta_global",
@@ -300,6 +315,7 @@
         "delta": 1
       }
     ],
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "reveal_hidden_assets_global",
@@ -329,6 +345,7 @@
         "delta": -1
       }
     ],
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "intel_level_delta_global",
@@ -348,6 +365,7 @@
     "name": "Harbor manifest leak",
     "description": "A clerk is selling dock paperwork cheap; economic sites are an open book for a week.",
     "durationTurns": 1,
+    "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
         "kind": "intel_level_delta_by_location_type",
