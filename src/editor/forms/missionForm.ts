@@ -219,6 +219,33 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
     container.appendChild(
       hint("Turns the offer stays on the table. Not started in time ⇒ expireEffects fire."),
     );
+    container.appendChild(
+      formRow(
+        "minInfamy (0 = no gate)",
+        numberInput(num(ctx.row, "minInfamy"), (v) =>
+          ctx.update((row) => {
+            setOrDelete(row, "minInfamy", v > 0 ? v : undefined, true);
+          }),
+          { min: 0, max: 100 },
+        ),
+      ),
+    );
+    container.appendChild(
+      formRow(
+        "minHeat (0 = no gate)",
+        numberInput(num(ctx.row, "minHeat"), (v) =>
+          ctx.update((row) => {
+            setOrDelete(row, "minHeat", v > 0 ? v : undefined, true);
+          }),
+          { min: 0, max: 100 },
+        ),
+      ),
+    );
+    container.appendChild(
+      hint(
+        "Draw-pool gates: the event is only offered once the player's infamy / heat reach these. Leave at 0 for events that can show up from turn one.",
+      ),
+    );
   }
 
   const traitIds = ctx.ids("traits");

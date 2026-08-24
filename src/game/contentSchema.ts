@@ -366,6 +366,9 @@ export const eventTemplateSchema = z.object({
   durationTurns: z.coerce.number().int().min(1),
   /** Turns the offer stays on the table before `expireEffects` fire (designer-set, ≥ 1). */
   lifetimeTurns: z.coerce.number().int().min(1).max(99),
+  /** Optional draw-pool gates: the event is only offered once the player reaches these. */
+  minInfamy: z.coerce.number().int().min(0).max(100).optional(),
+  minHeat: z.coerce.number().int().min(0).max(100).optional(),
   onSuccessEffects: z.array(missionEffectSchema).optional(),
   onFailureEffects: z.array(missionEffectSchema).optional(),
   expireEffects: z.array(missionEffectSchema).optional(),
@@ -575,6 +578,12 @@ function normalizeEventTemplates(arr: z.infer<typeof eventTemplateSchema>[]): Ev
       durationTurns: m.durationTurns,
       lifetimeTurns: m.lifetimeTurns,
     };
+    if (m.minInfamy !== undefined && m.minInfamy > 0) {
+      base.minInfamy = m.minInfamy;
+    }
+    if (m.minHeat !== undefined && m.minHeat > 0) {
+      base.minHeat = m.minHeat;
+    }
     if (m.cardArt !== undefined) {
       base.cardArt = m.cardArt;
     }

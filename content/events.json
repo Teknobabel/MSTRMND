@@ -11,6 +11,7 @@
       }
     ],
     "lifetimeTurns": 3,
+    "minHeat": 40,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "politician"
@@ -51,6 +52,7 @@
       }
     ],
     "lifetimeTurns": 3,
+    "minHeat": 20,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "soldier"
@@ -92,6 +94,7 @@
       }
     ],
     "lifetimeTurns": 3,
+    "minInfamy": 35,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "spy",
@@ -235,6 +238,7 @@
       }
     ],
     "lifetimeTurns": 3,
+    "minInfamy": 15,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "politician",
@@ -288,6 +292,7 @@
     "description": "Binders full of leverage: walk the committee with documents or eat the subpoena.",
     "durationTurns": 2,
     "lifetimeTurns": 3,
+    "minInfamy": 35,
     "onSuccessEffects": [
       {
         "kind": "security_level_delta_global",
@@ -316,6 +321,7 @@
       }
     ],
     "lifetimeTurns": 3,
+    "minHeat": 20,
     "onSuccessEffects": [
       {
         "kind": "reveal_hidden_assets_global",
@@ -346,6 +352,7 @@
       }
     ],
     "lifetimeTurns": 3,
+    "minHeat": 20,
     "onSuccessEffects": [
       {
         "kind": "intel_level_delta_global",

@@ -5,8 +5,10 @@ import {
   assignMission,
   cancelMission,
   createInitialGameState,
+  eligibleEventTemplates,
   executePlan,
 } from "./gameState";
+import type { ContentCatalog } from "./types";
 import { fixtureCatalog, makeMinionInstance, seededRng, sequentialIds } from "./testFixtures";
 
 const catalog = fixtureCatalog();
@@ -368,6 +370,61 @@ describe("executePlan", () => {
     const kinds = resolved.value.activityLog.flatMap((e) => e.events).map((e) => e.kind);
     expect(kinds).toContain("event_rotated_in");
     expect(kinds).not.toContain("event_expired");
+  });
+});
+
+describe("event draw-pool gates", () => {
+  /** Fixture catalog with the one event held behind an infamy gate. */
+  function gatedCatalog(gate: { minInfamy?: number; minHeat?: number }): ContentCatalog {
+    return { ...catalog, events: [{ ...catalog.events[0]!, ...gate }] };
+  }
+
+  it("keeps gated events out of the pool until the player's stats reach them", () => {
+    const player = baseState(11).player;
+    const infamyGated = gatedCatalog({ minInfamy: 20 });
+    expect(eligibleEventTemplates(infamyGated, { ...player, infamy: 19 })).toHaveLength(0);
+    expect(eligibleEventTemplates(infamyGated, { ...player, infamy: 20 })).toHaveLength(1);
+
+    const heatGated = gatedCatalog({ minHeat: 40 });
+    expect(eligibleEventTemplates(heatGated, { ...player, heat: 39 })).toHaveLength(0);
+    expect(eligibleEventTemplates(heatGated, { ...player, heat: 40 })).toHaveLength(1);
+
+    /* Both gates must be met, and an ungated event is always in the pool. */
+    const bothGated = gatedCatalog({ minInfamy: 20, minHeat: 40 });
+    expect(eligibleEventTemplates(bothGated, { ...player, infamy: 20, heat: 39 })).toHaveLength(0);
+    expect(eligibleEventTemplates(bothGated, { ...player, infamy: 20, heat: 40 })).toHaveLength(1);
+    expect(eligibleEventTemplates(catalog, { ...player, infamy: 0, heat: 0 })).toHaveLength(1);
+  });
+
+  it("leaves the slot empty while nothing is eligible, then draws once a gate opens", () => {
+    const gated = gatedCatalog({ minInfamy: 20 });
+    const quiet: GameState = {
+      ...baseState(12),
+      currentEventTemplateId: null,
+      currentEventTurnsRemaining: 0,
+      eventCooldownTurnsRemaining: 0,
+    };
+    const locked = executePlan(quiet, gated, () => 0, sequentialIds("ag"));
+    expect(locked.ok).toBe(true);
+    if (!locked.ok) {
+      return;
+    }
+    expect(locked.value.currentEventTemplateId).toBeNull();
+    const lockedKinds = locked.value.activityLog.flatMap((e) => e.events).map((e) => e.kind);
+    expect(lockedKinds).not.toContain("event_rotated_in");
+
+    /* The draw is retried every resolve, so crossing the gate opens the event up. */
+    const escalated: GameState = {
+      ...locked.value,
+      phase: "main",
+      player: { ...locked.value.player, infamy: 20 },
+    };
+    const unlocked = executePlan(escalated, gated, () => 0, sequentialIds("ag"));
+    expect(unlocked.ok).toBe(true);
+    if (!unlocked.ok) {
+      return;
+    }
+    expect(unlocked.value.currentEventTemplateId).toBe("ev-1");
   });
 });
 

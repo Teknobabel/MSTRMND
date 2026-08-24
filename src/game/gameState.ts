@@ -602,9 +602,27 @@ function pickRandomPlayerProfile(
   return { name: p.name, profilePic: p.profilePic };
 }
 
-/** Uniform random event template id, or null when the catalog has no events. */
-export function pickRandomEventTemplateId(catalog: ContentCatalog, rng: Rng): string | null {
-  const list = catalog.events;
+/**
+ * Events currently in the draw pool: those whose optional **`minInfamy`** / **`minHeat`** gates
+ * the player has reached. Ungated events are always in the pool, so gating a template holds it
+ * back until the run escalates rather than removing it.
+ */
+export function eligibleEventTemplates(
+  catalog: ContentCatalog,
+  player: PlayerState,
+): EventTemplate[] {
+  return catalog.events.filter(
+    (e) => player.infamy >= (e.minInfamy ?? 0) && player.heat >= (e.minHeat ?? 0),
+  );
+}
+
+/** Uniform random event template id from the pool the player has unlocked, or null if empty. */
+export function pickRandomEventTemplateId(
+  catalog: ContentCatalog,
+  rng: Rng,
+  player: PlayerState,
+): string | null {
+  const list = eligibleEventTemplates(catalog, player);
   if (list.length === 0) {
     return null;
   }
@@ -616,11 +634,16 @@ export function pickRandomEventTemplateId(catalog: ContentCatalog, rng: Rng): st
 export type EventOfferDraw = { eventTemplateId: string; lifetimeTurns: number };
 
 /**
- * Draw the next global event offer (uniform over `catalog.events`, with replacement), carrying
- * the template's designer-set `lifetimeTurns`. Null when the catalog has no events.
+ * Draw the next global event offer (uniform over the eligible pool, with replacement), carrying
+ * the template's designer-set `lifetimeTurns`. Null when no event is currently eligible — the
+ * slot then stays empty and the draw is retried at the next resolve.
  */
-export function drawEventOffer(catalog: ContentCatalog, rng: Rng): EventOfferDraw | null {
-  const id = pickRandomEventTemplateId(catalog, rng);
+export function drawEventOffer(
+  catalog: ContentCatalog,
+  rng: Rng,
+  player: PlayerState,
+): EventOfferDraw | null {
+  const id = pickRandomEventTemplateId(catalog, rng, player);
   if (id === null) {
     return null;
   }
@@ -689,7 +712,7 @@ export function createInitialGameState(
    * drawn at the resolve that ends turn `firstEventTurn - 1` and is on the table for turn
    * `firstEventTurn`. Only a `firstEventTurn` of 1 puts an offer up at run start. */
   const firstEventTurn = Math.max(1, catalog.balance.firstEventTurn);
-  const openingEventOffer = firstEventTurn <= 1 ? drawEventOffer(catalog, rng) : null;
+  const openingEventOffer = firstEventTurn <= 1 ? drawEventOffer(catalog, rng, player) : null;
   const base: GameState = {
     phase: "main",
     turnNumber: 1,
@@ -1912,7 +1935,9 @@ export function executePlan(
       nextEventCooldownTurnsRemaining -= 1;
     }
     if (nextEventCooldownTurnsRemaining === 0) {
-      const draw = drawEventOffer(catalog, rng);
+      /* Gates read the player's post-resolve stats, so crossing a threshold this turn opens
+       * that event up for the draw that follows it. */
+      const draw = drawEventOffer(catalog, rng, player);
       if (draw !== null) {
         nextCurrentEventTemplateId = draw.eventTemplateId;
         nextCurrentEventTurnsRemaining = draw.lifetimeTurns;

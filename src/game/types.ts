@@ -219,6 +219,14 @@ export type EventTemplate = MissionTemplate & {
    * the mission then decides the outcome via `onSuccessEffects` / `onFailureEffects`.
    */
   lifetimeTurns: number;
+  /**
+   * Player **infamy** needed for this event to enter the draw pool. Absent (or 0) ⇒ no gate.
+   * Gates are checked against the player's stats at the moment the next offer is drawn, so a
+   * gated event simply stays out of the rotation until the run reaches it.
+   */
+  minInfamy?: number;
+  /** Player **heat** needed for this event to enter the draw pool. Absent (or 0) ⇒ no gate. */
+  minHeat?: number;
   /** Applied automatically if the offer's lifetime runs out before the player starts it. */
   expireEffects?: MissionEffect[];
 };
