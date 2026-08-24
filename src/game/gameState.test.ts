@@ -787,7 +787,7 @@ describe("Lair Raid (game over)", () => {
     expect(result.value.lairRaidStatus).toBe("pending");
     /* Waits its turn: the offer already on the table is not displaced. */
     expect(result.value.currentEventTemplateId).toBe("ev-1");
-    expect(result.value.gameOverReason).toBeNull();
+    expect(result.value.runEnding).toBeNull();
   });
 
   it("puts the owed raid on the table at the next free slot, ignoring the cooldown", () => {
@@ -821,19 +821,19 @@ describe("Lair Raid (game over)", () => {
       return;
     }
     const dead = result.value;
-    expect(dead.gameOverReason).toBe("lair_raid_expired");
+    expect(dead.runEnding).toEqual({ kind: "defeat", reason: "lair_raid_expired" });
     /* No replacement offer is drawn over the corpse of the run. */
     expect(dead.currentEventTemplateId).toBeNull();
     const kinds = dead.activityLog.flatMap((e) => e.events).map((e) => e.kind);
-    expect(kinds).toContain("game_over");
+    expect(kinds).toContain("run_ended");
 
     /* Terminal: the run cannot be resolved or advanced any further. */
     const again = executePlan({ ...dead, phase: "main" }, raidCat, () => 0, sequentialIds("ag"));
     expect(again.ok).toBe(false);
-    expect(again.ok === false && again.error.code).toBe("game_over");
+    expect(again.ok === false && again.error.code).toBe("run_ended");
     const advanced = advanceToNextTurn(dead);
     expect(advanced.ok).toBe(false);
-    expect(advanced.ok === false && advanced.error.code).toBe("game_over");
+    expect(advanced.ok === false && advanced.error.code).toBe("run_ended");
   });
 
   it("ends the run when the raid mission fails", () => {
@@ -863,7 +863,7 @@ describe("Lair Raid (game over)", () => {
     if (!result.ok) {
       return;
     }
-    expect(result.value.gameOverReason).toBe("lair_raid_failed");
+    expect(result.value.runEnding).toEqual({ kind: "defeat", reason: "lair_raid_failed" });
   });
 
   it("stands the top tier down when the raid is survived, and re-arms it when heat returns", () => {
@@ -894,7 +894,7 @@ describe("Lair Raid (game over)", () => {
       return;
     }
     const survived = result.value;
-    expect(survived.gameOverReason).toBeNull();
+    expect(survived.runEnding).toBeNull();
     expect(survived.player.heat).toBe(75); /* 100 − 25 from the template's success effect */
     expect(survived.wantedLevelTierIndex).toBe(TOP_TIER - 1);
     expect(survived.lairRaidStatus).toBe("none");
@@ -913,5 +913,167 @@ describe("Lair Raid (game over)", () => {
     }
     expect(rearmed.value.wantedLevelTierIndex).toBe(TOP_TIER);
     expect(rearmed.value.lairRaidStatus).not.toBe("none");
+  });
+});
+
+describe("Omega Plan completion (game win)", () => {
+  /** Fixture plan stages all point at `ms-basic`; one success per slot clears a phase. */
+  function omegaMission(slot: number, turnsRemaining = 1): ActiveMission {
+    return activeMission({
+      id: `am-omega-${slot}`,
+      missionTemplateId: "ms-basic",
+      missionSource: "omega",
+      omegaStageIndex: 2,
+      omegaSlotIndex: slot,
+      target: { kind: "location", locationId: "loc-a" },
+      turnsRemaining,
+      participantInstanceIds: [`mi-${slot}`],
+    });
+  }
+
+  /** Sitting on the final phase with two of its three slots already banked. */
+  function finalPhaseState(seed: number): GameState {
+    const base = baseState(seed);
+    return {
+      ...base,
+      player: {
+        ...base.player,
+        minions: [
+          makeMinionInstance("mi-0", "m-hero", ["t-req"]),
+          makeMinionInstance("mi-1", "m-hero", ["t-req"]),
+          makeMinionInstance("mi-2", "m-hero", ["t-req"]),
+        ],
+      },
+      activeOmegaStageIndex: 2,
+      omegaStageProgress: [
+        [true, true, true],
+        [true, true, true],
+        [true, true, false],
+      ],
+    };
+  }
+
+  it("ends the run in victory when the last phase clears", () => {
+    const state: GameState = {
+      ...finalPhaseState(20),
+      activeMissions: [omegaMission(2)],
+    };
+    /* rng 0 ⇒ the roll always lands under the success chance. */
+    const result = executePlan(state, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const won = result.value;
+    expect(won.omegaStageProgress[2]).toEqual([true, true, true]);
+    expect(won.runEnding).toEqual({
+      kind: "victory",
+      omegaPlanId: state.activeOmegaPlanId,
+    });
+    const kinds = won.activityLog.flatMap((e) => e.events).map((e) => e.kind);
+    expect(kinds).toContain("run_ended");
+
+    /* Terminal, exactly like a defeat. */
+    const again = executePlan({ ...won, phase: "main" }, catalog, () => 0, sequentialIds("ag"));
+    expect(again.ok).toBe(false);
+    expect(again.ok === false && again.error.code).toBe("run_ended");
+    const advanced = advanceToNextTurn(won);
+    expect(advanced.ok).toBe(false);
+    expect(advanced.ok === false && advanced.error.code).toBe("run_ended");
+  });
+
+  it("leaves the run alive when an earlier phase clears", () => {
+    const base = baseState(21);
+    const state: GameState = {
+      ...base,
+      player: { ...base.player, minions: [makeMinionInstance("mi-2", "m-hero", ["t-req"])] },
+      activeOmegaStageIndex: 0,
+      omegaStageProgress: [
+        [true, true, false],
+        [false, false, false],
+        [false, false, false],
+      ],
+      activeMissions: [
+        activeMission({
+          id: "am-omega-2",
+          missionTemplateId: "ms-basic",
+          missionSource: "omega",
+          omegaStageIndex: 0,
+          omegaSlotIndex: 2,
+          target: { kind: "location", locationId: "loc-a" },
+          turnsRemaining: 1,
+          participantInstanceIds: ["mi-2"],
+        }),
+      ],
+    };
+    const result = executePlan(state, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.activeOmegaStageIndex).toBe(1);
+    expect(result.value.runEnding).toBeNull();
+  });
+
+  it("does not fire on a final-phase mission that fails", () => {
+    const base = finalPhaseState(22);
+    const state: GameState = {
+      ...base,
+      /* No `t-req`, so the mission's required trait is unmet and the roll cannot land. */
+      player: { ...base.player, minions: [makeMinionInstance("mi-2", "m-buddy", [])] },
+      activeMissions: [omegaMission(2)],
+    };
+    const result = executePlan(state, catalog, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.runEnding).toBeNull();
+    expect(result.value.omegaStageProgress[2]).toEqual([true, true, false]);
+  });
+
+  it("prefers victory over a lost Lair Raid resolving on the same turn", () => {
+    const raidCat = (() => {
+      const slices = rawFixtureSlices();
+      slices.events = [
+        ...slices.events,
+        {
+          id: "ev-raid",
+          name: "Lair raid",
+          description: "They found the lair.",
+          targetType: "none",
+          startCommandPoints: 0,
+          durationTurns: 1,
+          lifetimeTurns: 1,
+          requiredTraitIds: ["t-req"],
+          special: "lair_raid",
+        },
+      ];
+      return parseCatalog(slices);
+    })();
+    const base = finalPhaseState(23);
+    const state: GameState = {
+      ...base,
+      player: {
+        ...base.player,
+        heat: 100,
+        minions: [makeMinionInstance("mi-2", "m-hero", ["t-req"])],
+      },
+      wantedLevelTierIndex: raidCat.wantedLevels.length - 1,
+      lairRaidStatus: "offered",
+      currentEventTemplateId: "ev-raid",
+      /* Expires on this very resolve — the raid is lost the same tick the plan lands. */
+      currentEventTurnsRemaining: 1,
+      activeMissions: [omegaMission(2)],
+    };
+    const result = executePlan(state, raidCat, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.runEnding).toEqual({
+      kind: "victory",
+      omegaPlanId: state.activeOmegaPlanId,
+    });
   });
 });

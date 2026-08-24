@@ -47,9 +47,9 @@ import {
 } from "./game/dynamicTrait";
 import { describeMissionTemplateEffects } from "./game/missionEffects";
 import {
-  buildGameOverReport,
+  buildRunEndReport,
   buildTurnReport,
-  type GameOverReport,
+  type RunEndReport,
   type MissionResultReport,
   type TurnReport,
   type TurnReportLine,
@@ -618,13 +618,13 @@ function initGameController(
   const turnReportBody = req<HTMLElement>("turn-report-body");
   const btnTurnReportContinue = req<HTMLButtonElement>("btn-turn-report-continue");
   const btnTurnReportSkip = req<HTMLButtonElement>("btn-turn-report-skip");
-  const gameOverOverlay = req<HTMLElement>("overlay-game-over");
-  const gameOverKicker = req<HTMLElement>("game-over-kicker");
-  const gameOverTitle = req<HTMLElement>("game-over-title");
-  const gameOverVerdict = req<HTMLElement>("game-over-verdict");
-  const gameOverStepsEl = req<HTMLElement>("game-over-steps");
-  const gameOverBody = req<HTMLElement>("game-over-body");
-  const btnGameOverContinue = req<HTMLButtonElement>("btn-game-over-continue");
+  const runEndOverlay = req<HTMLElement>("overlay-run-end");
+  const runEndKicker = req<HTMLElement>("run-end-kicker");
+  const runEndTitle = req<HTMLElement>("run-end-title");
+  const runEndVerdict = req<HTMLElement>("run-end-verdict");
+  const runEndStepsEl = req<HTMLElement>("run-end-steps");
+  const runEndBody = req<HTMLElement>("run-end-body");
+  const btnRunEndContinue = req<HTMLButtonElement>("btn-run-end-continue");
   const hudShort = req<HTMLElement>("game-hud-short");
   const threatLevelEl = req<HTMLElement>("threat-level");
   const globalTickerEl = req<HTMLElement>("global-events-ticker");
@@ -3390,12 +3390,20 @@ function initGameController(
           }
           return `Event "${n}" expired — ${ev.effectDescriptions.join("; ")}.`;
         }
-        case "game_over": {
-          const n = missionName(ev.eventTemplateId);
+        case "run_ended": {
+          const ending = ev.ending;
+          if (ending.kind === "victory") {
+            const planName =
+              content.omegaPlans.find((pl) => pl.id === ending.omegaPlanId)?.name ??
+              "The Omega Plan";
+            return `${planName} is complete. ${state.organizationName} has won.`;
+          }
+          const raidName =
+            content.events.find((e) => e.special === "lair_raid")?.name ?? "the raid";
           const why =
-            ev.reason === "lair_raid_expired"
-              ? `"${n}" was never answered`
-              : `"${n}" was lost`;
+            ending.reason === "lair_raid_expired"
+              ? `"${raidName}" was never answered`
+              : `"${raidName}" was lost`;
           return `${state.organizationName} has fallen — ${why}.`;
         }
         default: {
@@ -3948,96 +3956,100 @@ function initGameController(
   }
 
   /* ---------------------------------------------------------------------------------------
-   * Game over: two modals (the verdict, then the run summary) that stand in for the whole
-   * end-of-turn report once the Lair Raid ends the run. The mission recap and Turn Summary
-   * are skipped entirely — there is no next turn to brief for.
+   * Run end: two modals — the outcome (Victory or Game Over), then the Run Summary — that
+   * stand in for the whole end-of-turn report once the run finishes, won or lost. The mission
+   * recap and Turn Summary are skipped entirely; there is no next turn to brief for.
    * ------------------------------------------------------------------------------------- */
 
-  /** Open report, or null when no game-over report is showing. */
-  let gameOverReport: GameOverReport | null = null;
-  /** Step cursor: 0 = the verdict, 1 = the run summary. */
-  let gameOverStepIndex = 0;
+  /** Open report, or null when no run-end report is showing. */
+  let runEndReport: RunEndReport | null = null;
+  /** Step cursor: 0 = the outcome, 1 = the run summary. */
+  let runEndStepIndex = 0;
 
-  function renderGameOverSteps(): void {
-    gameOverStepsEl.innerHTML = "";
+  function renderRunEndSteps(): void {
+    runEndStepsEl.innerHTML = "";
     for (let i = 0; i < 2; i += 1) {
       const dot = document.createElement("span");
       dot.className = "turn-report-step";
-      if (i < gameOverStepIndex) {
+      if (i < runEndStepIndex) {
         dot.classList.add("turn-report-step--done");
-      } else if (i === gameOverStepIndex) {
+      } else if (i === runEndStepIndex) {
         dot.classList.add("turn-report-step--current");
       }
-      gameOverStepsEl.appendChild(dot);
+      runEndStepsEl.appendChild(dot);
     }
   }
 
-  function renderGameOver(): void {
-    const report = gameOverReport;
+  function renderRunEnd(): void {
+    const report = runEndReport;
     if (report === null) {
       return;
     }
-    gameOverBody.innerHTML = "";
-    gameOverBody.scrollTop = 0;
-    gameOverVerdict.className = "turn-report-verdict turn-report-verdict--failure";
-    gameOverVerdict.textContent = report.verdict;
+    const won = report.ending.kind === "victory";
+    runEndBody.innerHTML = "";
+    runEndBody.scrollTop = 0;
+    runEndVerdict.className = `turn-report-verdict turn-report-verdict--${won ? "success" : "failure"}`;
+    runEndVerdict.textContent = report.verdict;
 
-    if (gameOverStepIndex === 0) {
-      gameOverKicker.textContent = `Turn ${report.turnNumber} · run ended`;
-      gameOverTitle.textContent = "Game Over";
-      for (const para of report.epitaph) {
+    if (runEndStepIndex === 0) {
+      runEndKicker.textContent = won
+        ? `Turn ${report.turnNumber} · Omega Plan complete`
+        : `Turn ${report.turnNumber} · run ended`;
+      runEndTitle.textContent = report.title;
+      for (const para of report.narrative) {
         const p = document.createElement("p");
-        p.className = "game-over-epitaph";
+        p.className = "run-end-narrative";
         p.textContent = para;
-        gameOverBody.appendChild(p);
+        runEndBody.appendChild(p);
       }
-      btnGameOverContinue.textContent = "View run summary";
+      btnRunEndContinue.textContent = "View run summary";
     } else {
-      gameOverKicker.textContent = report.organizationName;
-      gameOverTitle.textContent = "Run Summary";
+      runEndKicker.textContent = report.organizationName;
+      runEndTitle.textContent = "Run Summary";
       for (const sec of report.summary) {
-        gameOverBody.appendChild(turnReportBlock(sec.title, sec.lines));
+        runEndBody.appendChild(turnReportBlock(sec.title, sec.lines));
       }
-      btnGameOverContinue.textContent = "Return to main menu";
+      btnRunEndContinue.textContent = "Return to main menu";
     }
-    renderGameOverSteps();
-    btnGameOverContinue.focus();
+    renderRunEndSteps();
+    btnRunEndContinue.focus();
   }
 
-  function openGameOver(report: GameOverReport): void {
-    gameOverReport = report;
-    gameOverStepIndex = 0;
-    gameOverOverlay.hidden = false;
-    gameOverOverlay.setAttribute("aria-hidden", "false");
-    renderGameOver();
+  function openRunEnd(report: RunEndReport): void {
+    runEndReport = report;
+    runEndStepIndex = 0;
+    runEndOverlay.classList.toggle("run-end-overlay--victory", report.ending.kind === "victory");
+    runEndOverlay.hidden = false;
+    runEndOverlay.setAttribute("aria-hidden", "false");
+    renderRunEnd();
   }
 
   /**
    * Last step dismissed: the finished run is thrown away and a fresh one is rolled, so the
    * title screen's Play starts over rather than dropping the player back into a dead state.
    */
-  function closeGameOver(): void {
-    gameOverReport = null;
-    gameOverStepIndex = 0;
-    gameOverOverlay.hidden = true;
-    gameOverOverlay.setAttribute("aria-hidden", "true");
-    gameOverBody.innerHTML = "";
+  function closeRunEnd(): void {
+    runEndReport = null;
+    runEndStepIndex = 0;
+    runEndOverlay.hidden = true;
+    runEndOverlay.setAttribute("aria-hidden", "true");
+    runEndBody.innerHTML = "";
     clearAllAssignSlots();
     state = createInitialGameState(content);
     refresh();
     nav.returnToMainMenu();
   }
 
-  function advanceGameOver(): void {
-    if (gameOverReport === null) {
+  function advanceRunEnd(): void {
+    if (runEndReport === null) {
       return;
     }
-    if (gameOverStepIndex >= 1) {
-      closeGameOver();
+    if (runEndStepIndex >= 1) {
+      closeRunEnd();
       return;
     }
-    gameOverStepIndex += 1;
-    renderGameOver();
+    runEndStepIndex += 1;
+    renderRunEnd();
   }
 
   function refresh(): void {
@@ -4167,10 +4179,11 @@ function initGameController(
     if (!dispatch((s) => executePlan(s, content, rng))) {
       return;
     }
-    const ending = state.gameOverReason;
+    const ending = state.runEnding;
     if (ending !== null) {
-      /* The run is over: no mission recap, no Turn Summary — straight to the verdict. */
-      openGameOver(buildGameOverReport(state, content, ending));
+      /* The run is over, won or lost: no mission recap, no Turn Summary — straight to the
+       * outcome modal. */
+      openRunEnd(buildRunEndReport(state, content, ending));
       return;
     }
     openTurnReport(buildTurnReport(before, state, content));
@@ -4180,8 +4193,8 @@ function initGameController(
     advanceTurnReport();
   });
 
-  btnGameOverContinue.addEventListener("click", () => {
-    advanceGameOver();
+  btnRunEndContinue.addEventListener("click", () => {
+    advanceRunEnd();
   });
 
   btnTurnReportSkip.addEventListener("click", () => {

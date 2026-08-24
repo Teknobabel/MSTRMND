@@ -406,6 +406,9 @@ export const omegaPlanTemplateSchema = z.object({
   cardArt: z.string().min(1).optional(),
   mapId: z.string().min(1),
   stages: z.array(omegaPlanStageSchema).length(3),
+  /** Victory copy shown when this plan's final phase clears; absent ⇒ generic fallback. */
+  victoryTitle: z.string().min(1).optional(),
+  victoryNarrative: z.array(z.string().min(1)).optional(),
 });
 
 export const assetSchema: z.ZodType<Asset> = z.object({
@@ -631,6 +634,10 @@ function normalizeOmegaPlans(
     ...(p.cardArt !== undefined ? { cardArt: p.cardArt } : {}),
     mapId: p.mapId,
     stages: assertOmegaPlanStages(p.stages),
+    ...(p.victoryTitle !== undefined ? { victoryTitle: p.victoryTitle } : {}),
+    ...(p.victoryNarrative !== undefined && p.victoryNarrative.length > 0
+      ? { victoryNarrative: [...p.victoryNarrative] }
+      : {}),
   }));
 }
 

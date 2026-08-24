@@ -1808,39 +1808,72 @@ body {
 }
 
 /* ============================================================
-   Game over — reuses the turn-report shell, dialled to the loss
+   Run end — reuses the turn-report shell, skinned per outcome
    ============================================================ */
 
-.game-over-overlay {
+.run-end-overlay {
   /* Above the turn report: the run is finished, nothing behind it is reachable again. */
   z-index: 7;
 }
 
-.game-over-backdrop {
+.run-end-backdrop {
   background: radial-gradient(ellipse 70% 60% at 50% 45%, rgba(96, 6, 18, 0.72), rgba(0, 0, 0, 0.95));
 }
 
-.game-over-panel {
+.run-end-panel {
   border-color: var(--red-deep);
   box-shadow: 0 0 90px rgba(232, 17, 45, 0.35), 0 18px 48px rgba(0, 0, 0, 0.85);
 }
 
-.game-over-panel .turn-report-title {
+.run-end-panel .turn-report-title {
   font-size: 1.35rem;
   letter-spacing: 0.22em;
   color: var(--red-bright);
   text-shadow: 0 0 22px var(--red-glow);
 }
 
-.game-over-epitaph {
+.run-end-narrative {
   margin: 0 0 0.75rem;
   font-size: 0.82rem;
   line-height: 1.6;
   color: var(--text-1);
 }
 
-.game-over-epitaph:last-child {
+.run-end-narrative:last-child {
   margin-bottom: 0;
+}
+
+/* Victory recolours the same shell: gold instead of the house red. */
+.run-end-overlay--victory .run-end-backdrop {
+  background: radial-gradient(ellipse 70% 60% at 50% 45%, rgba(122, 84, 16, 0.6), rgba(0, 0, 0, 0.95));
+}
+
+.run-end-overlay--victory .run-end-panel {
+  border-color: var(--warn-dim);
+  box-shadow: 0 0 90px rgba(255, 176, 32, 0.28), 0 18px 48px rgba(0, 0, 0, 0.85);
+}
+
+.run-end-overlay--victory .turn-report-head {
+  background: linear-gradient(180deg, rgba(38, 26, 6, 0.98), rgba(18, 12, 4, 0.94));
+  border-image: linear-gradient(90deg, var(--warn), rgba(255, 176, 32, 0.35) 45%, transparent 92%) 1;
+}
+
+.run-end-overlay--victory .run-end-panel .turn-report-title {
+  color: var(--warn);
+  text-shadow: 0 0 22px rgba(255, 176, 32, 0.45);
+}
+
+.run-end-overlay--victory .turn-report-verdict {
+  color: var(--warn);
+  border-color: var(--warn-dim);
+  background: rgba(122, 84, 16, 0.2);
+  text-shadow: 0 0 12px rgba(255, 176, 32, 0.35);
+}
+
+.run-end-overlay--victory .turn-report-step--done,
+.run-end-overlay--victory .turn-report-step--current {
+  background: var(--warn);
+  border-color: var(--warn);
 }
 
 /* ============================================================

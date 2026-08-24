@@ -60,6 +60,7 @@ import {
 import {
   getOmegaPlanById,
   isOmegaStageComplete,
+  OMEGA_STAGE_COUNT,
   omegaSlotMissionId,
   pickRandomOmegaPlanId,
 } from "./omegaPlan";
@@ -81,8 +82,24 @@ export type TurnPhase = "main" | "resolve" | "summary";
  */
 export type LairRaidStatus = "none" | "pending" | "offered" | "engaged";
 
-/** Why a run ended. Both come from the Lair Raid — the only loss condition today. */
+/** Why a run ended in **defeat**. Both come from the Lair Raid — the only loss condition today. */
 export type GameOverReason = "lair_raid_expired" | "lair_raid_failed";
+
+/**
+ * How a finished run ended. One field rather than a pair of nullable flags, so "won" and
+ * "lost" can never both be set.
+ *
+ * - `victory` — the active Omega Plan's **final** phase cleared (`omegaPlanId` is the plan
+ *   that was completed; `null` only if the run somehow had none).
+ * - `defeat`  — the Lair Raid was lost. See {@link GameOverReason}.
+ *
+ * When a resolve produces both at once — the last Omega mission lands on the same tick the
+ * raid falls — **victory wins**: finishing the plan is the point of the game, and the lair
+ * burning down behind the player does not undo it.
+ */
+export type RunEnding =
+  | { kind: "victory"; omegaPlanId: string | null }
+  | { kind: "defeat"; reason: GameOverReason };
 
 export type PlayerState = {
   commandPoints: number;
@@ -204,11 +221,9 @@ export type ActivityEvent =
       effectDescriptions: string[];
     }
   | {
-      /** The run ended. Terminal — no further rows are ever appended after this one. */
-      kind: "game_over";
-      reason: GameOverReason;
-      /** The Lair Raid template whose expiry / failure ended the run. */
-      eventTemplateId: string;
+      /** The run ended, won or lost. Terminal — no further rows are ever appended after this one. */
+      kind: "run_ended";
+      ending: RunEnding;
     }
   | {
       kind: "asset_gained";
@@ -349,9 +364,10 @@ export type GameState = {
   lairRaidStatus: LairRaidStatus;
   /**
    * `null` while the run is alive. Once set, the run is over: `executePlan` and
-   * `advanceToNextTurn` refuse to run and the UI shows Game Over instead of the turn report.
+   * `advanceToNextTurn` refuse to run, and the UI shows the run-end modals instead of the
+   * turn report.
    */
-  gameOverReason: GameOverReason | null;
+  runEnding: RunEnding | null;
 };
 
 export type GameError =
@@ -397,7 +413,7 @@ export type GameError =
     }
   | { code: "not_enough_assets"; assetId: string; need: number; have: number }
   | { code: "no_current_event_offer" }
-  | { code: "game_over"; reason: GameOverReason }
+  | { code: "run_ended"; ending: RunEnding }
   | {
       code: "event_mission_mismatch";
       currentOffer: string | null;
@@ -825,7 +841,7 @@ export function createInitialGameState(
     eventCooldownTurnsRemaining: firstEventTurn - 1,
     activeSuccessModifiers: [],
     lairRaidStatus: "none",
-    gameOverReason: null,
+    runEnding: null,
   };
 
   const assetEvents: ActivityEvent[] = [];
@@ -1574,8 +1590,8 @@ export function executePlan(
   rng: Rng,
   newInstanceId: () => string = () => globalThis.crypto.randomUUID(),
 ): Result<GameState, GameError> {
-  if (state.gameOverReason !== null) {
-    return { ok: false, error: { code: "game_over", reason: state.gameOverReason } };
+  if (state.runEnding !== null) {
+    return { ok: false, error: { code: "run_ended", ending: state.runEnding } };
   }
   if (state.phase !== "main") {
     return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
@@ -1928,11 +1944,14 @@ export function executePlan(
     state.activeOmegaPlanId !== null
       ? getOmegaPlanById(catalog, state.activeOmegaPlanId)
       : undefined;
+  /* Clearing the **last** phase finishes the plan — the run's win condition. */
+  let omegaPlanCompleted = false;
   if (
     activePlan !== undefined &&
     isOmegaStageComplete(activePlan, stageAtExecute, omegaStageProgress[stageAtExecute]!)
   ) {
-    activeOmegaStageIndex = Math.min(2, stageAtExecute + 1);
+    omegaPlanCompleted = stageAtExecute >= OMEGA_STAGE_COUNT - 1;
+    activeOmegaStageIndex = Math.min(OMEGA_STAGE_COUNT - 1, stageAtExecute + 1);
   }
 
   player = {
@@ -1953,7 +1972,7 @@ export function executePlan(
    * player a raid, and the raid's own outcome decides whether the run continues.
    * ------------------------------------------------------------------------------------- */
   let lairRaidStatus = state.lairRaidStatus;
-  let gameOverReason: GameOverReason | null = null;
+  let runEnding: RunEnding | null = null;
 
   /* The offer left the table because the player started it (the slot bookkeeping below clears
    * `currentEventTemplateId`; this records *why*). */
@@ -1965,9 +1984,14 @@ export function executePlan(
      * `onSuccessEffects` (a `heat_delta`), so designers tune it in content. */
     lairRaidStatus = "none";
   } else if (lairRaidOutcome === "failure") {
-    gameOverReason = "lair_raid_failed";
+    runEnding = { kind: "defeat", reason: "lair_raid_failed" };
   } else if (lairRaidOutcome === "aborted") {
     lairRaidStatus = "pending";
+  }
+  /* Deliberately last, and unconditional: a resolve that both finishes the plan and loses the
+   * lair is a **win** (see `RunEnding`). */
+  if (omegaPlanCompleted) {
+    runEnding = { kind: "victory", omegaPlanId: state.activeOmegaPlanId };
   }
 
   let wantedLevelTierIndex = nextMonotonicWantedTierIndex(
@@ -2074,9 +2098,13 @@ export function executePlan(
             effectDescriptions: [],
           });
         }
-        if (lairRaid !== undefined && nextCurrentEventTemplateId === lairRaid.id) {
-          /* Ignoring the raid is the same as losing it. */
-          gameOverReason = "lair_raid_expired";
+        if (
+          lairRaid !== undefined &&
+          nextCurrentEventTemplateId === lairRaid.id &&
+          runEnding === null
+        ) {
+          /* Ignoring the raid is the same as losing it — unless the plan just landed. */
+          runEnding = { kind: "defeat", reason: "lair_raid_expired" };
         }
         nextCurrentEventTemplateId = null;
         nextCurrentEventTurnsRemaining = 0;
@@ -2090,7 +2118,7 @@ export function executePlan(
     .filter((m) => m.turnsRemaining > 0);
 
   /* Nothing is drawn while an event mission is still running, or once the run has ended. */
-  if (nextCurrentEventTemplateId === null && !eventMissionStillActive && gameOverReason === null) {
+  if (nextCurrentEventTemplateId === null && !eventMissionStillActive && runEnding === null) {
     if (lairRaid !== undefined && lairRaidStatus === "pending") {
       /* The raid jumps the queue: an owed raid takes the first free slot regardless of how many
        * quiet turns were rolled, and no ordinary offer is drawn this resolve. */
@@ -2125,14 +2153,10 @@ export function executePlan(
     }
   }
 
-  if (gameOverReason !== null && lairRaid !== undefined) {
-    /* Last row of the run — the Game Over modal reads the reason from state, not the log, but
+  if (runEnding !== null) {
+    /* Last row of the run — the run-end modals read the ending from state, not the log, but
      * the Activity panel should still show where it ended. */
-    resolveEvents.push({
-      kind: "game_over",
-      reason: gameOverReason,
-      eventTemplateId: lairRaid.id,
-    });
+    resolveEvents.push({ kind: "run_ended", ending: runEnding });
   }
 
   const activityLog = mergeResolveActivityEventsIntoActivityLog(
@@ -2165,14 +2189,14 @@ export function executePlan(
       eventCooldownTurnsRemaining: nextEventCooldownTurnsRemaining,
       activeSuccessModifiers,
       lairRaidStatus,
-      gameOverReason,
+      runEnding,
     },
   };
 }
 
 export function advanceToNextTurn(state: GameState): Result<GameState, GameError> {
-  if (state.gameOverReason !== null) {
-    return { ok: false, error: { code: "game_over", reason: state.gameOverReason } };
+  if (state.runEnding !== null) {
+    return { ok: false, error: { code: "run_ended", ending: state.runEnding } };
   }
   if (state.phase !== "summary") {
     return {

@@ -13,7 +13,7 @@
  * Ids stay structural (targets, participants, template ids) so `main.ts` can render cards and
  * portraits with its own lookups; everything else is already display text.
  */
-import type { ActivityEvent, GameOverReason, GameState } from "./gameState";
+import type { ActivityEvent, GameOverReason, GameState, RunEnding } from "./gameState";
 import type {
   ContentCatalog,
   DynamicTraitActivityChange,
@@ -757,24 +757,31 @@ export function buildTurnReport(
   return { turnNumber: before.turnNumber, missions, summary };
 }
 
+
 /* -------------------------------------------------------------------------------------------
- * Game over report: the data behind the Game Over modal and the Game Summary modal that
- * replace the end-of-turn report once `GameState.gameOverReason` is set (see `main.ts`).
- * Unlike the turn report this reads a single snapshot — the run is finished, so there is no
- * "before" to diff against. Career tallies come from the whole `activityLog`.
+ * Run-end report: the data behind the two modals that replace the end-of-turn report once
+ * `GameState.runEnding` is set — a Victory or Game Over modal, then the Run Summary
+ * (see `main.ts`). Unlike the turn report this reads a single snapshot: the run is finished,
+ * so there is no "before" to diff against, and career tallies come from the whole `activityLog`.
+ *
+ * Victory prose is **content**, not code: it comes from the completed plan's `victoryTitle` /
+ * `victoryNarrative` so each Omega Plan ends its own way. Defeat prose is generated here —
+ * there is no per-plan authoring seam for losing.
  * ----------------------------------------------------------------------------------------- */
 
-export type GameOverReport = {
-  reason: GameOverReason;
+export type RunEndReport = {
+  ending: RunEnding;
   /** Turn the run ended on. */
   turnNumber: number;
   organizationName: string;
   playerName: string;
-  /** Headline for the Game Over modal. */
+  /** Headline for the first modal (the plan's `victoryTitle` on a win). */
+  title: string;
+  /** Short verdict chip beside the headline. */
   verdict: string;
-  /** Prose for the Game Over modal, one paragraph per entry. */
-  epitaph: string[];
-  /** Blocks for the Game Summary modal. */
+  /** Prose for the first modal, one paragraph per entry. */
+  narrative: string[];
+  /** Blocks for the Run Summary modal. */
   summary: TurnSummarySection[];
 };
 
@@ -839,22 +846,34 @@ function careerSection(catalog: ContentCatalog, state: GameState): TurnSummarySe
 function finalStandingSection(
   catalog: ContentCatalog,
   state: GameState,
+  ending: RunEnding,
 ): TurnSummarySection | null {
   const p = state.player;
   const tier = catalog.wantedLevels[state.wantedLevelTierIndex];
+  const turns = state.turnNumber;
+  const won = ending.kind === "victory";
   const lines: TurnReportLine[] = [
-    { text: `Survived ${state.turnNumber} turn${state.turnNumber === 1 ? "" : "s"}.`, tone: "neutral" },
+    {
+      text: won
+        ? `Plan completed on turn ${turns}.`
+        : `Survived ${turns} turn${turns === 1 ? "" : "s"}.`,
+      tone: won ? "good" : "neutral",
+    },
     { text: `Final infamy ${p.infamy}.`, tone: p.infamy >= 50 ? "good" : "neutral" },
     { text: `Final heat ${p.heat}.`, tone: p.heat >= 50 ? "bad" : "neutral" },
     {
       text: `Threat level ${tier?.name ?? `tier ${state.wantedLevelTierIndex + 1}`}.`,
-      tone: "bad",
+      tone: won ? "neutral" : "bad",
     },
   ];
   return section("final-standing", "Final standing", lines);
 }
 
-function finalOmegaSection(catalog: ContentCatalog, state: GameState): TurnSummarySection | null {
+function finalOmegaSection(
+  catalog: ContentCatalog,
+  state: GameState,
+  ending: RunEnding,
+): TurnSummarySection | null {
   const plan =
     state.activeOmegaPlanId !== null
       ? getOmegaPlanById(catalog, state.activeOmegaPlanId)
@@ -862,13 +881,16 @@ function finalOmegaSection(catalog: ContentCatalog, state: GameState): TurnSumma
   if (plan === undefined) {
     return null;
   }
-  const done = state.omegaStageProgress.reduce(
-    (sum, row) => sum + row.filter(Boolean).length,
-    0,
-  );
+  const won = ending.kind === "victory";
+  const done = state.omegaStageProgress.reduce((sum, row) => sum + row.filter(Boolean).length, 0);
   const needed = omegaPlanRequiredMissionTotal(plan);
   const lines: TurnReportLine[] = [
-    { text: `${plan.name} — reached phase ${state.activeOmegaStageIndex + 1} of 3.`, tone: "neutral" },
+    {
+      text: won
+        ? `${plan.name} — all three phases cleared.`
+        : `${plan.name} — reached phase ${state.activeOmegaStageIndex + 1} of 3.`,
+      tone: won ? "good" : "neutral",
+    },
     {
       text: `${done} of ${needed} required objective${needed === 1 ? "" : "s"} completed.`,
       tone: done >= needed ? "good" : "bad",
@@ -879,9 +901,7 @@ function finalOmegaSection(catalog: ContentCatalog, state: GameState): TurnSumma
     const cleared = row.filter(Boolean).length;
     const need = omegaStageRequiredMissions(plan, stage);
     lines.push({
-      text: `Phase ${stage + 1}: ${cleared}/${need} — ${
-        cleared >= need ? "cleared" : "unfinished"
-      }.`,
+      text: `Phase ${stage + 1}: ${cleared}/${need} — ${cleared >= need ? "cleared" : "unfinished"}.`,
       tone: cleared >= need ? "good" : "neutral",
     });
   }
@@ -891,6 +911,7 @@ function finalOmegaSection(catalog: ContentCatalog, state: GameState): TurnSumma
 function finalOrganizationSection(
   catalog: ContentCatalog,
   state: GameState,
+  ending: RunEnding,
 ): TurnSummarySection | null {
   const p = state.player;
   const lines: TurnReportLine[] = [];
@@ -899,7 +920,9 @@ function finalOrganizationSection(
   } else {
     const best = [...p.minions].sort((a, b) => b.currentLevel - a.currentLevel);
     lines.push({
-      text: `${p.minions.length} minion${p.minions.length === 1 ? "" : "s"} on the roster at the end.`,
+      text: `${p.minions.length} minion${p.minions.length === 1 ? "" : "s"} on the roster ${
+        ending.kind === "victory" ? "at the finish" : "at the end"
+      }.`,
       tone: "neutral",
     });
     for (const m of best.slice(0, 3)) {
@@ -926,41 +949,79 @@ function finalOrganizationSection(
 }
 
 /**
- * Build the two-step end-of-run report. `state` is the post-`executePlan` snapshot whose
- * `gameOverReason` is set; `reason` is passed explicitly so callers cannot build one for a
- * living run.
+ * Victory copy for the plan that was completed. The prose is designer-authored on the plan;
+ * a plan that shipped without any gets a plain generated ending rather than an invented one.
  */
-export function buildGameOverReport(
+function victoryCopy(
+  catalog: ContentCatalog,
+  state: GameState,
+  omegaPlanId: string | null,
+): { title: string; narrative: string[] } {
+  const plan = omegaPlanId !== null ? getOmegaPlanById(catalog, omegaPlanId) : undefined;
+  const title = plan?.victoryTitle ?? "Omega Complete";
+  const authored = plan?.victoryNarrative ?? [];
+  if (authored.length > 0) {
+    return { title, narrative: [...authored] };
+  }
+  return {
+    title,
+    narrative: [
+      `${plan?.name ?? "The Omega Plan"} is complete — every phase cleared, on turn ${state.turnNumber}.`,
+      `${state.organizationName} answers to nobody now, and ${state.playerName} answers to less than that.`,
+    ],
+  };
+}
+
+function defeatCopy(
+  catalog: ContentCatalog,
+  state: GameState,
+  reason: GameOverReason,
+): { title: string; verdict: string; narrative: string[] } {
+  const raidName = catalog.events.find((e) => e.special === "lair_raid")?.name ?? "the raid";
+  const closing = `${state.organizationName} is a case file now, and ${state.playerName} is a name in it.`;
+  return {
+    title: "Game Over",
+    verdict: reason === "lair_raid_expired" ? "Overrun" : "Captured",
+    narrative:
+      reason === "lair_raid_expired"
+        ? [
+            `${raidName} was never answered. The doors came down on turn ${state.turnNumber} with nobody standing behind them.`,
+            closing,
+          ]
+        : [
+            `${raidName} was met — and lost. What was left of the guard did not hold the lair through turn ${state.turnNumber}.`,
+            closing,
+          ],
+  };
+}
+
+/**
+ * Build the two-step end-of-run report. `state` is the post-`executePlan` snapshot whose
+ * `runEnding` is set; `ending` is passed explicitly so callers cannot build one for a living run.
+ */
+export function buildRunEndReport(
   state: GameState,
   catalog: ContentCatalog,
-  reason: GameOverReason,
-): GameOverReport {
-  const raidName =
-    catalog.events.find((e) => e.special === "lair_raid")?.name ?? "the raid";
-  const verdict = reason === "lair_raid_expired" ? "Overrun" : "Captured";
-  const epitaph =
-    reason === "lair_raid_expired"
-      ? [
-          `${raidName} was never answered. The doors came down on turn ${state.turnNumber} with nobody standing behind them.`,
-          `${state.organizationName} is a case file now, and ${state.playerName} is a name in it.`,
-        ]
-      : [
-          `${raidName} was met — and lost. What was left of the guard did not hold the lair through turn ${state.turnNumber}.`,
-          `${state.organizationName} is a case file now, and ${state.playerName} is a name in it.`,
-        ];
+  ending: RunEnding,
+): RunEndReport {
+  const copy =
+    ending.kind === "victory"
+      ? { ...victoryCopy(catalog, state, ending.omegaPlanId), verdict: "Omega Complete" }
+      : defeatCopy(catalog, state, ending.reason);
   const summary = [
-    finalStandingSection(catalog, state),
-    finalOmegaSection(catalog, state),
+    finalStandingSection(catalog, state, ending),
+    finalOmegaSection(catalog, state, ending),
     careerSection(catalog, state),
-    finalOrganizationSection(catalog, state),
+    finalOrganizationSection(catalog, state, ending),
   ].filter((s): s is TurnSummarySection => s !== null);
   return {
-    reason,
+    ending,
     turnNumber: state.turnNumber,
     organizationName: state.organizationName,
     playerName: state.playerName,
-    verdict,
-    epitaph,
+    title: copy.title,
+    verdict: copy.verdict,
+    narrative: copy.narrative,
     summary,
   };
 }

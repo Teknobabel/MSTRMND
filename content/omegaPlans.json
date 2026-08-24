@@ -29,7 +29,12 @@
         ],
         "requiredMissions": 3
       }
-    ]
+    ],
+    "victoryNarrative": [
+      "PLACEHOLDER — final beat for Operation Nightfall. The annex goes dark on schedule and stays dark. By the time the duty officer finds the gap in the logs, the cold storage is empty and the manifest says it always was.",
+      "PLACEHOLDER — closing line. Nobody raises an alarm, because there is nothing left to raise one about. The city wakes up owned and does not notice."
+    ],
+    "victoryTitle": "Nightfall Complete"
   },
   {
     "id": "operation_sunrise",
@@ -61,6 +66,11 @@
         ],
         "requiredMissions": 3
       }
-    ]
+    ],
+    "victoryNarrative": [
+      "PLACEHOLDER — final beat for Operation Sunrise. The distraction runs exactly as long as it needs to, and the real cut happens three blocks away while every camera in the district points the other way.",
+      "PLACEHOLDER — closing line. The ledger balances to the cent, signed by people who will spend years insisting they signed nothing."
+    ],
+    "victoryTitle": "Sunrise Complete"
   }
 ]

@@ -169,6 +169,37 @@ export function renderOmegaPlanForm(container: HTMLElement, ctx: FormCtx): void 
     ),
   );
 
+  /* Victory copy: the only place a run's ending is written, so it lives with the plan. */
+  container.appendChild(
+    formRow(
+      "victoryTitle",
+      textInput(str(ctx.row, "victoryTitle"), (v) =>
+        ctx.update((row) => {
+          setOrDelete(row, "victoryTitle", v, true);
+        }),
+      ),
+    ),
+  );
+  container.appendChild(
+    fieldset(
+      "victoryNarrative (one paragraph per entry)",
+      listEditor(
+        strArray(ctx.row, "victoryNarrative"),
+        (next) =>
+          ctx.update((row) => {
+            setOrDelete(row, "victoryNarrative", next, true);
+          }),
+        (item, replace) => textArea(item, replace),
+        () => "",
+      ),
+    ),
+  );
+  container.appendChild(
+    hint(
+      "Shown on the victory modal when this plan's final phase clears. Leave both empty to fall back to generic copy — every shipped plan should have its own ending.",
+    ),
+  );
+
   const stages = rowArray(ctx.row, "stages");
   const missionIds = ctx.ids("missions");
   const missionNames = ctx.names("missions");

@@ -235,7 +235,7 @@ export type EventTemplate = MissionTemplate & {
    * table directly, overriding the event cooldown.
    *
    * `"lair_raid"` — the run-ending raid the **top wanted tier** spawns. Letting its offer
-   * expire, or failing its mission, ends the run (`GameState.gameOverReason`). Completing it
+   * expire, or failing its mission, ends the run (`GameState.runEnding`). Completing it
    * stands the top tier down until heat climbs back to its `minHeat`. At most one event in the
    * catalog may carry it (checked in `collectContentIssues`).
    */
@@ -348,6 +348,17 @@ export type OmegaPlanTemplate = {
   /** Map (`MapTemplate.id`) whose locations are playable for this plan. */
   mapId: string;
   stages: [OmegaPlanStage, OmegaPlanStage, OmegaPlanStage];
+  /**
+   * Headline on the **victory** modal when this plan's final phase clears — the payoff line
+   * for *this* plan, not a generic "You win". Falls back to `"Omega Complete"` when absent.
+   */
+  victoryTitle?: string;
+  /**
+   * Designer-authored victory prose, one paragraph per entry, shown under {@link victoryTitle}.
+   * This is the only place the ending of a run is written, so a plan without it gets a bland
+   * generic paragraph — author it alongside the stages.
+   */
+  victoryNarrative?: string[];
 };
 
 /** Heat tier for wanted level (designer-authored); monotonic escalation at runtime. */

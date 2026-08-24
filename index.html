@@ -326,30 +326,30 @@
         </div>
 
         <div
-          id="overlay-game-over"
-          class="turn-report-overlay game-over-overlay"
+          id="overlay-run-end"
+          class="turn-report-overlay run-end-overlay"
           hidden
           aria-hidden="true"
         >
-          <div class="turn-report-backdrop game-over-backdrop" aria-hidden="true"></div>
+          <div class="turn-report-backdrop run-end-backdrop" aria-hidden="true"></div>
           <div
-            class="turn-report-panel game-over-panel"
+            class="turn-report-panel run-end-panel"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="game-over-title"
-            aria-describedby="game-over-body"
+            aria-labelledby="run-end-title"
+            aria-describedby="run-end-body"
           >
             <header class="turn-report-head">
               <div class="turn-report-head__text">
-                <p id="game-over-kicker" class="turn-report-kicker"></p>
-                <h2 id="game-over-title" class="turn-report-title"></h2>
+                <p id="run-end-kicker" class="turn-report-kicker"></p>
+                <h2 id="run-end-title" class="turn-report-title"></h2>
               </div>
-              <div id="game-over-verdict" class="turn-report-verdict"></div>
+              <div id="run-end-verdict" class="turn-report-verdict"></div>
             </header>
-            <div id="game-over-steps" class="turn-report-steps" aria-hidden="true"></div>
-            <div id="game-over-body" class="turn-report-body" tabindex="-1"></div>
+            <div id="run-end-steps" class="turn-report-steps" aria-hidden="true"></div>
+            <div id="run-end-body" class="turn-report-body" tabindex="-1"></div>
             <footer class="turn-report-actions">
-              <button type="button" class="btn btn-primary" id="btn-game-over-continue">
+              <button type="button" class="btn btn-primary" id="btn-run-end-continue">
                 Continue
               </button>
             </footer>
