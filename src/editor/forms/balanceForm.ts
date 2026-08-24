@@ -191,6 +191,14 @@ const GROUPS: BalanceGroup[] = [
         max: 99,
       },
       {
+        key: "firstEventTurn",
+        label: "First event turn",
+        tooltip:
+          "Turn number the first global event of a run shows up on. The run opens with that many turns minus one of quiet, so the player settles in before events start. 1 puts an offer on the table at turn 1.",
+        min: 1,
+        max: 99,
+      },
+      {
         key: "fireRehireCooldownTurns",
         label: "Rehire cooldown (turns)",
         tooltip:

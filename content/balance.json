@@ -14,6 +14,7 @@
   "eventCooldownTurnsMin": 0,
   "eventMaxParticipants": 3,
   "fireRehireCooldownTurns": 3,
+  "firstEventTurn": 3,
   "heatFailureDelta": 5,
   "hireLevelInfamyThresholds": [15, 35, 60, 85],
   "heatSuccessDelta": 0,

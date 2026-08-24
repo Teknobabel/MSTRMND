@@ -459,6 +459,7 @@ export const balanceConfigSchema = z.object({
   eventMaxParticipants: balanceInt(1, 12, DEFAULT_BALANCE.eventMaxParticipants),
   eventCooldownTurnsMin: balanceInt(0, 99, DEFAULT_BALANCE.eventCooldownTurnsMin),
   eventCooldownTurnsMax: balanceInt(0, 99, DEFAULT_BALANCE.eventCooldownTurnsMax),
+  firstEventTurn: balanceInt(1, 99, DEFAULT_BALANCE.firstEventTurn),
   fireRehireCooldownTurns: balanceInt(0, 99, DEFAULT_BALANCE.fireRehireCooldownTurns),
   hireLevelInfamyThresholds: z
     .array(z.number().int().min(1).max(100))

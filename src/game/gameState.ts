@@ -685,7 +685,11 @@ export function createInitialGameState(
     player,
   );
   const locationAssetSlots = initializeLocationAssetPlacements(catalog, rng, runLocations);
-  const openingEventOffer = drawEventOffer(catalog, rng);
+  /* The event slot opens quiet: `firstEventTurn - 1` turns of cooldown, so the first offer is
+   * drawn at the resolve that ends turn `firstEventTurn - 1` and is on the table for turn
+   * `firstEventTurn`. Only a `firstEventTurn` of 1 puts an offer up at run start. */
+  const firstEventTurn = Math.max(1, catalog.balance.firstEventTurn);
+  const openingEventOffer = firstEventTurn <= 1 ? drawEventOffer(catalog, rng) : null;
   const base: GameState = {
     phase: "main",
     turnNumber: 1,
@@ -713,7 +717,7 @@ export function createInitialGameState(
     wantedLevelTierIndex: 0,
     currentEventTemplateId: openingEventOffer?.eventTemplateId ?? null,
     currentEventTurnsRemaining: openingEventOffer?.lifetimeTurns ?? 0,
-    eventCooldownTurnsRemaining: 0,
+    eventCooldownTurnsRemaining: firstEventTurn - 1,
     activeSuccessModifiers: [],
   };
 

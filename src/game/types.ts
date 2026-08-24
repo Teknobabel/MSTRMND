@@ -414,6 +414,11 @@ export type BalanceConfig = {
    */
   eventCooldownTurnsMin: number;
   eventCooldownTurnsMax: number;
+  /**
+   * Turn number the **first** global event offer of a run appears on (≥ 1). The run opens with
+   * `firstEventTurn - 1` quiet turns on the event slot; `1` puts an offer on the table at turn 1.
+   */
+  firstEventTurn: number;
   /** Turns before a fired minion reappears in the hire pool. */
   fireRehireCooldownTurns: number;
   /* Progression */
@@ -464,6 +469,7 @@ export const DEFAULT_BALANCE: BalanceConfig = {
   eventMaxParticipants: 3,
   eventCooldownTurnsMin: 0,
   eventCooldownTurnsMax: 3,
+  firstEventTurn: 3,
   fireRehireCooldownTurns: 3,
   minionXpPerMission: 1,
   minionXpToLevel: 3,

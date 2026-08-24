@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ActiveMission, GameState } from "./gameState";
 import {
+  advanceToNextTurn,
   assignMission,
   cancelMission,
   createInitialGameState,
@@ -43,6 +44,35 @@ function completedEvents(state: GameState) {
 }
 
 describe("createInitialGameState", () => {
+  it("opens the event slot quiet until `firstEventTurn`", () => {
+    const state = createInitialGameState(catalog, seededRng(3));
+    expect(state.currentEventTemplateId).toBeNull();
+    /* Default firstEventTurn is 3 ⇒ two quiet turns before the first offer. */
+    expect(state.eventCooldownTurnsRemaining).toBe(2);
+
+    let cur = state;
+    const offersByTurn: { turn: number; offer: string | null }[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const r = executePlan(cur, catalog, seededRng(3 + i), sequentialIds("ag"));
+      expect(r.ok).toBe(true);
+      if (!r.ok) {
+        return;
+      }
+      const a = advanceToNextTurn(r.value);
+      expect(a.ok).toBe(true);
+      if (!a.ok) {
+        return;
+      }
+      cur = a.value;
+      offersByTurn.push({ turn: cur.turnNumber, offer: cur.currentEventTemplateId });
+    }
+    expect(offersByTurn).toEqual([
+      { turn: 2, offer: null },
+      { turn: 3, offer: "ev-1" },
+      { turn: 4, offer: "ev-1" },
+    ]);
+  });
+
   it("is deterministic for a given seed", () => {
     const a = createInitialGameState(catalog, seededRng(5));
     const b = createInitialGameState(catalog, seededRng(5));
