@@ -246,6 +246,27 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
         "Draw-pool gates: the event is only offered once the player's infamy / heat reach these. Leave at 0 for events that can show up from turn one.",
       ),
     );
+    container.appendChild(
+      formRow(
+        "special",
+        selectInput(
+          [
+            { value: "", label: "(none — ordinary rotation)" },
+            { value: "lair_raid", label: "lair_raid" },
+          ],
+          str(ctx.row, "special"),
+          (v) =>
+            ctx.update((row) => {
+              setOrDelete(row, "special", v, true);
+            }),
+        ),
+      ),
+    );
+    container.appendChild(
+      hint(
+        "lair_raid: the run-ending raid the top wanted tier spawns. Never drawn at random — it takes the first free event slot regardless of cooldown, and letting it expire or losing its mission ends the run. Only one event may claim it; the draw-pool gates above are ignored.",
+      ),
+    );
   }
 
   const traitIds = ctx.ids("traits");

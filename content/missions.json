@@ -6,20 +6,15 @@
     "durationTurns": 1,
     "onFailureEffects": [
       {
-        "kind": "add_all_participant_traits",
-        "traitIds": [
-          "injured"
-        ]
+        "kind": "heat_delta",
+        "amount": 100
       }
     ],
     "onSuccessEffects": [
       {
-        "kind": "infamy_delta",
+        "kind": "heat_delta",
         "amount": 100
       }
-    ],
-    "requiredAssetIds": [
-      "classified_documents"
     ],
     "requiredTraitIds": [
       "hacker"

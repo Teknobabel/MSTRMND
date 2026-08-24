@@ -13,7 +13,7 @@
  * Ids stay structural (targets, participants, template ids) so `main.ts` can render cards and
  * portraits with its own lookups; everything else is already display text.
  */
-import type { ActivityEvent, GameState } from "./gameState";
+import type { ActivityEvent, GameOverReason, GameState } from "./gameState";
 import type {
   ContentCatalog,
   DynamicTraitActivityChange,
@@ -23,7 +23,13 @@ import type {
 } from "./types";
 import { isOccupiedAssetSlot } from "./types";
 import { formatDynamicTraitActivityChange, isPositiveDynamicTraitKind } from "./dynamicTrait";
-import { getOmegaPlanById, omegaSlotMissionId } from "./omegaPlan";
+import {
+  getOmegaPlanById,
+  omegaPlanRequiredMissionTotal,
+  omegaSlotMissionId,
+  omegaStageRequiredMissions,
+} from "./omegaPlan";
+import { getLairById } from "./lair";
 
 /** `good` = went the player's way, `bad` = cost them something, `neutral` = just news. */
 export type TurnReportTone = "good" | "bad" | "neutral";
@@ -749,4 +755,212 @@ export function buildTurnReport(
     recruitmentSection(catalog, before, after),
   ].filter((s): s is TurnSummarySection => s !== null);
   return { turnNumber: before.turnNumber, missions, summary };
+}
+
+/* -------------------------------------------------------------------------------------------
+ * Game over report: the data behind the Game Over modal and the Game Summary modal that
+ * replace the end-of-turn report once `GameState.gameOverReason` is set (see `main.ts`).
+ * Unlike the turn report this reads a single snapshot — the run is finished, so there is no
+ * "before" to diff against. Career tallies come from the whole `activityLog`.
+ * ----------------------------------------------------------------------------------------- */
+
+export type GameOverReport = {
+  reason: GameOverReason;
+  /** Turn the run ended on. */
+  turnNumber: number;
+  organizationName: string;
+  playerName: string;
+  /** Headline for the Game Over modal. */
+  verdict: string;
+  /** Prose for the Game Over modal, one paragraph per entry. */
+  epitaph: string[];
+  /** Blocks for the Game Summary modal. */
+  summary: TurnSummarySection[];
+};
+
+/** Every event row in the log, oldest turn first (the log itself is newest-turn-first). */
+function allActivityEvents(state: GameState): ActivityEvent[] {
+  const out: ActivityEvent[] = [];
+  for (let i = state.activityLog.length - 1; i >= 0; i -= 1) {
+    out.push(...state.activityLog[i]!.events);
+  }
+  return out;
+}
+
+function careerSection(catalog: ContentCatalog, state: GameState): TurnSummarySection | null {
+  const events = allActivityEvents(state);
+  let won = 0;
+  let lost = 0;
+  let hired = 0;
+  let levelUps = 0;
+  let eventsAnswered = 0;
+  let eventsIgnored = 0;
+  const eventIds = new Set(catalog.events.map((e) => e.id));
+  for (const ev of events) {
+    if (ev.kind === "mission_completed") {
+      if (ev.success) {
+        won += 1;
+      } else {
+        lost += 1;
+      }
+      if (eventIds.has(ev.missionTemplateId)) {
+        eventsAnswered += 1;
+      }
+    } else if (ev.kind === "minion_hired" || ev.kind === "minion_rehired") {
+      hired += 1;
+    } else if (ev.kind === "minion_leveled_up") {
+      levelUps += 1;
+    } else if (ev.kind === "event_expired") {
+      eventsIgnored += 1;
+    }
+  }
+  const run = won + lost;
+  const lines: TurnReportLine[] = [
+    {
+      text: `${run} mission${run === 1 ? "" : "s"} resolved — ${won} won, ${lost} lost.`,
+      tone: won > lost ? "good" : run === 0 ? "neutral" : "bad",
+    },
+    {
+      text: `${hired} recruit${hired === 1 ? "" : "s"} brought in, ${levelUps} promotion${
+        levelUps === 1 ? "" : "s"
+      } earned.`,
+      tone: "neutral",
+    },
+    {
+      text: `${eventsAnswered} global event${
+        eventsAnswered === 1 ? "" : "s"
+      } answered, ${eventsIgnored} left to expire.`,
+      tone: eventsIgnored > eventsAnswered ? "bad" : "neutral",
+    },
+  ];
+  return section("career", "Career", lines);
+}
+
+function finalStandingSection(
+  catalog: ContentCatalog,
+  state: GameState,
+): TurnSummarySection | null {
+  const p = state.player;
+  const tier = catalog.wantedLevels[state.wantedLevelTierIndex];
+  const lines: TurnReportLine[] = [
+    { text: `Survived ${state.turnNumber} turn${state.turnNumber === 1 ? "" : "s"}.`, tone: "neutral" },
+    { text: `Final infamy ${p.infamy}.`, tone: p.infamy >= 50 ? "good" : "neutral" },
+    { text: `Final heat ${p.heat}.`, tone: p.heat >= 50 ? "bad" : "neutral" },
+    {
+      text: `Threat level ${tier?.name ?? `tier ${state.wantedLevelTierIndex + 1}`}.`,
+      tone: "bad",
+    },
+  ];
+  return section("final-standing", "Final standing", lines);
+}
+
+function finalOmegaSection(catalog: ContentCatalog, state: GameState): TurnSummarySection | null {
+  const plan =
+    state.activeOmegaPlanId !== null
+      ? getOmegaPlanById(catalog, state.activeOmegaPlanId)
+      : undefined;
+  if (plan === undefined) {
+    return null;
+  }
+  const done = state.omegaStageProgress.reduce(
+    (sum, row) => sum + row.filter(Boolean).length,
+    0,
+  );
+  const needed = omegaPlanRequiredMissionTotal(plan);
+  const lines: TurnReportLine[] = [
+    { text: `${plan.name} — reached phase ${state.activeOmegaStageIndex + 1} of 3.`, tone: "neutral" },
+    {
+      text: `${done} of ${needed} required objective${needed === 1 ? "" : "s"} completed.`,
+      tone: done >= needed ? "good" : "bad",
+    },
+  ];
+  for (let stage = 0; stage < state.omegaStageProgress.length; stage += 1) {
+    const row = state.omegaStageProgress[stage]!;
+    const cleared = row.filter(Boolean).length;
+    const need = omegaStageRequiredMissions(plan, stage);
+    lines.push({
+      text: `Phase ${stage + 1}: ${cleared}/${need} — ${
+        cleared >= need ? "cleared" : "unfinished"
+      }.`,
+      tone: cleared >= need ? "good" : "neutral",
+    });
+  }
+  return section("final-omega", "Omega Plan", lines);
+}
+
+function finalOrganizationSection(
+  catalog: ContentCatalog,
+  state: GameState,
+): TurnSummarySection | null {
+  const p = state.player;
+  const lines: TurnReportLine[] = [];
+  if (p.minions.length === 0) {
+    lines.push({ text: "No minions left on the roster.", tone: "bad" });
+  } else {
+    const best = [...p.minions].sort((a, b) => b.currentLevel - a.currentLevel);
+    lines.push({
+      text: `${p.minions.length} minion${p.minions.length === 1 ? "" : "s"} on the roster at the end.`,
+      tone: "neutral",
+    });
+    for (const m of best.slice(0, 3)) {
+      lines.push({
+        text: `${minionName(catalog, state, m.instanceId)} — level ${m.currentLevel}.`,
+        tone: "neutral",
+      });
+    }
+  }
+  const assetTotal = Object.values(p.assets).reduce((sum, q) => sum + Math.max(0, q), 0);
+  lines.push({
+    text: `${assetTotal} asset${assetTotal === 1 ? "" : "s"} in the vault.`,
+    tone: "neutral",
+  });
+  const lair = state.activeLairId !== null ? getLairById(catalog, state.activeLairId) : undefined;
+  if (lair !== undefined) {
+    const upgrades = state.completedLairUpgradeMissionIds.length;
+    lines.push({
+      text: `${lair.name} — ${upgrades} upgrade${upgrades === 1 ? "" : "s"} completed.`,
+      tone: "neutral",
+    });
+  }
+  return section("final-organization", "Organization", lines);
+}
+
+/**
+ * Build the two-step end-of-run report. `state` is the post-`executePlan` snapshot whose
+ * `gameOverReason` is set; `reason` is passed explicitly so callers cannot build one for a
+ * living run.
+ */
+export function buildGameOverReport(
+  state: GameState,
+  catalog: ContentCatalog,
+  reason: GameOverReason,
+): GameOverReport {
+  const raidName =
+    catalog.events.find((e) => e.special === "lair_raid")?.name ?? "the raid";
+  const verdict = reason === "lair_raid_expired" ? "Overrun" : "Captured";
+  const epitaph =
+    reason === "lair_raid_expired"
+      ? [
+          `${raidName} was never answered. The doors came down on turn ${state.turnNumber} with nobody standing behind them.`,
+          `${state.organizationName} is a case file now, and ${state.playerName} is a name in it.`,
+        ]
+      : [
+          `${raidName} was met — and lost. What was left of the guard did not hold the lair through turn ${state.turnNumber}.`,
+          `${state.organizationName} is a case file now, and ${state.playerName} is a name in it.`,
+        ];
+  const summary = [
+    finalStandingSection(catalog, state),
+    finalOmegaSection(catalog, state),
+    careerSection(catalog, state),
+    finalOrganizationSection(catalog, state),
+  ].filter((s): s is TurnSummarySection => s !== null);
+  return {
+    reason,
+    turnNumber: state.turnNumber,
+    organizationName: state.organizationName,
+    playerName: state.playerName,
+    verdict,
+    epitaph,
+    summary,
+  };
 }

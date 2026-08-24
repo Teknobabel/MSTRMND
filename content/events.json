@@ -386,5 +386,31 @@
     "requiredTraitIds": [],
     "startCommandPoints": 1,
     "targetType": "none"
+  },
+  {
+    "id": "evt_lair_raid",
+    "name": "Lair raid",
+    "description": "They have the lair's coordinates and every agency you ever embarrassed is at the gate. Hold the door or the run ends here.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": -25
+      },
+      {
+        "kind": "infamy_delta",
+        "amount": 5
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "bodyguard",
+      "soldier",
+      "tactician"
+    ],
+    "special": "lair_raid",
+    "startCommandPoints": 3,
+    "targetType": "none"
   }
 ]

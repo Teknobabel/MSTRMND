@@ -4,6 +4,11 @@ export type NavigationHooks = {
   setGameLoopRunning: (running: boolean) => void;
 };
 
+export type NavigationApi = {
+  /** Leave the game screen for the title screen (used when a run ends). */
+  returnToMainMenu: () => void;
+};
+
 type Screen = "main" | "settings" | "game";
 type SettingsReturnTarget = "main" | "game-paused";
 
@@ -20,7 +25,7 @@ function setPanelVisibility(el: HTMLElement, visible: boolean): void {
   el.setAttribute("aria-hidden", visible ? "false" : "true");
 }
 
-export function initNavigation(hooks: NavigationHooks): void {
+export function initNavigation(hooks: NavigationHooks): NavigationApi {
   const screenMain = req<HTMLElement>("screen-main");
   const screenSettings = req<HTMLElement>("screen-settings");
   const screenGame = req<HTMLElement>("screen-game");
@@ -100,4 +105,12 @@ export function initNavigation(hooks: NavigationHooks): void {
   });
 
   apply();
+
+  return {
+    returnToMainMenu(): void {
+      paused = false;
+      screen = "main";
+      apply();
+    },
+  };
 }

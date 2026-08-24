@@ -1808,6 +1808,42 @@ body {
 }
 
 /* ============================================================
+   Game over — reuses the turn-report shell, dialled to the loss
+   ============================================================ */
+
+.game-over-overlay {
+  /* Above the turn report: the run is finished, nothing behind it is reachable again. */
+  z-index: 7;
+}
+
+.game-over-backdrop {
+  background: radial-gradient(ellipse 70% 60% at 50% 45%, rgba(96, 6, 18, 0.72), rgba(0, 0, 0, 0.95));
+}
+
+.game-over-panel {
+  border-color: var(--red-deep);
+  box-shadow: 0 0 90px rgba(232, 17, 45, 0.35), 0 18px 48px rgba(0, 0, 0, 0.85);
+}
+
+.game-over-panel .turn-report-title {
+  font-size: 1.35rem;
+  letter-spacing: 0.22em;
+  color: var(--red-bright);
+  text-shadow: 0 0 22px var(--red-glow);
+}
+
+.game-over-epitaph {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--text-1);
+}
+
+.game-over-epitaph:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================================
    Omega Plan panel
    ============================================================ */
 

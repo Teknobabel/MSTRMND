@@ -373,6 +373,8 @@ export const eventTemplateSchema = z.object({
   onSuccessEffects: z.array(missionEffectSchema).optional(),
   onFailureEffects: z.array(missionEffectSchema).optional(),
   expireEffects: z.array(missionEffectSchema).optional(),
+  /** System-spawned event marker; kept out of the random draw pool (see `EventTemplate.special`). */
+  special: z.literal("lair_raid").optional(),
 });
 
 export const locationTemplateSchema: z.ZodType<LocationTemplate> = z.object({
@@ -598,6 +600,9 @@ function normalizeEventTemplates(arr: z.infer<typeof eventTemplateSchema>[]): Ev
     }
     if (m.expireEffects !== undefined && m.expireEffects.length > 0) {
       base.expireEffects = [...m.expireEffects];
+    }
+    if (m.special !== undefined) {
+      base.special = m.special;
     }
     return base;
   });
@@ -1365,6 +1370,17 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
       }
       checkUnlockForbidden("events", ev.id, ev.onFailureEffects, "onFailureEffects", issues);
       checkUnlockForbidden("events", ev.id, ev.expireEffects, "expireEffects", issues);
+    }
+    /* One raid at most: the top wanted tier spawns a single event by id, so a second one
+     * would be authored content that can never reach the table. */
+    const raids = s.events.filter((ev) => ev.special === "lair_raid");
+    for (let i = 1; i < raids.length; i += 1) {
+      issues.push({
+        slice: "events",
+        entityId: raids[i]!.id,
+        path: "special",
+        message: `Only one event may be special "lair_raid" (already claimed by "${raids[0]!.id}")`,
+      });
     }
   }
 

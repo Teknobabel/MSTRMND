@@ -16,8 +16,13 @@
   "fireRehireCooldownTurns": 3,
   "firstEventTurn": 3,
   "heatFailureDelta": 5,
-  "hireLevelInfamyThresholds": [15, 35, 60, 85],
   "heatSuccessDelta": 0,
+  "hireLevelInfamyThresholds": [
+    15,
+    35,
+    60,
+    85
+  ],
   "infamyFailureDelta": 0,
   "infamySuccessDelta": 5,
   "initialIntelSitesAtOne": 2,

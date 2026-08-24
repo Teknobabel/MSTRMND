@@ -229,6 +229,17 @@ export type EventTemplate = MissionTemplate & {
   minHeat?: number;
   /** Applied automatically if the offer's lifetime runs out before the player starts it. */
   expireEffects?: MissionEffect[];
+  /**
+   * Marks a **system-spawned** event. Special events are never in the random draw pool
+   * (`eligibleEventTemplates` filters them out); the rule that owns them puts them on the
+   * table directly, overriding the event cooldown.
+   *
+   * `"lair_raid"` — the run-ending raid the **top wanted tier** spawns. Letting its offer
+   * expire, or failing its mission, ends the run (`GameState.gameOverReason`). Completing it
+   * stands the top tier down until heat climbs back to its `minHeat`. At most one event in the
+   * catalog may carry it (checked in `collectContentIssues`).
+   */
+  special?: "lair_raid";
 };
 
 /** Visibility of an asset at a location for the player (kind known only when revealed). */

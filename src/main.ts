@@ -47,7 +47,9 @@ import {
 } from "./game/dynamicTrait";
 import { describeMissionTemplateEffects } from "./game/missionEffects";
 import {
+  buildGameOverReport,
   buildTurnReport,
+  type GameOverReport,
   type MissionResultReport,
   type TurnReport,
   type TurnReportLine,
@@ -76,7 +78,7 @@ import {
 } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { maxHireableStartingLevel, nextHireLevelInfamyThreshold } from "./game/minion";
-import { initNavigation } from "./navigation";
+import { initNavigation, type NavigationApi } from "./navigation";
 import { initStageScale } from "./ui/stageScale";
 import {
   appendCardArtShell,
@@ -581,7 +583,10 @@ function formatAssignMissionError(err: GameError): string {
   }
 }
 
-function initGameController(content: ReturnType<typeof loadContent>): void {
+function initGameController(
+  content: ReturnType<typeof loadContent>,
+  nav: NavigationApi,
+): void {
   let state: GameState = createInitialGameState(content);
   let missionFxTooltipSerial = 0;
 
@@ -613,6 +618,13 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const turnReportBody = req<HTMLElement>("turn-report-body");
   const btnTurnReportContinue = req<HTMLButtonElement>("btn-turn-report-continue");
   const btnTurnReportSkip = req<HTMLButtonElement>("btn-turn-report-skip");
+  const gameOverOverlay = req<HTMLElement>("overlay-game-over");
+  const gameOverKicker = req<HTMLElement>("game-over-kicker");
+  const gameOverTitle = req<HTMLElement>("game-over-title");
+  const gameOverVerdict = req<HTMLElement>("game-over-verdict");
+  const gameOverStepsEl = req<HTMLElement>("game-over-steps");
+  const gameOverBody = req<HTMLElement>("game-over-body");
+  const btnGameOverContinue = req<HTMLButtonElement>("btn-game-over-continue");
   const hudShort = req<HTMLElement>("game-hud-short");
   const threatLevelEl = req<HTMLElement>("threat-level");
   const globalTickerEl = req<HTMLElement>("global-events-ticker");
@@ -2939,7 +2951,12 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       note.className = "assets-panel-empty";
       note.style.marginTop = "0.25rem";
       const left = state.currentEventTurnsRemaining;
-      if (activeEventMission) {
+      if (et?.special === "lair_raid") {
+        /* The one offer that cannot be shrugged off: ignoring or losing it ends the run. */
+        note.textContent = activeEventMission
+          ? "The raid is under way. Lose it and the run ends."
+          : `Answer this or the run ends — ${left} ${left === 1 ? "turn" : "turns"} left.`;
+      } else if (activeEventMission) {
         note.textContent = "Started this turn — Execute Plan takes the offer off the table.";
       } else if (left <= 1) {
         note.textContent =
@@ -3373,6 +3390,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
           }
           return `Event "${n}" expired — ${ev.effectDescriptions.join("; ")}.`;
         }
+        case "game_over": {
+          const n = missionName(ev.eventTemplateId);
+          const why =
+            ev.reason === "lair_raid_expired"
+              ? `"${n}" was never answered`
+              : `"${n}" was lost`;
+          return `${state.organizationName} has fallen — ${why}.`;
+        }
         default: {
           const _exhaustive: never = ev;
           return String(_exhaustive);
@@ -3639,8 +3664,11 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
       if (et) {
         const left = state.currentEventTurnsRemaining;
         items.push({
-          title: "Incoming event",
-          detail: `${et.name} — ${left} ${left === 1 ? "turn" : "turns"} to act`,
+          title: et.special === "lair_raid" ? "LAIR UNDER SIEGE" : "Incoming event",
+          detail:
+            et.special === "lair_raid"
+              ? `${et.name} — answer in ${left} ${left === 1 ? "turn" : "turns"} or the run ends`
+              : `${et.name} — ${left} ${left === 1 ? "turn" : "turns"} to act`,
         });
       }
     }
@@ -3919,6 +3947,99 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     renderTurnReport();
   }
 
+  /* ---------------------------------------------------------------------------------------
+   * Game over: two modals (the verdict, then the run summary) that stand in for the whole
+   * end-of-turn report once the Lair Raid ends the run. The mission recap and Turn Summary
+   * are skipped entirely — there is no next turn to brief for.
+   * ------------------------------------------------------------------------------------- */
+
+  /** Open report, or null when no game-over report is showing. */
+  let gameOverReport: GameOverReport | null = null;
+  /** Step cursor: 0 = the verdict, 1 = the run summary. */
+  let gameOverStepIndex = 0;
+
+  function renderGameOverSteps(): void {
+    gameOverStepsEl.innerHTML = "";
+    for (let i = 0; i < 2; i += 1) {
+      const dot = document.createElement("span");
+      dot.className = "turn-report-step";
+      if (i < gameOverStepIndex) {
+        dot.classList.add("turn-report-step--done");
+      } else if (i === gameOverStepIndex) {
+        dot.classList.add("turn-report-step--current");
+      }
+      gameOverStepsEl.appendChild(dot);
+    }
+  }
+
+  function renderGameOver(): void {
+    const report = gameOverReport;
+    if (report === null) {
+      return;
+    }
+    gameOverBody.innerHTML = "";
+    gameOverBody.scrollTop = 0;
+    gameOverVerdict.className = "turn-report-verdict turn-report-verdict--failure";
+    gameOverVerdict.textContent = report.verdict;
+
+    if (gameOverStepIndex === 0) {
+      gameOverKicker.textContent = `Turn ${report.turnNumber} · run ended`;
+      gameOverTitle.textContent = "Game Over";
+      for (const para of report.epitaph) {
+        const p = document.createElement("p");
+        p.className = "game-over-epitaph";
+        p.textContent = para;
+        gameOverBody.appendChild(p);
+      }
+      btnGameOverContinue.textContent = "View run summary";
+    } else {
+      gameOverKicker.textContent = report.organizationName;
+      gameOverTitle.textContent = "Run Summary";
+      for (const sec of report.summary) {
+        gameOverBody.appendChild(turnReportBlock(sec.title, sec.lines));
+      }
+      btnGameOverContinue.textContent = "Return to main menu";
+    }
+    renderGameOverSteps();
+    btnGameOverContinue.focus();
+  }
+
+  function openGameOver(report: GameOverReport): void {
+    gameOverReport = report;
+    gameOverStepIndex = 0;
+    gameOverOverlay.hidden = false;
+    gameOverOverlay.setAttribute("aria-hidden", "false");
+    renderGameOver();
+  }
+
+  /**
+   * Last step dismissed: the finished run is thrown away and a fresh one is rolled, so the
+   * title screen's Play starts over rather than dropping the player back into a dead state.
+   */
+  function closeGameOver(): void {
+    gameOverReport = null;
+    gameOverStepIndex = 0;
+    gameOverOverlay.hidden = true;
+    gameOverOverlay.setAttribute("aria-hidden", "true");
+    gameOverBody.innerHTML = "";
+    clearAllAssignSlots();
+    state = createInitialGameState(content);
+    refresh();
+    nav.returnToMainMenu();
+  }
+
+  function advanceGameOver(): void {
+    if (gameOverReport === null) {
+      return;
+    }
+    if (gameOverStepIndex >= 1) {
+      closeGameOver();
+      return;
+    }
+    gameOverStepIndex += 1;
+    renderGameOver();
+  }
+
   function refresh(): void {
     reconcileStagedEventMissionWithState();
     const p = state.player;
@@ -4046,11 +4167,21 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     if (!dispatch((s) => executePlan(s, content, rng))) {
       return;
     }
+    const ending = state.gameOverReason;
+    if (ending !== null) {
+      /* The run is over: no mission recap, no Turn Summary — straight to the verdict. */
+      openGameOver(buildGameOverReport(state, content, ending));
+      return;
+    }
     openTurnReport(buildTurnReport(before, state, content));
   });
 
   btnTurnReportContinue.addEventListener("click", () => {
     advanceTurnReport();
+  });
+
+  btnGameOverContinue.addEventListener("click", () => {
+    advanceGameOver();
   });
 
   btnTurnReportSkip.addEventListener("click", () => {
@@ -4118,11 +4249,7 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   refresh();
 }
 
-initGameController(catalog);
-
-initStageScale();
-
-initNavigation({
+const navigation = initNavigation({
   setGameLoopRunning(running: boolean): void {
     if (running) {
       startGameLoop();
@@ -4131,3 +4258,7 @@ initNavigation({
     }
   },
 });
+
+initGameController(catalog, navigation);
+
+initStageScale();

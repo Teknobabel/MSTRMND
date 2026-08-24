@@ -714,3 +714,204 @@ describe("omega phase completion", () => {
     expect(result.value.omegaStageProgress[0]).toEqual([false, false, false]);
   });
 });
+
+describe("Lair Raid (game over)", () => {
+  /** Fixture catalog plus the special raid event the top wanted tier spawns. */
+  function raidCatalog(): ContentCatalog {
+    const slices = rawFixtureSlices();
+    slices.events = [
+      ...slices.events,
+      {
+        id: "ev-raid",
+        name: "Lair raid",
+        description: "They found the lair.",
+        targetType: "none",
+        startCommandPoints: 0,
+        durationTurns: 1,
+        lifetimeTurns: 2,
+        requiredTraitIds: ["t-req"],
+        special: "lair_raid",
+        onSuccessEffects: [{ kind: "heat_delta", amount: -25 }],
+      },
+    ];
+    return parseCatalog(slices);
+  }
+
+  const raidCat = raidCatalog();
+  /** Fixture wanted levels: index 1 ("Noticed", minHeat 5) is the top tier. */
+  const TOP_TIER = raidCat.wantedLevels.length - 1;
+
+  function raidBaseState(seed: number): GameState {
+    const state = createInitialGameState(raidCat, seededRng(seed));
+    return {
+      ...state,
+      locationRequiredTraits: { "loc-a": [], "loc-b": [] },
+      locationSecurityTraits: { "loc-a": ["t-sec"], "loc-b": [] },
+    };
+  }
+
+  /** State sitting at the top wanted tier with the raid owed and the event slot free. */
+  function pendingRaidState(seed: number): GameState {
+    return {
+      ...raidBaseState(seed),
+      player: { ...raidBaseState(seed).player, heat: 100 },
+      wantedLevelTierIndex: TOP_TIER,
+      lairRaidStatus: "pending",
+      currentEventTemplateId: null,
+      currentEventTurnsRemaining: 0,
+      /* Deliberately long: the raid must ignore it. */
+      eventCooldownTurnsRemaining: 3,
+    };
+  }
+
+  it("keeps the raid out of the ordinary draw pool", () => {
+    const player = raidBaseState(1).player;
+    const pool = eligibleEventTemplates(raidCat, { ...player, infamy: 100, heat: 100 });
+    expect(pool.map((e) => e.id)).toEqual(["ev-1"]);
+  });
+
+  it("owes a raid once heat pushes the player to the top wanted tier", () => {
+    const state: GameState = {
+      ...raidBaseState(2),
+      player: { ...raidBaseState(2).player, heat: 100 },
+      /* Slot busy with an ordinary offer, so the raid can only be queued this resolve. */
+      currentEventTemplateId: "ev-1",
+      currentEventTurnsRemaining: 3,
+    };
+    const result = executePlan(state, raidCat, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.wantedLevelTierIndex).toBe(TOP_TIER);
+    expect(result.value.lairRaidStatus).toBe("pending");
+    /* Waits its turn: the offer already on the table is not displaced. */
+    expect(result.value.currentEventTemplateId).toBe("ev-1");
+    expect(result.value.gameOverReason).toBeNull();
+  });
+
+  it("puts the owed raid on the table at the next free slot, ignoring the cooldown", () => {
+    const result = executePlan(pendingRaidState(3), raidCat, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const next = result.value;
+    expect(next.currentEventTemplateId).toBe("ev-raid");
+    expect(next.currentEventTurnsRemaining).toBe(2);
+    expect(next.eventCooldownTurnsRemaining).toBe(0);
+    expect(next.lairRaidStatus).toBe("offered");
+    const rotated = next.activityLog
+      .flatMap((e) => e.events)
+      .filter((e) => e.kind === "event_rotated_in");
+    expect(rotated).toHaveLength(1);
+    expect(rotated[0]!.kind === "event_rotated_in" && rotated[0]!.eventTemplateId).toBe("ev-raid");
+  });
+
+  it("ends the run when the raid offer expires unanswered", () => {
+    const offered: GameState = {
+      ...pendingRaidState(4),
+      lairRaidStatus: "offered",
+      currentEventTemplateId: "ev-raid",
+      currentEventTurnsRemaining: 1,
+    };
+    const result = executePlan(offered, raidCat, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const dead = result.value;
+    expect(dead.gameOverReason).toBe("lair_raid_expired");
+    /* No replacement offer is drawn over the corpse of the run. */
+    expect(dead.currentEventTemplateId).toBeNull();
+    const kinds = dead.activityLog.flatMap((e) => e.events).map((e) => e.kind);
+    expect(kinds).toContain("game_over");
+
+    /* Terminal: the run cannot be resolved or advanced any further. */
+    const again = executePlan({ ...dead, phase: "main" }, raidCat, () => 0, sequentialIds("ag"));
+    expect(again.ok).toBe(false);
+    expect(again.ok === false && again.error.code).toBe("game_over");
+    const advanced = advanceToNextTurn(dead);
+    expect(advanced.ok).toBe(false);
+    expect(advanced.ok === false && advanced.error.code).toBe("game_over");
+  });
+
+  it("ends the run when the raid mission fails", () => {
+    const engaged: GameState = {
+      ...pendingRaidState(5),
+      lairRaidStatus: "offered",
+      currentEventTemplateId: "ev-raid",
+      currentEventTurnsRemaining: 2,
+      player: {
+        ...pendingRaidState(5).player,
+        /* No `t-req`, so the raid's required trait is unmet and the roll cannot land. */
+        minions: [makeMinionInstance("mi-1", "m-buddy", [])],
+      },
+      activeMissions: [
+        activeMission({
+          id: "am-raid",
+          missionTemplateId: "ev-raid",
+          missionSource: "event",
+          target: { kind: "none" },
+          turnsRemaining: 1,
+          participantInstanceIds: ["mi-1"],
+        }),
+      ],
+    };
+    const result = executePlan(engaged, raidCat, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.gameOverReason).toBe("lair_raid_failed");
+  });
+
+  it("stands the top tier down when the raid is survived, and re-arms it when heat returns", () => {
+    const engaged: GameState = {
+      ...pendingRaidState(6),
+      lairRaidStatus: "offered",
+      currentEventTemplateId: "ev-raid",
+      currentEventTurnsRemaining: 2,
+      player: {
+        ...pendingRaidState(6).player,
+        minions: [makeMinionInstance("mi-1", "m-hero", ["t-req"])],
+      },
+      activeMissions: [
+        activeMission({
+          id: "am-raid",
+          missionTemplateId: "ev-raid",
+          missionSource: "event",
+          target: { kind: "none" },
+          turnsRemaining: 1,
+          participantInstanceIds: ["mi-1"],
+        }),
+      ],
+    };
+    /* rng 0 ⇒ the roll always lands under the success chance. */
+    const result = executePlan(engaged, raidCat, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const survived = result.value;
+    expect(survived.gameOverReason).toBeNull();
+    expect(survived.player.heat).toBe(75); /* 100 − 25 from the template's success effect */
+    expect(survived.wantedLevelTierIndex).toBe(TOP_TIER - 1);
+    expect(survived.lairRaidStatus).toBe("none");
+    /* The stand-down is not undone by the same resolve's own re-check. */
+    expect(survived.currentEventTemplateId).not.toBe("ev-raid");
+
+    const hotAgain: GameState = {
+      ...survived,
+      phase: "main",
+      player: { ...survived.player, heat: 100 },
+    };
+    const rearmed = executePlan(hotAgain, raidCat, () => 0, sequentialIds("ag"));
+    expect(rearmed.ok).toBe(true);
+    if (!rearmed.ok) {
+      return;
+    }
+    expect(rearmed.value.wantedLevelTierIndex).toBe(TOP_TIER);
+    expect(rearmed.value.lairRaidStatus).not.toBe("none");
+  });
+});

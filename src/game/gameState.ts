@@ -68,6 +68,22 @@ import { nextMonotonicWantedTierIndex } from "./wantedLevel";
 
 export type TurnPhase = "main" | "resolve" | "summary";
 
+/**
+ * Lifecycle of the Lair Raid, the special event the **top** wanted tier spawns:
+ *
+ * - `none`     — the top tier is not standing (never reached, or the last raid was survived and
+ *                the tier was stood down). Reaching the top tier again moves this to `pending`.
+ * - `pending`  — the raid is owed. The next `executePlan` that finds the global event slot free
+ *                puts it on the table, **ignoring** `eventCooldownTurnsRemaining`.
+ * - `offered`  — the raid is the current offer. Letting its lifetime run out ends the run.
+ * - `engaged`  — the player started the raid mission. Failing it ends the run; completing it
+ *                applies the template's success effects and stands the top tier down.
+ */
+export type LairRaidStatus = "none" | "pending" | "offered" | "engaged";
+
+/** Why a run ended. Both come from the Lair Raid — the only loss condition today. */
+export type GameOverReason = "lair_raid_expired" | "lair_raid_failed";
+
 export type PlayerState = {
   commandPoints: number;
   maxCommandPoints: number;
@@ -186,6 +202,13 @@ export type ActivityEvent =
       kind: "event_expired";
       eventTemplateId: string;
       effectDescriptions: string[];
+    }
+  | {
+      /** The run ended. Terminal — no further rows are ever appended after this one. */
+      kind: "game_over";
+      reason: GameOverReason;
+      /** The Lair Raid template whose expiry / failure ended the run. */
+      eventTemplateId: string;
     }
   | {
       kind: "asset_gained";
@@ -319,6 +342,16 @@ export type GameState = {
   eventCooldownTurnsRemaining: number;
   /** Flat success % modifiers from event effects; each entry decays once per `executePlan`. */
   activeSuccessModifiers: { delta: number; turnsRemaining: number }[];
+  /**
+   * Where the Lair Raid — the run-ending event the **top** wanted tier spawns — currently sits.
+   * See {@link LairRaidStatus}.
+   */
+  lairRaidStatus: LairRaidStatus;
+  /**
+   * `null` while the run is alive. Once set, the run is over: `executePlan` and
+   * `advanceToNextTurn` refuse to run and the UI shows Game Over instead of the turn report.
+   */
+  gameOverReason: GameOverReason | null;
 };
 
 export type GameError =
@@ -364,6 +397,7 @@ export type GameError =
     }
   | { code: "not_enough_assets"; assetId: string; need: number; have: number }
   | { code: "no_current_event_offer" }
+  | { code: "game_over"; reason: GameOverReason }
   | {
       code: "event_mission_mismatch";
       currentOffer: string | null;
@@ -631,14 +665,33 @@ function pickRandomPlayerProfile(
  * Events currently in the draw pool: those whose optional **`minInfamy`** / **`minHeat`** gates
  * the player has reached. Ungated events are always in the pool, so gating a template holds it
  * back until the run escalates rather than removing it.
+ *
+ * **`special`** events (the Lair Raid) are never drawn: the rule that owns them puts them on
+ * the table directly. See {@link lairRaidEventTemplate}.
  */
 export function eligibleEventTemplates(
   catalog: ContentCatalog,
   player: PlayerState,
 ): EventTemplate[] {
   return catalog.events.filter(
-    (e) => player.infamy >= (e.minInfamy ?? 0) && player.heat >= (e.minHeat ?? 0),
+    (e) =>
+      e.special === undefined &&
+      player.infamy >= (e.minInfamy ?? 0) &&
+      player.heat >= (e.minHeat ?? 0),
   );
+}
+
+/** The catalog's Lair Raid template, or undefined when the content ships none (no loss condition). */
+export function lairRaidEventTemplate(catalog: ContentCatalog): EventTemplate | undefined {
+  return catalog.events.find((e) => e.special === "lair_raid");
+}
+
+/**
+ * Index of the **top** wanted tier — the one that spawns the Lair Raid — or `null` when the
+ * catalog has fewer than two tiers (a single tier is the run's opening state, not an escalation).
+ */
+export function topWantedTierIndex(catalog: ContentCatalog): number | null {
+  return catalog.wantedLevels.length > 1 ? catalog.wantedLevels.length - 1 : null;
 }
 
 /** Uniform random event template id from the pool the player has unlocked, or null if empty. */
@@ -771,6 +824,8 @@ export function createInitialGameState(
     currentEventTurnsRemaining: openingEventOffer?.lifetimeTurns ?? 0,
     eventCooldownTurnsRemaining: firstEventTurn - 1,
     activeSuccessModifiers: [],
+    lairRaidStatus: "none",
+    gameOverReason: null,
   };
 
   const assetEvents: ActivityEvent[] = [];
@@ -1519,9 +1574,17 @@ export function executePlan(
   rng: Rng,
   newInstanceId: () => string = () => globalThis.crypto.randomUUID(),
 ): Result<GameState, GameError> {
+  if (state.gameOverReason !== null) {
+    return { ok: false, error: { code: "game_over", reason: state.gameOverReason } };
+  }
   if (state.phase !== "main") {
     return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
   }
+
+  const lairRaid = lairRaidEventTemplate(catalog);
+  /* Set by the resolve loop when the raid's own mission finishes; drives the loss check, the
+   * top-tier stand-down, and (on an abort) putting the raid back in the queue. */
+  let lairRaidOutcome: "success" | "failure" | "aborted" | null = null;
 
   let player = state.player;
   const resolveEvents: ActivityEvent[] = [];
@@ -1597,6 +1660,11 @@ export function executePlan(
         }
         player = { ...player, assets: nextAssets };
       }
+      if (lairRaid !== undefined && am.missionTemplateId === lairRaid.id) {
+        /* An aborted raid is an invariant breach, not a loss — requeue it rather than ending
+         * the run on a bug (see `mission_aborted`). */
+        lairRaidOutcome = "aborted";
+      }
       resolveEvents.push({
         kind: "mission_aborted",
         activeMissionId: am.id,
@@ -1649,6 +1717,9 @@ export function executePlan(
     );
     const roll = Math.floor(rng() * 100);
     const success = roll < pct;
+    if (lairRaid !== undefined && template.id === lairRaid.id) {
+      lairRaidOutcome = success ? "success" : "failure";
+    }
     const infamyBefore = player.infamy;
     const heatBefore = player.heat;
     const baselineInfamy = success
@@ -1877,11 +1948,47 @@ export function executePlan(
     player,
   );
 
-  const wantedLevelTierIndex = nextMonotonicWantedTierIndex(
+  /* ---------------------------------------------------------------------------------------
+   * Lair Raid — the loss condition. It rides the top wanted tier: reaching that tier owes the
+   * player a raid, and the raid's own outcome decides whether the run continues.
+   * ------------------------------------------------------------------------------------- */
+  let lairRaidStatus = state.lairRaidStatus;
+  let gameOverReason: GameOverReason | null = null;
+
+  /* The offer left the table because the player started it (the slot bookkeeping below clears
+   * `currentEventTemplateId`; this records *why*). */
+  if (lairRaidStatus === "offered" && eventMissionAtStart) {
+    lairRaidStatus = "engaged";
+  }
+  if (lairRaidOutcome === "success") {
+    /* Survived: the top tier stands down. Heat relief comes from the template's own
+     * `onSuccessEffects` (a `heat_delta`), so designers tune it in content. */
+    lairRaidStatus = "none";
+  } else if (lairRaidOutcome === "failure") {
+    gameOverReason = "lair_raid_failed";
+  } else if (lairRaidOutcome === "aborted") {
+    lairRaidStatus = "pending";
+  }
+
+  let wantedLevelTierIndex = nextMonotonicWantedTierIndex(
     state.wantedLevelTierIndex,
     player.heat,
     catalog.wantedLevels,
   );
+  const topTierIndex = topWantedTierIndex(catalog);
+  if (lairRaidOutcome === "success" && topTierIndex !== null) {
+    /* Standing the top tier down is the one break in the wanted ratchet: every lower tier keeps
+     * its floor, so the raid only returns once heat climbs back to the top tier's `minHeat`. */
+    wantedLevelTierIndex = Math.min(wantedLevelTierIndex, topTierIndex - 1);
+  }
+  if (
+    topTierIndex !== null &&
+    lairRaid !== undefined &&
+    wantedLevelTierIndex >= topTierIndex &&
+    lairRaidStatus === "none"
+  ) {
+    lairRaidStatus = "pending";
+  }
 
   const tierIncreased = wantedLevelTierIndex > state.wantedLevelTierIndex;
   if (tierIncreased) {
@@ -1967,6 +2074,10 @@ export function executePlan(
             effectDescriptions: [],
           });
         }
+        if (lairRaid !== undefined && nextCurrentEventTemplateId === lairRaid.id) {
+          /* Ignoring the raid is the same as losing it. */
+          gameOverReason = "lair_raid_expired";
+        }
         nextCurrentEventTemplateId = null;
         nextCurrentEventTurnsRemaining = 0;
         eventSlotFreedThisTurn = true;
@@ -1978,14 +2089,27 @@ export function executePlan(
     .map((m) => ({ ...m, turnsRemaining: m.turnsRemaining - 1 }))
     .filter((m) => m.turnsRemaining > 0);
 
-  /* Nothing is drawn while an event mission is still running. */
-  if (nextCurrentEventTemplateId === null && !eventMissionStillActive) {
-    if (eventSlotFreedThisTurn) {
+  /* Nothing is drawn while an event mission is still running, or once the run has ended. */
+  if (nextCurrentEventTemplateId === null && !eventMissionStillActive && gameOverReason === null) {
+    if (lairRaid !== undefined && lairRaidStatus === "pending") {
+      /* The raid jumps the queue: an owed raid takes the first free slot regardless of how many
+       * quiet turns were rolled, and no ordinary offer is drawn this resolve. */
+      nextCurrentEventTemplateId = lairRaid.id;
+      nextCurrentEventTurnsRemaining = Math.max(1, lairRaid.lifetimeTurns);
+      nextEventCooldownTurnsRemaining = 0;
+      lairRaidStatus = "offered";
+      resolveEvents.push({
+        kind: "event_rotated_in",
+        eventTemplateId: lairRaid.id,
+        lifetimeTurns: nextCurrentEventTurnsRemaining,
+      });
+    } else if (eventSlotFreedThisTurn) {
       nextEventCooldownTurnsRemaining = rollEventCooldownTurns(catalog, rng);
     } else if (nextEventCooldownTurnsRemaining > 0) {
       nextEventCooldownTurnsRemaining -= 1;
     }
-    if (nextEventCooldownTurnsRemaining === 0) {
+    /* `null` still, i.e. the raid did not just claim the slot. */
+    if (nextCurrentEventTemplateId === null && nextEventCooldownTurnsRemaining === 0) {
       /* Gates read the player's post-resolve stats, so crossing a threshold this turn opens
        * that event up for the draw that follows it. */
       const draw = drawEventOffer(catalog, rng, player);
@@ -1999,6 +2123,16 @@ export function executePlan(
         });
       }
     }
+  }
+
+  if (gameOverReason !== null && lairRaid !== undefined) {
+    /* Last row of the run — the Game Over modal reads the reason from state, not the log, but
+     * the Activity panel should still show where it ended. */
+    resolveEvents.push({
+      kind: "game_over",
+      reason: gameOverReason,
+      eventTemplateId: lairRaid.id,
+    });
   }
 
   const activityLog = mergeResolveActivityEventsIntoActivityLog(
@@ -2030,11 +2164,16 @@ export function executePlan(
       currentEventTurnsRemaining: nextCurrentEventTurnsRemaining,
       eventCooldownTurnsRemaining: nextEventCooldownTurnsRemaining,
       activeSuccessModifiers,
+      lairRaidStatus,
+      gameOverReason,
     },
   };
 }
 
 export function advanceToNextTurn(state: GameState): Result<GameState, GameError> {
+  if (state.gameOverReason !== null) {
+    return { ok: false, error: { code: "game_over", reason: state.gameOverReason } };
+  }
   if (state.phase !== "summary") {
     return {
       ok: false,

@@ -27,6 +27,6 @@
   {
     "name": "Mastermind",
     "maxAgents": 5,
-    "minHeat": 99
+    "minHeat": 100
   }
 ]
