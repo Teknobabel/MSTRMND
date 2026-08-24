@@ -29,3 +29,6 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Dev UI screenshots (scripts/ui-screenshot2.mjs)
+.screens/

@@ -20,7 +20,6 @@ import {
 } from "./game/gameState";
 import type {
   DynamicTrait,
-  DynamicTraitActivityChange,
   LocationAssetSlot,
   LocationType,
   MinionInstance,
@@ -41,11 +40,18 @@ import {
   dynamicTraitDisplayLabel,
   dynamicTraitSuccessModifierBreakdownFromFullRoster,
   dynamicTraitSuccessModifierFromFullRoster,
+  formatDynamicTraitActivityChange,
   formatStartingDynamicTraitsPreview,
   isPositiveDynamicTraitKind,
   type DynamicTraitSuccessBreakdownEntry,
 } from "./game/dynamicTrait";
 import { describeMissionTemplateEffects } from "./game/missionEffects";
+import {
+  buildTurnReport,
+  type MissionResultReport,
+  type TurnReport,
+  type TurnReportLine,
+} from "./game/turnReport";
 import { loadContent } from "./game/loadContent";
 import {
   locationTemplatesForOmegaPlan,
@@ -482,69 +488,6 @@ function minionNameByInstanceId(
     : instanceId;
 }
 
-function locationNameById(
-  catalog: ReturnType<typeof loadContent>,
-  locationId: string,
-): string {
-  return catalog.locations.find((l) => l.id === locationId)?.name ?? locationId;
-}
-
-function formatDynamicTraitActivityChange(
-  catalog: ReturnType<typeof loadContent>,
-  roster: readonly MinionInstance[],
-  ch: DynamicTraitActivityChange,
-): string {
-  const owner =
-    catalog.minions.find((t) => t.id === ch.ownerTemplateId)?.name ?? ch.ownerTemplateId;
-  if (ch.locationId !== undefined) {
-    const loc = locationNameById(catalog, ch.locationId);
-    if (ch.changeType === "added") {
-      return ch.kind === "hero"
-        ? `${owner} gained Hero of ${loc}.`
-        : `${owner} gained Wanted in ${loc}.`;
-    }
-    if (ch.changeType === "replaced" && ch.removedKind !== undefined) {
-      const was = ch.removedKind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
-      const now = ch.kind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
-      return `${owner} replaced ${was} with ${now}.`;
-    }
-    return `${owner}: ${ch.kind} at ${loc}.`;
-  }
-  const other = minionNameByInstanceId(catalog, roster, ch.targetMinionInstanceId ?? "");
-  if (ch.changeType === "added") {
-    if (ch.kind === "friend") {
-      return `${owner} gained Friend of ${other}.`;
-    }
-    if (ch.kind === "rival") {
-      return `${owner} gained Rival of ${other}.`;
-    }
-    return `${owner} gained ${ch.kind} toward ${other}.`;
-  }
-  if (ch.changeType === "upgraded") {
-    if (ch.kind === "lover") {
-      return `${owner}'s friendship with ${other} deepened into Lover of ${other}.`;
-    }
-    if (ch.kind === "hatred") {
-      return `${owner}'s rivalry with ${other} deepened into Hatred for ${other}.`;
-    }
-    return `${owner} upgraded a bond toward ${other}.`;
-  }
-  if (ch.changeType === "replaced" && ch.removedKind !== undefined) {
-    const removedWord =
-      ch.removedKind === "friend" || ch.removedKind === "lover"
-        ? "positive bond"
-        : "negative bond";
-    const gained =
-      ch.kind === "friend"
-        ? `Friend of ${other}`
-        : ch.kind === "rival"
-          ? `Rival of ${other}`
-          : ch.kind;
-    return `${owner} replaced a ${removedWord} with ${gained}.`;
-  }
-  return `${owner}: dynamic trait ${ch.changeType} (${ch.kind}).`;
-}
-
 /** Revealed vs hidden security stack for UI (order preserved for revealed slice). */
 function formatLocationSecurityTraitsDisplay(
   catalog: ReturnType<typeof loadContent>,
@@ -662,6 +605,14 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
   const btnExec = req<HTMLButtonElement>("btn-execute-plan");
   const btnRerollHire = req<HTMLButtonElement>("btn-reroll-hire");
+  const turnReportOverlay = req<HTMLElement>("overlay-turn-report");
+  const turnReportKicker = req<HTMLElement>("turn-report-kicker");
+  const turnReportTitle = req<HTMLElement>("turn-report-title");
+  const turnReportVerdict = req<HTMLElement>("turn-report-verdict");
+  const turnReportStepsEl = req<HTMLElement>("turn-report-steps");
+  const turnReportBody = req<HTMLElement>("turn-report-body");
+  const btnTurnReportContinue = req<HTMLButtonElement>("btn-turn-report-continue");
+  const btnTurnReportSkip = req<HTMLButtonElement>("btn-turn-report-skip");
   const hudShort = req<HTMLElement>("game-hud-short");
   const threatLevelEl = req<HTMLElement>("threat-level");
   const globalTickerEl = req<HTMLElement>("global-events-ticker");
@@ -3725,6 +3676,249 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
     }
   }
 
+  /* ---------------------------------------------------------------------------------------
+   * End-of-turn report: one Mission Results modal per mission that finished, then the Turn
+   * Summary. The turn only advances (`advanceToNextTurn`) when the summary is dismissed, so
+   * the player reads the resolve in the `summary` phase rather than seeing it flash past.
+   * ------------------------------------------------------------------------------------- */
+
+  /** Open report, or null when no report is showing. */
+  let turnReport: TurnReport | null = null;
+  /** Step cursor: `0..missions.length - 1` are mission cards, `missions.length` is the summary. */
+  let turnReportStepIndex = 0;
+
+  function turnReportLineList(lines: readonly TurnReportLine[]): HTMLUListElement {
+    const ul = document.createElement("ul");
+    ul.className = "turn-report-lines";
+    for (const line of lines) {
+      const li = document.createElement("li");
+      li.className = `turn-report-line turn-report-line--${line.tone}`;
+      li.textContent = line.text;
+      ul.appendChild(li);
+    }
+    return ul;
+  }
+
+  function turnReportBlock(title: string, lines: readonly TurnReportLine[]): HTMLElement {
+    const block = document.createElement("section");
+    block.className = "turn-report-block";
+    const heading = document.createElement("h3");
+    heading.className = "turn-report-block__title";
+    heading.textContent = title;
+    block.appendChild(heading);
+    block.appendChild(turnReportLineList(lines));
+    return block;
+  }
+
+  function missionResultSourceLabel(m: MissionResultReport): string {
+    if (m.missionSource === "lair") {
+      return "Lair";
+    }
+    if (m.missionSource === "event") {
+      return "Event";
+    }
+    if (m.missionSource === "omega") {
+      return `Omega (phase ${(m.omegaStageIndex ?? 0) + 1} · slot ${(m.omegaSlotIndex ?? 0) + 1})`;
+    }
+    return "—";
+  }
+
+  function appendMissionResultParticipants(host: HTMLElement, instanceIds: string[]): void {
+    const wrap = document.createElement("div");
+    wrap.className = "turn-report-crew";
+    if (instanceIds.length === 0) {
+      const none = document.createElement("p");
+      none.className = "turn-report-crew__empty";
+      none.textContent = "No minions were assigned.";
+      wrap.appendChild(none);
+      host.appendChild(wrap);
+      return;
+    }
+    for (const iid of instanceIds) {
+      const inst = state.player.minions.find((m) => m.instanceId === iid);
+      const tpl = inst ? content.minions.find((t) => t.id === inst.templateId) : undefined;
+      const chip = document.createElement("div");
+      chip.className = "turn-report-crew__chip";
+      chip.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "turn-report-crew__art"));
+      const text = document.createElement("div");
+      text.className = "turn-report-crew__text";
+      const name = document.createElement("span");
+      name.className = "turn-report-crew__name";
+      name.textContent = tpl?.name ?? inst?.templateId ?? "Missing minion";
+      const meta = document.createElement("span");
+      meta.className = "turn-report-crew__meta";
+      meta.textContent = inst !== undefined ? `Level ${inst.currentLevel}` : "No longer on roster";
+      text.append(name, meta);
+      chip.appendChild(text);
+      wrap.appendChild(chip);
+    }
+    host.appendChild(wrap);
+  }
+
+  function renderMissionResultStep(m: MissionResultReport, total: number): void {
+    const mission = findMissionOrEventTemplate(m.missionTemplateId);
+
+    turnReportKicker.textContent = `Mission Result ${turnReportStepIndex + 1} of ${total}`;
+    turnReportTitle.textContent = m.missionName;
+    turnReportVerdict.className = `turn-report-verdict turn-report-verdict--${m.outcome}`;
+    turnReportVerdict.textContent =
+      m.outcome === "success" ? "Success" : m.outcome === "failure" ? "Failure" : "Aborted";
+
+    const hero = document.createElement("div");
+    hero.className = "turn-report-hero";
+    hero.appendChild(createCardArtImg(resolveMissionCardArt(mission), "turn-report-hero__art"));
+    const heroText = document.createElement("div");
+    heroText.className = "turn-report-hero__text";
+    if (mission?.description) {
+      const desc = document.createElement("p");
+      desc.className = "turn-report-description";
+      desc.textContent = mission.description;
+      heroText.appendChild(desc);
+    }
+    const dl = document.createElement("dl");
+    dl.className = "asset-card-stats turn-report-stats";
+    const rows: Array<{ label: string; value: string }> = [
+      { label: "Source", value: missionResultSourceLabel(m) },
+      { label: "Target", value: formatMissionTargetSummary(m.target) },
+    ];
+    if (m.roll !== null && m.successChancePercent !== null) {
+      rows.push({ label: "Roll", value: `${m.roll} vs ${m.successChancePercent}% chance` });
+    }
+    if (mission !== undefined) {
+      rows.push({
+        label: "Duration",
+        value: `${mission.durationTurns} turn${mission.durationTurns === 1 ? "" : "s"}`,
+      });
+      if (mission.requiredAssetIds.length > 0) {
+        rows.push({
+          label: "Committed assets",
+          value: plannedAssetSlotsDisplay(content, mission.requiredAssetIds, m.plannedAssetIds),
+        });
+      }
+    }
+    appendMinionStatRows(dl, rows);
+    heroText.appendChild(dl);
+    hero.appendChild(heroText);
+    turnReportBody.appendChild(hero);
+
+    const crewBlock = document.createElement("section");
+    crewBlock.className = "turn-report-block";
+    const crewHeading = document.createElement("h3");
+    crewHeading.className = "turn-report-block__title";
+    crewHeading.textContent = "Participating minions";
+    crewBlock.appendChild(crewHeading);
+    appendMissionResultParticipants(crewBlock, m.participantInstanceIds);
+    turnReportBody.appendChild(crewBlock);
+
+    if (m.outcomeGroups.length === 0) {
+      turnReportBody.appendChild(
+        turnReportBlock(m.outcome === "success" ? "Success effects" : "Failure effects", [
+          { text: "Nothing else changed.", tone: "neutral" },
+        ]),
+      );
+      return;
+    }
+    for (const grp of m.outcomeGroups) {
+      turnReportBody.appendChild(turnReportBlock(grp.title, grp.lines));
+    }
+  }
+
+  function renderTurnSummaryStep(report: TurnReport): void {
+    const wins = report.missions.filter((m) => m.outcome === "success").length;
+    const losses = report.missions.length - wins;
+
+    turnReportKicker.textContent = "End of turn";
+    turnReportTitle.textContent = `Turn ${report.turnNumber} Summary`;
+    turnReportVerdict.className = "turn-report-verdict turn-report-verdict--tally";
+    turnReportVerdict.textContent =
+      report.missions.length === 0 ? "No missions resolved" : `${wins} won · ${losses} lost`;
+
+    for (const sec of report.summary) {
+      turnReportBody.appendChild(turnReportBlock(sec.title, sec.lines));
+    }
+  }
+
+  function renderTurnReportSteps(report: TurnReport): void {
+    turnReportStepsEl.innerHTML = "";
+    const total = report.missions.length + 1;
+    if (total < 2) {
+      return;
+    }
+    for (let i = 0; i < total; i += 1) {
+      const dot = document.createElement("span");
+      dot.className = "turn-report-step";
+      if (i < turnReportStepIndex) {
+        dot.classList.add("turn-report-step--done");
+      } else if (i === turnReportStepIndex) {
+        dot.classList.add("turn-report-step--current");
+      }
+      turnReportStepsEl.appendChild(dot);
+    }
+  }
+
+  function renderTurnReport(): void {
+    const report = turnReport;
+    if (report === null) {
+      return;
+    }
+    turnReportBody.innerHTML = "";
+    turnReportBody.scrollTop = 0;
+    const mission = report.missions[turnReportStepIndex];
+    if (mission !== undefined) {
+      renderMissionResultStep(mission, report.missions.length);
+    } else {
+      renderTurnSummaryStep(report);
+    }
+    renderTurnReportSteps(report);
+
+    /* "Skip all" belongs to the mission sequence; the summary is the last step either way. */
+    btnTurnReportSkip.hidden = mission === undefined;
+    btnTurnReportContinue.textContent =
+      mission !== undefined ? "Continue" : `Begin turn ${report.turnNumber + 1}`;
+    btnTurnReportContinue.focus();
+  }
+
+  function openTurnReport(report: TurnReport): void {
+    turnReport = report;
+    turnReportStepIndex = 0;
+    turnReportOverlay.hidden = false;
+    turnReportOverlay.setAttribute("aria-hidden", "false");
+    renderTurnReport();
+  }
+
+  /** Dismisses the report and advances the turn — the only way out of the `summary` phase. */
+  function closeTurnReport(): void {
+    turnReport = null;
+    turnReportStepIndex = 0;
+    turnReportOverlay.hidden = true;
+    turnReportOverlay.setAttribute("aria-hidden", "true");
+    turnReportBody.innerHTML = "";
+    dispatch((s) => advanceToNextTurn(s));
+    btnExec.focus();
+  }
+
+  function advanceTurnReport(): void {
+    const report = turnReport;
+    if (report === null) {
+      return;
+    }
+    if (turnReportStepIndex >= report.missions.length) {
+      closeTurnReport();
+      return;
+    }
+    turnReportStepIndex += 1;
+    renderTurnReport();
+  }
+
+  function skipTurnReportMissions(): void {
+    const report = turnReport;
+    if (report === null) {
+      return;
+    }
+    turnReportStepIndex = report.missions.length;
+    renderTurnReport();
+  }
+
   function refresh(): void {
     reconcileStagedEventMissionWithState();
     const p = state.player;
@@ -3843,15 +4037,24 @@ function initGameController(content: ReturnType<typeof loadContent>): void {
   });
 
   btnExec.addEventListener("click", () => {
-    /* advanceToNextTurn cannot fail after a successful executePlan (phase is "summary"),
-     * so the two run as one transition. */
-    dispatch((s) => {
-      const executed = executePlan(s, content, rng);
-      if (!executed.ok) {
-        return executed;
-      }
-      return advanceToNextTurn(executed.value);
-    });
+    if (state.phase !== "main") {
+      return;
+    }
+    /* The resolve stops in the "summary" phase: the end-of-turn report is shown from here,
+     * and dismissing its Turn Summary is what calls `advanceToNextTurn` (closeTurnReport). */
+    const before = state;
+    if (!dispatch((s) => executePlan(s, content, rng))) {
+      return;
+    }
+    openTurnReport(buildTurnReport(before, state, content));
+  });
+
+  btnTurnReportContinue.addEventListener("click", () => {
+    advanceTurnReport();
+  });
+
+  btnTurnReportSkip.addEventListener("click", () => {
+    skipTurnReportMissions();
   });
 
   btnRerollHire.addEventListener("click", () => {

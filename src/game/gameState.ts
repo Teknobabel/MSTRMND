@@ -187,8 +187,20 @@ export type ActivityEvent =
       eventTemplateId: string;
       effectDescriptions: string[];
     }
-  | { kind: "asset_gained"; assetId: string; quantity: number }
-  | { kind: "asset_lost"; assetId: string; quantity: number }
+  | {
+      kind: "asset_gained";
+      assetId: string;
+      quantity: number;
+      /** Set when this row came out of one mission's resolve (see {@link ActivityEvent}). */
+      activeMissionId?: string;
+    }
+  | {
+      kind: "asset_lost";
+      assetId: string;
+      quantity: number;
+      /** Set when this row came out of one mission's resolve (see {@link ActivityEvent}). */
+      activeMissionId?: string;
+    }
   | {
       kind: "minion_leveled_up";
       instanceId: string;
@@ -196,6 +208,8 @@ export type ActivityEvent =
       newLevel: number;
       /** Present when a trait from `levelUpTraitOrder` was unlocked. */
       traitId?: string;
+      /** Set when this row came out of one mission's resolve (see {@link ActivityEvent}). */
+      activeMissionId?: string;
     };
 
 /** @deprecated Use {@link ActivityEvent} */
@@ -1487,6 +1501,18 @@ export function increaseMaxConcurrentMissions(state: GameState, delta: number): 
  * Pass `newInstanceId` alongside a seeded `rng` for fully deterministic resolves (it feeds
  * opposing-agent spawns); defaults to `crypto.randomUUID`.
  */
+/**
+ * Stamps a resolve-time activity row with the mission whose resolution produced it, so the
+ * end-of-turn report can group each mission's fallout under its own result card. Rows that
+ * carry no `activeMissionId` field (e.g. `event_expired`) pass through untouched.
+ */
+function withActiveMissionId(ev: ActivityEvent, activeMissionId: string): ActivityEvent {
+  if (ev.kind === "asset_gained" || ev.kind === "asset_lost" || ev.kind === "minion_leveled_up") {
+    return { ...ev, activeMissionId };
+  }
+  return ev;
+}
+
 export function executePlan(
   state: GameState,
   catalog: ContentCatalog,
@@ -1579,7 +1605,7 @@ export function executePlan(
         reason: !template ? "missing_template" : "invalid_participants",
       });
       for (const [assetId, quantity] of refund) {
-        resolveEvents.push({ kind: "asset_gained", assetId, quantity });
+        resolveEvents.push({ kind: "asset_gained", assetId, quantity, activeMissionId: am.id });
       }
       continue;
     }
@@ -1738,7 +1764,8 @@ export function executePlan(
           }
         : {}),
     });
-    resolveEvents.push(...applied.events);
+    /* Tagged so the end-of-turn mission modal can show exactly this mission's fallout. */
+    resolveEvents.push(...applied.events.map((ev) => withActiveMissionId(ev, am.id)));
 
     if (success) {
       for (const eff of orderedMissionEffects(template.onSuccessEffects ?? [])) {
@@ -1804,6 +1831,7 @@ export function executePlan(
           templateId: inst.templateId,
           newLevel: nextInst.currentLevel,
           traitId: traitUnlockedId,
+          activeMissionId: am.id,
         });
       }
     }

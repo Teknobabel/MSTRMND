@@ -1501,6 +1501,313 @@ body {
 }
 
 /* ============================================================
+   End-of-turn report (mission results, then the turn summary)
+   ============================================================ */
+
+.turn-report-overlay {
+  position: absolute;
+  inset: 0;
+  /* Above the pause overlay: the resolve must be read before anything else is reachable. */
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.turn-report-overlay[hidden] {
+  display: none !important;
+}
+
+.turn-report-backdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 50% at 50% 45%, rgba(60, 4, 12, 0.6), rgba(2, 0, 1, 0.86));
+  backdrop-filter: blur(4px);
+}
+
+.turn-report-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 720px;
+  max-height: 82%;
+  background: var(--panel-bg-solid);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 0 60px rgba(232, 17, 45, 0.22), 0 18px 48px rgba(0, 0, 0, 0.7);
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
+}
+
+.turn-report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.4rem 0.85rem;
+  background: linear-gradient(180deg, rgba(30, 9, 13, 0.98), rgba(16, 6, 8, 0.94));
+  border-bottom: 1px solid var(--red-deep);
+  border-image: linear-gradient(90deg, var(--red), rgba(232, 17, 45, 0.35) 45%, transparent 92%) 1;
+}
+
+.turn-report-head__text {
+  min-width: 0;
+}
+
+.turn-report-kicker {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.turn-report-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-0);
+  text-shadow: 0 0 14px var(--red-glow-soft);
+}
+
+.turn-report-verdict {
+  flex-shrink: 0;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--line-2);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.turn-report-verdict--success {
+  color: var(--good);
+  border-color: var(--good-dim);
+  background: rgba(29, 107, 61, 0.16);
+  text-shadow: 0 0 12px rgba(69, 223, 123, 0.35);
+}
+
+.turn-report-verdict--failure,
+.turn-report-verdict--aborted {
+  color: var(--red-bright);
+  border-color: var(--red-deep);
+  background: rgba(140, 19, 32, 0.2);
+  text-shadow: 0 0 12px var(--red-glow);
+}
+
+.turn-report-verdict--tally {
+  color: var(--text-1);
+  background: rgba(30, 10, 13, 0.6);
+}
+
+.turn-report-steps {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.55rem 1.4rem 0;
+}
+
+/* A single-step report (summary only) draws no dots; don't leave their padding behind. */
+.turn-report-steps:empty {
+  display: none;
+}
+
+.turn-report-step {
+  width: 26px;
+  height: 3px;
+  background: var(--line-0);
+  border: 1px solid var(--line-1);
+}
+
+.turn-report-step--done {
+  background: var(--red-deep);
+  border-color: var(--red-deep);
+}
+
+.turn-report-step--current {
+  background: var(--red);
+  border-color: var(--red-bright);
+  box-shadow: 0 0 8px var(--red-glow);
+}
+
+.turn-report-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem 1.4rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.turn-report-body:focus {
+  outline: none;
+}
+
+.turn-report-hero {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+.turn-report-hero__art.card-art {
+  width: 104px;
+  height: 104px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 1px solid var(--line-1);
+  background: rgba(10, 4, 5, 0.8);
+  filter: saturate(0.85) contrast(1.05);
+}
+
+.turn-report-hero__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.turn-report-description {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.turn-report-block {
+  border-top: 1px solid var(--line-0);
+  padding-top: 0.7rem;
+}
+
+.turn-report-block__title {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+}
+
+.turn-report-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.turn-report-line {
+  position: relative;
+  padding-left: 1rem;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  color: var(--text-1);
+}
+
+.turn-report-line::before {
+  content: "◢";
+  position: absolute;
+  left: 0;
+  font-size: 0.6rem;
+  line-height: 1.9;
+  color: var(--text-3);
+}
+
+.turn-report-line--good {
+  color: var(--good);
+}
+
+.turn-report-line--good::before {
+  content: "▲";
+  color: var(--good-dim);
+}
+
+.turn-report-line--bad {
+  color: var(--red-bright);
+}
+
+.turn-report-line--bad::before {
+  content: "▼";
+  color: var(--red-deep);
+}
+
+.turn-report-crew {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.turn-report-crew__empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
+.turn-report-crew__chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+  border: 1px solid var(--line-1);
+  background: var(--card-bg);
+}
+
+.turn-report-crew__art.card-art {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border: 1px solid var(--line-1);
+  background: rgba(10, 4, 5, 0.8);
+}
+
+.turn-report-crew__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.turn-report-crew__name {
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-0);
+}
+
+.turn-report-crew__meta {
+  font-size: 0.72rem;
+  color: var(--text-2);
+}
+
+.turn-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 0.85rem 1.4rem;
+  border-top: 1px solid var(--line-0);
+  background: linear-gradient(180deg, rgba(14, 5, 7, 0.6), rgba(22, 8, 10, 0.9));
+}
+
+.btn-turn-report-skip[hidden] {
+  display: none !important;
+}
+
+/* ============================================================
    Omega Plan panel
    ============================================================ */
 

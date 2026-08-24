@@ -484,6 +484,78 @@ function missionTargetLocationId(target: MissionTarget): string | null {
   return null;
 }
 
+function dynamicTraitMinionName(
+  catalog: ContentCatalog,
+  roster: readonly MinionInstance[],
+  instanceId: string,
+): string {
+  const inst = roster.find((m) => m.instanceId === instanceId);
+  return inst !== undefined
+    ? (catalog.minions.find((t) => t.id === inst.templateId)?.name ?? inst.templateId)
+    : instanceId;
+}
+
+function dynamicTraitLocationName(catalog: ContentCatalog, locationId: string): string {
+  return catalog.locations.find((l) => l.id === locationId)?.name ?? locationId;
+}
+
+/** One-sentence activity/report line for a bond gained, deepened, or replaced after a mission. */
+export function formatDynamicTraitActivityChange(
+  catalog: ContentCatalog,
+  roster: readonly MinionInstance[],
+  ch: DynamicTraitActivityChange,
+): string {
+  const owner =
+    catalog.minions.find((t) => t.id === ch.ownerTemplateId)?.name ?? ch.ownerTemplateId;
+  if (ch.locationId !== undefined) {
+    const loc = dynamicTraitLocationName(catalog, ch.locationId);
+    if (ch.changeType === "added") {
+      return ch.kind === "hero"
+        ? `${owner} gained Hero of ${loc}.`
+        : `${owner} gained Wanted in ${loc}.`;
+    }
+    if (ch.changeType === "replaced" && ch.removedKind !== undefined) {
+      const was = ch.removedKind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
+      const now = ch.kind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
+      return `${owner} replaced ${was} with ${now}.`;
+    }
+    return `${owner}: ${ch.kind} at ${loc}.`;
+  }
+  const other = dynamicTraitMinionName(catalog, roster, ch.targetMinionInstanceId ?? "");
+  if (ch.changeType === "added") {
+    if (ch.kind === "friend") {
+      return `${owner} gained Friend of ${other}.`;
+    }
+    if (ch.kind === "rival") {
+      return `${owner} gained Rival of ${other}.`;
+    }
+    return `${owner} gained ${ch.kind} toward ${other}.`;
+  }
+  if (ch.changeType === "upgraded") {
+    if (ch.kind === "lover") {
+      return `${owner}'s friendship with ${other} deepened into Lover of ${other}.`;
+    }
+    if (ch.kind === "hatred") {
+      return `${owner}'s rivalry with ${other} deepened into Hatred for ${other}.`;
+    }
+    return `${owner} upgraded a bond toward ${other}.`;
+  }
+  if (ch.changeType === "replaced" && ch.removedKind !== undefined) {
+    const removedWord =
+      ch.removedKind === "friend" || ch.removedKind === "lover"
+        ? "positive bond"
+        : "negative bond";
+    const gained =
+      ch.kind === "friend"
+        ? `Friend of ${other}`
+        : ch.kind === "rival"
+          ? `Rival of ${other}`
+          : ch.kind;
+    return `${owner} replaced a ${removedWord} with ${gained}.`;
+  }
+  return `${owner}: dynamic trait ${ch.changeType} (${ch.kind}).`;
+}
+
 /** Hire-card preview lines for `MinionTemplate.startingDynamicTraits`. */
 export function formatStartingDynamicTraitsPreview(
   catalog: ContentCatalog,

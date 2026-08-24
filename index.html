@@ -296,6 +296,35 @@
           </footer>
         </div>
 
+        <div id="overlay-turn-report" class="turn-report-overlay" hidden aria-hidden="true">
+          <div class="turn-report-backdrop" aria-hidden="true"></div>
+          <div
+            class="turn-report-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="turn-report-title"
+            aria-describedby="turn-report-body"
+          >
+            <header class="turn-report-head">
+              <div class="turn-report-head__text">
+                <p id="turn-report-kicker" class="turn-report-kicker"></p>
+                <h2 id="turn-report-title" class="turn-report-title"></h2>
+              </div>
+              <div id="turn-report-verdict" class="turn-report-verdict"></div>
+            </header>
+            <div id="turn-report-steps" class="turn-report-steps" aria-hidden="true"></div>
+            <div id="turn-report-body" class="turn-report-body" tabindex="-1"></div>
+            <footer class="turn-report-actions">
+              <button type="button" class="btn btn-turn-report-skip" id="btn-turn-report-skip">
+                Skip all
+              </button>
+              <button type="button" class="btn btn-primary" id="btn-turn-report-continue">
+                Continue
+              </button>
+            </footer>
+          </div>
+        </div>
+
         <div id="overlay-pause" class="pause-overlay" hidden aria-hidden="true">
           <div class="pause-backdrop" aria-hidden="true"></div>
           <div class="pause-panel" role="dialog" aria-modal="true" aria-labelledby="pause-heading">
