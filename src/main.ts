@@ -14,6 +14,7 @@ import {
   rehireMinion,
   rerollHireOffers,
   type ActiveMission,
+  type ActivityEvent,
   type GameError,
   type GameState,
   type Result,
@@ -116,6 +117,7 @@ const LOCATION_CATEGORY_LABEL: Record<LocationType, string> = {
 const GAME_MENU_VALUES = [
   "dashboard",
   "omega",
+  "missions",
   "minions",
   "locations",
   "lair",
@@ -639,6 +641,7 @@ function initGameController(
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const assetsPanelEl = req<HTMLElement>("assets-panel");
   const missionsPanelRootEl = req<HTMLElement>("missions-panel-root");
+  const missionsPanelTitleEl = req<HTMLElement>("missions-panel-title");
   const eventsPanelEl = req<HTMLElement>("events-panel");
   const lairPanelEl = req<HTMLElement>("lair-panel");
   const planColumnTabPlan = req<HTMLButtonElement>("plan-column-tab-plan");
@@ -2975,9 +2978,369 @@ function initGameController(
     }
   }
 
+  /** One runnable mission offer plus how it may be dragged into the plan slot. */
+  type AvailableMissionEntry = {
+    missionTemplateId: string;
+    dragMeta?: MissionCardDragMeta;
+    status?: { label: string; kind: "inprogress" | "pending" | "locked" };
+  };
+
+  /** Runnable offers from one source (omega phase / lair / lair upgrades / event). */
+  type AvailableMissionGroup = {
+    label: string;
+    /** Shown in place of the card list when the source has nothing on offer. */
+    emptyText: string;
+    entries: AvailableMissionEntry[];
+  };
+
+  function missionDisplayName(missionTemplateId: string): string {
+    return findMissionOrEventTemplate(missionTemplateId)?.name ?? missionTemplateId;
+  }
+
+  function compareMissionIdsByName(a: string, b: string): number {
+    return missionDisplayName(a).localeCompare(missionDisplayName(b), undefined, {
+      sensitivity: "base",
+    });
+  }
+
+  /**
+   * Every mission the run has unlocked and could still be started from, grouped by source.
+   * Mirrors what `assignMission` accepts: the active omega phase's unfinished slots, the lair
+   * pool, pending lair upgrades, and the global event offer.
+   */
+  function collectAvailableMissionGroups(): AvailableMissionGroup[] {
+    const mainOnly = state.phase === "main";
+    const groups: AvailableMissionGroup[] = [];
+
+    const planId = state.activeOmegaPlanId;
+    const plan = planId !== null ? getOmegaPlanById(content, planId) : undefined;
+    if (plan) {
+      const stageIndex = state.activeOmegaStageIndex;
+      const stage = plan.stages[stageIndex];
+      const stageProgress = state.omegaStageProgress[stageIndex];
+      const entries: AvailableMissionEntry[] = [];
+      if (stage && stageProgress) {
+        for (let slotIndex = 0; slotIndex < OMEGA_MISSIONS_PER_STAGE; slotIndex += 1) {
+          const missionTemplateId = stage.missionIds[slotIndex];
+          if (missionTemplateId === undefined || stageProgress[slotIndex] === true) {
+            continue;
+          }
+          const running = state.activeMissions.some(
+            (am) =>
+              am.missionSource === "omega" &&
+              am.omegaStageIndex === stageIndex &&
+              am.omegaSlotIndex === slotIndex,
+          );
+          entries.push({
+            missionTemplateId,
+            dragMeta:
+              mainOnly && !running
+                ? {
+                    draggable: true,
+                    source: "omega",
+                    missionTemplateId,
+                    stageIndex,
+                    slotIndex,
+                  }
+                : undefined,
+            status: running
+              ? { label: "In Progress", kind: "inprogress" }
+              : { label: "Pending", kind: "pending" },
+          });
+        }
+      }
+      groups.push({
+        label: `Omega Plan — Phase ${stageIndex + 1}`,
+        emptyText: "Every mission this phase needs is done.",
+        entries,
+      });
+    }
+
+    if (state.activeLairId !== null) {
+      groups.push({
+        label: "Lair",
+        emptyText: "No missions at this lair.",
+        entries: [...state.lairMissionIds].sort(compareMissionIdsByName).map((mid) => ({
+          missionTemplateId: mid,
+          dragMeta: mainOnly
+            ? { draggable: true, source: "lair", missionTemplateId: mid }
+            : undefined,
+        })),
+      });
+
+      groups.push({
+        label: "Lair Upgrades",
+        emptyText: "No pending upgrades.",
+        entries: pendingLairUpgradeMissionIds(
+          state.activeLairId,
+          state.completedLairUpgradeMissionIds,
+          content,
+        )
+          .slice()
+          .sort(compareMissionIdsByName)
+          .map((mid) => ({
+            missionTemplateId: mid,
+            dragMeta: mainOnly
+              ? { draggable: true, source: "lair", missionTemplateId: mid }
+              : undefined,
+          })),
+      });
+    }
+
+    const eventOfferId = state.currentEventTemplateId;
+    const eventMissionRunning = state.activeMissions.some((am) => am.missionSource === "event");
+    const eventEntries: AvailableMissionEntry[] = [];
+    if (eventOfferId !== null) {
+      eventEntries.push({
+        missionTemplateId: eventOfferId,
+        dragMeta:
+          mainOnly && !eventMissionRunning
+            ? { draggable: true, source: "event", missionTemplateId: eventOfferId }
+            : undefined,
+        status: eventMissionRunning
+          ? { label: "In Progress", kind: "inprogress" }
+          : {
+              label: `${state.currentEventTurnsRemaining} ${
+                state.currentEventTurnsRemaining === 1 ? "Turn" : "Turns"
+              } Left`,
+              kind: "pending",
+            },
+      });
+    }
+    groups.push({
+      label: "Event Offer",
+      emptyText: eventMissionRunning
+        ? "The event you took is under way."
+        : "No event on the table.",
+      entries: eventEntries,
+    });
+
+    return groups;
+  }
+
+  function fillAvailableMissionsInto(container: HTMLElement): void {
+    const groups = collectAvailableMissionGroups();
+    const total = groups.reduce((sum, group) => sum + group.entries.length, 0);
+
+    const summary = document.createElement("p");
+    summary.className = "active-missions-summary";
+    summary.textContent = `${total} mission${total === 1 ? "" : "s"} unlocked`;
+    container.appendChild(summary);
+
+    const hint = document.createElement("p");
+    hint.className = "assets-panel-empty";
+    hint.textContent =
+      state.phase === "main"
+        ? "Drag a mission onto the Plan Mission slot to start it."
+        : "Missions can only be started during the Main Phase.";
+    container.appendChild(hint);
+
+    for (const group of groups) {
+      const heading = document.createElement("h3");
+      heading.className = "events-tab-section-title";
+      heading.textContent = group.label;
+      container.appendChild(heading);
+
+      if (group.entries.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "assets-panel-empty";
+        empty.textContent = group.emptyText;
+        container.appendChild(empty);
+        continue;
+      }
+
+      const list = document.createElement("div");
+      list.className = "missions-available-list";
+      for (const entry of group.entries) {
+        const card = omegaPlanMissionCard(entry.missionTemplateId, entry.dragMeta);
+        if (entry.status) {
+          const badge = document.createElement("span");
+          badge.classList.add(
+            "status-badge",
+            "omega-card-badge",
+            `status-badge--${entry.status.kind}`,
+          );
+          badge.textContent = entry.status.label;
+          card.appendChild(badge);
+        }
+        list.appendChild(card);
+      }
+      container.appendChild(list);
+    }
+  }
+
+  /** One resolved / cancelled / aborted mission, as it reads in the history column. */
+  type MissionHistoryRow = {
+    missionTemplateId: string;
+    targetLabel: string;
+    outcomeLabel: string;
+    outcomeKind: "complete" | "failed" | "locked";
+    detailLines: string[];
+  };
+
+  function missionHistoryRowsForTurn(
+    events: readonly ActivityEvent[],
+  ): MissionHistoryRow[] {
+    function signed(value: number): string {
+      return value >= 0 ? `+${value}` : String(value);
+    }
+
+    const rows: MissionHistoryRow[] = [];
+    for (const ev of events) {
+      if (ev.kind === "mission_completed") {
+        const detailLines = [
+          `Roll ${ev.roll} vs ${ev.successChancePercent}% success chance`,
+          `Infamy ${signed(ev.infamyDelta)} · Heat ${signed(ev.heatDelta)}`,
+        ];
+        if (ev.templateEffectDescriptions.length > 0) {
+          detailLines.push(ev.templateEffectDescriptions.join("; "));
+        }
+        if (ev.criticalFailure) {
+          const n = ev.criticalOpposingAgentCount ?? 0;
+          detailLines.push(
+            `Critical failure — ${n} opposing agent${n === 1 ? "" : "s"} on site.`,
+          );
+        }
+        rows.push({
+          missionTemplateId: ev.missionTemplateId,
+          targetLabel: formatMissionTargetSummary(ev.target),
+          outcomeLabel: ev.success ? "Success" : "Failure",
+          outcomeKind: ev.success ? "complete" : "failed",
+          detailLines,
+        });
+      } else if (ev.kind === "mission_cancelled") {
+        rows.push({
+          missionTemplateId: ev.missionTemplateId,
+          targetLabel: formatMissionTargetSummary(ev.target),
+          outcomeLabel: "Cancelled",
+          outcomeKind: "locked",
+          detailLines: ["Called off before it resolved; minions freed."],
+        });
+      } else if (ev.kind === "mission_aborted") {
+        rows.push({
+          missionTemplateId: ev.missionTemplateId,
+          targetLabel: formatMissionTargetSummary(ev.target),
+          outcomeLabel: "Aborted",
+          outcomeKind: "locked",
+          detailLines: [
+            ev.reason === "missing_template"
+              ? "Mission template is no longer in the catalog; assets refunded."
+              : "Roster was invalid at resolve time; assets refunded.",
+          ],
+        });
+      }
+    }
+    return rows;
+  }
+
+  function fillMissionHistoryInto(container: HTMLElement): void {
+    /* `activityLog` is newest turn first; keep that order and read chronologically inside a turn. */
+    const turns = state.activityLog
+      .map((entry) => ({ turnNumber: entry.turnNumber, rows: missionHistoryRowsForTurn(entry.events) }))
+      .filter((entry) => entry.rows.length > 0);
+
+    const total = turns.reduce((sum, entry) => sum + entry.rows.length, 0);
+    const summary = document.createElement("p");
+    summary.className = "active-missions-summary";
+    summary.textContent = `${total} mission${total === 1 ? "" : "s"} on record`;
+    container.appendChild(summary);
+
+    if (turns.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent = "No missions have resolved yet.";
+      container.appendChild(empty);
+      return;
+    }
+
+    for (const turn of turns) {
+      const section = document.createElement("section");
+      section.className = "mission-history-turn";
+      section.setAttribute("aria-label", `Turn ${turn.turnNumber}`);
+
+      const heading = document.createElement("h3");
+      heading.className = "events-tab-section-title";
+      heading.textContent = `Turn ${turn.turnNumber}`;
+      section.appendChild(heading);
+
+      const list = document.createElement("ul");
+      list.className = "mission-history-list";
+      for (const row of turn.rows) {
+        const li = document.createElement("li");
+        li.className = "mission-history-row";
+
+        const head = document.createElement("div");
+        head.className = "mission-history-row__head";
+        const name = document.createElement("span");
+        name.className = "mission-history-row__name";
+        name.textContent = missionDisplayName(row.missionTemplateId);
+        const badge = document.createElement("span");
+        badge.classList.add("status-badge", `status-badge--${row.outcomeKind}`);
+        badge.textContent = row.outcomeLabel;
+        head.appendChild(name);
+        head.appendChild(badge);
+        li.appendChild(head);
+
+        const where = document.createElement("p");
+        where.className = "mission-history-row__meta";
+        where.textContent = `Target: ${row.targetLabel}`;
+        li.appendChild(where);
+
+        for (const line of row.detailLines) {
+          const detail = document.createElement("p");
+          detail.className = "mission-history-row__meta";
+          detail.textContent = line;
+          li.appendChild(detail);
+        }
+
+        list.appendChild(li);
+      }
+      section.appendChild(list);
+      container.appendChild(section);
+    }
+  }
+
+  function appendMissionsMenuColumn(
+    parent: HTMLElement,
+    label: string,
+    fill: (container: HTMLElement) => void,
+  ): void {
+    const column = document.createElement("section");
+    column.className = "missions-menu-column";
+    column.setAttribute("aria-label", label);
+
+    const heading = document.createElement("h3");
+    heading.className = "game-controls-heading missions-menu-column-title";
+    heading.textContent = label;
+    column.appendChild(heading);
+
+    const body = document.createElement("div");
+    body.className = "missions-menu-column-body";
+    fill(body);
+    column.appendChild(body);
+
+    parent.appendChild(column);
+  }
+
   function renderMissionsPanel(): void {
     missionsPanelRootEl.innerHTML = "";
-    renderActiveMissionsInto(missionsPanelRootEl);
+
+    if (currentMenu !== "missions") {
+      /* Dashboard keeps the compact panel: what is running right now. */
+      missionsPanelTitleEl.textContent = "Active Missions";
+      renderActiveMissionsInto(missionsPanelRootEl);
+      return;
+    }
+
+    missionsPanelTitleEl.textContent = "Missions";
+    const columns = document.createElement("div");
+    columns.className = "missions-menu-columns";
+    appendMissionsMenuColumn(columns, "Available", fillAvailableMissionsInto);
+    appendMissionsMenuColumn(columns, "Active", (body) => {
+      renderActiveMissionsInto(body);
+    });
+    appendMissionsMenuColumn(columns, "History", fillMissionHistoryInto);
+    missionsPanelRootEl.appendChild(columns);
   }
 
   function renderEventsPanel(): void {
@@ -3498,6 +3861,7 @@ function initGameController(
     applyGameMenuVisibility();
     renderLocationsPanel();
     renderAssetsPanel();
+    renderMissionsPanel();
     renderLairPanel();
   }
 
