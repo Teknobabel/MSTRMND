@@ -80,6 +80,7 @@ import { wantedTierAtIndex } from "./game/wantedLevel";
 import { maxHireableStartingLevel, nextHireLevelInfamyThreshold } from "./game/minion";
 import { initNavigation, type NavigationApi } from "./navigation";
 import { initStageScale } from "./ui/stageScale";
+import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import {
   appendCardArtShell,
   createCardArtImg,
@@ -583,11 +584,17 @@ function formatAssignMissionError(err: GameError): string {
   }
 }
 
+type GameControllerApi = {
+  /** Throw away the current run and roll a fresh one from the title screen's picks. */
+  startRun: () => void;
+};
+
 function initGameController(
   content: ReturnType<typeof loadContent>,
   nav: NavigationApi,
-): void {
-  let state: GameState = createInitialGameState(content);
+  runSetup: RunSetupApi,
+): GameControllerApi {
+  let state: GameState = createInitialGameState(content, undefined, runSetup.read());
   let missionFxTooltipSerial = 0;
 
   const organizationNameEl = req<HTMLElement>("organization-name");
@@ -4025,6 +4032,16 @@ function initGameController(
   }
 
   /**
+   * Rolls a fresh run from the title screen's omega plan / lair picks (each `null` there is
+   * rolled at random) and drops any plan staged by the run that just ended.
+   */
+  function startRun(): void {
+    clearAllAssignSlots();
+    state = createInitialGameState(content, undefined, runSetup.read());
+    refresh();
+  }
+
+  /**
    * Last step dismissed: the finished run is thrown away and a fresh one is rolled, so the
    * title screen's Play starts over rather than dropping the player back into a dead state.
    */
@@ -4034,9 +4051,7 @@ function initGameController(
     runEndOverlay.hidden = true;
     runEndOverlay.setAttribute("aria-hidden", "true");
     runEndBody.innerHTML = "";
-    clearAllAssignSlots();
-    state = createInitialGameState(content);
-    refresh();
+    startRun();
     nav.returnToMainMenu();
   }
 
@@ -4260,8 +4275,14 @@ function initGameController(
   ensureAssignPickSlotsWired();
   renderAssignPickSlots();
   refresh();
+
+  return { startRun };
 }
 
+const runSetup = initRunSetup(catalog);
+/* The controller needs `nav` and `nav` needs the controller's `startRun`, so Play routes
+ * through this ref, filled in as soon as the controller exists. */
+let startRunFromMenu: () => void = () => {};
 const navigation = initNavigation({
   setGameLoopRunning(running: boolean): void {
     if (running) {
@@ -4270,8 +4291,11 @@ const navigation = initNavigation({
       stopGameLoop();
     }
   },
+  startRun(): void {
+    startRunFromMenu();
+  },
 });
 
-initGameController(catalog, navigation);
+startRunFromMenu = initGameController(catalog, navigation, runSetup).startRun;
 
 initStageScale();
