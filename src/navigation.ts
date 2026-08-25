@@ -2,6 +2,8 @@ import { tryLockLandscape } from "./ui/stageScale";
 
 export type NavigationHooks = {
   setGameLoopRunning: (running: boolean) => void;
+  /** Roll the run the title screen is configured for; called as Play is pressed. */
+  startRun: () => void;
 };
 
 export type NavigationApi = {
@@ -60,6 +62,7 @@ export function initNavigation(hooks: NavigationHooks): NavigationApi {
   }
 
   btnPlay.addEventListener("click", () => {
+    hooks.startRun();
     paused = false;
     screen = "game";
     apply();

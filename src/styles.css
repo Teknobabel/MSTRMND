@@ -243,6 +243,20 @@ body {
   max-width: 300px;
 }
 
+.menu-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 0.25rem;
+}
+
+.menu-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: left;
+}
+
 /* ============================================================
    Buttons
    ============================================================ */

@@ -29,6 +29,21 @@ export function pickRandomOmegaPlanId(
 }
 
 /**
+ * Omega plan id for a new run: the `requestedId` when it names a catalog plan, otherwise a
+ * random pick. Only the random path draws from `rng`, so a chosen plan costs no draw.
+ */
+export function resolveRunOmegaPlanId(
+  catalog: ContentCatalog,
+  requestedId: string | null,
+  rng: () => number,
+): string | null {
+  if (requestedId !== null && getOmegaPlanById(catalog, requestedId) !== undefined) {
+    return requestedId;
+  }
+  return pickRandomOmegaPlanId(catalog, rng);
+}
+
+/**
  * Mission id at zero-based stage and mission indices, or undefined if out of bounds.
  */
 export function missionIdAt(

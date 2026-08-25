@@ -62,9 +62,9 @@ import {
   isOmegaStageComplete,
   OMEGA_STAGE_COUNT,
   omegaSlotMissionId,
-  pickRandomOmegaPlanId,
+  resolveRunOmegaPlanId,
 } from "./omegaPlan";
-import { getLairById, pendingLairUpgradeMissionIds, pickRandomLairId } from "./lair";
+import { getLairById, pendingLairUpgradeMissionIds, resolveRunLairId } from "./lair";
 import { nextMonotonicWantedTierIndex } from "./wantedLevel";
 
 export type TurnPhase = "main" | "resolve" | "summary";
@@ -757,15 +757,28 @@ export function rollEventCooldownTurns(catalog: ContentCatalog, rng: Rng): numbe
 }
 
 /**
+ * Player-chosen run options from the title screen. A field left out, `null`, or naming an id
+ * the catalog does not have is rolled at random instead.
+ */
+export type RunSetup = {
+  /** `OmegaPlanTemplate.id` to run, or `null` to roll one. */
+  omegaPlanId?: string | null;
+  /** `LairTemplate.id` to start in, or `null` to roll one. */
+  lairId?: string | null;
+};
+
+/**
  * Create a fresh run. Pass a seeded `rng` for deterministic runs (tests, replays);
- * defaults to `Math.random` for normal play.
+ * defaults to `Math.random` for normal play. `setup` carries the title screen's omega plan
+ * and lair picks; anything it leaves unset is rolled from the catalog as before.
  */
 export function createInitialGameState(
   catalog: ContentCatalog,
   rng: Rng = () => Math.random(),
+  setup: RunSetup = {},
 ): GameState {
-  const activeOmegaPlanId = pickRandomOmegaPlanId(catalog, rng);
-  const activeLairId = pickRandomLairId(catalog, rng);
+  const activeOmegaPlanId = resolveRunOmegaPlanId(catalog, setup.omegaPlanId ?? null, rng);
+  const activeLairId = resolveRunLairId(catalog, setup.lairId ?? null, rng);
   const lairTemplate = activeLairId !== null ? getLairById(catalog, activeLairId) : undefined;
   const assetsFromLair: Record<string, number> = {};
   if (lairTemplate?.startingAssets) {

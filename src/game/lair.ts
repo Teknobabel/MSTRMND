@@ -36,3 +36,18 @@ export function pickRandomLairId(catalog: ContentCatalog, rng: () => number): st
   const i = Math.floor(rng() * lairs.length);
   return lairs[i]!.id;
 }
+
+/**
+ * Lair id for a new run: the `requestedId` when it names a catalog lair, otherwise a random
+ * pick. Only the random path draws from `rng`, so a chosen lair costs no draw.
+ */
+export function resolveRunLairId(
+  catalog: ContentCatalog,
+  requestedId: string | null,
+  rng: () => number,
+): string | null {
+  if (requestedId !== null && getLairById(catalog, requestedId) !== undefined) {
+    return requestedId;
+  }
+  return pickRandomLairId(catalog, rng);
+}

@@ -87,6 +87,54 @@ describe("createInitialGameState", () => {
     const b = createInitialGameState(catalog, seededRng(5));
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
+
+  /** Two plans and two lairs so a chosen id is distinguishable from a lucky roll. */
+  function multiChoiceCatalog(): ContentCatalog {
+    const raw = rawFixtureSlices();
+    const plan = raw.omegaPlans[0] as Record<string, unknown>;
+    raw.omegaPlans = [plan, { ...plan, id: "op-2", name: "Operation Second" }];
+    const lair = raw.lairs[0] as Record<string, unknown>;
+    raw.lairs = [
+      lair,
+      { ...lair, id: "lair-2", name: "Orbital Station", startingAssets: { "as-cash": 2 } },
+    ];
+    return parseCatalog(raw);
+  }
+
+  it("uses the chosen omega plan and lair", () => {
+    const cat = multiChoiceCatalog();
+    for (const seed of [1, 2, 3, 4]) {
+      const state = createInitialGameState(cat, seededRng(seed), {
+        omegaPlanId: "op-2",
+        lairId: "lair-2",
+      });
+      expect(state.activeOmegaPlanId).toBe("op-2");
+      expect(state.activeLairId).toBe("lair-2");
+      /* The chosen lair's starting assets are applied, not the other one's. */
+      expect(state.player.assets["as-cash"]).toBe(2);
+    }
+  });
+
+  it("rolls the fields left random, and either pick may be random on its own", () => {
+    const cat = multiChoiceCatalog();
+    const planOnly = createInitialGameState(cat, seededRng(7), { omegaPlanId: "op-2" });
+    expect(planOnly.activeOmegaPlanId).toBe("op-2");
+    expect(["lair-1", "lair-2"]).toContain(planOnly.activeLairId);
+
+    const lairOnly = createInitialGameState(cat, seededRng(7), { lairId: "lair-1" });
+    expect(lairOnly.activeLairId).toBe("lair-1");
+    expect(["op-1", "op-2"]).toContain(lairOnly.activeOmegaPlanId);
+  });
+
+  it("falls back to a random pick when an id is not in the catalog", () => {
+    const cat = multiChoiceCatalog();
+    const state = createInitialGameState(cat, seededRng(9), {
+      omegaPlanId: "op-missing",
+      lairId: "lair-missing",
+    });
+    expect(["op-1", "op-2"]).toContain(state.activeOmegaPlanId);
+    expect(["lair-1", "lair-2"]).toContain(state.activeLairId);
+  });
 });
 
 describe("executePlan", () => {
