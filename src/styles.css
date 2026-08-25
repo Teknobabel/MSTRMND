@@ -2123,6 +2123,12 @@ body {
   background: rgba(40, 32, 34, 0.4);
 }
 
+.status-badge--failed {
+  color: var(--red-bright);
+  background: rgba(140, 19, 32, 0.25);
+  text-shadow: 0 0 6px var(--red-glow-soft);
+}
+
 /* Badge pinned to the corner of an Omega mission card */
 .omega-card-badge {
   position: absolute;
@@ -2723,6 +2729,102 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+/* Missions menu (fullscreen): Available / Active / History side by side */
+.game-ui-columns-row--single
+  .game-panel.game-panel--missions:not([hidden])
+  .missions-panel-root {
+  overflow: hidden;
+}
+
+.missions-menu-columns {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.65rem;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
+}
+
+.missions-menu-column {
+  flex: 1 1 0;
+  min-width: 13rem;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.missions-menu-column-title {
+  margin: 0;
+}
+
+.missions-menu-column-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-right: 0.15rem;
+}
+
+.missions-available-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.mission-history-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mission-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mission-history-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line-1);
+  background: rgba(26, 8, 11, 0.35);
+}
+
+.mission-history-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.mission-history-row__name {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-0);
+}
+
+.mission-history-row__meta {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text-2);
 }
 
 .game-panel.game-panel--events .events-panel {
