@@ -11,6 +11,12 @@ export type CreateMinionOverrides = Partial<
   Pick<MinionInstance, "currentLevel" | "currentExperience" | "traitIds" | "dynamicTraits">
 >;
 
+/**
+ * Only the location bonds come across at hire. Minion-to-minion starting bonds seed the pair
+ * affinity table instead (`seedStartingAffinities` in `affinity.ts`), which then projects them
+ * back onto both minions — a relationship needs the other half of the pair on the roster, and
+ * the pair is what owns the score.
+ */
 function dynamicTraitsFromStarting(
   traits: readonly StartingDynamicTrait[] | undefined,
 ): DynamicTrait[] {
@@ -19,13 +25,7 @@ function dynamicTraitsFromStarting(
   }
   const out: DynamicTrait[] = [];
   for (const s of traits) {
-    if ("targetMinionTemplateId" in s) {
-      out.push({
-        kind: s.kind,
-        targetMinionInstanceId: "",
-        pendingTargetTemplateId: s.targetMinionTemplateId,
-      });
-    } else {
+    if (!("targetMinionTemplateId" in s)) {
       out.push({ kind: s.kind, locationId: s.locationId });
     }
   }

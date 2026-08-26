@@ -46,6 +46,7 @@ import {
   isPositiveDynamicTraitKind,
   type DynamicTraitSuccessBreakdownEntry,
 } from "./game/dynamicTrait";
+import { formatRelationshipChange } from "./game/affinity";
 import { describeMissionTemplateEffects } from "./game/missionEffects";
 import {
   buildRunEndReport,
@@ -341,7 +342,7 @@ function assignChipDynamicPillModifierClass(dt: DynamicTrait): string {
 function previewDynamicPillModifierClass(label: string): string {
   if (
     label.startsWith("Friend ") ||
-    label.startsWith("Lover ") ||
+    label.startsWith("Ally ") ||
     label.startsWith("Hero ")
   ) {
     return "minions-trait-pill--dynamic-positive";
@@ -3770,6 +3771,12 @@ function initGameController(
               formatDynamicTraitActivityChange(content, state.player.minions, c),
             );
             line += ` ${dynParts.join(" ")}`;
+          }
+          if (ev.relationshipChanges !== undefined && ev.relationshipChanges.length > 0) {
+            const relParts = ev.relationshipChanges.map((c) =>
+              formatRelationshipChange(content, state.player.minions, c),
+            );
+            line += ` ${relParts.join(" ")}`;
           }
           if (ev.criticalFailure && ev.criticalInjuryChancePercent !== undefined) {
             const n = ev.criticalOpposingAgentCount ?? 0;

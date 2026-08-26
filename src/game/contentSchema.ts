@@ -148,7 +148,7 @@ export const startingDynamicTraitSchema: z.ZodType<StartingDynamicTrait> = z.dis
       targetMinionTemplateId: z.string().min(1),
     }),
     z.object({
-      kind: z.literal("lover"),
+      kind: z.literal("ally"),
       targetMinionTemplateId: z.string().min(1),
     }),
     z.object({
@@ -447,7 +447,7 @@ export const balanceConfigSchema = z.object({
   dynamicTraitModifiers: z
     .object({
       friend: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.friend),
-      lover: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.lover),
+      ally: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.ally),
       rival: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.rival),
       hatred: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.hatred),
       hero: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.hero),
@@ -455,6 +455,23 @@ export const balanceConfigSchema = z.object({
     })
     .default({ ...DEFAULT_BALANCE.dynamicTraitModifiers }),
   dynamicTraitRollPercent: balanceInt(0, 100, DEFAULT_BALANCE.dynamicTraitRollPercent),
+  minionAffinity: z
+    .object({
+      friendThreshold: balanceInt(1, 100, DEFAULT_BALANCE.minionAffinity.friendThreshold),
+      allyThreshold: balanceInt(1, 100, DEFAULT_BALANCE.minionAffinity.allyThreshold),
+      rivalThreshold: balanceInt(-100, -1, DEFAULT_BALANCE.minionAffinity.rivalThreshold),
+      hatedThreshold: balanceInt(-100, -1, DEFAULT_BALANCE.minionAffinity.hatedThreshold),
+      hysteresis: balanceInt(0, 100, DEFAULT_BALANCE.minionAffinity.hysteresis),
+      missionSuccess: balanceInt(-100, 100, DEFAULT_BALANCE.minionAffinity.missionSuccess),
+      missionFailure: balanceInt(-100, 100, DEFAULT_BALANCE.minionAffinity.missionFailure),
+      eventSuccess: balanceInt(-100, 100, DEFAULT_BALANCE.minionAffinity.eventSuccess),
+      eventFailure: balanceInt(-100, 100, DEFAULT_BALANCE.minionAffinity.eventFailure),
+      omegaSuccess: balanceInt(-100, 100, DEFAULT_BALANCE.minionAffinity.omegaSuccess),
+      omegaFailure: balanceInt(-100, 100, DEFAULT_BALANCE.minionAffinity.omegaFailure),
+      lairRaidSuccess: balanceInt(-100, 100, DEFAULT_BALANCE.minionAffinity.lairRaidSuccess),
+      lairRaidFailure: balanceInt(-100, 100, DEFAULT_BALANCE.minionAffinity.lairRaidFailure),
+    })
+    .default({ ...DEFAULT_BALANCE.minionAffinity }),
   infamySuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamySuccessDelta),
   infamyFailureDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamyFailureDelta),
   heatSuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.heatSuccessDelta),
@@ -836,7 +853,7 @@ function checkStartingDynamicTraits(
         }
         seenKeys.add(key);
         const t = dt.targetMinionTemplateId;
-        if (dt.kind === "friend" || dt.kind === "lover") {
+        if (dt.kind === "friend" || dt.kind === "ally") {
           if (negativeMinionTargets.has(t)) {
             issues.push({
               slice,
@@ -850,7 +867,7 @@ function checkStartingDynamicTraits(
               slice,
               entityId: m.id,
               path,
-              message: `Multiple positive bonds toward "${t}" (at most one friend or lover per target)`,
+              message: `Multiple positive bonds toward "${t}" (at most one friend or ally per target)`,
             });
           }
           positiveMinionTargets.add(t);

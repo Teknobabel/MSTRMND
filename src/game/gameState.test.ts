@@ -7,6 +7,7 @@ import {
   createInitialGameState,
   eligibleEventTemplates,
   executePlan,
+  hireMinion,
 } from "./gameState";
 import { parseCatalog } from "./contentSchema";
 import {
@@ -14,6 +15,7 @@ import {
   currentLairUpgradeLevel,
 } from "./lair";
 import type { ContentCatalog } from "./types";
+import { dynamicTraitSuccessModifierFromFullRoster } from "./dynamicTrait";
 import {
   fixtureCatalog,
   makeMinionInstance,
@@ -1292,5 +1294,221 @@ describe("lair upgrade levels", () => {
     expect(
       currentLairUpgradeLevel(done.activeLairId, done.completedLairUpgradeMissionIds, cat),
     ).toBeNull();
+  });
+});
+
+describe("minion pair affinity through executePlan", () => {
+  /** Two matched operatives so the mission succeeds at 100% with `rng: () => 0`. */
+  function pairState(seed: number, overrides?: Partial<ActiveMission>): GameState {
+    const state = baseState(seed);
+    return {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [
+          makeMinionInstance("mi-1", "m-hero", ["t-req"]),
+          makeMinionInstance("mi-2", "m-hero", ["t-req"]),
+        ],
+      },
+      activeMissions: [
+        activeMission({ participantInstanceIds: ["mi-1", "mi-2"], ...overrides }),
+      ],
+    };
+  }
+
+  function runTurns(start: GameState, turns: number, rng: () => number): GameState {
+    let cur = start;
+    for (let i = 0; i < turns; i += 1) {
+      const missions = cur.activeMissions;
+      const result = executePlan(cur, catalog, rng, sequentialIds("ag"));
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return cur;
+      }
+      /* Re-arm the same mission for the next turn; only the affinity carries over. */
+      cur = { ...result.value, phase: "main" as const, activeMissions: missions };
+    }
+    return cur;
+  }
+
+  it("moves the pair's score by the tuned lair-mission amount on success", () => {
+    const next = runTurns(pairState(1), 1, () => 0);
+    expect(next.minionAffinities).toHaveLength(1);
+    expect(next.minionAffinities[0]).toMatchObject({
+      aInstanceId: "mi-1",
+      bInstanceId: "mi-2",
+      score: catalog.balance.minionAffinity.missionSuccess,
+      relationship: "neutral",
+    });
+  });
+
+  it("logs the threshold crossing on the resolve that reaches it, and only then", () => {
+    const next = runTurns(pairState(1), 3, () => 0);
+    expect(next.minionAffinities[0]!.relationship).toBe("friend");
+    const crossings = completedEvents(next).flatMap((e) => e.relationshipChanges ?? []);
+    expect(crossings).toEqual([
+      { aInstanceId: "mi-1", bInstanceId: "mi-2", from: "neutral", to: "friend" },
+    ]);
+  });
+
+  it("projects the new band onto both minions as a symmetric bond", () => {
+    const next = runTurns(pairState(1), 3, () => 0);
+    expect(next.player.minions.find((m) => m.instanceId === "mi-1")!.dynamicTraits).toContainEqual({
+      kind: "friend",
+      targetMinionInstanceId: "mi-2",
+    });
+    expect(next.player.minions.find((m) => m.instanceId === "mi-2")!.dynamicTraits).toContainEqual({
+      kind: "friend",
+      targetMinionInstanceId: "mi-1",
+    });
+  });
+
+  it("counts the resulting bond once per pair in the next mission's success chance", () => {
+    const friends = runTurns(pairState(1), 3, () => 0);
+    const result = executePlan(
+      { ...friends, phase: "main", activeMissions: [activeMission({ participantInstanceIds: ["mi-1", "mi-2"] })] },
+      catalog,
+      () => 0,
+      sequentialIds("ag"),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    /* Base is already 100 and the roll clamps, so read the pre-clamp intent from the modifier
+     * itself: one Friend bond (+5), not one per minion (+10). */
+    const bonds = result.value.player.minions
+      .flatMap((m) => m.dynamicTraits)
+      .filter((dt) => dt.kind === "friend");
+    expect(bonds).toHaveLength(2); /* symmetric pills … */
+    expect(
+      dynamicTraitSuccessModifierFromFullRoster(
+        result.value.player.minions,
+        ["mi-1", "mi-2"],
+        null,
+        catalog.balance.dynamicTraitModifiers,
+      ),
+    ).toBe(catalog.balance.dynamicTraitModifiers.friend); /* … one modifier */
+  });
+
+  it("uses the omega delta for an omega mission", () => {
+    const next = runTurns(
+      pairState(1, { missionSource: "omega", omegaStageIndex: 0, omegaSlotIndex: 0 }),
+      1,
+      () => 0,
+    );
+    expect(next.minionAffinities[0]!.score).toBe(catalog.balance.minionAffinity.omegaSuccess);
+  });
+
+  it("leaves a solo mission with no pair rows at all", () => {
+    const state = baseState(1);
+    const solo = {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [makeMinionInstance("mi-1", "m-hero", ["t-req"])],
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+    };
+    expect(runTurns(solo, 1, () => 0).minionAffinities).toEqual([]);
+  });
+
+  it("holds the band when the score oscillates around a threshold", () => {
+    const friends = runTurns(pairState(1), 3, () => 0);
+    expect(friends.minionAffinities[0]!.relationship).toBe("friend");
+    /* Strip the required trait so the same pair now runs at 0% and the roll of 99 fails. One
+     * failure drops the score to 2 — below the +3 entry but inside the hysteresis band. */
+    const wobbled = runTurns(
+      {
+        ...friends,
+        phase: "main",
+        player: {
+          ...friends.player,
+          minions: friends.player.minions.map((m) => ({ ...m, traitIds: [] })),
+        },
+        activeMissions: [activeMission({ participantInstanceIds: ["mi-1", "mi-2"] })],
+      },
+      1,
+      () => 0.99,
+    );
+    expect(wobbled.minionAffinities[0]!.score).toBe(2);
+    expect(wobbled.minionAffinities[0]!.relationship).toBe("friend");
+    expect(completedEvents(wobbled)[0]!.relationshipChanges).toBeUndefined();
+  });
+});
+
+describe("run-start affinity seeds", () => {
+  it("rolls a fixed template table at run start, before anyone is hired", () => {
+    const state = createInitialGameState(catalog, seededRng(4));
+    expect(state.minionAffinities).toEqual([]); /* roster is empty at turn 1 */
+    /* The fixture catalog has two templates → exactly one pair, which takes the positive role. */
+    expect(state.minionAffinitySeeds).toHaveLength(1);
+    expect(state.minionAffinitySeeds[0]!.score).toBeGreaterThanOrEqual(
+      catalog.balance.minionAffinity.friendThreshold,
+    );
+  });
+
+  it("lands a seed on the pair only once the second minion is hired", () => {
+    const start = createInitialGameState(catalog, seededRng(4));
+    const seed = start.minionAffinitySeeds[0]!;
+    const staged: GameState = {
+      ...start,
+      player: { ...start.player, commandPoints: 20 },
+      availableMinionTemplateIds: [seed.aTemplateId, seed.bTemplateId],
+    };
+
+    const first = hireMinion(staged, catalog, seed.aTemplateId, "mi-1");
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+    expect(first.value.minionAffinities).toEqual([]);
+
+    const second = hireMinion(first.value, catalog, seed.bTemplateId, "mi-2");
+    expect(second.ok).toBe(true);
+    if (!second.ok) {
+      return;
+    }
+    expect(second.value.minionAffinities).toEqual([
+      {
+        aInstanceId: "mi-1",
+        bInstanceId: "mi-2",
+        score: seed.score,
+        relationship: "friend",
+      },
+    ]);
+    /* Seeded bands project onto both roster cards exactly like earned ones. */
+    for (const m of second.value.player.minions) {
+      expect(m.dynamicTraits.some((dt) => dt.kind === "friend")).toBe(true);
+    }
+  });
+
+  it("lets a designer-authored bond outrank the roll for the same pair", () => {
+    const raw = rawFixtureSlices();
+    raw.minions[1] = {
+      ...(raw.minions[1] as Record<string, unknown>),
+      startingDynamicTraits: [{ kind: "hatred", targetMinionTemplateId: "m-hero" }],
+    };
+    const cat = parseCatalog(raw);
+    const start = createInitialGameState(cat, seededRng(4));
+    const staged: GameState = {
+      ...start,
+      player: { ...start.player, commandPoints: 20 },
+      availableMinionTemplateIds: ["m-hero", "m-buddy"],
+    };
+    const first = hireMinion(staged, cat, "m-hero", "mi-1");
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+    const second = hireMinion(first.value, cat, "m-buddy", "mi-2");
+    expect(second.ok).toBe(true);
+    if (!second.ok) {
+      return;
+    }
+    expect(second.value.minionAffinities[0]).toMatchObject({
+      score: cat.balance.minionAffinity.hatedThreshold,
+      relationship: "hated",
+    });
   });
 });

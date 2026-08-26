@@ -23,6 +23,7 @@ import type {
 } from "./types";
 import { isOccupiedAssetSlot } from "./types";
 import { formatDynamicTraitActivityChange, isPositiveDynamicTraitKind } from "./dynamicTrait";
+import { formatRelationshipChange, relationshipChangeIsPositive } from "./affinity";
 import {
   getOmegaPlanById,
   omegaPlanRequiredMissionTotal,
@@ -245,7 +246,18 @@ function missionOutcomeGroups(
       tone: dynamicTraitChangeTone(change),
     });
   }
+  /* Relationship moves earn their own group: they are the fallout players most want to spot,
+   * and burying them under level-ups makes them easy to miss. */
   groups.push(group("Minions", crew));
+  groups.push(
+    group(
+      "Relationships",
+      (ev.relationshipChanges ?? []).map((change) => ({
+        text: formatRelationshipChange(catalog, after.player.minions, change),
+        tone: relationshipChangeIsPositive(change) ? ("good" as const) : ("bad" as const),
+      })),
+    ),
+  );
 
   const fallout: TurnReportLine[] = [];
   if (ev.criticalFailure && ev.criticalInjuryChancePercent !== undefined) {
@@ -523,6 +535,12 @@ function rosterSection(
       lines.push({
         text: formatDynamicTraitActivityChange(catalog, after.player.minions, change),
         tone: dynamicTraitChangeTone(change),
+      });
+    }
+    for (const change of ev.relationshipChanges ?? []) {
+      lines.push({
+        text: formatRelationshipChange(catalog, after.player.minions, change),
+        tone: relationshipChangeIsPositive(change) ? "good" : "bad",
       });
     }
   }

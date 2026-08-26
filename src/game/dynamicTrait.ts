@@ -1,3 +1,14 @@
+/**
+ * Dynamic traits — the runtime modifiers that hang off a minion instead of the catalog.
+ *
+ * Two families live here and they work differently:
+ *
+ * - **Location** bonds (`hero` / `wanted`) are per-minion and still rolled after each resolve.
+ * - **Minion-to-minion** bonds (`friend` / `ally` / `rival` / `hatred`) are a read-only
+ *   projection of the pair affinity table in `affinity.ts`. They are never rolled and never
+ *   edited here; the only thing this module does with them is render them and total their
+ *   success modifier — **once per unordered pair**, not once per minion.
+ */
 import type {
   ContentCatalog,
   DynamicTrait,
@@ -9,6 +20,7 @@ import type {
   StartingDynamicTrait,
 } from "./types";
 import { DEFAULT_BALANCE } from "./types";
+import { pairKey } from "./affinity";
 
 /** @deprecated Read `catalog.balance.dynamicTraitRollPercent`; kept as the legacy default. */
 export const DYNAMIC_TRAIT_ROLL_PERCENT = DEFAULT_BALANCE.dynamicTraitRollPercent;
@@ -17,15 +29,15 @@ const DEFAULT_BONUS_BY_KIND: Record<DynamicTraitKind, number> =
   DEFAULT_BALANCE.dynamicTraitModifiers;
 
 export function isPositiveDynamicTraitKind(kind: DynamicTraitKind): boolean {
-  return kind === "friend" || kind === "lover" || kind === "hero";
+  return kind === "friend" || kind === "ally" || kind === "hero";
 }
 
 export function isMinionTargetedDynamicTrait(
   d: DynamicTrait,
-): d is Extract<DynamicTrait, { kind: "friend" | "lover" | "rival" | "hatred" }> {
+): d is Extract<DynamicTrait, { kind: "friend" | "ally" | "rival" | "hatred" }> {
   return (
     d.kind === "friend" ||
-    d.kind === "lover" ||
+    d.kind === "ally" ||
     d.kind === "rival" ||
     d.kind === "hatred"
   );
@@ -46,6 +58,9 @@ function minionInstanceName(
 
 /**
  * Resolves `pendingTargetTemplateId` to the first other roster minion with that template.
+ *
+ * Only reachable for legacy/hand-built instances now that bonds are projected from the affinity
+ * table (which stores instance ids outright), but kept so such data still renders.
  */
 export function materializePendingDynamicTraits(minions: MinionInstance[]): MinionInstance[] {
   return minions.map((owner) => ({
@@ -87,23 +102,29 @@ export function dynamicTraitSuccessModifierBreakdownForMission(
     return { total: 0, entries: [] };
   }
   const ids = new Set(participants.map((p) => p.instanceId));
+  /* A relationship belongs to the pair, so both halves of it are on the roster — count the
+   * first one seen and skip its mirror. */
+  const countedPairs = new Set<string>();
   const entries: DynamicTraitSuccessBreakdownEntry[] = [];
   let total = 0;
   for (const p of participants) {
     for (const dt of p.dynamicTraits) {
       if (isMinionTargetedDynamicTrait(dt)) {
-        if (
-          dt.targetMinionInstanceId.length > 0 &&
-          ids.has(dt.targetMinionInstanceId)
-        ) {
-          const delta = modifiers[dt.kind];
-          total += delta;
-          entries.push({
-            ownerInstanceId: p.instanceId,
-            delta,
-            traitLabel: dynamicTraitDisplayLabel(catalog, roster, dt),
-          });
+        if (dt.targetMinionInstanceId.length === 0 || !ids.has(dt.targetMinionInstanceId)) {
+          continue;
         }
+        const key = pairKey(p.instanceId, dt.targetMinionInstanceId);
+        if (countedPairs.has(key)) {
+          continue;
+        }
+        countedPairs.add(key);
+        const delta = modifiers[dt.kind];
+        total += delta;
+        entries.push({
+          ownerInstanceId: p.instanceId,
+          delta,
+          traitLabel: dynamicTraitDisplayLabel(catalog, roster, dt),
+        });
       } else if (missionLocationId !== null && dt.locationId === missionLocationId) {
         const delta = modifiers[dt.kind];
         total += delta;
@@ -127,16 +148,20 @@ export function dynamicTraitSuccessModifierForMission(
     return 0;
   }
   const ids = new Set(participants.map((p) => p.instanceId));
+  const countedPairs = new Set<string>();
   let delta = 0;
   for (const p of participants) {
     for (const dt of p.dynamicTraits) {
       if (isMinionTargetedDynamicTrait(dt)) {
-        if (
-          dt.targetMinionInstanceId.length > 0 &&
-          ids.has(dt.targetMinionInstanceId)
-        ) {
-          delta += modifiers[dt.kind];
+        if (dt.targetMinionInstanceId.length === 0 || !ids.has(dt.targetMinionInstanceId)) {
+          continue;
         }
+        const key = pairKey(p.instanceId, dt.targetMinionInstanceId);
+        if (countedPairs.has(key)) {
+          continue;
+        }
+        countedPairs.add(key);
+        delta += modifiers[dt.kind];
       } else if (missionLocationId !== null && dt.locationId === missionLocationId) {
         delta += modifiers[dt.kind];
       }
@@ -210,8 +235,8 @@ export function dynamicTraitDisplayLabel(
     switch (dt.kind) {
       case "friend":
         return `Friend of ${name}`;
-      case "lover":
-        return `Lover of ${name}`;
+      case "ally":
+        return `Ally of ${name}`;
       case "rival":
         return `Rival of ${name}`;
       case "hatred":
@@ -225,161 +250,6 @@ export function dynamicTraitDisplayLabel(
 
 function rollHits(rng: () => number, rollPercent: number): boolean {
   return Math.floor(rng() * 100) < rollPercent;
-}
-
-function pickRandomOtherParticipant(
-  participantInstanceIds: readonly string[],
-  ownerId: string,
-  rng: () => number,
-): string | null {
-  const others = participantInstanceIds.filter((id) => id !== ownerId);
-  if (others.length === 0) {
-    return null;
-  }
-  return others[Math.floor(rng() * others.length)]!;
-}
-
-function findIndexMinionBond(
-  traits: readonly DynamicTrait[],
-  targetId: string,
-  kinds: readonly DynamicTraitKind[],
-): number {
-  return traits.findIndex(
-    (t) =>
-      isMinionTargetedDynamicTrait(t) &&
-      kinds.includes(t.kind) &&
-      t.targetMinionInstanceId === targetId,
-  );
-}
-
-function applyPositiveMinionBond(
-  traits: DynamicTrait[],
-  targetInstanceId: string,
-  ownerTemplateId: string,
-  ownerInstanceId: string,
-): { next: DynamicTrait[]; change: DynamicTraitActivityChange | null } {
-  const negKinds: DynamicTraitKind[] = ["rival", "hatred"];
-
-  const loverIdx = findIndexMinionBond(traits, targetInstanceId, ["lover"]);
-  if (loverIdx !== -1) {
-    return { next: traits, change: null };
-  }
-
-  const friendIdx = findIndexMinionBond(traits, targetInstanceId, ["friend"]);
-  if (friendIdx !== -1) {
-    const next = traits.map((t, i) =>
-      i === friendIdx ? ({ kind: "lover", targetMinionInstanceId: targetInstanceId } as const) : t,
-    );
-    return {
-      next,
-      change: {
-        ownerInstanceId,
-        ownerTemplateId,
-        changeType: "upgraded",
-        kind: "lover",
-        targetMinionInstanceId: targetInstanceId,
-        removedKind: "friend",
-      },
-    };
-  }
-
-  let removedKind: DynamicTraitKind | undefined;
-  let working = [...traits];
-  for (const nk of negKinds) {
-    const idx = findIndexMinionBond(working, targetInstanceId, [nk]);
-    if (idx !== -1) {
-      removedKind = working[idx]!.kind as DynamicTraitKind;
-      working = working.filter((_, i) => i !== idx);
-      break;
-    }
-  }
-
-  working.push({ kind: "friend", targetMinionInstanceId: targetInstanceId });
-  return {
-    next: working,
-    change:
-      removedKind !== undefined
-        ? {
-            ownerInstanceId,
-            ownerTemplateId,
-            changeType: "replaced",
-            kind: "friend",
-            targetMinionInstanceId: targetInstanceId,
-            removedKind,
-          }
-        : {
-            ownerInstanceId,
-            ownerTemplateId,
-            changeType: "added",
-            kind: "friend",
-            targetMinionInstanceId: targetInstanceId,
-          },
-  };
-}
-
-function applyNegativeMinionBond(
-  traits: DynamicTrait[],
-  targetInstanceId: string,
-  ownerTemplateId: string,
-  ownerInstanceId: string,
-): { next: DynamicTrait[]; change: DynamicTraitActivityChange | null } {
-  const posKinds: DynamicTraitKind[] = ["friend", "lover"];
-
-  const hatredIdx = findIndexMinionBond(traits, targetInstanceId, ["hatred"]);
-  if (hatredIdx !== -1) {
-    return { next: traits, change: null };
-  }
-
-  const rivalIdx = findIndexMinionBond(traits, targetInstanceId, ["rival"]);
-  if (rivalIdx !== -1) {
-    const next = traits.map((t, i) =>
-      i === rivalIdx ? ({ kind: "hatred", targetMinionInstanceId: targetInstanceId } as const) : t,
-    );
-    return {
-      next,
-      change: {
-        ownerInstanceId,
-        ownerTemplateId,
-        changeType: "upgraded",
-        kind: "hatred",
-        targetMinionInstanceId: targetInstanceId,
-        removedKind: "rival",
-      },
-    };
-  }
-
-  let removedKind: DynamicTraitKind | undefined;
-  let working = [...traits];
-  for (const pk of posKinds) {
-    const idx = findIndexMinionBond(working, targetInstanceId, [pk]);
-    if (idx !== -1) {
-      removedKind = working[idx]!.kind as DynamicTraitKind;
-      working = working.filter((_, i) => i !== idx);
-      break;
-    }
-  }
-
-  working.push({ kind: "rival", targetMinionInstanceId: targetInstanceId });
-  return {
-    next: working,
-    change:
-      removedKind !== undefined
-        ? {
-            ownerInstanceId,
-            ownerTemplateId,
-            changeType: "replaced",
-            kind: "rival",
-            targetMinionInstanceId: targetInstanceId,
-            removedKind,
-          }
-        : {
-            ownerInstanceId,
-            ownerTemplateId,
-            changeType: "added",
-            kind: "rival",
-            targetMinionInstanceId: targetInstanceId,
-          },
-  };
 }
 
 function findLocationDynamic(
@@ -403,7 +273,7 @@ function applyHero(
     return { next: traits, change: null };
   }
 
-  let removedKind: DynamicTraitKind | undefined;
+  let removedKind: "hero" | "wanted" | undefined;
   let working = [...traits];
   const wantedIdx = findLocationDynamic(working, locationId, ["wanted"]);
   if (wantedIdx !== -1) {
@@ -444,7 +314,7 @@ function applyWanted(
     return { next: traits, change: null };
   }
 
-  let removedKind: DynamicTraitKind | undefined;
+  let removedKind: "hero" | "wanted" | undefined;
   let working = [...traits];
   const heroIdx = findLocationDynamic(working, locationId, ["hero"]);
   if (heroIdx !== -1) {
@@ -484,76 +354,30 @@ function missionTargetLocationId(target: MissionTarget): string | null {
   return null;
 }
 
-function dynamicTraitMinionName(
-  catalog: ContentCatalog,
-  roster: readonly MinionInstance[],
-  instanceId: string,
-): string {
-  const inst = roster.find((m) => m.instanceId === instanceId);
-  return inst !== undefined
-    ? (catalog.minions.find((t) => t.id === inst.templateId)?.name ?? inst.templateId)
-    : instanceId;
-}
-
 function dynamicTraitLocationName(catalog: ContentCatalog, locationId: string): string {
   return catalog.locations.find((l) => l.id === locationId)?.name ?? locationId;
 }
 
-/** One-sentence activity/report line for a bond gained, deepened, or replaced after a mission. */
+/** One-sentence activity/report line for a Hero / Wanted bond gained or replaced after a mission. */
 export function formatDynamicTraitActivityChange(
   catalog: ContentCatalog,
-  roster: readonly MinionInstance[],
+  _roster: readonly MinionInstance[],
   ch: DynamicTraitActivityChange,
 ): string {
   const owner =
     catalog.minions.find((t) => t.id === ch.ownerTemplateId)?.name ?? ch.ownerTemplateId;
-  if (ch.locationId !== undefined) {
-    const loc = dynamicTraitLocationName(catalog, ch.locationId);
-    if (ch.changeType === "added") {
-      return ch.kind === "hero"
-        ? `${owner} gained Hero of ${loc}.`
-        : `${owner} gained Wanted in ${loc}.`;
-    }
-    if (ch.changeType === "replaced" && ch.removedKind !== undefined) {
-      const was = ch.removedKind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
-      const now = ch.kind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
-      return `${owner} replaced ${was} with ${now}.`;
-    }
-    return `${owner}: ${ch.kind} at ${loc}.`;
-  }
-  const other = dynamicTraitMinionName(catalog, roster, ch.targetMinionInstanceId ?? "");
+  const loc = dynamicTraitLocationName(catalog, ch.locationId);
   if (ch.changeType === "added") {
-    if (ch.kind === "friend") {
-      return `${owner} gained Friend of ${other}.`;
-    }
-    if (ch.kind === "rival") {
-      return `${owner} gained Rival of ${other}.`;
-    }
-    return `${owner} gained ${ch.kind} toward ${other}.`;
-  }
-  if (ch.changeType === "upgraded") {
-    if (ch.kind === "lover") {
-      return `${owner}'s friendship with ${other} deepened into Lover of ${other}.`;
-    }
-    if (ch.kind === "hatred") {
-      return `${owner}'s rivalry with ${other} deepened into Hatred for ${other}.`;
-    }
-    return `${owner} upgraded a bond toward ${other}.`;
+    return ch.kind === "hero"
+      ? `${owner} gained Hero of ${loc}.`
+      : `${owner} gained Wanted in ${loc}.`;
   }
   if (ch.changeType === "replaced" && ch.removedKind !== undefined) {
-    const removedWord =
-      ch.removedKind === "friend" || ch.removedKind === "lover"
-        ? "positive bond"
-        : "negative bond";
-    const gained =
-      ch.kind === "friend"
-        ? `Friend of ${other}`
-        : ch.kind === "rival"
-          ? `Rival of ${other}`
-          : ch.kind;
-    return `${owner} replaced a ${removedWord} with ${gained}.`;
+    const was = ch.removedKind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
+    const now = ch.kind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
+    return `${owner} replaced ${was} with ${now}.`;
   }
-  return `${owner}: dynamic trait ${ch.changeType} (${ch.kind}).`;
+  return `${owner}: ${ch.kind} at ${loc}.`;
 }
 
 /** Hire-card preview lines for `MinionTemplate.startingDynamicTraits`. */
@@ -572,8 +396,8 @@ export function formatStartingDynamicTraitsPreview(
       switch (s.kind) {
         case "friend":
           return `Friend of ${n}`;
-        case "lover":
-          return `Lover of ${n}`;
+        case "ally":
+          return `Ally of ${n}`;
         case "rival":
           return `Rival of ${n}`;
         case "hatred":
@@ -587,10 +411,14 @@ export function formatStartingDynamicTraitsPreview(
 }
 
 /**
- * After mission effects, roll per-participant dynamic traits and return the next roster
- * plus structured changes for `mission_completed.dynamicTraitChanges`.
+ * After mission effects, roll each participant's **location** dynamic traits (Hero on success,
+ * Wanted on failure) and return the next roster plus structured changes for
+ * `mission_completed.dynamicTraitChanges`.
+ *
+ * Minion-to-minion relationships are deliberately absent: those move deterministically through
+ * the pair affinity table (`affinity.ts`), not through this roll.
  */
-export function rollDynamicTraitsAfterMission(
+export function rollLocationDynamicTraitsAfterMission(
   minions: readonly MinionInstance[],
   participantInstanceIds: readonly string[],
   success: boolean,
@@ -598,84 +426,31 @@ export function rollDynamicTraitsAfterMission(
   rng: () => number,
   rollPercent: number = DEFAULT_BALANCE.dynamicTraitRollPercent,
 ): { nextMinions: MinionInstance[]; changes: DynamicTraitActivityChange[] } {
-  let working = materializePendingDynamicTraits([...minions.map((m) => ({ ...m, dynamicTraits: [...m.dynamicTraits] }))]);
+  let working = materializePendingDynamicTraits([
+    ...minions.map((m) => ({ ...m, dynamicTraits: [...m.dynamicTraits] })),
+  ]);
   const changes: DynamicTraitActivityChange[] = [];
   const locationId = missionTargetLocationId(missionTarget);
-  const multi = participantInstanceIds.length > 1;
+  if (locationId === null) {
+    return { nextMinions: working, changes };
+  }
 
   const byId = new Map(working.map((m) => [m.instanceId, m] as const));
 
   for (const ownerId of participantInstanceIds) {
-    if (success && multi) {
-      if (rollHits(rng, rollPercent)) {
-        const otherId = pickRandomOtherParticipant(participantInstanceIds, ownerId, rng);
-        if (otherId !== null) {
-          const cur = byId.get(ownerId);
-          if (cur === undefined) {
-            continue;
-          }
-          const r = applyPositiveMinionBond(
-            cur.dynamicTraits,
-            otherId,
-            cur.templateId,
-            cur.instanceId,
-          );
-          if (r.change !== null) {
-            byId.set(ownerId, { ...cur, dynamicTraits: r.next });
-            changes.push(r.change);
-          }
-        }
-      }
+    if (!rollHits(rng, rollPercent)) {
+      continue;
     }
-
-    if (!success && multi) {
-      if (rollHits(rng, rollPercent)) {
-        const otherId = pickRandomOtherParticipant(participantInstanceIds, ownerId, rng);
-        if (otherId !== null) {
-          const cur = byId.get(ownerId);
-          if (cur === undefined) {
-            continue;
-          }
-          const r = applyNegativeMinionBond(
-            cur.dynamicTraits,
-            otherId,
-            cur.templateId,
-            cur.instanceId,
-          );
-          if (r.change !== null) {
-            byId.set(ownerId, { ...cur, dynamicTraits: r.next });
-            changes.push(r.change);
-          }
-        }
-      }
+    const cur = byId.get(ownerId);
+    if (cur === undefined) {
+      continue;
     }
-
-    if (success && locationId !== null) {
-      if (rollHits(rng, rollPercent)) {
-        const cur = byId.get(ownerId);
-        if (cur === undefined) {
-          continue;
-        }
-        const r = applyHero(cur.dynamicTraits, locationId, cur.templateId, cur.instanceId);
-        if (r.change !== null) {
-          byId.set(ownerId, { ...cur, dynamicTraits: r.next });
-          changes.push(r.change);
-        }
-      }
-    }
-
-    if (!success && locationId !== null) {
-      if (rollHits(rng, rollPercent)) {
-        const cur = byId.get(ownerId);
-        if (cur === undefined) {
-          continue;
-        }
-        const r = applyWanted(cur.dynamicTraits, locationId, cur.templateId, cur.instanceId);
-        if (r.change !== null) {
-          byId.set(ownerId, { ...cur, dynamicTraits: r.next });
-          changes.push(r.change);
-        }
-      }
+    const r = success
+      ? applyHero(cur.dynamicTraits, locationId, cur.templateId, cur.instanceId)
+      : applyWanted(cur.dynamicTraits, locationId, cur.templateId, cur.instanceId);
+    if (r.change !== null) {
+      byId.set(ownerId, { ...cur, dynamicTraits: r.next });
+      changes.push(r.change);
     }
   }
 

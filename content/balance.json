@@ -2,10 +2,10 @@
   "assetsPerLocationMax": 3,
   "assetsPerLocationMin": 1,
   "dynamicTraitModifiers": {
+    "ally": 10,
     "friend": 5,
     "hatred": -10,
     "hero": 5,
-    "lover": 10,
     "rival": -5,
     "wanted": -5
   },
@@ -28,6 +28,21 @@
   "initialIntelSitesAtOne": 2,
   "initialIntelSitesAtTwo": 1,
   "injuryChancePerAgentPercent": 20,
+  "minionAffinity": {
+    "allyThreshold": 7,
+    "eventFailure": -2,
+    "eventSuccess": 2,
+    "friendThreshold": 3,
+    "hatedThreshold": -7,
+    "hysteresis": 2,
+    "lairRaidFailure": 0,
+    "lairRaidSuccess": 3,
+    "missionFailure": -1,
+    "missionSuccess": 1,
+    "omegaFailure": -2,
+    "omegaSuccess": 2,
+    "rivalThreshold": -3
+  },
   "minionXpPerMission": 1,
   "minionXpToLevel": 3,
   "opposingAgentPenalty": 20,

@@ -311,3 +311,59 @@ describe("buildTurnReport — turn summary", () => {
     expect(sectionById(report.summary, "standing")).toBeDefined();
   });
 });
+
+describe("buildTurnReport — relationships", () => {
+  /** Two matched operatives, one turn short of the Friends threshold. */
+  function onTheCusp(): GameState {
+    const state = baseState(1);
+    const minions = [
+      makeMinionInstance("mi-1", "m-hero", ["t-req"]),
+      makeMinionInstance("mi-2", "m-hero", ["t-req"]),
+    ];
+    return {
+      ...state,
+      player: { ...state.player, minions },
+      minionAffinities: [
+        {
+          aInstanceId: "mi-1",
+          bInstanceId: "mi-2",
+          score: catalog.balance.minionAffinity.friendThreshold - 1,
+          relationship: "neutral",
+        },
+      ],
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1", "mi-2"] })],
+    };
+  }
+
+  it("shows the crossing on the mission result card and the turn summary", () => {
+    const before = onTheCusp();
+    const after = resolve(before, 0);
+    const report = buildTurnReport(before, after, catalog);
+    const card = report.missions[0]!;
+    const relationships = card.outcomeGroups.find((g) => g.title === "Relationships");
+    expect(relationships?.lines.map((l) => l.text)).toEqual([
+      "Operative and Operative became Friends.",
+    ]);
+    expect(relationships?.lines[0]!.tone).toBe("good");
+    expect(lineTexts(report.summary, "roster")).toContain(
+      "Operative and Operative became Friends.",
+    );
+  });
+
+  it("drops the Relationships group entirely when nothing crossed", () => {
+    const before = baseState(1);
+    const staged: GameState = {
+      ...before,
+      player: {
+        ...before.player,
+        minions: [
+          makeMinionInstance("mi-1", "m-hero", ["t-req"]),
+          makeMinionInstance("mi-2", "m-hero", ["t-req"]),
+        ],
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1", "mi-2"] })],
+    };
+    const report = buildTurnReport(staged, resolve(staged, 0), catalog);
+    expect(report.missions[0]!.outcomeGroups.some((g) => g.title === "Relationships")).toBe(false);
+  });
+});

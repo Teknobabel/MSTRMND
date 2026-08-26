@@ -1,5 +1,5 @@
 import { DEFAULT_BALANCE } from "../../game/types";
-import type { DynamicTraitModifiers } from "../../game/types";
+import type { DynamicTraitModifiers, MinionAffinityConfig } from "../../game/types";
 import type { FormCtx } from "./context";
 import {
   el,
@@ -14,7 +14,7 @@ import {
 
 type ScalarKey = Exclude<
   keyof typeof DEFAULT_BALANCE,
-  "dynamicTraitModifiers" | "hireLevelInfamyThresholds"
+  "dynamicTraitModifiers" | "hireLevelInfamyThresholds" | "minionAffinity"
 >;
 
 type BalanceFieldDef = {
@@ -58,9 +58,9 @@ const GROUPS: BalanceGroup[] = [
       },
       {
         key: "dynamicTraitRollPercent",
-        label: "Relationship roll %",
+        label: "Hero / Wanted roll %",
         tooltip:
-          "After every resolved mission, each participant has this % chance to form or deepen a relationship: Friend/Rival with a teammate, Hero/Wanted at the mission's location. Raise it for a more dramatic, soap-opera roster.",
+          "After every resolved mission at a site, each participant has this % chance to become a Hero there (success) or Wanted there (failure). Minion-to-minion relationships are NOT rolled — they run off the affinity track below.",
         min: 0,
         max: 100,
       },
@@ -326,12 +326,12 @@ function hireThresholdRows(ctx: FormCtx): HTMLElement {
 }
 
 const DYNAMIC_MODIFIER_TOOLTIPS: Record<keyof DynamicTraitModifiers, string> = {
-  friend: "Success bonus when a minion's Friend is on the same mission.",
-  lover: "Success bonus when a minion's Lover is on the same mission (upgraded from Friend).",
-  rival: "Success penalty when a minion's Rival is on the same mission.",
-  hatred: "Success penalty when a minion's Hated rival is on the same mission (upgraded from Rival).",
-  hero: "Success bonus when the minion is a Hero of the mission's target location.",
-  wanted: "Success penalty when the minion is Wanted at the mission's target location.",
+  friend: "Success bonus for each pair of Friends on the mission. Counted ONCE per pair, not per minion.",
+  ally: "Success bonus for each pair of Allies on the mission (the deeper end of Friends). Counted ONCE per pair.",
+  rival: "Success penalty for each pair of Rivals on the mission. Counted ONCE per pair, not per minion.",
+  hatred: "Success penalty for each pair who hate each other on the mission (the deeper end of Rivals). Counted ONCE per pair.",
+  hero: "Success bonus when the minion is a Hero of the mission's target location. Per minion.",
+  wanted: "Success penalty when the minion is Wanted at the mission's target location. Per minion.",
 };
 
 function scalar(row: Row, key: ScalarKey): number {
@@ -350,6 +350,204 @@ function formulaStrip(row: Row): HTMLElement {
     `          − ${agent}% × opposing agents at the target site\n` +
     `          → clamped to 0–100`;
   return strip;
+}
+
+
+/* ---------- Minion pair affinity (nested object) ---------- */
+
+type AffinityKey = keyof MinionAffinityConfig;
+
+type AffinityFieldDef = {
+  key: AffinityKey;
+  label: string;
+  tooltip: string;
+  min: number;
+  max: number;
+};
+
+const AFFINITY_THRESHOLD_FIELDS: AffinityFieldDef[] = [
+  {
+    key: "friendThreshold",
+    label: "Friends at",
+    tooltip:
+      "Affinity score at which a pair becomes Friends. With +1 per shared mission success, 3 means three clean jobs together.",
+    min: 1,
+    max: 100,
+  },
+  {
+    key: "allyThreshold",
+    label: "Allies at",
+    tooltip:
+      "Affinity score at which Friends become Allies — the strongest positive bond. Keep it comfortably above the Friends threshold.",
+    min: 1,
+    max: 100,
+  },
+  {
+    key: "rivalThreshold",
+    label: "Rivals at",
+    tooltip:
+      "Affinity score (negative) at which a pair becomes Rivals. −3 means three shared failures.",
+    min: -100,
+    max: -1,
+  },
+  {
+    key: "hatedThreshold",
+    label: "Hated at",
+    tooltip:
+      "Affinity score (negative) at which Rivals come to hate each other — the strongest negative bond.",
+    min: -100,
+    max: -1,
+  },
+  {
+    key: "hysteresis",
+    label: "Hysteresis",
+    tooltip:
+      "How far back past a threshold the score must fall before the pair gives the band up. 0 lets a pair sitting on a threshold flip every turn; 2 means Friends earned at +3 only lapse at +0.",
+    min: 0,
+    max: 100,
+  },
+];
+
+const AFFINITY_DELTA_FIELDS: AffinityFieldDef[] = [
+  {
+    key: "missionSuccess",
+    label: "Lair mission success",
+    tooltip: "Affinity each pair of participants gains when a normal mission succeeds.",
+    min: -100,
+    max: 100,
+  },
+  {
+    key: "missionFailure",
+    label: "Lair mission failure",
+    tooltip: "Affinity each pair of participants loses when a normal mission fails (negative).",
+    min: -100,
+    max: 100,
+  },
+  {
+    key: "eventSuccess",
+    label: "Global event success",
+    tooltip: "Affinity per pair when a global event mission succeeds. Bigger stakes, bigger bond.",
+    min: -100,
+    max: 100,
+  },
+  {
+    key: "eventFailure",
+    label: "Global event failure",
+    tooltip: "Affinity per pair when a global event mission fails (negative).",
+    min: -100,
+    max: 100,
+  },
+  {
+    key: "omegaSuccess",
+    label: "Omega plan success",
+    tooltip: "Affinity per pair when an Omega plan mission succeeds.",
+    min: -100,
+    max: 100,
+  },
+  {
+    key: "omegaFailure",
+    label: "Omega plan failure",
+    tooltip: "Affinity per pair when an Omega plan mission fails (negative).",
+    min: -100,
+    max: 100,
+  },
+  {
+    key: "lairRaidSuccess",
+    label: "Lair raid repelled",
+    tooltip: "Affinity per pair for surviving the lair raid together — the strongest single swing.",
+    min: -100,
+    max: 100,
+  },
+  {
+    key: "lairRaidFailure",
+    label: "Lair raid lost",
+    tooltip:
+      "Affinity per pair when the lair raid is lost. The run ends there today, so this only matters if that ever changes.",
+    min: -100,
+    max: 100,
+  },
+];
+
+function affinityRow(ctx: FormCtx): Row {
+  const cur = ctx.row.minionAffinity;
+  return cur !== null && typeof cur === "object" && !Array.isArray(cur) ? (cur as Row) : {};
+}
+
+function affinityValue(ctx: FormCtx, key: AffinityKey): number {
+  return num(affinityRow(ctx), key, DEFAULT_BALANCE.minionAffinity[key]);
+}
+
+function affinityFieldRows(ctx: FormCtx, defs: AffinityFieldDef[], rerender: () => void): HTMLElement[] {
+  const rows: HTMLElement[] = [];
+  for (const def of defs) {
+    const input = numberInput(
+      affinityValue(ctx, def.key),
+      (v) => {
+        ctx.update((row) => {
+          const cur = row.minionAffinity;
+          const next: Row =
+            cur !== null && typeof cur === "object" && !Array.isArray(cur)
+              ? { ...(cur as Row) }
+              : { ...DEFAULT_BALANCE.minionAffinity };
+          next[def.key] = v;
+          row.minionAffinity = next;
+        });
+        rerender();
+      },
+      { min: def.min, max: def.max },
+    );
+    input.title = def.tooltip;
+    const frow = formRow(def.label, input, hint(def.tooltip));
+    frow.title = def.tooltip;
+    rows.push(frow);
+  }
+  return rows;
+}
+
+/** Live picture of the track the current thresholds carve out, including the hysteresis bands. */
+function affinityTrackStrip(ctx: FormCtx): HTMLElement {
+  const friend = affinityValue(ctx, "friendThreshold");
+  const ally = affinityValue(ctx, "allyThreshold");
+  const rival = affinityValue(ctx, "rivalThreshold");
+  const hated = affinityValue(ctx, "hatedThreshold");
+  const h = affinityValue(ctx, "hysteresis");
+  const strip = el("div", "ed-preview-result");
+  strip.textContent =
+    `every pair starts at 0 · Neutral
+` +
+    `  ${ally}  → Allies      (lapses back to Friends below ${ally - h})
+` +
+    `  ${friend}  → Friends     (lapses back to Neutral below ${friend - h})
+` +
+    ` ${rival}  → Rivals      (lapses back to Neutral above ${rival + h})
+` +
+    ` ${hated}  → Hated       (lapses back to Rivals above ${hated + h})`;
+  return strip;
+}
+
+function minionAffinityBlock(ctx: FormCtx): HTMLElement {
+  const wrap = el("div");
+  const render = (): void => {
+    wrap.innerHTML = "";
+    wrap.appendChild(
+      fieldset(
+        "Minion affinity thresholds (hidden score → relationship)",
+        hint(
+          "Every unordered pair of minions shares one affinity score, starting at 0. The score is never shown to the player — only the relationship it lands in. Modifiers apply once per pair.",
+        ),
+        ...affinityFieldRows(ctx, AFFINITY_THRESHOLD_FIELDS, render),
+        affinityTrackStrip(ctx),
+      ),
+    );
+    wrap.appendChild(
+      fieldset(
+        "Minion affinity per resolve (applied to every pair on the mission)",
+        ...affinityFieldRows(ctx, AFFINITY_DELTA_FIELDS, render),
+      ),
+    );
+  };
+  render();
+  return wrap;
 }
 
 /** Single-object form for `content/balance.json` (no entity list, no id). */
@@ -389,7 +587,7 @@ export function renderBalanceForm(container: HTMLElement, ctx: FormCtx): void {
       ? (modifiers as Row)
       : {};
   const modRows: HTMLElement[] = [];
-  for (const kind of ["friend", "lover", "rival", "hatred", "hero", "wanted"] as const) {
+  for (const kind of ["friend", "ally", "rival", "hatred", "hero", "wanted"] as const) {
     const input = numberInput(
       num(modRow, kind, DEFAULT_BALANCE.dynamicTraitModifiers[kind]),
       (v) =>
@@ -415,4 +613,6 @@ export function renderBalanceForm(container: HTMLElement, ctx: FormCtx): void {
       ...modRows,
     ),
   );
+
+  container.appendChild(minionAffinityBlock(ctx));
 }

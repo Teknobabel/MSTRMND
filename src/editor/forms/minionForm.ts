@@ -17,7 +17,7 @@ import {
   type Row,
 } from "../widgets";
 
-const BOND_KINDS = ["friend", "lover", "rival", "hatred"] as const;
+const BOND_KINDS = ["friend", "ally", "rival", "hatred"] as const;
 const LOCATION_KINDS = ["hero", "wanted"] as const;
 
 function isBondKind(kind: string): boolean {
@@ -181,7 +181,7 @@ export function renderMinionForm(container: HTMLElement, ctx: FormCtx): void {
       },
     ),
     hint(
-      "Friend +5% / Lover +10% / Rival −5% / Hatred −10% when the linked minion shares the mission; Hero +5% / Wanted −5% at the linked location.",
+      "Bonds seed the pair's hidden affinity score at that relationship's threshold once both minions are on the roster — the pair takes it from there. Friend / Ally / Rival / Hatred apply once per pair when both share a mission; Hero / Wanted apply per minion at the linked location.",
     ),
   );
   container.appendChild(dynFs);

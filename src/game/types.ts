@@ -9,39 +9,86 @@ export type Trait = {
 /** Runtime-only relationship traits (not catalog `Trait` ids). */
 export type DynamicTraitKind =
   | "friend"
-  | "lover"
+  | "ally"
   | "rival"
   | "hatred"
   | "hero"
   | "wanted";
 
+/**
+ * The four minion-to-minion kinds are a **projection** of {@link MinionPairAffinity}: the pair's
+ * score is the source of truth and `syncMinionPairDynamicTraits` (see `affinity.ts`) rewrites
+ * both minions' bonds from it after every resolve. Never edit them directly.
+ */
 export type DynamicTrait =
   | {
-      kind: "friend" | "lover" | "rival" | "hatred";
+      kind: "friend" | "ally" | "rival" | "hatred";
       targetMinionInstanceId: string;
       /** Present until resolved against a roster instance of this template. */
       pendingTargetTemplateId?: string;
     }
   | { kind: "hero" | "wanted"; locationId: string };
 
+/**
+ * Where an unordered minion pair sits on the affinity track. `neutral` is the starting state and
+ * carries no success modifier.
+ */
+export type MinionRelationship = "hated" | "rival" | "neutral" | "friend" | "ally";
+
+/**
+ * One unordered pair's shared affinity. Instance ids are stored **sorted** (`aInstanceId` <
+ * `bInstanceId`) so a pair has exactly one row regardless of which minion is looked up first.
+ *
+ * `score` is deliberately never surfaced in the game UI — the player only ever sees the derived
+ * {@link relationship}. `relationship` is stored rather than recomputed because the thresholds are
+ * hysteretic: which band a score sits in depends on which band it was in last turn.
+ */
+export type MinionPairAffinity = {
+  aInstanceId: string;
+  bInstanceId: string;
+  score: number;
+  relationship: MinionRelationship;
+};
+
+/**
+ * A run's opening affinity between two minion **templates**, rolled once at run start and fixed
+ * for the run. It lands on the real instance pair the moment both minions are on the roster —
+ * the roster is empty at turn 1, so there is nothing to seed until then.
+ */
+export type MinionTemplatePairAffinity = {
+  aTemplateId: string;
+  bTemplateId: string;
+  score: number;
+};
+
+/** One pair crossing a threshold during a resolve; drives the result card and turn summary. */
+export type MinionRelationshipChange = {
+  aInstanceId: string;
+  bInstanceId: string;
+  from: MinionRelationship;
+  to: MinionRelationship;
+};
+
 export type DynamicTraitChangeType = "added" | "upgraded" | "replaced" | "removed";
 
-/** Logged on `mission_completed` when dynamic traits change after a resolve. */
+/**
+ * Logged on `mission_completed` when a **location** dynamic trait changes after a resolve.
+ * Minion-to-minion changes travel as {@link MinionRelationshipChange} instead — those come from
+ * the pair affinity table, not from a per-minion roll.
+ */
 export type DynamicTraitActivityChange = {
   ownerInstanceId: string;
   ownerTemplateId: string;
   changeType: DynamicTraitChangeType;
-  kind: DynamicTraitKind;
-  targetMinionInstanceId?: string;
-  targetMinionTemplateId?: string;
-  locationId?: string;
-  /** When `changeType` is `replaced`, the kind that was removed for the same target. */
-  removedKind?: DynamicTraitKind;
+  kind: "hero" | "wanted";
+  locationId: string;
+  /** When `changeType` is `replaced`, the kind that was removed for the same location. */
+  removedKind?: "hero" | "wanted";
 };
 
 export type StartingDynamicTrait =
   | {
-      kind: "friend" | "lover" | "rival" | "hatred";
+      kind: "friend" | "ally" | "rival" | "hatred";
       targetMinionTemplateId: string;
     }
   | { kind: "hero" | "wanted"; locationId: string };
@@ -419,14 +466,58 @@ export type PlayerProfile = {
   profilePic: string;
 };
 
-/** Flat success % modifier per dynamic trait kind (applied when the bond/location matches). */
+/**
+ * Flat success % modifier per dynamic trait kind. Minion-to-minion kinds apply **once per
+ * unordered pair** on the mission (not once per minion); `hero` / `wanted` apply per minion
+ * against the mission's target location.
+ */
 export type DynamicTraitModifiers = {
   friend: number;
-  lover: number;
+  ally: number;
   rival: number;
   hatred: number;
   hero: number;
   wanted: number;
+};
+
+/**
+ * Designer-tunable minion pair affinity: how much a shared mission moves a pair's score, and
+ * where the score turns into a relationship.
+ *
+ * Thresholds are **entry** points. Leaving a band needs the score to fall `hysteresis` further
+ * back than the point it entered on, which is what keeps a pair sitting on a threshold from
+ * flip-flopping every turn (e.g. with `friendThreshold: 3` and `hysteresis: 2`, a pair becomes
+ * Friends at +3 and only drops back to Neutral at +0).
+ */
+export type MinionAffinityConfig = {
+  /* Thresholds — positive pair ascending, negative pair descending. */
+  /** Score at which a pair becomes Friends. */
+  friendThreshold: number;
+  /** Score at which Friends become Allies. */
+  allyThreshold: number;
+  /** Score (negative) at which a pair becomes Rivals. */
+  rivalThreshold: number;
+  /** Score (negative) at which Rivals become Hated. */
+  hatedThreshold: number;
+  /** How far back past a threshold a score must fall before the band is given up (≥ 0). */
+  hysteresis: number;
+  /* Per-resolve score deltas, applied to every unordered pair of participants. */
+  /** Lair / standard mission succeeded. */
+  missionSuccess: number;
+  /** Lair / standard mission failed. */
+  missionFailure: number;
+  /** Global event mission succeeded. */
+  eventSuccess: number;
+  /** Global event mission failed. */
+  eventFailure: number;
+  /** Omega plan mission succeeded. */
+  omegaSuccess: number;
+  /** Omega plan mission failed. */
+  omegaFailure: number;
+  /** Lair raid repelled — surviving it together is the strongest bond in the game. */
+  lairRaidSuccess: number;
+  /** Lair raid lost. The run ends here, so this only matters if that ever stops being true. */
+  lairRaidFailure: number;
 };
 
 /**
@@ -443,8 +534,12 @@ export type BalanceConfig = {
   /** Flat −% per opposing agent at the mission's target site (stored positive). */
   opposingAgentPenalty: number;
   dynamicTraitModifiers: DynamicTraitModifiers;
-  /** Chance (%) per participant per resolve to gain/upgrade a dynamic trait. */
+  /**
+   * Chance (%) per participant per resolve to gain/upgrade a **location** dynamic trait
+   * (Hero / Wanted). Minion-to-minion relationships are not rolled — see {@link minionAffinity}.
+   */
   dynamicTraitRollPercent: number;
+  minionAffinity: MinionAffinityConfig;
   /* Infamy, heat & risk */
   /** Infamy change on mission success (typically positive — the reputation the player builds). */
   infamySuccessDelta: number;
@@ -507,13 +602,28 @@ export const DEFAULT_BALANCE: BalanceConfig = {
   opposingAgentPenalty: 20,
   dynamicTraitModifiers: {
     friend: 5,
-    lover: 10,
+    ally: 10,
     rival: -5,
     hatred: -10,
     hero: 5,
     wanted: -5,
   },
   dynamicTraitRollPercent: 10,
+  minionAffinity: {
+    friendThreshold: 3,
+    allyThreshold: 7,
+    rivalThreshold: -3,
+    hatedThreshold: -7,
+    hysteresis: 2,
+    missionSuccess: 1,
+    missionFailure: -1,
+    eventSuccess: 2,
+    eventFailure: -2,
+    omegaSuccess: 2,
+    omegaFailure: -2,
+    lairRaidSuccess: 3,
+    lairRaidFailure: 0,
+  },
   infamySuccessDelta: 5,
   infamyFailureDelta: 0,
   heatSuccessDelta: 0,

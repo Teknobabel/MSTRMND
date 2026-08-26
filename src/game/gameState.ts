@@ -11,6 +11,9 @@ import type {
   LocationSecurityState,
   LocationTemplate,
   MinionInstance,
+  MinionPairAffinity,
+  MinionRelationshipChange,
+  MinionTemplatePairAffinity,
   MissionSource,
   MissionTarget,
   MissionTargetType,
@@ -45,8 +48,16 @@ import {
 } from "./locationCatalog";
 import {
   dynamicTraitSuccessModifierFromFullRoster,
-  rollDynamicTraitsAfterMission,
+  rollLocationDynamicTraitsAfterMission,
 } from "./dynamicTrait";
+import {
+  affinityDeltaForResolve,
+  applyMissionAffinity,
+  applyTemplatePairSeeds,
+  rollStartingTemplateAffinities,
+  seedStartingAffinities,
+  syncMinionPairDynamicTraits,
+} from "./affinity";
 import {
   canAssignParticipants,
   successChancePercent,
@@ -182,8 +193,13 @@ export type ActivityEventMissionCompleted = {
   criticalInjuryChancePercent?: number;
   /** Participants who gained `injured` from the critical-failure roll pass only (may be empty). */
   criticalInjuryInstanceIds?: string[];
-  /** Dynamic trait adds/upgrades/replacements after this resolve (before XP). */
+  /** Hero / Wanted adds and replacements after this resolve (before XP). */
   dynamicTraitChanges?: DynamicTraitActivityChange[];
+  /**
+   * Participant pairs that crossed an affinity threshold on this resolve. The score behind them
+   * is never surfaced — only the band the pair moved into.
+   */
+  relationshipChanges?: MinionRelationshipChange[];
 };
 
 /** @deprecated Use {@link ActivityEventMissionCompleted} */
@@ -366,6 +382,23 @@ export type GameState = {
   eventCooldownTurnsRemaining: number;
   /** Flat success % modifiers from event effects; each entry decays once per `executePlan`. */
   activeSuccessModifiers: { delta: number; turnsRemaining: number }[];
+  /**
+   * Shared affinity score per **unordered** minion pair, and the relationship band it currently
+   * sits in (see `affinity.ts`). One row per pair that has ever had a non-zero score; a pair with
+   * no row is Neutral at 0. The score is internal — the UI only ever renders the band.
+   *
+   * `MinionInstance.dynamicTraits` mirrors these bands for display and for the success modifier;
+   * this table is the source of truth and always wins.
+   */
+  minionAffinities: MinionPairAffinity[];
+  /**
+   * This run's opening affinities, rolled once over the catalog's minion **templates** at
+   * `createInitialGameState` and fixed thereafter. The roster is empty at turn 1, so each entry
+   * waits and lands on the real instance pair the first time both of those minions are hired
+   * (see `applyTemplatePairSeeds`). A designer-authored bond and any score the run has already
+   * moved both outrank it.
+   */
+  minionAffinitySeeds: MinionTemplatePairAffinity[];
   /**
    * Where the Lair Raid — the run-ending event the **top** wanted tier spawns — currently sits.
    * See {@link LairRaidStatus}.
@@ -882,6 +915,12 @@ export function createInitialGameState(
     currentEventTurnsRemaining: openingEventOffer?.lifetimeTurns ?? 0,
     eventCooldownTurnsRemaining: firstEventTurn - 1,
     activeSuccessModifiers: [],
+    minionAffinities: [],
+    minionAffinitySeeds: rollStartingTemplateAffinities(
+      catalog.minions.map((m) => m.id),
+      rng,
+      catalog.balance.minionAffinity,
+    ),
     lairRaidStatus: "none",
     runEnding: null,
   };
@@ -972,6 +1011,35 @@ export function busyInstanceIds(activeMissions: ActiveMission[]): Set<string> {
   return s;
 }
 
+/**
+ * Re-seeds designer-authored starting bonds against the current roster and re-projects every
+ * minion's relationship pills from the affinity table. Run after any roster change: a starting
+ * bond only lands once both minions are hired, and a departure has to clear the other half's pill.
+ */
+function withRefreshedAffinities(state: GameState, catalog: ContentCatalog): GameState {
+  /* Designer bonds first, then this run's roll — whichever lands first owns the pair, and a
+   * pair the run has already moved is never re-seeded by either. */
+  const minionAffinities = applyTemplatePairSeeds(
+    seedStartingAffinities(
+      state.minionAffinities,
+      state.player.minions,
+      (templateId) => minionTemplateById(catalog, templateId)?.startingDynamicTraits,
+      catalog.balance.minionAffinity,
+    ),
+    state.player.minions,
+    state.minionAffinitySeeds,
+    catalog.balance.minionAffinity,
+  );
+  return {
+    ...state,
+    minionAffinities,
+    player: {
+      ...state.player,
+      minions: syncMinionPairDynamicTraits(state.player.minions, minionAffinities),
+    },
+  };
+}
+
 export function hireMinion(
   state: GameState,
   catalog: ContentCatalog,
@@ -1015,7 +1083,10 @@ export function hireMinion(
   };
   return {
     ok: true,
-    value: appendActivityEvent(next, { kind: "minion_hired", templateId }),
+    value: appendActivityEvent(withRefreshedAffinities(next, catalog), {
+      kind: "minion_hired",
+      templateId,
+    }),
   };
 }
 
@@ -1050,7 +1121,10 @@ export function fireMinion(
   };
   return {
     ok: true,
-    value: appendActivityEvent(next, { kind: "minion_fired", templateId: minion.templateId }),
+    value: appendActivityEvent(withRefreshedAffinities(next, catalog), {
+      kind: "minion_fired",
+      templateId: minion.templateId,
+    }),
   };
 }
 
@@ -1113,7 +1187,7 @@ export function rehireMinion(
   };
   return {
     ok: true,
-    value: appendActivityEvent(next, {
+    value: appendActivityEvent(withRefreshedAffinities(next, catalog), {
       kind: "minion_rehired",
       templateId: entry.minion.templateId,
     }),
@@ -1677,6 +1751,7 @@ export function executePlan(
   let locationAssetSlots = state.locationAssetSlots;
   let lairMissionIds = [...state.lairMissionIds];
   let completedLairUpgradeMissionIds = [...state.completedLairUpgradeMissionIds];
+  let minionAffinities = [...state.minionAffinities];
   let opposingAgentInstances: AgentInstance[] = [...state.opposingAgentInstances];
   let locationAgentPresence: LocationAgentPresence[] = state.locationAgentPresence.map((r) => ({
     locationId: r.locationId,
@@ -1841,7 +1916,7 @@ export function executePlan(
     }
 
     const rosterForDynamic = Array.from(instanceById.values());
-    const dynamicRoll = rollDynamicTraitsAfterMission(
+    const dynamicRoll = rollLocationDynamicTraitsAfterMission(
       rosterForDynamic,
       am.participantInstanceIds,
       success,
@@ -1852,12 +1927,38 @@ export function executePlan(
     for (const m of dynamicRoll.nextMinions) {
       instanceById.set(m.instanceId, m);
     }
+    const dynamicTraitChanges =
+      dynamicRoll.changes.length > 0 ? dynamicRoll.changes : undefined;
+
+    /* Running a job together moves the pair's shared affinity by a fixed amount — no roll. The
+     * raid takes precedence over its `event` source: it is its own category of shared ordeal. */
+    const affinityDelta = affinityDeltaForResolve(
+      am.missionSource,
+      lairRaid !== undefined && template.id === lairRaid.id,
+      success,
+      catalog.balance.minionAffinity,
+    );
+    const affinityResult = applyMissionAffinity(
+      minionAffinities,
+      am.participantInstanceIds,
+      affinityDelta,
+      catalog.balance.minionAffinity,
+    );
+    minionAffinities = affinityResult.next;
+    const relationshipChanges =
+      affinityResult.changes.length > 0 ? affinityResult.changes : undefined;
+
+    /* Re-project the pills so the roster reflects any band that just moved. */
+    for (const m of syncMinionPairDynamicTraits(
+      Array.from(instanceById.values()),
+      minionAffinities,
+    )) {
+      instanceById.set(m.instanceId, m);
+    }
     player = {
       ...player,
       minions: player.minions.map((mm) => instanceById.get(mm.instanceId) ?? mm),
     };
-    const dynamicTraitChanges =
-      dynamicRoll.changes.length > 0 ? dynamicRoll.changes : undefined;
 
     const isCriticalFailure =
       !success &&
@@ -1910,6 +2011,7 @@ export function executePlan(
       ...(dynamicTraitChanges !== undefined
         ? { dynamicTraitChanges }
         : {}),
+      ...(relationshipChanges !== undefined ? { relationshipChanges } : {}),
       ...(isCriticalFailure
         ? {
             criticalOpposingAgentCount,
@@ -2254,6 +2356,7 @@ export function executePlan(
       currentEventTurnsRemaining: nextCurrentEventTurnsRemaining,
       eventCooldownTurnsRemaining: nextEventCooldownTurnsRemaining,
       activeSuccessModifiers,
+      minionAffinities,
       lairRaidStatus,
       runEnding,
     },
