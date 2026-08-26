@@ -9,6 +9,10 @@ import {
   executePlan,
 } from "./gameState";
 import { parseCatalog } from "./contentSchema";
+import {
+  availableLairUpgradeMissionIds,
+  currentLairUpgradeLevel,
+} from "./lair";
 import type { ContentCatalog } from "./types";
 import {
   fixtureCatalog,
@@ -124,6 +128,28 @@ describe("createInitialGameState", () => {
     const lairOnly = createInitialGameState(cat, seededRng(7), { lairId: "lair-1" });
     expect(lairOnly.activeLairId).toBe("lair-1");
     expect(["op-1", "op-2"]).toContain(lairOnly.activeOmegaPlanId);
+  });
+
+  it("opens core missions in every lair's pool, without duplicating a lair's own list", () => {
+    const raw = rawFixtureSlices();
+    const missions = raw.missions as Record<string, unknown>[];
+    /* `ms-core` is core-only (no lair lists it); `ms-basic` is core AND on lair-1's list. */
+    missions.push({ ...missions[0], id: "ms-core", name: "Core Job", coreMission: true });
+    missions[0] = { ...missions[0], coreMission: true };
+    const lair = raw.lairs[0] as Record<string, unknown>;
+    raw.lairs = [lair, { ...lair, id: "lair-2", name: "Orbital Station", availableMissionIds: [] }];
+    const cat = parseCatalog(raw);
+
+    const inLair1 = createInitialGameState(cat, seededRng(1), { lairId: "lair-1" });
+    expect(inLair1.lairMissionIds).toEqual(["ms-basic", "ms-asset", "ms-core"]);
+
+    const inLair2 = createInitialGameState(cat, seededRng(1), { lairId: "lair-2" });
+    expect(inLair2.lairMissionIds).toEqual(["ms-basic", "ms-core"]);
+  });
+
+  it("leaves the pool to the lair when no mission is flagged core", () => {
+    const state = createInitialGameState(catalog, seededRng(1), { lairId: "lair-1" });
+    expect(state.lairMissionIds).toEqual(["ms-basic", "ms-asset"]);
   });
 
   it("falls back to a random pick when an id is not in the catalog", () => {
@@ -1123,5 +1149,148 @@ describe("Omega Plan completion (game win)", () => {
       kind: "victory",
       omegaPlanId: state.activeOmegaPlanId,
     });
+  });
+});
+
+describe("lair upgrade levels", () => {
+  /** Lair with a two-rung ladder: a mutually exclusive pair, then a single follow-up. */
+  function ladderCatalog(): ContentCatalog {
+    const raw = rawFixtureSlices();
+    const missions = raw.missions as Record<string, unknown>[];
+    for (const id of ["ms-up-a", "ms-up-b", "ms-up-c"]) {
+      missions.push({
+        id,
+        name: `Upgrade ${id.slice(-1).toUpperCase()}`,
+        description: "Lair upgrade",
+        targetType: "none",
+        startCommandPoints: 0,
+        requiredTraitIds: ["t-req"],
+        durationTurns: 1,
+      });
+    }
+    raw.lairs[0] = {
+      ...raw.lairs[0],
+      upgradeLevels: [
+        { name: "Rig", missionIds: ["ms-up-a", "ms-up-b"] },
+        { missionIds: ["ms-up-c"] },
+      ],
+    };
+    return parseCatalog(raw);
+  }
+
+  function ladderState(cat: ContentCatalog): GameState {
+    const state = createInitialGameState(cat, seededRng(4), { lairId: "lair-1" });
+    return {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [makeMinionInstance("mi-1", "m-hero", ["t-req"])],
+      },
+    };
+  }
+
+  function startUpgrade(state: GameState, cat: ContentCatalog, missionId: string) {
+    return assignMission(
+      state,
+      cat,
+      `am-${missionId}`,
+      missionId,
+      { kind: "none" },
+      "lair",
+      null,
+      null,
+      ["mi-1"],
+      [],
+    );
+  }
+
+  it("offers only the current level's choices", () => {
+    const cat = ladderCatalog();
+    const state = ladderState(cat);
+    expect(
+      availableLairUpgradeMissionIds(state.activeLairId, state.completedLairUpgradeMissionIds, cat),
+    ).toEqual(["ms-up-a", "ms-up-b"]);
+    /* A later level is not assignable before its turn comes. */
+    const early = startUpgrade(state, cat, "ms-up-c");
+    expect(early.ok).toBe(false);
+    if (!early.ok) {
+      expect(early.error.code).toBe("mission_not_on_lair");
+    }
+  });
+
+  it("closes the siblings while one choice is in flight", () => {
+    const cat = ladderCatalog();
+    const started = startUpgrade(ladderState(cat), cat, "ms-up-a");
+    expect(started.ok).toBe(true);
+    if (!started.ok) {
+      return;
+    }
+    const withRoster = {
+      ...started.value,
+      player: {
+        ...started.value.player,
+        minions: [
+          ...started.value.player.minions,
+          makeMinionInstance("mi-2", "m-hero", ["t-req"]),
+        ],
+      },
+    };
+    const sibling = assignMission(
+      withRoster,
+      cat,
+      "am-sibling",
+      "ms-up-b",
+      { kind: "none" },
+      "lair",
+      null,
+      null,
+      ["mi-2"],
+      [],
+    );
+    expect(sibling.ok).toBe(false);
+    if (!sibling.ok) {
+      expect(sibling.error.code).toBe("lair_upgrade_level_busy");
+    }
+  });
+
+  it("installs one upgrade, locks out its siblings, and opens the next level", () => {
+    const cat = ladderCatalog();
+    const started = startUpgrade(ladderState(cat), cat, "ms-up-a");
+    expect(started.ok).toBe(true);
+    if (!started.ok) {
+      return;
+    }
+    const resolved = executePlan(started.value, cat, () => 0, sequentialIds("ag"));
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    const after = resolved.value;
+    expect(after.completedLairUpgradeMissionIds).toEqual(["ms-up-a"]);
+    expect(
+      availableLairUpgradeMissionIds(after.activeLairId, after.completedLairUpgradeMissionIds, cat),
+    ).toEqual(["ms-up-c"]);
+    /* The passed-over sibling is gone for the run, not merely deferred. */
+    const mainPhase = { ...after, phase: "main" as const };
+    const lockedOut = startUpgrade(mainPhase, cat, "ms-up-b");
+    expect(lockedOut.ok).toBe(false);
+    if (!lockedOut.ok) {
+      expect(lockedOut.error.code).toBe("mission_not_on_lair");
+    }
+  });
+
+  it("leaves nothing on offer once every level is installed", () => {
+    const cat = ladderCatalog();
+    const state = ladderState(cat);
+    const done = {
+      ...state,
+      completedLairUpgradeMissionIds: ["ms-up-b", "ms-up-c"],
+    };
+    expect(
+      availableLairUpgradeMissionIds(done.activeLairId, done.completedLairUpgradeMissionIds, cat),
+    ).toEqual([]);
+    expect(
+      currentLairUpgradeLevel(done.activeLairId, done.completedLairUpgradeMissionIds, cat),
+    ).toBeNull();
   });
 });

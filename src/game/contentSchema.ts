@@ -6,6 +6,7 @@ import type {
   ContentCatalog,
   EventTemplate,
   LairTemplate,
+  LairUpgradeLevel,
   LocationTemplate,
   MapTemplate,
   MinionTemplate,
@@ -338,6 +339,8 @@ export const missionTemplateSchema = z
     requiredTraitIds: z.array(z.string().min(1)).default([]),
     requiredAssetIds: z.array(z.string().min(1)).default([]),
     durationTurns: z.coerce.number().int().min(1),
+    /** Designer-only: in every run's lair mission pool from turn 1 (see `MissionTemplate.coreMission`). */
+    coreMission: z.boolean().optional(),
     onSuccessEffects: z.array(missionEffectSchema).optional(),
     onFailureEffects: z.array(missionEffectSchema).optional(),
   })
@@ -489,13 +492,25 @@ export const balanceConfigSchema = z.object({
   ),
 });
 
+/** One mutually exclusive upgrade tier on a lair. */
+export const lairUpgradeLevelSchema = z.object({
+  name: z.string().min(1).optional(),
+  missionIds: z.array(z.string().min(1)).min(1),
+});
+
 export const lairTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().min(1).optional(),
   cardArt: z.string().min(1).optional(),
   availableMissionIds: z.array(z.string().min(1)),
-  upgradeMissionIds: z.array(z.string().min(1)).default([]),
+  upgradeLevels: z.array(lairUpgradeLevelSchema).default([]),
+  /**
+   * Legacy flat upgrade list (pre-upgrade-levels). Read only when `upgradeLevels` is absent /
+   * empty, and migrated to one single-choice level per entry so no authored mission is lost;
+   * the editor writes `upgradeLevels` from then on.
+   */
+  upgradeMissionIds: z.array(z.string().min(1)).optional(),
   startingAssets: z.record(z.string().min(1), z.number().int().min(1)).optional(),
 });
 
@@ -560,6 +575,9 @@ function normalizeMissionTemplates(
       requiredAssetIds: [...m.requiredAssetIds],
       durationTurns: m.durationTurns,
     };
+    if (m.coreMission === true) {
+      base.coreMission = true;
+    }
     if (m.cardArt !== undefined) {
       base.cardArt = m.cardArt;
     }
@@ -648,9 +666,22 @@ function normalizeLairs(arr: z.infer<typeof lairTemplateSchema>[]): LairTemplate
     ...(l.description !== undefined ? { description: l.description } : {}),
     ...(l.cardArt !== undefined ? { cardArt: l.cardArt } : {}),
     availableMissionIds: [...l.availableMissionIds],
-    upgradeMissionIds: [...l.upgradeMissionIds],
+    upgradeLevels: normalizeLairUpgradeLevels(l),
     ...(l.startingAssets !== undefined ? { startingAssets: { ...l.startingAssets } } : {}),
   }));
+}
+
+/** `upgradeLevels` when authored, else one single-choice level per legacy `upgradeMissionIds` entry. */
+function normalizeLairUpgradeLevels(
+  l: z.infer<typeof lairTemplateSchema>,
+): LairUpgradeLevel[] {
+  if (l.upgradeLevels.length > 0) {
+    return l.upgradeLevels.map((lvl) => ({
+      ...(lvl.name !== undefined ? { name: lvl.name } : {}),
+      missionIds: [...lvl.missionIds],
+    }));
+  }
+  return (l.upgradeMissionIds ?? []).map((mid) => ({ missionIds: [mid] }));
 }
 
 /** Every slice parsed, or null where its shape failed (issues carry the details). */
@@ -940,6 +971,8 @@ function checkMissionEffects(
   effects: readonly MissionEffect[],
   pathPrefix: string,
   catalogMissionIdSet: ReadonlySet<string>,
+  /** Missions owned by a lair upgrade ladder; `null` when the lairs slice failed to parse. */
+  upgradeLadderMissionIds: ReadonlySet<string> | null,
   traitIds: ReadonlySet<string>,
   assetIds: ReadonlySet<string>,
   issues: ContentIssue[],
@@ -953,6 +986,18 @@ function checkMissionEffects(
         entityId: templateId,
         path,
         message: `Unknown mission id "${eff.missionId}" in unlock_lair_mission`,
+      });
+    }
+    if (
+      eff.kind === "unlock_lair_mission" &&
+      upgradeLadderMissionIds !== null &&
+      upgradeLadderMissionIds.has(eff.missionId)
+    ) {
+      issues.push({
+        slice,
+        entityId: templateId,
+        path,
+        message: `Mission id "${eff.missionId}" is a lair upgrade — it is earned through that lair's upgrade levels, not by unlock_lair_mission`,
       });
     }
     const requirement = effectKindTargetTypeRequirement(eff.kind, targetType);
@@ -1069,6 +1114,16 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
   const assetIds = s.assets !== null ? new Set(s.assets.map((a) => a.id)) : null;
   const minionTemplateIds = s.minions !== null ? new Set(s.minions.map((m) => m.id)) : null;
   const missionIds = s.missions !== null ? new Set(s.missions.map((m) => m.id)) : null;
+  const coreMissionIds =
+    s.missions !== null
+      ? new Set(s.missions.filter((m) => m.coreMission === true).map((m) => m.id))
+      : null;
+  /* Every mission that sits on some lair's upgrade ladder: those are reachable only by
+   * climbing that ladder, so `unlock_lair_mission` may not drop one into the lair pool. */
+  const upgradeLadderMissionIds =
+    s.lairs !== null
+      ? new Set(s.lairs.flatMap((l) => l.upgradeLevels.flatMap((lvl) => lvl.missionIds)))
+      : null;
   const locationIds = s.locations !== null ? new Set(s.locations.map((l) => l.id)) : null;
   const mapIds = s.maps !== null ? new Set(s.maps.map((m) => m.id)) : null;
 
@@ -1157,6 +1212,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
           m.onSuccessEffects ?? [],
           "onSuccessEffects",
           missionIds,
+          upgradeLadderMissionIds,
           traitIds,
           assetIds,
           issues,
@@ -1168,6 +1224,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
           m.onFailureEffects ?? [],
           "onFailureEffects",
           missionIds,
+          upgradeLadderMissionIds,
           traitIds,
           assetIds,
           issues,
@@ -1254,33 +1311,54 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
           });
         }
       });
+      /* Upgrade levels: ids unique across the whole ladder (a mission may only be the reward
+       * for one choice, in one tier), disjoint from the always-available pool, never core. */
       const seenUpgrade = new Set<string>();
-      lair.upgradeMissionIds.forEach((mid, i) => {
-        if (seenUpgrade.has(mid)) {
+      lair.upgradeLevels.forEach((level, li) => {
+        if (level.missionIds.length === 0) {
           issues.push({
             slice: "lairs",
             entityId: lair.id,
-            path: `upgradeMissionIds[${i}]`,
-            message: `Duplicate mission id "${mid}" in upgradeMissionIds`,
+            path: `upgradeLevels[${li}].missionIds`,
+            message: `Upgrade level ${li + 1} must offer at least one mission`,
           });
         }
-        seenUpgrade.add(mid);
-        if (missionIds !== null && !missionIds.has(mid)) {
-          issues.push({
-            slice: "lairs",
-            entityId: lair.id,
-            path: `upgradeMissionIds[${i}]`,
-            message: `Unknown mission id "${mid}" in upgradeMissionIds`,
-          });
-        }
-        if (seenMission.has(mid)) {
-          issues.push({
-            slice: "lairs",
-            entityId: lair.id,
-            path: `upgradeMissionIds[${i}]`,
-            message: `Mission id "${mid}" cannot appear in both availableMissionIds and upgradeMissionIds`,
-          });
-        }
+        level.missionIds.forEach((mid, i) => {
+          const path = `upgradeLevels[${li}].missionIds[${i}]`;
+          if (seenUpgrade.has(mid)) {
+            issues.push({
+              slice: "lairs",
+              entityId: lair.id,
+              path,
+              message: `Duplicate upgrade mission id "${mid}" — a mission may appear in only one upgrade level`,
+            });
+          }
+          seenUpgrade.add(mid);
+          if (missionIds !== null && !missionIds.has(mid)) {
+            issues.push({
+              slice: "lairs",
+              entityId: lair.id,
+              path,
+              message: `Unknown mission id "${mid}" in upgradeLevels`,
+            });
+          }
+          if (seenMission.has(mid)) {
+            issues.push({
+              slice: "lairs",
+              entityId: lair.id,
+              path,
+              message: `Mission id "${mid}" cannot appear in both availableMissionIds and upgradeLevels`,
+            });
+          }
+          if (coreMissionIds !== null && coreMissionIds.has(mid)) {
+            issues.push({
+              slice: "lairs",
+              entityId: lair.id,
+              path,
+              message: `Mission id "${mid}" is a Core Mission (already unlocked at run start) and cannot be an upgrade mission`,
+            });
+          }
+        });
       });
       if (lair.startingAssets && assetIds !== null) {
         for (const aid of Object.keys(lair.startingAssets)) {
@@ -1348,6 +1426,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
           ev.onSuccessEffects ?? [],
           "onSuccessEffects",
           missionIds,
+          upgradeLadderMissionIds,
           traitIds,
           assetIds,
           issues,
@@ -1359,6 +1438,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
           ev.onFailureEffects ?? [],
           "onFailureEffects",
           missionIds,
+          upgradeLadderMissionIds,
           traitIds,
           assetIds,
           issues,
@@ -1370,6 +1450,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
           ev.expireEffects ?? [],
           "expireEffects",
           missionIds,
+          upgradeLadderMissionIds,
           traitIds,
           assetIds,
           issues,

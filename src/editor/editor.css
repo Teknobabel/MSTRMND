@@ -327,6 +327,29 @@ textarea {
   flex: 1;
 }
 
+/* One lair upgrade tier inside the levels list: title + optional name + its mission choices. */
+.ed-upgrade-level {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.ed-upgrade-level-title {
+  color: var(--text-dim);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ed-upgrade-level .ed-form-row {
+  margin: 0;
+}
+
 /* Label + number input sharing one list row (e.g. hire-pool level gates). */
 .ed-inline-field {
   display: flex;

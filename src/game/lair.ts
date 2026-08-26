@@ -1,21 +1,92 @@
-import type { ContentCatalog, LairTemplate } from "./types";
+import type { ContentCatalog, LairTemplate, LairUpgradeLevel } from "./types";
 
-/** Upgrade missions not yet completed successfully this run (for UI / assignment). */
-export function pendingLairUpgradeMissionIds(
+/** Upgrade ladder of the active lair, or `[]` when there is no lair / no upgrades authored. */
+export function lairUpgradeLevels(
+  activeLairId: string | null,
+  catalog: ContentCatalog,
+): LairUpgradeLevel[] {
+  if (activeLairId === null) {
+    return [];
+  }
+  return getLairById(catalog, activeLairId)?.upgradeLevels ?? [];
+}
+
+/** A level is done once **any** of its mutually exclusive missions has completed successfully. */
+function isLevelComplete(
+  level: LairUpgradeLevel,
+  completedLairUpgradeMissionIds: readonly string[],
+): boolean {
+  return level.missionIds.some((id) => completedLairUpgradeMissionIds.includes(id));
+}
+
+/**
+ * Index of the level the player is currently working on: the first one with nothing installed.
+ * Equals the ladder length when every level is done (nothing left to show).
+ */
+export function currentLairUpgradeLevelIndex(
+  activeLairId: string | null,
+  completedLairUpgradeMissionIds: readonly string[],
+  catalog: ContentCatalog,
+): number {
+  const levels = lairUpgradeLevels(activeLairId, catalog);
+  const i = levels.findIndex((level) => !isLevelComplete(level, completedLairUpgradeMissionIds));
+  return i === -1 ? levels.length : i;
+}
+
+/** The current level, or `null` when the ladder is finished / absent. */
+export function currentLairUpgradeLevel(
+  activeLairId: string | null,
+  completedLairUpgradeMissionIds: readonly string[],
+  catalog: ContentCatalog,
+): { level: LairUpgradeLevel; index: number; total: number } | null {
+  const levels = lairUpgradeLevels(activeLairId, catalog);
+  const index = currentLairUpgradeLevelIndex(
+    activeLairId,
+    completedLairUpgradeMissionIds,
+    catalog,
+  );
+  const level = levels[index];
+  if (level === undefined) {
+    return null;
+  }
+  return { level, index, total: levels.length };
+}
+
+/**
+ * Upgrade missions the player may start right now: the mutually exclusive choices on the
+ * current level only. Earlier levels are settled and later ones are not visible yet.
+ */
+export function availableLairUpgradeMissionIds(
   activeLairId: string | null,
   completedLairUpgradeMissionIds: readonly string[],
   catalog: ContentCatalog,
 ): string[] {
-  if (activeLairId === null) {
-    return [];
-  }
-  const lair = getLairById(catalog, activeLairId);
-  if (!lair) {
-    return [];
-  }
-  return lair.upgradeMissionIds.filter(
-    (id) => !completedLairUpgradeMissionIds.includes(id),
+  const current = currentLairUpgradeLevel(
+    activeLairId,
+    completedLairUpgradeMissionIds,
+    catalog,
   );
+  return current === null ? [] : [...current.level.missionIds];
+}
+
+/** Index of the upgrade level `missionId` belongs to on this lair, or `-1` if it is not one. */
+export function lairUpgradeLevelIndexOfMission(
+  activeLairId: string | null,
+  missionId: string,
+  catalog: ContentCatalog,
+): number {
+  return lairUpgradeLevels(activeLairId, catalog).findIndex((level) =>
+    level.missionIds.includes(missionId),
+  );
+}
+
+/** Whether `missionId` is an upgrade mission anywhere on the active lair's ladder. */
+export function isLairUpgradeMission(
+  activeLairId: string | null,
+  missionId: string,
+  catalog: ContentCatalog,
+): boolean {
+  return lairUpgradeLevelIndexOfMission(activeLairId, missionId, catalog) !== -1;
 }
 
 export function getLairById(

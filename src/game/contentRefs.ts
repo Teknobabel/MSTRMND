@@ -147,8 +147,16 @@ export function collectContentReferences(catalog: ContentCatalog): ContentRefere
     lair.availableMissionIds.forEach((mid, i) => {
       out.push({ fromSlice: "lairs", fromId: lair.id, path: `availableMissionIds[${i}]`, toSlice: "missions", toId: mid });
     });
-    lair.upgradeMissionIds.forEach((mid, i) => {
-      out.push({ fromSlice: "lairs", fromId: lair.id, path: `upgradeMissionIds[${i}]`, toSlice: "missions", toId: mid });
+    lair.upgradeLevels.forEach((level, li) => {
+      level.missionIds.forEach((mid, i) => {
+        out.push({
+          fromSlice: "lairs",
+          fromId: lair.id,
+          path: `upgradeLevels[${li}].missionIds[${i}]`,
+          toSlice: "missions",
+          toId: mid,
+        });
+      });
     });
     for (const aid of Object.keys(lair.startingAssets ?? {})) {
       out.push({ fromSlice: "lairs", fromId: lair.id, path: `startingAssets.${aid}`, toSlice: "assets", toId: aid });

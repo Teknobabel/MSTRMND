@@ -10,6 +10,8 @@ import { artFieldRow } from "../artField";
 import type { FormCtx } from "./context";
 import { effectsListFieldset } from "./effectsEditor";
 import {
+  bool,
+  checkboxInput,
   el,
   fieldset,
   formRow,
@@ -203,6 +205,24 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
       ),
     ),
   );
+
+  if (!isEvent) {
+    container.appendChild(
+      formRow(
+        "Core Mission",
+        checkboxInput(bool(ctx.row, "coreMission"), (v) =>
+          ctx.update((row) => {
+            setOrDelete(row, "coreMission", v ? true : undefined, true);
+          }),
+        ),
+      ),
+    );
+    container.appendChild(
+      hint(
+        "Designer-only flag (never shown in game). Core missions start in the Lair Missions pool of every run, whatever lair the player picked.",
+      ),
+    );
+  }
 
   if (isEvent) {
     container.appendChild(

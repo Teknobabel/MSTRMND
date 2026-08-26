@@ -45,6 +45,20 @@ export function textInput(
   return input;
 }
 
+/** Checkbox for a boolean field; commits immediately (there is nothing to type into). */
+export function checkboxInput(
+  value: boolean,
+  onCommit: (v: boolean) => void,
+): HTMLInputElement {
+  const input = el("input");
+  input.type = "checkbox";
+  input.checked = value;
+  input.addEventListener("change", () => {
+    onCommit(input.checked);
+  });
+  return input;
+}
+
 export function textArea(value: string, onCommit: (v: string) => void): HTMLTextAreaElement {
   const input = el("textarea");
   input.value = value;
@@ -200,6 +214,10 @@ export function str(row: Row, key: string): string {
 export function num(row: Row, key: string, fallback = 0): number {
   const v = row[key];
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+export function bool(row: Row, key: string): boolean {
+  return row[key] === true;
 }
 
 export function strArray(row: Row, key: string): string[] {

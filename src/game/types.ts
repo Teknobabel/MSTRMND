@@ -199,6 +199,13 @@ export type MissionTemplate = {
    */
   requiredAssetIds: string[];
   durationTurns: number;
+  /**
+   * Designer-only marker (never shown to the player): a **core** mission is in the Lair
+   * Missions pool from turn 1 in every run, whatever lair was picked, on top of that lair's
+   * `availableMissionIds`. Absent ⇒ `false`. Only meaningful on `content/missions.json`
+   * templates — events are drawn from their own pool and ignore it.
+   */
+  coreMission?: boolean;
   /** What the player must pick in the target planning slot (if any). */
   targetType: MissionTargetType;
   /** Applied in order when the mission resolves successfully (after baseline infamy). */
@@ -370,6 +377,18 @@ export type WantedLevelTier = {
   maxAgents: number;
 };
 
+/**
+ * One tier of lair upgrades. `missionIds` are **mutually exclusive**: the first of them to
+ * resolve successfully is the upgrade the player gets, and the others become unreachable for
+ * the run. Levels are consumed in `LairTemplate.upgradeLevels` order.
+ */
+export type LairUpgradeLevel = {
+  /** Optional designer label for the tier; UI falls back to `Level N`. */
+  name?: string;
+  /** Mutually exclusive upgrade mission template ids (at least one). */
+  missionIds: string[];
+};
+
 /** Designer-authored home base; one chosen per run. */
 export type LairTemplate = {
   id: string;
@@ -377,13 +396,18 @@ export type LairTemplate = {
   description?: string;
   /** Optional header/card art URL (site root path under `public/`). */
   cardArt?: string;
-  /** Mission templates the player may assign while at the lair (runtime pool starts as a copy). */
+  /**
+   * Mission templates unlocked and assignable from the lair from turn 1 (runtime pool starts
+   * as a copy). Unrelated to upgrades — these never lock out and never gate each other.
+   */
   availableMissionIds: string[];
   /**
-   * One-time upgrade missions (disjoint from `availableMissionIds`). Shown in Lair Upgrades tab
-   * until completed successfully once this run.
+   * Ordered upgrade tiers, played front to back. Each level offers a set of **mutually
+   * exclusive** upgrade missions: completing one installs it, locks its siblings out for the
+   * rest of the run, and opens the next level. The player only ever sees the next open level.
+   * Every mission id here is disjoint from `availableMissionIds` and from the other levels.
    */
-  upgradeMissionIds: string[];
+  upgradeLevels: LairUpgradeLevel[];
   /** Optional starting `Asset.id` quantities merged into `player.assets` at run start. */
   startingAssets?: Record<string, number>;
 };

@@ -147,6 +147,64 @@ describe("parseContentCatalog", () => {
     const clean = parseContentCatalog(rawFixtureSlices());
     expect(clean.issues).toEqual([]);
   });
+
+  it("rejects a Core Mission listed as a lair upgrade mission", () => {
+    const raw = rawFixtureSlices();
+    raw.missions[1]!.coreMission = true;
+    raw.lairs[0]!.availableMissionIds = ["ms-basic"];
+    raw.lairs[0]!.upgradeLevels = [{ missionIds: ["ms-asset"] }];
+    const { issues } = parseContentCatalog(raw);
+    expect(
+      issues.some((i) => i.slice === "lairs" && i.message.includes("Core Mission")),
+    ).toBe(true);
+  });
+
+  it("rejects an upgrade mission repeated across levels or shared with the lair pool", () => {
+    const repeated = rawFixtureSlices();
+    repeated.lairs[0]!.availableMissionIds = [];
+    repeated.lairs[0]!.upgradeLevels = [
+      { missionIds: ["ms-basic"] },
+      { missionIds: ["ms-asset", "ms-basic"] },
+    ];
+    expect(
+      parseContentCatalog(repeated).issues.some(
+        (i) => i.slice === "lairs" && i.path === "upgradeLevels[1].missionIds[1]",
+      ),
+    ).toBe(true);
+
+    const shared = rawFixtureSlices();
+    shared.lairs[0]!.availableMissionIds = ["ms-basic"];
+    shared.lairs[0]!.upgradeLevels = [{ missionIds: ["ms-basic"] }];
+    expect(
+      parseContentCatalog(shared).issues.some(
+        (i) => i.slice === "lairs" && i.message.includes("both availableMissionIds"),
+      ),
+    ).toBe(true);
+  });
+
+  it("forbids unlock_lair_mission from targeting a lair upgrade mission", () => {
+    const raw = rawFixtureSlices();
+    raw.lairs[0]!.availableMissionIds = ["ms-basic"];
+    raw.lairs[0]!.upgradeLevels = [{ missionIds: ["ms-asset"] }];
+    raw.missions[0]!.onSuccessEffects = [
+      { kind: "unlock_lair_mission", missionId: "ms-asset" },
+    ];
+    const { issues } = parseContentCatalog(raw);
+    expect(
+      issues.some((i) => i.slice === "missions" && i.message.includes("lair upgrade")),
+    ).toBe(true);
+  });
+
+  it("migrates a legacy flat upgradeMissionIds list to one level per mission", () => {
+    const raw = rawFixtureSlices();
+    raw.lairs[0]!.availableMissionIds = [];
+    raw.lairs[0]!.upgradeMissionIds = ["ms-basic", "ms-asset"];
+    const catalog = parseCatalog(raw);
+    expect(catalog.lairs[0]?.upgradeLevels).toEqual([
+      { missionIds: ["ms-basic"] },
+      { missionIds: ["ms-asset"] },
+    ]);
+  });
 });
 
 describe("parseCatalog (throwing wrapper)", () => {

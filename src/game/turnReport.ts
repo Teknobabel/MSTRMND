@@ -29,7 +29,11 @@ import {
   omegaSlotMissionId,
   omegaStageRequiredMissions,
 } from "./omegaPlan";
-import { getLairById } from "./lair";
+import {
+  getLairById,
+  lairUpgradeLevelIndexOfMission,
+  lairUpgradeLevels,
+} from "./lair";
 
 /** `good` = went the player's way, `bad` = cost them something, `neutral` = just news. */
 export type TurnReportTone = "good" | "bad" | "neutral";
@@ -721,12 +725,37 @@ function lairSection(
     }
   }
   for (const id of after.completedLairUpgradeMissionIds) {
-    if (!before.completedLairUpgradeMissionIds.includes(id)) {
+    if (before.completedLairUpgradeMissionIds.includes(id)) {
+      continue;
+    }
+    const levelIndex = lairUpgradeLevelIndexOfMission(after.activeLairId, id, catalog);
+    const levels = lairUpgradeLevels(after.activeLairId, catalog);
+    const label =
+      levelIndex === -1
+        ? "Lair upgrade installed"
+        : `Lair upgrade level ${levelIndex + 1} installed`;
+    lines.push({
+      text: `${label}: ${missionOrEventName(catalog, id)}.`,
+      tone: "good",
+    });
+    /* The choice is one-way — name what it cost so the player sees the trade, once. */
+    const lockedOut = (levels[levelIndex]?.missionIds ?? []).filter((mid) => mid !== id);
+    if (lockedOut.length > 0) {
       lines.push({
-        text: `Lair upgrade complete: ${missionOrEventName(catalog, id)}.`,
-        tone: "good",
+        text: `Locked out for this run: ${lockedOut
+          .map((mid) => missionOrEventName(catalog, mid))
+          .join(", ")}.`,
+        tone: "neutral",
       });
     }
+    const remaining = levels.length - (levelIndex + 1);
+    lines.push({
+      text:
+        remaining > 0
+          ? `Upgrade level ${levelIndex + 2} of ${levels.length} is now open.`
+          : "Every lair upgrade level is installed.",
+      tone: "neutral",
+    });
   }
   return section("lair", "Lair", lines);
 }
@@ -939,9 +968,13 @@ function finalOrganizationSection(
   });
   const lair = state.activeLairId !== null ? getLairById(catalog, state.activeLairId) : undefined;
   if (lair !== undefined) {
-    const upgrades = state.completedLairUpgradeMissionIds.length;
+    const installed = state.completedLairUpgradeMissionIds.length;
+    const total = lair.upgradeLevels.length;
     lines.push({
-      text: `${lair.name} — ${upgrades} upgrade${upgrades === 1 ? "" : "s"} completed.`,
+      text:
+        total > 0
+          ? `${lair.name} — ${installed} of ${total} upgrade level${total === 1 ? "" : "s"} installed.`
+          : `${lair.name} — no upgrades available.`,
       tone: "neutral",
     });
   }

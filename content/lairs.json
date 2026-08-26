@@ -4,25 +4,26 @@
     "name": "Subterranean Hub",
     "description": "Cold-war bunker retrofitted for ops and off-site planning.",
     "availableMissionIds": [
-      "breach_server",
-      "extract_asset",
       "surveil_site",
-      "deep_surveillance_net",
-      "vector_null_infil",
-      "black_ledger_sweep",
-      "cold_storage_placement",
-      "glass_dagger_pickup",
-      "kestrel_black_relay",
-      "vanta_cell_sanitize",
-      "redline_directive_cut",
-      "counterweight_diversion"
+      "deep_surveillance_net"
     ],
     "startingAssets": {
       "burner_network": 1,
       "classified_documents": 1
     },
-    "upgradeMissionIds": [
-      "hub_rig_upgrade"
+    "upgradeLevels": [
+      {
+        "name": "Operations Rig",
+        "missionIds": [
+          "hub_rig_upgrade",
+          "vector_null_infil"
+        ]
+      },
+      {
+        "missionIds": [
+          "sigma_seven_exfil_window"
+        ]
+      }
     ]
   },
   {
@@ -30,16 +31,23 @@
     "name": "Penthouse Safehouse",
     "description": "Glass walls, better optics, faster exits.",
     "availableMissionIds": [
-      "breach_server",
-      "extract_asset",
       "surveil_site",
       "deep_surveillance_net",
-      "iron_veil_meet",
-      "hollow_crown_social",
-      "grey_commission_witness",
-      "third_rail_distraction",
-      "phantom_reach_cartography",
-      "ninth_circle_cutout"
+      "iron_veil_meet"
+    ],
+    "upgradeLevels": [
+      {
+        "missionIds": [
+          "viper_hand_corridor",
+          "kestrel_black_relay"
+        ]
+      },
+      {
+        "missionIds": [
+          "third_rail_distraction",
+          "hollow_crown_social"
+        ]
+      }
     ]
   }
 ]

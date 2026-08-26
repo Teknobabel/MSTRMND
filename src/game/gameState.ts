@@ -3,6 +3,7 @@ import type {
   ContentCatalog,
   DynamicTraitActivityChange,
   EventTemplate,
+  LairTemplate,
   LocationAssetPlacement,
   LocationAssetSlot,
   LocationAgentPresence,
@@ -64,7 +65,13 @@ import {
   omegaSlotMissionId,
   resolveRunOmegaPlanId,
 } from "./omegaPlan";
-import { getLairById, pendingLairUpgradeMissionIds, resolveRunLairId } from "./lair";
+import {
+  availableLairUpgradeMissionIds,
+  getLairById,
+  isLairUpgradeMission,
+  lairUpgradeLevelIndexOfMission,
+  resolveRunLairId,
+} from "./lair";
 import { nextMonotonicWantedTierIndex } from "./wantedLevel";
 
 export type TurnPhase = "main" | "resolve" | "summary";
@@ -322,8 +329,10 @@ export type GameState = {
   /** Mission template ids available from the lair (starts as copy of template; gameplay may append). */
   lairMissionIds: string[];
   /**
-   * Upgrade missions from the active lair template that have completed successfully this run
-   * (removed from the Upgrades tab).
+   * Upgrade missions installed this run (resolved successfully), in completion order — at most
+   * one per level of the active lair's `upgradeLevels`. A completed entry closes its whole
+   * level: the siblings it was chosen over are locked out, and the Upgrades tab advances to
+   * the next level (see `lair.ts`).
    */
   completedLairUpgradeMissionIds: string[];
   /** Current Omega plan phase row (0–2) used for which missions may be assigned from the plan. */
@@ -397,6 +406,8 @@ export type GameError =
   | { code: "max_concurrent_missions"; max: number; have: number }
   | { code: "no_active_lair" }
   | { code: "mission_not_on_lair"; missionId: string }
+  /** A sibling choice from the same (mutually exclusive) upgrade level is already running. */
+  | { code: "lair_upgrade_level_busy"; missionId: string; runningMissionId: string }
   | { code: "lair_mission_already_in_pool"; missionId: string }
   | { code: "wrong_target_kind"; expected: MissionTargetType; actual: string }
   | { code: "unknown_asset_slot"; locationId: string; slotIndex: number }
@@ -768,6 +779,24 @@ export type RunSetup = {
 };
 
 /**
+ * Starting Lair Missions pool: the picked lair's `availableMissionIds` plus every mission
+ * template flagged `coreMission` — core missions are open from turn 1 in every run regardless
+ * of lair, and a lair that also lists one does not get it twice.
+ */
+function initialLairMissionIds(
+  catalog: ContentCatalog,
+  lairTemplate: LairTemplate | undefined,
+): string[] {
+  const out = lairTemplate ? [...lairTemplate.availableMissionIds] : [];
+  for (const m of catalog.missions) {
+    if (m.coreMission === true && !out.includes(m.id)) {
+      out.push(m.id);
+    }
+  }
+  return out;
+}
+
+/**
  * Create a fresh run. Pass a seeded `rng` for deterministic runs (tests, replays);
  * defaults to `Math.random` for normal play. `setup` carries the title screen's omega plan
  * and lair picks; anything it leaves unset is rolled from the catalog as before.
@@ -803,7 +832,7 @@ export function createInitialGameState(
   const locationRequiredTraits = rollLocationRequiredTraits(catalog, runLocations, rng);
   const locationSecurityTraits = rollLocationSecurityTraits(catalog, runLocations, rng);
   const locationIntelStates = rollInitialLocationIntelStates(catalog, runLocations, rng);
-  const lairMissionIds = lairTemplate ? [...lairTemplate.availableMissionIds] : [];
+  const lairMissionIds = initialLairMissionIds(catalog, lairTemplate);
   const playerProfile = pickRandomPlayerProfile(catalog, rng);
   /* Draw order is fixed so seeded runs stay reproducible: org name → hire offers → asset
    * placements → opening event offer. */
@@ -1182,7 +1211,7 @@ export function assignMission(
       return { ok: false, error: { code: "no_active_lair" } };
     }
     const fromPool = state.lairMissionIds.includes(missionTemplateId);
-    const fromUpgrade = pendingLairUpgradeMissionIds(
+    const fromUpgrade = availableLairUpgradeMissionIds(
       state.activeLairId,
       state.completedLairUpgradeMissionIds,
       catalog,
@@ -1192,6 +1221,31 @@ export function assignMission(
         ok: false,
         error: { code: "mission_not_on_lair", missionId: missionTemplateId },
       };
+    }
+    if (fromUpgrade) {
+      /* One choice per level: while a level's mission is in flight its siblings stay closed,
+       * otherwise two mutually exclusive upgrades could resolve on the same tick. */
+      const levelIndex = lairUpgradeLevelIndexOfMission(
+        state.activeLairId,
+        missionTemplateId,
+        catalog,
+      );
+      const running = state.activeMissions.find(
+        (am) =>
+          am.missionSource === "lair" &&
+          lairUpgradeLevelIndexOfMission(state.activeLairId, am.missionTemplateId, catalog) ===
+            levelIndex,
+      );
+      if (running !== undefined) {
+        return {
+          ok: false,
+          error: {
+            code: "lair_upgrade_level_busy",
+            missionId: missionTemplateId,
+            runningMissionId: running.missionTemplateId,
+          },
+        };
+      }
     }
   } else if (missionSource === "omega") {
     if (state.activeOmegaPlanId === null) {
@@ -1879,14 +1933,13 @@ export function executePlan(
           lairMissionIds = [...lairMissionIds, eff.missionId];
         }
       }
-      if (state.activeLairId !== null) {
-        const lair = getLairById(catalog, state.activeLairId);
-        if (
-          lair?.upgradeMissionIds.includes(template.id) &&
-          !completedLairUpgradeMissionIds.includes(template.id)
-        ) {
-          completedLairUpgradeMissionIds = [...completedLairUpgradeMissionIds, template.id];
-        }
+      /* Installing an upgrade settles its whole level: the siblings are never offered again
+       * (the Upgrades tab moves on to the next level). */
+      if (
+        isLairUpgradeMission(state.activeLairId, template.id, catalog) &&
+        !completedLairUpgradeMissionIds.includes(template.id)
+      ) {
+        completedLairUpgradeMissionIds = [...completedLairUpgradeMissionIds, template.id];
       }
     }
 

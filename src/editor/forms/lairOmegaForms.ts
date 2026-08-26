@@ -67,18 +67,78 @@ export function renderLairForm(container: HTMLElement, ctx: FormCtx): void {
       ),
     ),
   );
+  /* Upgrade ladder: ordered levels, each a set of mutually exclusive choices. The player only
+   * ever sees the lowest level that has nothing installed, so level order is the pacing. */
+  const authoredLevels = rowArray(ctx.row, "upgradeLevels");
+  const legacyUpgradeIds = strArray(ctx.row, "upgradeMissionIds");
+  /* Show pre-ladder content the way the loader migrates it, so a legacy lair does not read
+   * as having no upgrades. Committing any edit here writes `upgradeLevels` and drops the key. */
+  const migratedFromLegacy = authoredLevels.length === 0 && legacyUpgradeIds.length > 0;
+  const upgradeLevels: Row[] = migratedFromLegacy
+    ? legacyUpgradeIds.map((mid) => ({ missionIds: [mid] }))
+    : authoredLevels;
   container.appendChild(
     fieldset(
-      "upgradeMissionIds (one-time upgrades; disjoint from available)",
-      listEditor(
-        strArray(ctx.row, "upgradeMissionIds"),
+      "upgradeLevels (ordered tiers; one choice per tier)",
+      listEditor<Row>(
+        upgradeLevels,
         (next) =>
           ctx.update((row) => {
-            setOrDelete(row, "upgradeMissionIds", next, true);
+            setOrDelete(row, "upgradeLevels", next, true);
+            /* The legacy flat list is migrated on load; once levels exist it would be dead data. */
+            delete row.upgradeMissionIds;
           }),
-        (item, replace) => selectInput(idOptions(missionIds, missionNames), item, replace),
-        () => missionIds[0] ?? null,
+        (item, replace) => {
+          const wrap = el("div", "ed-upgrade-level");
+          const levelIndex = upgradeLevels.indexOf(item);
+          wrap.appendChild(
+            el(
+              "div",
+              "ed-upgrade-level-title",
+              `Level ${levelIndex === -1 ? "?" : levelIndex + 1}`,
+            ),
+          );
+          wrap.appendChild(
+            formRow(
+              "name (optional)",
+              textInput(
+                str(item, "name"),
+                (v) => {
+                  const nextLevel: Row = { ...item };
+                  setOrDelete(nextLevel, "name", v, true);
+                  replace(nextLevel);
+                },
+                "shown as “Level N: name”",
+              ),
+            ),
+          );
+          wrap.appendChild(
+            listEditor(
+              strArray(item, "missionIds"),
+              (nextIds) => {
+                replace({ ...item, missionIds: nextIds });
+              },
+              (mid, replaceId) =>
+                selectInput(idOptions(missionIds, missionNames), mid, replaceId),
+              () => missionIds[0] ?? null,
+              "+ Add choice",
+            ),
+          );
+          return wrap;
+        },
+        () => (missionIds[0] !== undefined ? { missionIds: [missionIds[0]] } : null),
+        "+ Add level",
       ),
+      hint(
+        "Each level's missions are mutually exclusive: completing one installs it, locks the others out for the run, and opens the next level. The player only ever sees the next level with nothing installed. Ids must be unique across the whole ladder and must not appear in availableMissionIds or be Core Missions.",
+      ),
+      ...(migratedFromLegacy
+        ? [
+            hint(
+              "Migrated from the legacy upgradeMissionIds list (one level per mission). Editing any level here rewrites this lair to upgradeLevels.",
+            ),
+          ]
+        : []),
     ),
   );
 

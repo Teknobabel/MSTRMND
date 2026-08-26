@@ -3,6 +3,7 @@
     "id": "breach_server",
     "name": "Breach the server",
     "description": "Gain access before the trace completes.",
+    "coreMission": true,
     "durationTurns": 1,
     "onFailureEffects": [
       {
@@ -47,6 +48,7 @@
     "id": "extract_asset",
     "name": "Extract the asset",
     "description": "Escort the contact out under pressure.",
+    "coreMission": true,
     "durationTurns": 1,
     "onSuccessEffects": [
       {

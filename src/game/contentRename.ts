@@ -134,7 +134,16 @@ function renameMissionRefs(draft: RawContentSlices, oldId: string, newId: string
   }
   for (const row of rowsOf(draft.lairs)) {
     renameInStringArray(row, "availableMissionIds", oldId, newId);
+    /* Legacy flat list still migrates on parse, so keep it in sync while it survives. */
     renameInStringArray(row, "upgradeMissionIds", oldId, newId);
+    const levels = row.upgradeLevels;
+    if (Array.isArray(levels)) {
+      for (const level of levels) {
+        if (level !== null && typeof level === "object") {
+          renameInStringArray(level as Row, "missionIds", oldId, newId);
+        }
+      }
+    }
   }
   for (const sliceKey of ["missions", "events"] as const) {
     for (const row of rowsOf(draft[sliceKey])) {

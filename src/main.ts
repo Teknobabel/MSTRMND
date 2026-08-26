@@ -69,7 +69,11 @@ import {
   totalPlayerVisibleOpposingAgents,
   MAX_INTEL_LEVEL,
 } from "./game/intel";
-import { getLairById, pendingLairUpgradeMissionIds } from "./game/lair";
+import {
+  currentLairUpgradeLevel,
+  getLairById,
+  lairUpgradeLevels,
+} from "./game/lair";
 import {
   getOmegaPlanById,
   OMEGA_MISSIONS_PER_STAGE,
@@ -2990,6 +2994,8 @@ function initGameController(
     label: string;
     /** Shown in place of the card list when the source has nothing on offer. */
     emptyText: string;
+    /** Optional rule line under the heading (how the group's offers relate to each other). */
+    note?: string;
     entries: AvailableMissionEntry[];
   };
 
@@ -3001,6 +3007,86 @@ function initGameController(
     return missionDisplayName(a).localeCompare(missionDisplayName(b), undefined, {
       sensitivity: "base",
     });
+  }
+
+  /**
+   * The single upgrade level the player may act on right now, rendered the same way in the Lair
+   * panel and the Missions menu. Its missions are mutually exclusive — starting one closes the
+   * level while it runs, completing one locks the rest out for the run — so the offer carries
+   * the rule line and the per-card badges that say so. Levels below are settled; levels above
+   * stay hidden until their turn.
+   */
+  function lairUpgradeOffer(): {
+    label: string;
+    note: string | null;
+    emptyText: string;
+    entries: AvailableMissionEntry[];
+  } {
+    const total = lairUpgradeLevels(state.activeLairId, content).length;
+    const current = currentLairUpgradeLevel(
+      state.activeLairId,
+      state.completedLairUpgradeMissionIds,
+      content,
+    );
+    if (current === null) {
+      return {
+        label: "Lair Upgrades",
+        note: null,
+        emptyText:
+          total === 0 ? "This lair has no upgrades." : "Every upgrade level is installed.",
+        entries: [],
+      };
+    }
+    const { level, index } = current;
+    const levelLabel = `Level ${index + 1} of ${total}`;
+    const label =
+      level.name !== undefined
+        ? `Lair Upgrades — ${levelLabel}: ${level.name}`
+        : `Lair Upgrades — ${levelLabel}`;
+    const running = state.activeMissions.find(
+      (am) => am.missionSource === "lair" && level.missionIds.includes(am.missionTemplateId),
+    );
+    const entries: AvailableMissionEntry[] = [...level.missionIds]
+      .sort(compareMissionIdsByName)
+      .map((mid) => {
+        if (running !== undefined) {
+          return {
+            missionTemplateId: mid,
+            status:
+              running.missionTemplateId === mid
+                ? ({ label: "In Progress", kind: "inprogress" } as const)
+                : ({ label: "Locked", kind: "locked" } as const),
+          };
+        }
+        return {
+          missionTemplateId: mid,
+          dragMeta:
+            state.phase === "main"
+              ? ({ draggable: true, source: "lair", missionTemplateId: mid } as const)
+              : undefined,
+          ...(level.missionIds.length > 1
+            ? { status: { label: "Choose One", kind: "pending" } as const }
+            : {}),
+        };
+      });
+    const note =
+      running !== undefined
+        ? `${missionDisplayName(running.missionTemplateId)} is underway — the other choices stay closed until it resolves.`
+        : level.missionIds.length > 1
+          ? "Pick one. Completing it installs that upgrade, locks the others out for this run, and opens the next level."
+          : "Completing it installs this upgrade and opens the next level.";
+    return { label, note, emptyText: "No pending upgrades.", entries };
+  }
+
+  /** Corner status chip on a mission card (In Progress / Locked / Pending). */
+  function appendMissionCardBadge(
+    card: HTMLElement,
+    status: NonNullable<AvailableMissionEntry["status"]>,
+  ): void {
+    const badge = document.createElement("span");
+    badge.classList.add("status-badge", "omega-card-badge", `status-badge--${status.kind}`);
+    badge.textContent = status.label;
+    card.appendChild(badge);
   }
 
   /**
@@ -3068,22 +3154,12 @@ function initGameController(
         })),
       });
 
+      const upgrades = lairUpgradeOffer();
       groups.push({
-        label: "Lair Upgrades",
-        emptyText: "No pending upgrades.",
-        entries: pendingLairUpgradeMissionIds(
-          state.activeLairId,
-          state.completedLairUpgradeMissionIds,
-          content,
-        )
-          .slice()
-          .sort(compareMissionIdsByName)
-          .map((mid) => ({
-            missionTemplateId: mid,
-            dragMeta: mainOnly
-              ? { draggable: true, source: "lair", missionTemplateId: mid }
-              : undefined,
-          })),
+        label: upgrades.label,
+        emptyText: upgrades.emptyText,
+        ...(upgrades.note !== null ? { note: upgrades.note } : {}),
+        entries: upgrades.entries,
       });
     }
 
@@ -3141,6 +3217,13 @@ function initGameController(
       heading.textContent = group.label;
       container.appendChild(heading);
 
+      if (group.note !== undefined) {
+        const note = document.createElement("p");
+        note.className = "assets-panel-empty";
+        note.textContent = group.note;
+        container.appendChild(note);
+      }
+
       if (group.entries.length === 0) {
         const empty = document.createElement("p");
         empty.className = "assets-panel-empty";
@@ -3154,14 +3237,7 @@ function initGameController(
       for (const entry of group.entries) {
         const card = omegaPlanMissionCard(entry.missionTemplateId, entry.dragMeta);
         if (entry.status) {
-          const badge = document.createElement("span");
-          badge.classList.add(
-            "status-badge",
-            "omega-card-badge",
-            `status-badge--${entry.status.kind}`,
-          );
-          badge.textContent = entry.status.label;
-          card.appendChild(badge);
+          appendMissionCardBadge(card, entry.status);
         }
         list.appendChild(card);
       }
@@ -3521,30 +3597,33 @@ function initGameController(
       }
     }
 
+    /** Only the next open upgrade level — earlier ones are settled, later ones stay unseen. */
     function fillLairUpgradesInto(container: HTMLElement): void {
-      const pending = sortMissionIds(
-        pendingLairUpgradeMissionIds(
-          state.activeLairId,
-          state.completedLairUpgradeMissionIds,
-          content,
-        ),
-      );
-      if (pending.length === 0) {
+      const offer = lairUpgradeOffer();
+      if (offer.entries.length === 0) {
         const empty = document.createElement("p");
         empty.className = "assets-panel-empty";
-        empty.textContent = "No pending upgrades.";
+        empty.textContent = offer.emptyText;
         container.appendChild(empty);
         return;
       }
-      for (const mid of pending) {
-        container.appendChild(
-          omegaPlanMissionCard(
-            mid,
-            state.phase === "main"
-              ? { draggable: true, source: "lair", missionTemplateId: mid }
-              : undefined,
-          ),
-        );
+      const levelLine = document.createElement("p");
+      levelLine.className = "lair-upgrade-level-title";
+      /* The column/tab is already titled "Upgrades"; keep just the level part here. */
+      levelLine.textContent = offer.label.replace("Lair Upgrades — ", "");
+      container.appendChild(levelLine);
+      if (offer.note !== null) {
+        const note = document.createElement("p");
+        note.className = "assets-panel-empty";
+        note.textContent = offer.note;
+        container.appendChild(note);
+      }
+      for (const entry of offer.entries) {
+        const card = omegaPlanMissionCard(entry.missionTemplateId, entry.dragMeta);
+        if (entry.status) {
+          appendMissionCardBadge(card, entry.status);
+        }
+        container.appendChild(card);
       }
     }
 
