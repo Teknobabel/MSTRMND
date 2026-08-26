@@ -16,9 +16,10 @@ export type DynamicTraitKind =
   | "wanted";
 
 /**
- * The four minion-to-minion kinds are a **projection** of {@link MinionPairAffinity}: the pair's
- * score is the source of truth and `syncMinionPairDynamicTraits` (see `affinity.ts`) rewrites
- * both minions' bonds from it after every resolve. Never edit them directly.
+ * Every kind here is a **projection** of an affinity table: the four minion-to-minion kinds come
+ * from {@link MinionPairAffinity}, `hero` / `wanted` from {@link MinionLocationAffinity}. Those
+ * scores are the source of truth and `syncMinionDynamicTraits` (see `affinity.ts`) rebuilds this
+ * whole array from them after every resolve. Never edit them directly.
  */
 export type DynamicTrait =
   | {
@@ -69,21 +70,41 @@ export type MinionRelationshipChange = {
   to: MinionRelationship;
 };
 
-export type DynamicTraitChangeType = "added" | "upgraded" | "replaced" | "removed";
+/**
+ * Where a minion stands at one location. `neutral` is the starting state and carries no success
+ * modifier; the two ends are the `hero` / `wanted` dynamic traits.
+ */
+export type MinionLocationStanding = "wanted" | "neutral" | "hero";
 
 /**
- * Logged on `mission_completed` when a **location** dynamic trait changes after a resolve.
- * Minion-to-minion changes travel as {@link MinionRelationshipChange} instead — those come from
- * the pair affinity table, not from a per-minion roll.
+ * One minion's standing at one location, driven by the same machinery as
+ * {@link MinionPairAffinity}: a hidden `score` the player never sees, and the band it lands in.
+ * `standing` is stored rather than recomputed because the thresholds are hysteretic.
  */
-export type DynamicTraitActivityChange = {
-  ownerInstanceId: string;
-  ownerTemplateId: string;
-  changeType: DynamicTraitChangeType;
-  kind: "hero" | "wanted";
+export type MinionLocationAffinity = {
+  minionInstanceId: string;
   locationId: string;
-  /** When `changeType` is `replaced`, the kind that was removed for the same location. */
-  removedKind?: "hero" | "wanted";
+  score: number;
+  standing: MinionLocationStanding;
+};
+
+/** One minion crossing a location threshold during a resolve; drives the report lines. */
+export type MinionLocationStandingChange = {
+  minionInstanceId: string;
+  locationId: string;
+  from: MinionLocationStanding;
+  to: MinionLocationStanding;
+};
+
+/**
+ * A run's opening standing between a minion **template** and a location, rolled once at run
+ * start. It lands on the real minion the moment that template is hired — the roster is empty at
+ * turn 1, but the run's locations already exist.
+ */
+export type MinionTemplateLocationAffinity = {
+  minionTemplateId: string;
+  locationId: string;
+  score: number;
 };
 
 export type StartingDynamicTrait =
@@ -521,6 +542,27 @@ export type MinionAffinityConfig = {
 };
 
 /**
+ * Designer-tunable minion-to-**location** affinity: how much a mission at a site moves the
+ * minion's standing there, and where that standing turns into the `hero` / `wanted` trait.
+ *
+ * Same shape and same hysteresis rule as {@link MinionAffinityConfig}, with one threshold each
+ * way instead of two — Hero and Wanted have no deeper tier. A minion becomes a Hero at
+ * `heroThreshold` and only gives it up once the score falls `hysteresis` further back.
+ */
+export type LocationAffinityConfig = {
+  /** Score at which a minion becomes a Hero of the location. */
+  heroThreshold: number;
+  /** Score (negative) at which a minion becomes Wanted at the location. */
+  wantedThreshold: number;
+  /** How far back past a threshold a score must fall before the standing is given up (≥ 0). */
+  hysteresis: number;
+  /** Applied to every participant when a mission at that location succeeds. */
+  missionSuccess: number;
+  /** Applied to every participant when a mission at that location fails. */
+  missionFailure: number;
+};
+
+/**
  * Designer-tunable balance knobs (`content/balance.json`). Every field has a schema default
  * equal to the pre-balance-slice constant (see {@link DEFAULT_BALANCE}), so a sparse or
  * empty file changes nothing.
@@ -534,12 +576,8 @@ export type BalanceConfig = {
   /** Flat −% per opposing agent at the mission's target site (stored positive). */
   opposingAgentPenalty: number;
   dynamicTraitModifiers: DynamicTraitModifiers;
-  /**
-   * Chance (%) per participant per resolve to gain/upgrade a **location** dynamic trait
-   * (Hero / Wanted). Minion-to-minion relationships are not rolled — see {@link minionAffinity}.
-   */
-  dynamicTraitRollPercent: number;
   minionAffinity: MinionAffinityConfig;
+  locationAffinity: LocationAffinityConfig;
   /* Infamy, heat & risk */
   /** Infamy change on mission success (typically positive — the reputation the player builds). */
   infamySuccessDelta: number;
@@ -608,7 +646,6 @@ export const DEFAULT_BALANCE: BalanceConfig = {
     hero: 5,
     wanted: -5,
   },
-  dynamicTraitRollPercent: 10,
   minionAffinity: {
     friendThreshold: 3,
     allyThreshold: 7,
@@ -623,6 +660,13 @@ export const DEFAULT_BALANCE: BalanceConfig = {
     omegaFailure: -2,
     lairRaidSuccess: 3,
     lairRaidFailure: 0,
+  },
+  locationAffinity: {
+    heroThreshold: 3,
+    wantedThreshold: -3,
+    hysteresis: 2,
+    missionSuccess: 1,
+    missionFailure: -1,
   },
   infamySuccessDelta: 5,
   infamyFailureDelta: 0,

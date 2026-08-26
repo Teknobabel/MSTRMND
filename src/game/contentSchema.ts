@@ -454,7 +454,6 @@ export const balanceConfigSchema = z.object({
       wanted: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.wanted),
     })
     .default({ ...DEFAULT_BALANCE.dynamicTraitModifiers }),
-  dynamicTraitRollPercent: balanceInt(0, 100, DEFAULT_BALANCE.dynamicTraitRollPercent),
   minionAffinity: z
     .object({
       friendThreshold: balanceInt(1, 100, DEFAULT_BALANCE.minionAffinity.friendThreshold),
@@ -472,6 +471,15 @@ export const balanceConfigSchema = z.object({
       lairRaidFailure: balanceInt(-100, 100, DEFAULT_BALANCE.minionAffinity.lairRaidFailure),
     })
     .default({ ...DEFAULT_BALANCE.minionAffinity }),
+  locationAffinity: z
+    .object({
+      heroThreshold: balanceInt(1, 100, DEFAULT_BALANCE.locationAffinity.heroThreshold),
+      wantedThreshold: balanceInt(-100, -1, DEFAULT_BALANCE.locationAffinity.wantedThreshold),
+      hysteresis: balanceInt(0, 100, DEFAULT_BALANCE.locationAffinity.hysteresis),
+      missionSuccess: balanceInt(-100, 100, DEFAULT_BALANCE.locationAffinity.missionSuccess),
+      missionFailure: balanceInt(-100, 100, DEFAULT_BALANCE.locationAffinity.missionFailure),
+    })
+    .default({ ...DEFAULT_BALANCE.locationAffinity }),
   infamySuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamySuccessDelta),
   infamyFailureDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamyFailureDelta),
   heatSuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.heatSuccessDelta),

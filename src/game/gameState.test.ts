@@ -16,6 +16,7 @@ import {
 } from "./lair";
 import type { ContentCatalog } from "./types";
 import { dynamicTraitSuccessModifierFromFullRoster } from "./dynamicTrait";
+import { findLocationAffinity } from "./affinity";
 import {
   fixtureCatalog,
   makeMinionInstance,
@@ -1510,5 +1511,137 @@ describe("run-start affinity seeds", () => {
       score: cat.balance.minionAffinity.hatedThreshold,
       relationship: "hated",
     });
+  });
+});
+
+describe("minion-location standing through executePlan", () => {
+  function siteState(overrides?: Partial<ActiveMission>): GameState {
+    const state = baseState(1);
+    return {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [makeMinionInstance("mi-1", "m-hero", ["t-req"])],
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"], ...overrides })],
+    };
+  }
+
+  function runTurns(start: GameState, turns: number, rng: () => number): GameState {
+    let cur = start;
+    for (let i = 0; i < turns; i += 1) {
+      const missions = cur.activeMissions;
+      const result = executePlan(cur, catalog, rng, sequentialIds("ag"));
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return cur;
+      }
+      cur = { ...result.value, phase: "main" as const, activeMissions: missions };
+    }
+    return cur;
+  }
+
+  it("moves the participant's score at the target site by the tuned amount", () => {
+    const next = runTurns(siteState(), 1, () => 0);
+    expect(next.minionLocationAffinities).toEqual([
+      {
+        minionInstanceId: "mi-1",
+        locationId: "loc-a",
+        score: catalog.balance.locationAffinity.missionSuccess,
+        standing: "neutral",
+      },
+    ]);
+  });
+
+  it("turns the minion into a Hero at the threshold and reports the crossing once", () => {
+    const next = runTurns(siteState(), 3, () => 0);
+    expect(next.minionLocationAffinities[0]!.standing).toBe("hero");
+    const crossings = completedEvents(next).flatMap((e) => e.standingChanges ?? []);
+    expect(crossings).toEqual([
+      { minionInstanceId: "mi-1", locationId: "loc-a", from: "neutral", to: "hero" },
+    ]);
+    expect(
+      next.player.minions.find((m) => m.instanceId === "mi-1")!.dynamicTraits,
+    ).toContainEqual({ kind: "hero", locationId: "loc-a" });
+  });
+
+  it("makes a minion Wanted after repeated failures at the same site", () => {
+    const failing = baseState(1);
+    const staged: GameState = {
+      ...failing,
+      player: {
+        ...failing.player,
+        minions: [makeMinionInstance("mi-1", "m-buddy", [])], /* no t-req → 0% */
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+    };
+    const next = runTurns(staged, 3, () => 0.99);
+    expect(next.minionLocationAffinities[0]).toMatchObject({
+      locationId: "loc-a",
+      score: catalog.balance.locationAffinity.missionFailure * 3,
+      standing: "wanted",
+    });
+    expect(
+      next.player.minions.find((m) => m.instanceId === "mi-1")!.dynamicTraits,
+    ).toContainEqual({ kind: "wanted", locationId: "loc-a" });
+  });
+
+  it("holds the standing when the score wobbles back across the threshold", () => {
+    const hero = runTurns(siteState(), 3, () => 0);
+    const wobbled = runTurns(
+      {
+        ...hero,
+        phase: "main",
+        player: {
+          ...hero.player,
+          minions: hero.player.minions.map((m) => ({ ...m, traitIds: [] })),
+        },
+        activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+      },
+      1,
+      () => 0.99,
+    );
+    expect(wobbled.minionLocationAffinities[0]!.score).toBe(2);
+    expect(wobbled.minionLocationAffinities[0]!.standing).toBe("hero");
+    expect(completedEvents(wobbled)[0]!.standingChanges).toBeUndefined();
+  });
+
+  it("leaves standings alone for a mission with no site", () => {
+    const noSite = runTurns(
+      siteState({ missionTemplateId: "ms-asset", target: { kind: "none" }, turnsRemaining: 1 }),
+      1,
+      () => 0,
+    );
+    expect(noSite.minionLocationAffinities).toEqual([]);
+  });
+});
+
+describe("run-start location affinity seeds", () => {
+  it("rolls a template x run-location table at run start", () => {
+    const state = createInitialGameState(catalog, seededRng(4));
+    expect(state.minionLocationAffinities).toEqual([]); /* roster is empty at turn 1 */
+    expect(state.minionLocationAffinitySeeds.length).toBeGreaterThan(0);
+    const runLocationIds = new Set(state.locationSecurityStates.map((s) => s.locationId));
+    for (const seed of state.minionLocationAffinitySeeds) {
+      expect(runLocationIds.has(seed.locationId)).toBe(true);
+    }
+  });
+
+  it("lands a minion's seeded standings the moment they are hired", () => {
+    const start = createInitialGameState(catalog, seededRng(4));
+    const seed = start.minionLocationAffinitySeeds[0]!;
+    const staged: GameState = {
+      ...start,
+      player: { ...start.player, commandPoints: 20 },
+      availableMinionTemplateIds: [seed.minionTemplateId],
+    };
+    const hired = hireMinion(staged, catalog, seed.minionTemplateId, "mi-1");
+    expect(hired.ok).toBe(true);
+    if (!hired.ok) {
+      return;
+    }
+    expect(
+      findLocationAffinity(hired.value.minionLocationAffinities, "mi-1", seed.locationId)?.score,
+    ).toBe(seed.score);
   });
 });

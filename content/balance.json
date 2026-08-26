@@ -9,7 +9,6 @@
     "rival": -5,
     "wanted": -5
   },
-  "dynamicTraitRollPercent": 10,
   "eventCooldownTurnsMax": 3,
   "eventCooldownTurnsMin": 0,
   "eventMaxParticipants": 3,
@@ -28,6 +27,13 @@
   "initialIntelSitesAtOne": 2,
   "initialIntelSitesAtTwo": 1,
   "injuryChancePerAgentPercent": 20,
+  "locationAffinity": {
+    "heroThreshold": 3,
+    "hysteresis": 2,
+    "missionFailure": -1,
+    "missionSuccess": 1,
+    "wantedThreshold": -3
+  },
   "minionAffinity": {
     "allyThreshold": 7,
     "eventFailure": -2,

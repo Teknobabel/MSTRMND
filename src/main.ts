@@ -41,12 +41,11 @@ import {
   dynamicTraitDisplayLabel,
   dynamicTraitSuccessModifierBreakdownFromFullRoster,
   dynamicTraitSuccessModifierFromFullRoster,
-  formatDynamicTraitActivityChange,
   formatStartingDynamicTraitsPreview,
   isPositiveDynamicTraitKind,
   type DynamicTraitSuccessBreakdownEntry,
 } from "./game/dynamicTrait";
-import { formatRelationshipChange } from "./game/affinity";
+import { formatRelationshipChange, formatStandingChange } from "./game/affinity";
 import { describeMissionTemplateEffects } from "./game/missionEffects";
 import {
   buildRunEndReport,
@@ -3766,17 +3765,17 @@ function initGameController(
               : "none";
           const outcomeLabel = ev.success ? "Success" : "Failure";
           let line = `${ev.missionName} @ ${whereLabel}: ${outcomeLabel} (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}, total heat change ${heat}. Outcome: baseline infamy ${baseline}, baseline heat ${baselineHeat}. Mission effects: ${templateFx}.`;
-          if (ev.dynamicTraitChanges !== undefined && ev.dynamicTraitChanges.length > 0) {
-            const dynParts = ev.dynamicTraitChanges.map((c) =>
-              formatDynamicTraitActivityChange(content, state.player.minions, c),
-            );
-            line += ` ${dynParts.join(" ")}`;
-          }
           if (ev.relationshipChanges !== undefined && ev.relationshipChanges.length > 0) {
             const relParts = ev.relationshipChanges.map((c) =>
               formatRelationshipChange(content, state.player.minions, c),
             );
             line += ` ${relParts.join(" ")}`;
+          }
+          if (ev.standingChanges !== undefined && ev.standingChanges.length > 0) {
+            const standingParts = ev.standingChanges.map((c) =>
+              formatStandingChange(content, state.player.minions, c),
+            );
+            line += ` ${standingParts.join(" ")}`;
           }
           if (ev.criticalFailure && ev.criticalInjuryChancePercent !== undefined) {
             const n = ev.criticalOpposingAgentCount ?? 0;

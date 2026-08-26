@@ -1,7 +1,6 @@
 import type {
   AgentInstance,
   ContentCatalog,
-  DynamicTraitActivityChange,
   EventTemplate,
   LairTemplate,
   LocationAssetPlacement,
@@ -11,8 +10,11 @@ import type {
   LocationSecurityState,
   LocationTemplate,
   MinionInstance,
+  MinionLocationAffinity,
+  MinionLocationStandingChange,
   MinionPairAffinity,
   MinionRelationshipChange,
+  MinionTemplateLocationAffinity,
   MinionTemplatePairAffinity,
   MissionSource,
   MissionTarget,
@@ -46,17 +48,18 @@ import {
   rollLocationRequiredTraits,
   rollLocationSecurityTraits,
 } from "./locationCatalog";
-import {
-  dynamicTraitSuccessModifierFromFullRoster,
-  rollLocationDynamicTraitsAfterMission,
-} from "./dynamicTrait";
+import { dynamicTraitSuccessModifierFromFullRoster } from "./dynamicTrait";
 import {
   affinityDeltaForResolve,
+  applyLocationAffinity,
   applyMissionAffinity,
+  applyTemplateLocationSeeds,
   applyTemplatePairSeeds,
+  locationAffinityDeltaForResolve,
   rollStartingTemplateAffinities,
+  rollStartingTemplateLocationAffinities,
   seedStartingAffinities,
-  syncMinionPairDynamicTraits,
+  syncMinionDynamicTraits,
 } from "./affinity";
 import {
   canAssignParticipants,
@@ -193,13 +196,16 @@ export type ActivityEventMissionCompleted = {
   criticalInjuryChancePercent?: number;
   /** Participants who gained `injured` from the critical-failure roll pass only (may be empty). */
   criticalInjuryInstanceIds?: string[];
-  /** Hero / Wanted adds and replacements after this resolve (before XP). */
-  dynamicTraitChanges?: DynamicTraitActivityChange[];
   /**
    * Participant pairs that crossed an affinity threshold on this resolve. The score behind them
    * is never surfaced — only the band the pair moved into.
    */
   relationshipChanges?: MinionRelationshipChange[];
+  /**
+   * Participants who crossed a Hero / Wanted threshold at this mission's location. Same deal:
+   * the score stays internal, only the standing is reported.
+   */
+  standingChanges?: MinionLocationStandingChange[];
 };
 
 /** @deprecated Use {@link ActivityEventMissionCompleted} */
@@ -399,6 +405,19 @@ export type GameState = {
    * moved both outrank it.
    */
   minionAffinitySeeds: MinionTemplatePairAffinity[];
+  /**
+   * Each minion's hidden score per location, and the Hero / Wanted standing it currently sits in
+   * (see `affinity.ts`). One row per minion-location slot that has ever been non-zero; a slot
+   * with no row is Neutral at 0. Projected onto `MinionInstance.dynamicTraits` alongside the
+   * pair bonds; this table is the source of truth and always wins.
+   */
+  minionLocationAffinities: MinionLocationAffinity[];
+  /**
+   * This run's opening Hero / Wanted standings, rolled once over (minion template × **run**
+   * location) at `createInitialGameState` and fixed thereafter. Lands on a minion as soon as
+   * they are hired — unlike a pair, a location needs no second party.
+   */
+  minionLocationAffinitySeeds: MinionTemplateLocationAffinity[];
   /**
    * Where the Lair Raid — the run-ending event the **top** wanted tier spawns — currently sits.
    * See {@link LairRaidStatus}.
@@ -921,6 +940,13 @@ export function createInitialGameState(
       rng,
       catalog.balance.minionAffinity,
     ),
+    minionLocationAffinities: [],
+    minionLocationAffinitySeeds: rollStartingTemplateLocationAffinities(
+      catalog.minions.map((m) => m.id),
+      runLocations.map((l) => l.id),
+      rng,
+      catalog.balance.locationAffinity,
+    ),
     lairRaidStatus: "none",
     runEnding: null,
   };
@@ -1030,12 +1056,23 @@ function withRefreshedAffinities(state: GameState, catalog: ContentCatalog): Gam
     state.minionAffinitySeeds,
     catalog.balance.minionAffinity,
   );
+  const minionLocationAffinities = applyTemplateLocationSeeds(
+    state.minionLocationAffinities,
+    state.player.minions,
+    state.minionLocationAffinitySeeds,
+    catalog.balance.locationAffinity,
+  );
   return {
     ...state,
     minionAffinities,
+    minionLocationAffinities,
     player: {
       ...state.player,
-      minions: syncMinionPairDynamicTraits(state.player.minions, minionAffinities),
+      minions: syncMinionDynamicTraits(
+        state.player.minions,
+        minionAffinities,
+        minionLocationAffinities,
+      ),
     },
   };
 }
@@ -1752,6 +1789,7 @@ export function executePlan(
   let lairMissionIds = [...state.lairMissionIds];
   let completedLairUpgradeMissionIds = [...state.completedLairUpgradeMissionIds];
   let minionAffinities = [...state.minionAffinities];
+  let minionLocationAffinities = [...state.minionLocationAffinities];
   let opposingAgentInstances: AgentInstance[] = [...state.opposingAgentInstances];
   let locationAgentPresence: LocationAgentPresence[] = state.locationAgentPresence.map((r) => ({
     locationId: r.locationId,
@@ -1915,20 +1953,18 @@ export function executePlan(
       instanceById.set(m.instanceId, m);
     }
 
-    const rosterForDynamic = Array.from(instanceById.values());
-    const dynamicRoll = rollLocationDynamicTraitsAfterMission(
-      rosterForDynamic,
+    /* Working a site moves each participant's own standing there by a fixed amount — no roll.
+     * Missions with no site (minion / none targets) leave every standing alone. */
+    const standingResult = applyLocationAffinity(
+      minionLocationAffinities,
       am.participantInstanceIds,
-      success,
-      am.target,
-      rng,
-      catalog.balance.dynamicTraitRollPercent,
+      missionLocId,
+      locationAffinityDeltaForResolve(success, catalog.balance.locationAffinity),
+      catalog.balance.locationAffinity,
     );
-    for (const m of dynamicRoll.nextMinions) {
-      instanceById.set(m.instanceId, m);
-    }
-    const dynamicTraitChanges =
-      dynamicRoll.changes.length > 0 ? dynamicRoll.changes : undefined;
+    minionLocationAffinities = standingResult.next;
+    const standingChanges =
+      standingResult.changes.length > 0 ? standingResult.changes : undefined;
 
     /* Running a job together moves the pair's shared affinity by a fixed amount — no roll. The
      * raid takes precedence over its `event` source: it is its own category of shared ordeal. */
@@ -1948,10 +1984,11 @@ export function executePlan(
     const relationshipChanges =
       affinityResult.changes.length > 0 ? affinityResult.changes : undefined;
 
-    /* Re-project the pills so the roster reflects any band that just moved. */
-    for (const m of syncMinionPairDynamicTraits(
+    /* Re-project the pills so the roster reflects any band that just moved, on either track. */
+    for (const m of syncMinionDynamicTraits(
       Array.from(instanceById.values()),
       minionAffinities,
+      minionLocationAffinities,
     )) {
       instanceById.set(m.instanceId, m);
     }
@@ -2008,10 +2045,8 @@ export function executePlan(
       baselineHeatDelta: baselineHeat,
       templateEffectDescriptions,
       criticalFailure: isCriticalFailure,
-      ...(dynamicTraitChanges !== undefined
-        ? { dynamicTraitChanges }
-        : {}),
       ...(relationshipChanges !== undefined ? { relationshipChanges } : {}),
+      ...(standingChanges !== undefined ? { standingChanges } : {}),
       ...(isCriticalFailure
         ? {
             criticalOpposingAgentCount,
@@ -2357,6 +2392,7 @@ export function executePlan(
       eventCooldownTurnsRemaining: nextEventCooldownTurnsRemaining,
       activeSuccessModifiers,
       minionAffinities,
+      minionLocationAffinities,
       lairRaidStatus,
       runEnding,
     },

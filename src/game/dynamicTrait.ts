@@ -1,29 +1,22 @@
 /**
  * Dynamic traits — the runtime modifiers that hang off a minion instead of the catalog.
  *
- * Two families live here and they work differently:
- *
- * - **Location** bonds (`hero` / `wanted`) are per-minion and still rolled after each resolve.
- * - **Minion-to-minion** bonds (`friend` / `ally` / `rival` / `hatred`) are a read-only
- *   projection of the pair affinity table in `affinity.ts`. They are never rolled and never
- *   edited here; the only thing this module does with them is render them and total their
- *   success modifier — **once per unordered pair**, not once per minion.
+ * Every kind here is a **read-only projection** of an affinity table in `affinity.ts`:
+ * `friend` / `ally` / `rival` / `hatred` come from the minion **pair** track, `hero` / `wanted`
+ * from the minion-**location** track. Nothing in this module creates, rolls, or edits them. All
+ * it does is render them and total their success modifier — once per unordered **pair** for a
+ * relationship, once per **minion** for a location standing.
  */
 import type {
   ContentCatalog,
   DynamicTrait,
-  DynamicTraitActivityChange,
   DynamicTraitKind,
   DynamicTraitModifiers,
   MinionInstance,
-  MissionTarget,
   StartingDynamicTrait,
 } from "./types";
 import { DEFAULT_BALANCE } from "./types";
 import { pairKey } from "./affinity";
-
-/** @deprecated Read `catalog.balance.dynamicTraitRollPercent`; kept as the legacy default. */
-export const DYNAMIC_TRAIT_ROLL_PERCENT = DEFAULT_BALANCE.dynamicTraitRollPercent;
 
 const DEFAULT_BONUS_BY_KIND: Record<DynamicTraitKind, number> =
   DEFAULT_BALANCE.dynamicTraitModifiers;
@@ -248,138 +241,6 @@ export function dynamicTraitDisplayLabel(
   return dt.kind === "hero" ? `Hero of ${locName}` : `Wanted in ${locName}`;
 }
 
-function rollHits(rng: () => number, rollPercent: number): boolean {
-  return Math.floor(rng() * 100) < rollPercent;
-}
-
-function findLocationDynamic(
-  traits: readonly DynamicTrait[],
-  locationId: string,
-  kinds: readonly DynamicTraitKind[],
-): number {
-  return traits.findIndex(
-    (t) => !isMinionTargetedDynamicTrait(t) && kinds.includes(t.kind) && t.locationId === locationId,
-  );
-}
-
-function applyHero(
-  traits: DynamicTrait[],
-  locationId: string,
-  ownerTemplateId: string,
-  ownerInstanceId: string,
-): { next: DynamicTrait[]; change: DynamicTraitActivityChange | null } {
-  const heroIdx = findLocationDynamic(traits, locationId, ["hero"]);
-  if (heroIdx !== -1) {
-    return { next: traits, change: null };
-  }
-
-  let removedKind: "hero" | "wanted" | undefined;
-  let working = [...traits];
-  const wantedIdx = findLocationDynamic(working, locationId, ["wanted"]);
-  if (wantedIdx !== -1) {
-    removedKind = "wanted";
-    working = working.filter((_, i) => i !== wantedIdx);
-  }
-  working.push({ kind: "hero", locationId });
-  return {
-    next: working,
-    change:
-      removedKind !== undefined
-        ? {
-            ownerInstanceId,
-            ownerTemplateId,
-            changeType: "replaced",
-            kind: "hero",
-            locationId,
-            removedKind,
-          }
-        : {
-            ownerInstanceId,
-            ownerTemplateId,
-            changeType: "added",
-            kind: "hero",
-            locationId,
-          },
-  };
-}
-
-function applyWanted(
-  traits: DynamicTrait[],
-  locationId: string,
-  ownerTemplateId: string,
-  ownerInstanceId: string,
-): { next: DynamicTrait[]; change: DynamicTraitActivityChange | null } {
-  const wantedIdx = findLocationDynamic(traits, locationId, ["wanted"]);
-  if (wantedIdx !== -1) {
-    return { next: traits, change: null };
-  }
-
-  let removedKind: "hero" | "wanted" | undefined;
-  let working = [...traits];
-  const heroIdx = findLocationDynamic(working, locationId, ["hero"]);
-  if (heroIdx !== -1) {
-    removedKind = "hero";
-    working = working.filter((_, i) => i !== heroIdx);
-  }
-  working.push({ kind: "wanted", locationId });
-  return {
-    next: working,
-    change:
-      removedKind !== undefined
-        ? {
-            ownerInstanceId,
-            ownerTemplateId,
-            changeType: "replaced",
-            kind: "wanted",
-            locationId,
-            removedKind,
-          }
-        : {
-            ownerInstanceId,
-            ownerTemplateId,
-            changeType: "added",
-            kind: "wanted",
-            locationId,
-          },
-  };
-}
-
-function missionTargetLocationId(target: MissionTarget): string | null {
-  if (target.kind === "location") {
-    return target.locationId;
-  }
-  if (target.kind === "asset") {
-    return target.locationId;
-  }
-  return null;
-}
-
-function dynamicTraitLocationName(catalog: ContentCatalog, locationId: string): string {
-  return catalog.locations.find((l) => l.id === locationId)?.name ?? locationId;
-}
-
-/** One-sentence activity/report line for a Hero / Wanted bond gained or replaced after a mission. */
-export function formatDynamicTraitActivityChange(
-  catalog: ContentCatalog,
-  _roster: readonly MinionInstance[],
-  ch: DynamicTraitActivityChange,
-): string {
-  const owner =
-    catalog.minions.find((t) => t.id === ch.ownerTemplateId)?.name ?? ch.ownerTemplateId;
-  const loc = dynamicTraitLocationName(catalog, ch.locationId);
-  if (ch.changeType === "added") {
-    return ch.kind === "hero"
-      ? `${owner} gained Hero of ${loc}.`
-      : `${owner} gained Wanted in ${loc}.`;
-  }
-  if (ch.changeType === "replaced" && ch.removedKind !== undefined) {
-    const was = ch.removedKind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
-    const now = ch.kind === "hero" ? `Hero of ${loc}` : `Wanted in ${loc}`;
-    return `${owner} replaced ${was} with ${now}.`;
-  }
-  return `${owner}: ${ch.kind} at ${loc}.`;
-}
-
 /** Hire-card preview lines for `MinionTemplate.startingDynamicTraits`. */
 export function formatStartingDynamicTraitsPreview(
   catalog: ContentCatalog,
@@ -408,52 +269,4 @@ export function formatStartingDynamicTraitsPreview(
       catalog.locations.find((l) => l.id === s.locationId)?.name ?? s.locationId;
     return s.kind === "hero" ? `Hero of ${locName}` : `Wanted in ${locName}`;
   });
-}
-
-/**
- * After mission effects, roll each participant's **location** dynamic traits (Hero on success,
- * Wanted on failure) and return the next roster plus structured changes for
- * `mission_completed.dynamicTraitChanges`.
- *
- * Minion-to-minion relationships are deliberately absent: those move deterministically through
- * the pair affinity table (`affinity.ts`), not through this roll.
- */
-export function rollLocationDynamicTraitsAfterMission(
-  minions: readonly MinionInstance[],
-  participantInstanceIds: readonly string[],
-  success: boolean,
-  missionTarget: MissionTarget,
-  rng: () => number,
-  rollPercent: number = DEFAULT_BALANCE.dynamicTraitRollPercent,
-): { nextMinions: MinionInstance[]; changes: DynamicTraitActivityChange[] } {
-  let working = materializePendingDynamicTraits([
-    ...minions.map((m) => ({ ...m, dynamicTraits: [...m.dynamicTraits] })),
-  ]);
-  const changes: DynamicTraitActivityChange[] = [];
-  const locationId = missionTargetLocationId(missionTarget);
-  if (locationId === null) {
-    return { nextMinions: working, changes };
-  }
-
-  const byId = new Map(working.map((m) => [m.instanceId, m] as const));
-
-  for (const ownerId of participantInstanceIds) {
-    if (!rollHits(rng, rollPercent)) {
-      continue;
-    }
-    const cur = byId.get(ownerId);
-    if (cur === undefined) {
-      continue;
-    }
-    const r = success
-      ? applyHero(cur.dynamicTraits, locationId, cur.templateId, cur.instanceId)
-      : applyWanted(cur.dynamicTraits, locationId, cur.templateId, cur.instanceId);
-    if (r.change !== null) {
-      byId.set(ownerId, { ...cur, dynamicTraits: r.next });
-      changes.push(r.change);
-    }
-  }
-
-  working = working.map((m) => byId.get(m.instanceId) ?? m);
-  return { nextMinions: working, changes };
 }

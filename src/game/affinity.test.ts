@@ -1,21 +1,35 @@
 import { describe, expect, it } from "vitest";
 import {
   affinityDeltaForResolve,
+  applyLocationAffinity,
   applyMissionAffinity,
+  applyTemplateLocationSeeds,
   applyTemplatePairSeeds,
+  findLocationAffinity,
   findPairAffinity,
   formatRelationshipChange,
+  formatStandingChange,
   nextRelationship,
+  nextStanding,
   orderPair,
   pairKey,
   relationshipBetween,
   rollStartingTemplateAffinities,
+  rollStartingTemplateLocationAffinities,
+  setLocationAffinityScore,
+  standingAt,
   seedStartingAffinities,
   setPairAffinityScore,
-  syncMinionPairDynamicTraits,
+  syncMinionDynamicTraits,
 } from "./affinity";
 import { DEFAULT_BALANCE } from "./types";
-import type { MinionAffinityConfig, MinionPairAffinity } from "./types";
+import type {
+  LocationAffinityConfig,
+  MinionAffinityConfig,
+  MinionLocationAffinity,
+  MinionLocationStanding,
+  MinionPairAffinity,
+} from "./types";
 import { fixtureCatalog, makeMinionInstance, seededRng } from "./testFixtures";
 
 const cfg: MinionAffinityConfig = DEFAULT_BALANCE.minionAffinity;
@@ -138,17 +152,15 @@ describe("applyMissionAffinity", () => {
   });
 });
 
-describe("syncMinionPairDynamicTraits", () => {
-  it("projects each band onto both minions and leaves hero/wanted alone", () => {
+describe("syncMinionDynamicTraits", () => {
+  it("projects both tracks onto the minions, standings first", () => {
     const roster = [
-      {
-        ...makeMinionInstance("mi-1", "m-hero", []),
-        dynamicTraits: [{ kind: "hero" as const, locationId: "loc-a" }],
-      },
+      makeMinionInstance("mi-1", "m-hero", []),
       makeMinionInstance("mi-2", "m-buddy", []),
     ];
     const affinities = setPairAffinityScore([], "mi-1", "mi-2", 7, cfg);
-    const synced = syncMinionPairDynamicTraits(roster, affinities);
+    const standings = setLocationAffinityScore([], "mi-1", "loc-a", 3);
+    const synced = syncMinionDynamicTraits(roster, affinities, standings);
     expect(synced[0]!.dynamicTraits).toEqual([
       { kind: "hero", locationId: "loc-a" },
       { kind: "ally", targetMinionInstanceId: "mi-2" },
@@ -161,9 +173,9 @@ describe("syncMinionPairDynamicTraits", () => {
   it("emits nothing for a neutral pair and drops bonds to minions off the roster", () => {
     const roster = [makeMinionInstance("mi-1", "m-hero", [])];
     const affinities = setPairAffinityScore([], "mi-1", "mi-gone", 7, cfg);
-    expect(syncMinionPairDynamicTraits(roster, affinities)[0]!.dynamicTraits).toEqual([]);
+    expect(syncMinionDynamicTraits(roster, affinities)[0]!.dynamicTraits).toEqual([]);
     const neutral = setPairAffinityScore([], "mi-1", "mi-2", 1, cfg);
-    expect(syncMinionPairDynamicTraits(roster, neutral)[0]!.dynamicTraits).toEqual([]);
+    expect(syncMinionDynamicTraits(roster, neutral)[0]!.dynamicTraits).toEqual([]);
   });
 
   it("replaces a stale projection rather than stacking onto it", () => {
@@ -172,9 +184,9 @@ describe("syncMinionPairDynamicTraits", () => {
       makeMinionInstance("mi-2", "m-buddy", []),
     ];
     const friends = setPairAffinityScore([], "mi-1", "mi-2", 3, cfg);
-    const once = syncMinionPairDynamicTraits(roster, friends);
+    const once = syncMinionDynamicTraits(roster, friends);
     const allies = setPairAffinityScore(friends, "mi-1", "mi-2", 7, cfg);
-    const twice = syncMinionPairDynamicTraits(once, allies);
+    const twice = syncMinionDynamicTraits(once, allies);
     expect(twice[0]!.dynamicTraits).toEqual([{ kind: "ally", targetMinionInstanceId: "mi-2" }]);
   });
 });
@@ -328,5 +340,182 @@ describe("applyTemplatePairSeeds", () => {
       makeMinionInstance("mi-2", "m-buddy", []),
     ];
     expect(applyTemplatePairSeeds([], both, [], cfg)).toEqual([]);
+  });
+});
+
+const locCfg: LocationAffinityConfig = DEFAULT_BALANCE.locationAffinity;
+
+describe("nextStanding", () => {
+  it("crosses into Hero and Wanted at the thresholds", () => {
+    expect(nextStanding(2, "neutral", locCfg)).toBe("neutral");
+    expect(nextStanding(3, "neutral", locCfg)).toBe("hero");
+    expect(nextStanding(-2, "neutral", locCfg)).toBe("neutral");
+    expect(nextStanding(-3, "neutral", locCfg)).toBe("wanted");
+  });
+
+  it("holds a standing until the score falls a full hysteresis back", () => {
+    expect(nextStanding(1, "hero", locCfg)).toBe("hero");
+    expect(nextStanding(0, "hero", locCfg)).toBe("neutral");
+    expect(nextStanding(-1, "wanted", locCfg)).toBe("wanted");
+    expect(nextStanding(0, "wanted", locCfg)).toBe("neutral");
+  });
+
+  it("does not flip-flop when the score oscillates across a threshold", () => {
+    let st = nextStanding(3, "neutral", locCfg);
+    expect(st).toBe("hero");
+    for (const score of [2, 3, 2, 3, 2]) {
+      st = nextStanding(score, st, locCfg);
+      expect(st).toBe("hero");
+    }
+  });
+
+  it("flips straight from Hero to Wanted when a score swings far enough", () => {
+    expect(nextStanding(-3, "hero", locCfg)).toBe("wanted");
+  });
+});
+
+describe("applyLocationAffinity", () => {
+  it("moves every participant's own score at the mission's site", () => {
+    const r = applyLocationAffinity([], ["a", "b"], "loc-a", 1, locCfg);
+    expect(r.next).toEqual([
+      { minionInstanceId: "a", locationId: "loc-a", score: 1, standing: "neutral" },
+      { minionInstanceId: "b", locationId: "loc-a", score: 1, standing: "neutral" },
+    ]);
+    expect(r.changes).toEqual([]);
+  });
+
+  it("changes nothing for a mission with no site", () => {
+    expect(applyLocationAffinity([], ["a"], null, 1, locCfg)).toEqual({ next: [], changes: [] });
+  });
+
+  it("keeps each location's score separate for the same minion", () => {
+    let affinities = applyLocationAffinity([], ["a"], "loc-a", 1, locCfg).next;
+    affinities = applyLocationAffinity(affinities, ["a"], "loc-b", -1, locCfg).next;
+    expect(findLocationAffinity(affinities, "a", "loc-a")?.score).toBe(1);
+    expect(findLocationAffinity(affinities, "a", "loc-b")?.score).toBe(-1);
+  });
+
+  it("reports the crossing only on the resolve that reaches it", () => {
+    let affinities: MinionLocationAffinity[] = [];
+    const seen: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const r = applyLocationAffinity(affinities, ["a"], "loc-a", 1, locCfg);
+      affinities = r.next;
+      seen.push(...r.changes.map((c) => `${c.from}->${c.to}`));
+    }
+    expect(standingAt(affinities, "a", "loc-a")).toBe("hero");
+    expect(seen).toEqual(["neutral->hero"]);
+  });
+
+  it("carries a minion from Hero to Wanted through a run of failures at that site", () => {
+    let affinities = applyLocationAffinity([], ["a"], "loc-a", 3, locCfg).next;
+    expect(standingAt(affinities, "a", "loc-a")).toBe("hero");
+    const seen: string[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      const r = applyLocationAffinity(affinities, ["a"], "loc-a", -1, locCfg);
+      affinities = r.next;
+      seen.push(...r.changes.map((c) => c.to));
+    }
+    expect(findLocationAffinity(affinities, "a", "loc-a")?.score).toBe(-3);
+    expect(seen).toEqual(["neutral", "wanted"]);
+  });
+});
+
+describe("rollStartingTemplateLocationAffinities", () => {
+  const templateIds = ["t1", "t2", "t3"];
+  const locationIds = ["l1", "l2", "l3", "l4"]; /* 12 slots */
+
+  function roll(seed = 1) {
+    return rollStartingTemplateLocationAffinities(
+      templateIds,
+      locationIds,
+      seededRng(seed),
+      locCfg,
+    );
+  }
+
+  it("opens exactly one Hero slot and one Wanted slot", () => {
+    for (let seed = 1; seed <= 25; seed += 1) {
+      const seeded = roll(seed);
+      const heroes = seeded.filter((x) => x.score >= locCfg.heroThreshold);
+      const wanted = seeded.filter((x) => x.score <= locCfg.wantedThreshold);
+      expect(heroes).toHaveLength(1);
+      expect(wanted).toHaveLength(1);
+      expect(nextStanding(heroes[0]!.score, "neutral", locCfg)).toBe("hero");
+      expect(nextStanding(wanted[0]!.score, "neutral", locCfg)).toBe("wanted");
+    }
+  });
+
+  it("leans half the remaining slots without crossing a threshold", () => {
+    const seeded = roll();
+    const lean = seeded.filter(
+      (x) => x.score > locCfg.wantedThreshold && x.score < locCfg.heroThreshold,
+    );
+    /* 12 slots minus the two strong ones = 10 remaining, half rounded down. */
+    expect(lean).toHaveLength(5);
+    expect(seeded).toHaveLength(7);
+    for (const x of lean) {
+      expect(x.score).not.toBe(0);
+      expect(nextStanding(x.score, "neutral", locCfg)).toBe("neutral");
+    }
+  });
+
+  it("never seeds the same slot twice and is deterministic per seed", () => {
+    const seeded = roll(6);
+    const keys = seeded.map((x) => `${x.minionTemplateId}@${x.locationId}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(roll(6)).toEqual(seeded);
+    expect(roll(7)).not.toEqual(seeded);
+  });
+
+  it("degrades quietly with nothing to pair up", () => {
+    expect(rollStartingTemplateLocationAffinities([], ["l1"], seededRng(1), locCfg)).toEqual([]);
+    expect(rollStartingTemplateLocationAffinities(["t1"], [], seededRng(1), locCfg)).toEqual([]);
+  });
+});
+
+describe("applyTemplateLocationSeeds", () => {
+  const seeds = [{ minionTemplateId: "m-hero", locationId: "loc-a", score: 3 }];
+
+  it("lands on the minion as soon as they are hired — no second party needed", () => {
+    const roster = [makeMinionInstance("mi-1", "m-hero", [])];
+    expect(applyTemplateLocationSeeds([], roster, seeds, locCfg)).toEqual([
+      { minionInstanceId: "mi-1", locationId: "loc-a", score: 3, standing: "hero" },
+    ]);
+  });
+
+  it("leaves a site the minion already has history at alone", () => {
+    const roster = [makeMinionInstance("mi-1", "m-hero", [])];
+    const earned = setLocationAffinityScore([], "mi-1", "loc-a", -1, locCfg);
+    expect(applyTemplateLocationSeeds(earned, roster, seeds, locCfg)).toEqual(earned);
+  });
+
+  it("ignores minions of other templates", () => {
+    const roster = [makeMinionInstance("mi-2", "m-buddy", [])];
+    expect(applyTemplateLocationSeeds([], roster, seeds, locCfg)).toEqual([]);
+  });
+});
+
+describe("formatStandingChange", () => {
+  const standingCatalog = fixtureCatalog();
+  const standingRoster = [makeMinionInstance("mi-1", "m-hero", [])];
+  const locName =
+    standingCatalog.locations.find((l) => l.id === "loc-a")?.name ?? "loc-a";
+  const line = (from: MinionLocationStanding, to: MinionLocationStanding) =>
+    formatStandingChange(standingCatalog, standingRoster, {
+      minionInstanceId: "mi-1",
+      locationId: "loc-a",
+      from,
+      to,
+    });
+
+  it("names the minion, the site, and the standing", () => {
+    expect(line("neutral", "hero")).toBe(`Operative became a Hero of ${locName}.`);
+    expect(line("neutral", "wanted")).toBe(`Operative became Wanted in ${locName}.`);
+  });
+
+  it("says which standing was lost when it lapses", () => {
+    expect(line("hero", "neutral")).toBe(`Operative is no longer a Hero of ${locName}.`);
+    expect(line("wanted", "neutral")).toBe(`Operative is no longer Wanted in ${locName}.`);
   });
 });

@@ -1,5 +1,9 @@
 import { DEFAULT_BALANCE } from "../../game/types";
-import type { DynamicTraitModifiers, MinionAffinityConfig } from "../../game/types";
+import type {
+  DynamicTraitModifiers,
+  LocationAffinityConfig,
+  MinionAffinityConfig,
+} from "../../game/types";
 import type { FormCtx } from "./context";
 import {
   el,
@@ -14,7 +18,10 @@ import {
 
 type ScalarKey = Exclude<
   keyof typeof DEFAULT_BALANCE,
-  "dynamicTraitModifiers" | "hireLevelInfamyThresholds" | "minionAffinity"
+  | "dynamicTraitModifiers"
+  | "hireLevelInfamyThresholds"
+  | "minionAffinity"
+  | "locationAffinity"
 >;
 
 type BalanceFieldDef = {
@@ -53,14 +60,6 @@ const GROUPS: BalanceGroup[] = [
         label: "Per-agent penalty %",
         tooltip:
           "Each enemy agent at the mission's target location subtracts this % from success chance — including HIDDEN agents the player can't see yet. Raise it to make agent-occupied sites genuinely scary.",
-        min: 0,
-        max: 100,
-      },
-      {
-        key: "dynamicTraitRollPercent",
-        label: "Hero / Wanted roll %",
-        tooltip:
-          "After every resolved mission at a site, each participant has this % chance to become a Hero there (success) or Wanted there (failure). Minion-to-minion relationships are NOT rolled — they run off the affinity track below.",
         min: 0,
         max: 100,
       },
@@ -550,6 +549,118 @@ function minionAffinityBlock(ctx: FormCtx): HTMLElement {
   return wrap;
 }
 
+
+/* ---------- Minion-location affinity (nested object) ---------- */
+
+type LocationAffinityKey = keyof LocationAffinityConfig;
+
+const LOCATION_AFFINITY_FIELDS: { key: LocationAffinityKey; label: string; tooltip: string; min: number; max: number }[] = [
+  {
+    key: "heroThreshold",
+    label: "Hero at",
+    tooltip:
+      "Standing at which a minion becomes a Hero of that location (worth the Hero success bonus there). With +1 per success, 3 means three clean jobs at the same site.",
+    min: 1,
+    max: 100,
+  },
+  {
+    key: "wantedThreshold",
+    label: "Wanted at",
+    tooltip:
+      "Standing (negative) at which a minion becomes Wanted at that location, taking the Wanted penalty on every future job there.",
+    min: -100,
+    max: -1,
+  },
+  {
+    key: "hysteresis",
+    label: "Hysteresis",
+    tooltip:
+      "How far back past a threshold the standing must fall before the minion gives it up. 0 lets a minion parked on a threshold flip every turn; 2 means a Hero earned at +3 only lapses at +0.",
+    min: 0,
+    max: 100,
+  },
+  {
+    key: "missionSuccess",
+    label: "Mission success",
+    tooltip:
+      "Standing each participant gains at the mission's location when it succeeds. Missions with no site (minion / none targets) change nothing.",
+    min: -100,
+    max: 100,
+  },
+  {
+    key: "missionFailure",
+    label: "Mission failure",
+    tooltip:
+      "Standing each participant loses at the mission's location when it fails (negative). This is the road to Wanted.",
+    min: -100,
+    max: 100,
+  },
+];
+
+function locationAffinityRow(ctx: FormCtx): Row {
+  const cur = ctx.row.locationAffinity;
+  return cur !== null && typeof cur === "object" && !Array.isArray(cur) ? (cur as Row) : {};
+}
+
+function locationAffinityValue(ctx: FormCtx, key: LocationAffinityKey): number {
+  return num(locationAffinityRow(ctx), key, DEFAULT_BALANCE.locationAffinity[key]);
+}
+
+/** Live picture of the Hero / Wanted track, including where each standing lapses. */
+function locationTrackStrip(ctx: FormCtx): HTMLElement {
+  const hero = locationAffinityValue(ctx, "heroThreshold");
+  const wanted = locationAffinityValue(ctx, "wantedThreshold");
+  const h = locationAffinityValue(ctx, "hysteresis");
+  const strip = el("div", "ed-preview-result");
+  strip.textContent =
+    `every minion starts at 0 at every site · Neutral\n` +
+    `  ${hero}  → Hero        (lapses back to Neutral below ${hero - h})\n` +
+    ` ${wanted}  → Wanted      (lapses back to Neutral above ${wanted + h})`;
+  return strip;
+}
+
+function locationAffinityBlock(ctx: FormCtx): HTMLElement {
+  const wrap = el("div");
+  const render = (): void => {
+    wrap.innerHTML = "";
+    const rows: HTMLElement[] = [];
+    for (const def of LOCATION_AFFINITY_FIELDS) {
+      const input = numberInput(
+        locationAffinityValue(ctx, def.key),
+        (v) => {
+          ctx.update((row) => {
+            const cur = row.locationAffinity;
+            const next: Row =
+              cur !== null && typeof cur === "object" && !Array.isArray(cur)
+                ? { ...(cur as Row) }
+                : { ...DEFAULT_BALANCE.locationAffinity };
+            next[def.key] = v;
+            row.locationAffinity = next;
+          });
+          render();
+        },
+        { min: def.min, max: def.max },
+      );
+      input.title = def.tooltip;
+      const frow = formRow(def.label, input, hint(def.tooltip));
+      frow.title = def.tooltip;
+      rows.push(frow);
+    }
+    wrap.appendChild(
+      fieldset(
+        "Hero / Wanted standing (hidden score → location trait)",
+        hint(
+          "Every minion carries one hidden score per location, starting at 0 and moved by missions there. The score is never shown to the player — only the Hero or Wanted trait it produces. Nothing is rolled.",
+        ),
+        ...rows,
+        locationTrackStrip(ctx),
+      ),
+    );
+  };
+  render();
+  return wrap;
+}
+
 /** Single-object form for `content/balance.json` (no entity list, no id). */
 export function renderBalanceForm(container: HTMLElement, ctx: FormCtx): void {
   container.appendChild(
@@ -615,4 +726,5 @@ export function renderBalanceForm(container: HTMLElement, ctx: FormCtx): void {
   );
 
   container.appendChild(minionAffinityBlock(ctx));
+  container.appendChild(locationAffinityBlock(ctx));
 }

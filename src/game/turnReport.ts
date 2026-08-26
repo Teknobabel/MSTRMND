@@ -16,14 +16,17 @@
 import type { ActivityEvent, GameOverReason, GameState, RunEnding } from "./gameState";
 import type {
   ContentCatalog,
-  DynamicTraitActivityChange,
   LocationAssetSlot,
   MissionSource,
   MissionTarget,
 } from "./types";
 import { isOccupiedAssetSlot } from "./types";
-import { formatDynamicTraitActivityChange, isPositiveDynamicTraitKind } from "./dynamicTrait";
-import { formatRelationshipChange, relationshipChangeIsPositive } from "./affinity";
+import {
+  formatRelationshipChange,
+  formatStandingChange,
+  relationshipChangeIsPositive,
+  standingChangeIsPositive,
+} from "./affinity";
 import {
   getOmegaPlanById,
   omegaPlanRequiredMissionTotal,
@@ -240,23 +243,20 @@ function missionOutcomeGroups(
       tone: "good",
     });
   }
-  for (const change of ev.dynamicTraitChanges ?? []) {
-    crew.push({
-      text: formatDynamicTraitActivityChange(catalog, after.player.minions, change),
-      tone: dynamicTraitChangeTone(change),
-    });
-  }
-  /* Relationship moves earn their own group: they are the fallout players most want to spot,
-   * and burying them under level-ups makes them easy to miss. */
   groups.push(group("Minions", crew));
+  /* Relationship and standing moves earn their own group: they are the fallout players most
+   * want to spot, and burying them under level-ups makes them easy to miss. */
   groups.push(
-    group(
-      "Relationships",
-      (ev.relationshipChanges ?? []).map((change) => ({
+    group("Relationships", [
+      ...(ev.relationshipChanges ?? []).map((change) => ({
         text: formatRelationshipChange(catalog, after.player.minions, change),
         tone: relationshipChangeIsPositive(change) ? ("good" as const) : ("bad" as const),
       })),
-    ),
+      ...(ev.standingChanges ?? []).map((change) => ({
+        text: formatStandingChange(catalog, after.player.minions, change),
+        tone: standingChangeIsPositive(change) ? ("good" as const) : ("bad" as const),
+      })),
+    ]),
   );
 
   const fallout: TurnReportLine[] = [];
@@ -280,10 +280,6 @@ function missionOutcomeGroups(
   groups.push(group("Fallout", fallout));
 
   return groups.filter((g): g is MissionOutcomeGroup => g !== null);
-}
-
-function dynamicTraitChangeTone(change: DynamicTraitActivityChange): TurnReportTone {
-  return isPositiveDynamicTraitKind(change.kind) ? "good" : "bad";
 }
 
 function buildMissionReports(
@@ -531,16 +527,16 @@ function rosterSection(
     if (ev.kind !== "mission_completed") {
       continue;
     }
-    for (const change of ev.dynamicTraitChanges ?? []) {
-      lines.push({
-        text: formatDynamicTraitActivityChange(catalog, after.player.minions, change),
-        tone: dynamicTraitChangeTone(change),
-      });
-    }
     for (const change of ev.relationshipChanges ?? []) {
       lines.push({
         text: formatRelationshipChange(catalog, after.player.minions, change),
         tone: relationshipChangeIsPositive(change) ? "good" : "bad",
+      });
+    }
+    for (const change of ev.standingChanges ?? []) {
+      lines.push({
+        text: formatStandingChange(catalog, after.player.minions, change),
+        tone: standingChangeIsPositive(change) ? "good" : "bad",
       });
     }
   }
