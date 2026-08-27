@@ -66,19 +66,42 @@ describe("successChancePercent", () => {
     expect(successChancePercent(t, [p], { traitsCatalog })).toBe(90);
   });
 
-  it("applies dynamic, event, and opposing-agent modifiers then clamps to [0, 100]", () => {
+  it("applies dynamic, event, and challenge-trait modifiers then clamps to [0, 100]", () => {
     const t = template({ requiredTraitIds: ["t-a"] });
     const p = makeMinionInstance("i1", "m1", ["t-a"]);
     expect(
       successChancePercent(t, [p], {
         dynamicTraitDelta: 10,
         eventSuccessModifierDelta: 15,
-        opposingAgentPenaltyCount: 1,
+        challengeTraitIds: ["t-x"],
       }),
     ).toBe(100); /* 100 + 10 + 15 − 20 = 105 → clamp 100 */
     expect(
-      successChancePercent(t, [p], { opposingAgentPenaltyCount: 6 }),
+      successChancePercent(t, [p], {
+        challengeTraitIds: ["t-x", "t-y", "t-z", "t-w", "t-v", "t-u"],
+      }),
     ).toBe(0); /* 100 − 120 → clamp 0 */
+  });
+
+  it("charges each challenge trait once and never for one a participant holds", () => {
+    const t = template({ requiredTraitIds: ["t-a"] });
+    const p = makeMinionInstance("i1", "m1", ["t-a", "t-x"]);
+    /* Duplicates collapse: two agents bringing the same challenge cost one penalty. */
+    expect(
+      successChancePercent(t, [p], { challengeTraitIds: ["t-y", "t-y"] }),
+    ).toBe(80);
+    /* Held by a participant → no penalty, and no base-chance credit either. */
+    expect(successChancePercent(t, [p], { challengeTraitIds: ["t-x"] })).toBe(100);
+  });
+
+  it("keeps challenge traits out of the required-trait ratio", () => {
+    const t = template({ requiredTraitIds: ["t-a", "t-b"] });
+    const p = makeMinionInstance("i1", "m1", ["t-a", "t-x"]);
+    const b = computeSuccessChanceBreakdown(t, [p], { challengeTraitIds: ["t-x"] });
+    expect(b.requiredTraitCount).toBe(2);
+    expect(b.matchedTraits).toBe(1);
+    expect(b.basePercent).toBe(50);
+    expect(b.challengeTraitPenaltyTotal).toBe(0);
   });
 
   it("exposes the same numbers in the breakdown used by the UI tooltip", () => {
@@ -86,13 +109,15 @@ describe("successChancePercent", () => {
     const p = makeMinionInstance("i1", "m1", ["t-a", "t-neg"]);
     const b = computeSuccessChanceBreakdown(t, [p], {
       traitsCatalog,
-      opposingAgentPenaltyCount: 1,
+      challengeTraitIds: ["t-chal"],
     });
     expect(b.basePercent).toBe(50);
     expect(b.matchedTraits).toBe(1);
     expect(b.missingTraitIds).toEqual(["t-b"]);
     expect(b.statusDelta).toBe(-20);
-    expect(b.opposingAgentPenaltyTotal).toBe(20);
+    expect(b.challengeTraitIds).toEqual(["t-chal"]);
+    expect(b.unmatchedChallengeTraitIds).toEqual(["t-chal"]);
+    expect(b.challengeTraitPenaltyTotal).toBe(20);
     expect(b.preClampPercent).toBe(10);
     expect(b.finalPercent).toBe(10);
   });

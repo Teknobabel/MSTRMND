@@ -5,6 +5,7 @@ import type {
   PlayerState,
   Rng,
 } from "./gameState";
+import { guardAgentByLocationId, nextSecurityLevel } from "./agentAbility";
 import { maxSecurityLevelForLocation } from "./locationCatalog";
 import {
   applyIntelLevelDelta,
@@ -15,6 +16,7 @@ import {
   intelLevelForLocation,
 } from "./intel";
 import type {
+  AgentInstance,
   ContentCatalog,
   LocationAssetPlacement,
   LocationAssetSlot,
@@ -188,6 +190,8 @@ function applySecurityLevelDelta(
   states: LocationSecurityState[],
   target: MissionTarget,
   delta: number,
+  guarded: ReadonlyMap<string, AgentInstance>,
+  blocked: string[],
 ): LocationSecurityState[] {
   const locationId = missionTargetLocationId(target);
   if (locationId === null) {
@@ -198,8 +202,14 @@ function applySecurityLevelDelta(
     if (s.locationId !== locationId) {
       return s;
     }
-    const next = Math.max(0, Math.min(cap, s.securityLevel + delta));
-    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
+    const isGuarded = guarded.has(s.locationId);
+    if (isGuarded && delta < 0) {
+      blocked.push(s.locationId);
+    }
+    return {
+      ...s,
+      securityLevel: nextSecurityLevel(s.securityLevel, delta, cap, isGuarded),
+    };
   });
 }
 
@@ -207,11 +217,19 @@ function applySecurityLevelDeltaGlobal(
   catalog: ContentCatalog,
   states: LocationSecurityState[],
   delta: number,
+  guarded: ReadonlyMap<string, AgentInstance>,
+  blocked: string[],
 ): LocationSecurityState[] {
   return states.map((s) => {
     const cap = maxSecurityLevelForLocation(catalog, s.locationId);
-    const next = Math.max(0, Math.min(cap, s.securityLevel + delta));
-    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
+    const isGuarded = guarded.has(s.locationId);
+    if (isGuarded && delta < 0) {
+      blocked.push(s.locationId);
+    }
+    return {
+      ...s,
+      securityLevel: nextSecurityLevel(s.securityLevel, delta, cap, isGuarded),
+    };
   });
 }
 
@@ -220,6 +238,8 @@ function applySecurityLevelDeltaByLocationType(
   states: LocationSecurityState[],
   delta: number,
   locationType: LocationType,
+  guarded: ReadonlyMap<string, AgentInstance>,
+  blocked: string[],
 ): LocationSecurityState[] {
   const typeById = new Map(catalog.locations.map((l) => [l.id, l.locationType] as const));
   return states.map((s) => {
@@ -227,8 +247,14 @@ function applySecurityLevelDeltaByLocationType(
       return s;
     }
     const cap = maxSecurityLevelForLocation(catalog, s.locationId);
-    const next = Math.max(0, Math.min(cap, s.securityLevel + delta));
-    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
+    const isGuarded = guarded.has(s.locationId);
+    if (isGuarded && delta < 0) {
+      blocked.push(s.locationId);
+    }
+    return {
+      ...s,
+      securityLevel: nextSecurityLevel(s.securityLevel, delta, cap, isGuarded),
+    };
   });
 }
 
@@ -237,6 +263,8 @@ function applySecurityLevelDeltaByLocationLevel(
   states: LocationSecurityState[],
   delta: number,
   locationLevel: 1 | 2 | 3,
+  guarded: ReadonlyMap<string, AgentInstance>,
+  blocked: string[],
 ): LocationSecurityState[] {
   const levelById = new Map(catalog.locations.map((l) => [l.id, l.locationLevel] as const));
   return states.map((s) => {
@@ -244,8 +272,14 @@ function applySecurityLevelDeltaByLocationLevel(
       return s;
     }
     const cap = maxSecurityLevelForLocation(catalog, s.locationId);
-    const next = Math.max(0, Math.min(cap, s.securityLevel + delta));
-    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
+    const isGuarded = guarded.has(s.locationId);
+    if (isGuarded && delta < 0) {
+      blocked.push(s.locationId);
+    }
+    return {
+      ...s,
+      securityLevel: nextSecurityLevel(s.securityLevel, delta, cap, isGuarded),
+    };
   });
 }
 
@@ -654,48 +688,6 @@ function applyAddAllParticipantTraits(
   return { ...player, minions };
 }
 
-/** After template failure effects; each participant rolls once vs `injuryChancePercent` for `injuredTraitId` (deduped). */
-export function applyCriticalFailureInjuryRolls(
-  player: PlayerState,
-  participantInstanceIds: readonly string[],
-  injuryChancePercent: number,
-  injuredTraitId: string,
-  rng: Rng,
-): { player: PlayerState; newlyInjuredInstanceIds: string[] } {
-  const p = Math.min(100, Math.max(0, injuryChancePercent));
-  if (participantInstanceIds.length === 0 || p <= 0) {
-    return { player, newlyInjuredInstanceIds: [] };
-  }
-
-  const byId = new Map(player.minions.map((m) => [m.instanceId, m] as const));
-  const newlyInjuredInstanceIds: string[] = [];
-
-  for (const iid of participantInstanceIds) {
-    const roll = Math.floor(rng() * 100);
-    if (roll >= p) {
-      continue;
-    }
-    const m = byId.get(iid);
-    if (m === undefined || m.traitIds.includes(injuredTraitId)) {
-      continue;
-    }
-    const next = { ...m, traitIds: [...m.traitIds, injuredTraitId] };
-    byId.set(iid, next);
-    newlyInjuredInstanceIds.push(iid);
-  }
-
-  if (newlyInjuredInstanceIds.length === 0) {
-    return { player, newlyInjuredInstanceIds: [] };
-  }
-  return {
-    player: {
-      ...player,
-      minions: player.minions.map((m) => byId.get(m.instanceId) ?? m),
-    },
-    newlyInjuredInstanceIds,
-  };
-}
-
 function applyStealTargetAsset(
   placements: LocationAssetPlacement[],
   target: MissionTarget,
@@ -787,6 +779,14 @@ export function applyMissionEffects(
 } {
   const target = activeMission.target;
   const ordered = orderedMissionEffects(effects);
+  /* A Guard refuses every security *reduction* at the site it holds, whoever ordered it —
+   * mission effect, event, or scoped sweep. Raising security is never blocked. */
+  const guarded = guardAgentByLocationId(
+    state.opposingAgentInstances,
+    state.locationAgentPresence,
+  );
+  /* Sites where a reduction was refused this pass; one report line each, deduped below. */
+  const guardBlocked: string[] = [];
   let player = { ...state.player };
   let locationAssetSlots = state.locationAssetSlots.map((p) => ({
     ...p,
@@ -859,12 +859,16 @@ export function applyMissionEffects(
         locationSecurityStates,
         target,
         effect.delta,
+        guarded,
+        guardBlocked,
       );
     } else if (effect.kind === "security_level_delta_global") {
       locationSecurityStates = applySecurityLevelDeltaGlobal(
         catalog,
         locationSecurityStates,
         effect.delta,
+        guarded,
+        guardBlocked,
       );
     } else if (effect.kind === "security_level_delta_by_location_type") {
       locationSecurityStates = applySecurityLevelDeltaByLocationType(
@@ -872,6 +876,8 @@ export function applyMissionEffects(
         locationSecurityStates,
         effect.delta,
         effect.locationType,
+        guarded,
+        guardBlocked,
       );
     } else if (effect.kind === "security_level_delta_by_location_level") {
       locationSecurityStates = applySecurityLevelDeltaByLocationLevel(
@@ -879,6 +885,8 @@ export function applyMissionEffects(
         locationSecurityStates,
         effect.delta,
         effect.locationLevel,
+        guarded,
+        guardBlocked,
       );
     } else if (effect.kind === "intel_level_delta") {
       locationIntelStates = applyIntelLevelDelta(
@@ -931,6 +939,21 @@ export function applyMissionEffects(
   }
 
   player = { ...player, infamy: clampInfamy(player.infamy), heat: clampHeat(player.heat) };
+  for (const locationId of new Set(guardBlocked)) {
+    const guard = guarded.get(locationId);
+    if (guard === undefined) {
+      continue;
+    }
+    events.push({
+      kind: "agent_ability_used",
+      agentInstanceId: guard.instanceId,
+      agentTemplateId: guard.templateId,
+      abilityId: "guard",
+      locationId,
+      activeMissionId: activeMission.id,
+    });
+  }
+
   return {
     player,
     locationAssetSlots,

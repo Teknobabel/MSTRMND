@@ -56,10 +56,10 @@ const GROUPS: BalanceGroup[] = [
         max: 100,
       },
       {
-        key: "opposingAgentPenalty",
-        label: "Per-agent penalty %",
+        key: "agentChallengeTraitPenalty",
+        label: "Challenge trait penalty %",
         tooltip:
-          "Each enemy agent at the mission's target location subtracts this % from success chance — including HIDDEN agents the player can't see yet. Raise it to make agent-occupied sites genuinely scary.",
+          "Each DISTINCT challenge trait brought by enemy agents at the mission's target location subtracts this % from success chance unless someone on the crew has the matching trait — including challenge traits from HIDDEN agents the player can't see yet. Two agents with the same challenge trait still cost only once.",
         min: 0,
         max: 100,
       },
@@ -98,14 +98,6 @@ const GROUPS: BalanceGroup[] = [
         tooltip:
           "Heat gained when a mission FAILS. Heat drives the wanted level, so higher values escalate it faster and spawn opposing agents sooner. The wanted level never goes back down.",
         min: -100,
-        max: 100,
-      },
-      {
-        key: "injuryChancePerAgentPercent",
-        label: "Injury chance per agent %",
-        tooltip:
-          "When a mission fails at a location with enemy agents, every participant rolls this % PER AGENT to gain the Injured trait (which then applies the negative status penalty). Higher = failed missions cripple the roster.",
-        min: 0,
         max: 100,
       },
     ],
@@ -340,13 +332,13 @@ function scalar(row: Row, key: ScalarKey): number {
 function formulaStrip(row: Row): HTMLElement {
   const pos = scalar(row, "statusPositiveBonus");
   const neg = scalar(row, "statusNegativePenalty");
-  const agent = scalar(row, "opposingAgentPenalty");
+  const challenge = scalar(row, "agentChallengeTraitPenalty");
   const strip = el("div", "ed-preview-result");
   strip.textContent =
     `success % = base (matched requirements ÷ total)\n` +
     `          + ${pos}% × positive status traits  − ${neg}% × negative status traits\n` +
     `          + relationship bonds + event modifiers\n` +
-    `          − ${agent}% × opposing agents at the target site\n` +
+    `          − ${challenge}% × unmatched agent challenge traits at the site\n` +
     `          → clamped to 0–100`;
   return strip;
 }

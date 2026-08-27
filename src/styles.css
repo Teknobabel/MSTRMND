@@ -2359,6 +2359,21 @@ body {
   background: rgba(10, 4, 5, 0.8);
 }
 
+/* Ability names on an agent chip */
+.location-agent-abilities {
+  margin-left: 0.3rem;
+  font-size: 0.8em;
+  color: var(--warn);
+}
+
+/* Challenge traits the site's visible agents bring to any mission run there */
+.location-agent-challenge-note {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.85em;
+  color: var(--red-bright);
+}
+
 /* Mission outcome hover tooltip */
 .mission-outcome-tooltip-anchor {
   position: relative;

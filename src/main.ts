@@ -5,6 +5,7 @@ import {
   busyInstanceIds,
   cancelMission,
   createInitialGameState,
+  executeAgentPhase,
   executePlan,
   fireMinion,
   getMissionTargetLocationId,
@@ -50,6 +51,7 @@ import { describeMissionTemplateEffects } from "./game/missionEffects";
 import {
   buildRunEndReport,
   buildTurnReport,
+  describeAgentAbilityUse,
   type RunEndReport,
   type MissionResultReport,
   type TurnReport,
@@ -59,12 +61,13 @@ import { loadContent } from "./game/loadContent";
 import {
   locationTemplatesForOmegaPlan,
 } from "./game/locationCatalog";
-import { getAgentTemplateById } from "./game/agent";
+import { challengeTraitIdsForAgents, getAgentTemplateById } from "./game/agent";
+import { agentAbilityDef, agentAbilityName } from "./game/agentAbility";
 import {
   assetSlotKnowledge,
-  countPlayerVisibleOpposingAgentsAtLocation,
   effectiveVisibilityOfSlot,
   intelLevelAtLocation,
+  isOpposingAgentMoveVisibleToPlayer,
   playerVisibleOpposingAgentsAtLocation,
   totalPlayerVisibleOpposingAgents,
   MAX_INTEL_LEVEL,
@@ -1278,10 +1281,21 @@ function initGameController(
         `Timed event modifier: ${formatSignedPercent(breakdown.eventSuccessModifierDelta)}.`,
       );
     }
-    if (breakdown.opposingAgentCount > 0) {
+    if (breakdown.challengeTraitIds.length > 0) {
+      const unmatched = new Set(breakdown.unmatchedChallengeTraitIds);
       lines.push(
-        `Revealed opposing agents at target: ${breakdown.opposingAgentCount} * -${content.balance.opposingAgentPenalty}% = -${breakdown.opposingAgentPenaltyTotal}%.`,
+        `Agent challenge traits at target (from agents you can see): ${breakdown.challengeTraitIds
+          .map(
+            (tid) =>
+              `${traitDisplayNames(content, [tid])}${unmatched.has(tid) ? " (unmatched)" : " (covered)"}`,
+          )
+          .join(", ")}.`,
       );
+      if (breakdown.unmatchedChallengeTraitIds.length > 0) {
+        lines.push(
+          `Unmatched challenge traits: ${breakdown.unmatchedChallengeTraitIds.length} * -${content.balance.agentChallengeTraitPenalty}% = -${breakdown.challengeTraitPenaltyTotal}%.`,
+        );
+      }
     }
     if (breakdown.preClampPercent !== breakdown.finalPercent) {
       lines.push(`Clamped to [0, 100]: shown success chance is ${breakdown.finalPercent}%.`);
@@ -2034,7 +2048,36 @@ function initGameController(
         chip.className = "location-agent-chip";
         chip.appendChild(createCardArtImg(resolveAgentCardArt(template), "card-art--chip"));
         chip.appendChild(document.createTextNode(name));
+        const chipTitle: string[] = [];
+        if (a.challengeTraitIds.length > 0) {
+          chipTitle.push(
+            `Challenge traits: ${traitDisplayNames(content, a.challengeTraitIds)} — each one no participant matches costs -${content.balance.agentChallengeTraitPenalty}% success here.`,
+          );
+        }
+        for (const abilityId of a.abilityIds) {
+          const def = agentAbilityDef(abilityId);
+          if (def !== undefined) {
+            chipTitle.push(`${def.name} (${def.kind}): ${def.description}`);
+          }
+        }
+        if (chipTitle.length > 0) {
+          chip.title = chipTitle.join("\n");
+        }
+        if (a.abilityIds.length > 0) {
+          const abilities = document.createElement("span");
+          abilities.className = "location-agent-abilities";
+          abilities.textContent = a.abilityIds.map((id) => agentAbilityName(id)).join(" · ");
+          chip.appendChild(abilities);
+        }
         dd.appendChild(chip);
+      }
+      const siteChallenges = challengeTraitIdsForAgents(visibleAgents);
+      if (siteChallenges.length > 0) {
+        const note = document.createElement("span");
+        note.className = "location-agent-challenge-note";
+        note.textContent = `Challenge: ${traitDisplayNames(content, siteChallenges)}`;
+        note.title = `Each distinct challenge trait costs -${content.balance.agentChallengeTraitPenalty}% success on missions here unless a participant has the matching trait.`;
+        dd.appendChild(note);
       }
       dl.appendChild(dt);
       dl.appendChild(dd);
@@ -2756,8 +2799,12 @@ function initGameController(
 
     if (mission) {
       const lid = getMissionTargetLocationId(am.target);
-      const opposingAgentPenaltyCount =
-        lid === null ? 0 : countPlayerVisibleOpposingAgentsAtLocation(state, lid);
+      /* Preview only what the player has uncovered: challenge traits from hidden agents stay
+       * out of the shown chance, exactly as the old per-agent penalty did. */
+      const challengeTraitIds =
+        lid === null
+          ? []
+          : challengeTraitIdsForAgents(playerVisibleOpposingAgentsAtLocation(state, lid));
       const dynamicTraitDelta = dynamicTraitSuccessModifierFromFullRoster(
         state.player.minions,
         am.participantInstanceIds,
@@ -2768,7 +2815,7 @@ function initGameController(
         ...missionSuccessOptionsForTarget(state, am.target),
         traitsCatalog: content.traits,
         balance: content.balance,
-        opposingAgentPenaltyCount,
+        challengeTraitIds,
         dynamicTraitDelta,
         eventSuccessModifierDelta: totalEventSuccessModifierDelta(),
         ...(mission.requiredAssetIds.length > 0
@@ -3271,10 +3318,10 @@ function initGameController(
         if (ev.templateEffectDescriptions.length > 0) {
           detailLines.push(ev.templateEffectDescriptions.join("; "));
         }
-        if (ev.criticalFailure) {
-          const n = ev.criticalOpposingAgentCount ?? 0;
+        const unmetChallenges = ev.unmatchedChallengeTraitIds ?? [];
+        if (unmetChallenges.length > 0) {
           detailLines.push(
-            `Critical failure — ${n} opposing agent${n === 1 ? "" : "s"} on site.`,
+            `Unmatched agent challenge traits: ${traitDisplayNames(content, unmetChallenges)}.`,
           );
         }
         rows.push({
@@ -3777,14 +3824,12 @@ function initGameController(
             );
             line += ` ${standingParts.join(" ")}`;
           }
-          if (ev.criticalFailure && ev.criticalInjuryChancePercent !== undefined) {
-            const n = ev.criticalOpposingAgentCount ?? 0;
-            const injuredWho =
-              ev.criticalInjuryInstanceIds !== undefined &&
-              ev.criticalInjuryInstanceIds.length > 0
-                ? participantNames(ev.criticalInjuryInstanceIds)
-                : "none";
-            line += ` Critical failure (${n} opposing agent${n === 1 ? "" : "s"}): ${ev.criticalInjuryChancePercent}% injury chance per participant; injured from critical roll: ${injuredWho}.`;
+          const challengeIds = ev.challengeTraitIds ?? [];
+          if (challengeIds.length > 0) {
+            const unmet = ev.unmatchedChallengeTraitIds ?? [];
+            line += ` Agent challenge traits on site: ${traitDisplayNames(content, challengeIds)}; unmatched: ${
+              unmet.length > 0 ? traitDisplayNames(content, unmet) : "none"
+            }.`;
           }
           return line;
         }
@@ -3845,6 +3890,16 @@ function initGameController(
           }
           return `Event "${n}" expired — ${ev.effectDescriptions.join("; ")}.`;
         }
+        case "agent_ability_used":
+          return describeAgentAbilityUse(content, state, ev);
+        case "agent_moved": {
+          const who = content.agents.find((a) => a.id === ev.agentTemplateId)?.name ?? "An agent";
+          const nameOf = (lid: string): string =>
+            content.locations.find((l) => l.id === lid)?.name ?? lid;
+          const from = nameOf(ev.fromLocationId);
+          const to = nameOf(ev.toLocationId);
+          return `${who} moved from ${from} to ${to}.`;
+        }
         case "run_ended": {
           const ending = ev.ending;
           if (ending.kind === "victory") {
@@ -3891,6 +3946,19 @@ function initGameController(
         ul.appendChild(li);
       } else {
         for (const ev of events) {
+          /* Agent movement is logged for every agent; only the moves the player could watch
+           * belong in the feed (see `isOpposingAgentMoveVisibleToPlayer`). */
+          if (
+            ev.kind === "agent_moved" &&
+            !isOpposingAgentMoveVisibleToPlayer(
+              state,
+              ev.agentInstanceId,
+              ev.fromLocationId,
+              ev.toLocationId,
+            )
+          ) {
+            continue;
+          }
           const li = document.createElement("li");
           li.className = "activity-event";
           li.textContent = formatActivityEvent(ev);
@@ -4637,10 +4705,17 @@ function initGameController(
     if (state.phase !== "main") {
       return;
     }
-    /* The resolve stops in the "summary" phase: the end-of-turn report is shown from here,
-     * and dismissing its Turn Summary is what calls `advanceToNextTurn` (closeTurnReport). */
+    /* Two steps, one click: `executePlan` resolves missions and leaves the turn in the
+     * "agent" phase, then `executeAgentPhase` runs the opposition and lands in "summary" —
+     * where the end-of-turn report is shown, and dismissing its Turn Summary is what calls
+     * `advanceToNextTurn` (closeTurnReport). */
     const before = state;
     if (!dispatch((s) => executePlan(s, content, rng))) {
+      return;
+    }
+    /* A run that ended during resolution skips the Agent Phase: there is no next turn to
+     * shape, and `executeAgentPhase` refuses a finished run anyway. */
+    if (state.runEnding === null && !dispatch((s) => executeAgentPhase(s, content, rng))) {
       return;
     }
     const ending = state.runEnding;

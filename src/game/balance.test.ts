@@ -64,19 +64,19 @@ describe("balance knobs steer the success formula", () => {
     { id: "t-neg", name: "Neg", type: "status_negative" as const },
   ];
 
-  it("uses modified status bonuses/penalties and per-agent penalty", () => {
+  it("uses modified status bonuses/penalties and challenge-trait penalty", () => {
     const p = makeMinionInstance("i1", "m1", ["t-a", "t-pos", "t-neg"]);
     const balance = {
       ...DEFAULT_BALANCE,
       statusPositiveBonus: 30,
       statusNegativePenalty: 5,
-      opposingAgentPenalty: 50,
+      agentChallengeTraitPenalty: 50,
     };
     /* base 100 + 30 − 5 − 50 = 75 (legacy values would give 100 + 10 − 20 − 20 = 70). */
     expect(
       successChancePercent(template, [p], {
         traitsCatalog,
-        opposingAgentPenaltyCount: 1,
+        challengeTraitIds: ["t-chal"],
         balance,
       }),
     ).toBe(75);

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { MissionEffect } from "./types";
-import type { ActiveMission } from "./gameState";
+import type { ActiveMission, GameState } from "./gameState";
 import { createInitialGameState } from "./gameState";
+import { createAgentFromTemplate, getAgentTemplateById } from "./agent";
 import {
-  applyCriticalFailureInjuryRolls,
   applyMissionEffects,
   orderedMissionEffects,
 } from "./missionEffects";
-import { fixtureCatalog, makeMinionInstance, seededRng } from "./testFixtures";
+import { fixtureCatalog, seededRng } from "./testFixtures";
 
 function stubMission(overrides?: Partial<ActiveMission>): ActiveMission {
   return {
@@ -152,40 +152,87 @@ describe("applyMissionEffects", () => {
   });
 });
 
-describe("applyCriticalFailureInjuryRolls", () => {
+describe("Guard passive vs security reductions", () => {
   const catalog = fixtureCatalog();
 
-  it("injures every participant at 100% chance without duplicating the trait", () => {
-    const state = createInitialGameState(catalog, seededRng(1));
-    const player = {
-      ...state.player,
-      minions: [
-        makeMinionInstance("i1", "m-hero", ["t-req"]),
-        makeMinionInstance("i2", "m-buddy", ["injured"]),
+  /** A run with loc-a at security 2 (its cap) and, optionally, a guard standing on it. */
+  function stateWithSecurity(guardAt: string | null): GameState {
+    const base = createInitialGameState(catalog, seededRng(1));
+    const state: GameState = {
+      ...base,
+      locationSecurityStates: [
+        { locationId: "loc-a", securityLevel: 2 },
+        { locationId: "loc-b", securityLevel: 1 },
       ],
     };
-    const result = applyCriticalFailureInjuryRolls(
-      player,
-      ["i1", "i2"],
-      100,
-      "injured",
-      seededRng(3),
-    );
-    expect(result.newlyInjuredInstanceIds).toEqual(["i1"]);
-    const i1 = result.player.minions.find((m) => m.instanceId === "i1");
-    const i2 = result.player.minions.find((m) => m.instanceId === "i2");
-    expect(i1?.traitIds).toContain("injured");
-    expect(i2?.traitIds.filter((t) => t === "injured")).toHaveLength(1);
+    if (guardAt === null) {
+      return state;
+    }
+    const template = getAgentTemplateById(catalog, "a-spy")!;
+    return {
+      ...state,
+      opposingAgentInstances: [
+        {
+          ...createAgentFromTemplate(template, "opp-1", { catalogVisibility: "revealed" }),
+          abilityIds: ["guard"],
+        },
+      ],
+      locationAgentPresence: state.locationAgentPresence.map((row) =>
+        row.locationId === guardAt ? { ...row, agentInstanceIds: ["opp-1"] } : row,
+      ),
+    };
+  }
+
+  function securityAfter(
+    state: GameState,
+    effects: MissionEffect[],
+  ): { levels: Record<string, number>; guardEvents: number } {
+    const applied = applyMissionEffects(state, effects, stubMission(), catalog, seededRng(2));
+    const levels: Record<string, number> = {};
+    for (const s of applied.locationSecurityStates) {
+      levels[s.locationId] = s.securityLevel;
+    }
+    return {
+      levels,
+      guardEvents: applied.events.filter(
+        (e) => e.kind === "agent_ability_used" && e.abilityId === "guard",
+      ).length,
+    };
+  }
+
+  it("refuses a targeted reduction at the guarded site and reports the refusal", () => {
+    const effects: MissionEffect[] = [{ kind: "security_level_delta", delta: -2 }];
+    expect(securityAfter(stateWithSecurity(null), effects).levels["loc-a"]).toBe(0);
+
+    const guarded = securityAfter(stateWithSecurity("loc-a"), effects);
+    expect(guarded.levels["loc-a"]).toBe(2);
+    expect(guarded.guardEvents).toBe(1);
   });
 
-  it("is a no-op at 0% chance", () => {
-    const state = createInitialGameState(catalog, seededRng(1));
-    const player = {
-      ...state.player,
-      minions: [makeMinionInstance("i1", "m-hero", [])],
-    };
-    const result = applyCriticalFailureInjuryRolls(player, ["i1"], 0, "injured", seededRng(3));
-    expect(result.newlyInjuredInstanceIds).toEqual([]);
-    expect(result.player).toBe(player);
+  it("never blocks security rising", () => {
+    /* loc-b is `locationLevel` 1, so it is already capped; loc-a has room to climb. */
+    const raised = securityAfter(stateWithSecurity("loc-a"), [
+      { kind: "security_level_delta_global", delta: 1 },
+    ]);
+    expect(raised.levels["loc-a"]).toBe(2); /* already at its cap of 2 */
+    expect(raised.guardEvents).toBe(0);
+  });
+
+  it("shields only its own site from a global sweep", () => {
+    const swept = securityAfter(stateWithSecurity("loc-a"), [
+      { kind: "security_level_delta_global", delta: -1 },
+    ]);
+    expect(swept.levels["loc-a"]).toBe(2);
+    expect(swept.levels["loc-b"]).toBe(0);
+    expect(swept.guardEvents).toBe(1);
+  });
+
+  it("covers scoped sweeps too", () => {
+    /* loc-a is the economic site in the fixture map. */
+    const scoped = securityAfter(stateWithSecurity("loc-a"), [
+      { kind: "security_level_delta_by_location_type", delta: -1, locationType: "economic" },
+    ]);
+    expect(scoped.levels["loc-a"]).toBe(2);
+    expect(scoped.guardEvents).toBe(1);
   });
 });

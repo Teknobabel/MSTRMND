@@ -15,11 +15,17 @@
  */
 import type { ActivityEvent, GameOverReason, GameState, RunEnding } from "./gameState";
 import type {
+  AgentMovementBehavior,
   ContentCatalog,
   LocationAssetSlot,
   MissionSource,
   MissionTarget,
 } from "./types";
+import {
+  intelLevelForLocation,
+  isOpposingAgentMoveVisibleToPlayer,
+  isOpposingAgentVisibleToPlayer,
+} from "./intel";
 import { isOccupiedAssetSlot } from "./types";
 import {
   formatRelationshipChange,
@@ -259,23 +265,30 @@ function missionOutcomeGroups(
     ]),
   );
 
+  /* The site's agents are named here by the challenge they posed, not by identity — an
+   * unrevealed agent still gets to bite, and the crew felt it either way. */
   const fallout: TurnReportLine[] = [];
-  if (ev.criticalFailure && ev.criticalInjuryChancePercent !== undefined) {
-    const agents = ev.criticalOpposingAgentCount ?? 0;
-    fallout.push({
-      text: `Critical failure: ${agents} opposing agent${
-        agents === 1 ? "" : "s"
-      } on site, ${ev.criticalInjuryChancePercent}% injury chance per participant.`,
-      tone: "bad",
-    });
-    const injured = ev.criticalInjuryInstanceIds ?? [];
-    if (injured.length === 0) {
-      fallout.push({ text: "Everyone got out uninjured.", tone: "good" });
-    } else {
-      for (const iid of injured) {
-        fallout.push({ text: `${minionName(catalog, after, iid)} was injured.`, tone: "bad" });
-      }
+  /* Passive abilities that fired on this mission (Brawler, Investigator, a Guard refusing a
+   * reduction) ride in tagged with this mission's id. */
+  for (const own of ownEvents) {
+    if (own.kind === "agent_ability_used") {
+      fallout.push({ text: describeAgentAbilityUse(catalog, after, own), tone: "bad" });
     }
+  }
+  const challenges = ev.challengeTraitIds ?? [];
+  const unmatched = new Set(ev.unmatchedChallengeTraitIds ?? []);
+  for (const tid of challenges) {
+    fallout.push(
+      unmatched.has(tid)
+        ? {
+            text: `Opposition challenge ${traitName(catalog, tid)}: nobody on the crew could answer it.`,
+            tone: "bad",
+          }
+        : {
+            text: `Opposition challenge ${traitName(catalog, tid)}: the crew covered it.`,
+            tone: "good",
+          },
+    );
   }
   groups.push(group("Fallout", fallout));
 
@@ -298,7 +311,8 @@ function buildMissionReports(
       (e) =>
         (e.kind === "asset_gained" ||
           e.kind === "asset_lost" ||
-          e.kind === "minion_leveled_up") &&
+          e.kind === "minion_leveled_up" ||
+          e.kind === "agent_ability_used") &&
         e.activeMissionId === ev.activeMissionId,
     );
     const base = {
@@ -565,6 +579,110 @@ function assetsSection(
   return section("assets", "Assets", lines);
 }
 
+/** Why an agent went where it went, in the report's voice rather than the enum's. */
+const MOVEMENT_REASONS: Record<AgentMovementBehavior, string> = {
+  defender: "closing on the gear your Omega phase needs",
+  investigator: "working the scene of your last failure",
+  hunter: "shadowing one of your minions on the job",
+  analyst: "drawn to the site you know best",
+  asset_protector: "covering assets left in the open",
+  opportunist: "picking the softest site on the map",
+};
+
+/**
+ * How an agent is named in a report line. An agent the player cannot see stays anonymous — the
+ * *effect* is visible (their security jumped, their intel dropped), but the name behind it is
+ * not, so the line reads "An unknown agent …".
+ */
+export function agentReportName(
+  catalog: ContentCatalog,
+  state: GameState,
+  agentInstanceId: string,
+  locationId: string,
+): string {
+  const agent = state.opposingAgentInstances.find((a) => a.instanceId === agentInstanceId);
+  if (
+    agent === undefined ||
+    !isOpposingAgentVisibleToPlayer(agent, intelLevelForLocation(state.locationIntelStates, locationId))
+  ) {
+    return "An unknown agent";
+  }
+  return agentName(catalog, state, agentInstanceId);
+}
+
+/**
+ * One report line for an `agent_ability_used` row, with the agent redacted when the player
+ * cannot see who did it. Shared with the Activity panel in `main.ts` so both read alike.
+ */
+export function describeAgentAbilityUse(
+  catalog: ContentCatalog,
+  state: GameState,
+  ev: Extract<ActivityEvent, { kind: "agent_ability_used" }>,
+): string {
+  const who = agentReportName(catalog, state, ev.agentInstanceId, ev.locationId);
+  const where = locationName(catalog, ev.locationId);
+  switch (ev.abilityId) {
+    case "brawler":
+      return `${who} put the crew in the hospital at ${where}.`;
+    case "investigator":
+      return `${who} worked the failure at ${where} into extra heat.`;
+    case "guard":
+      return `${who} held the security line at ${where} — it could not be reduced.`;
+    case "security_chief":
+      return `${who} raised the security level at ${where}.`;
+    case "counterintelligence":
+      return `${who} burned your intel at ${where}.`;
+    case "asset_protection":
+      return ev.assetId !== undefined
+        ? `${who} moved ${assetName(catalog, ev.assetId)} back out of sight at ${where}.`
+        : `${who} moved an asset back out of sight at ${where}.`;
+    default:
+      return `${who} acted at ${where}.`;
+  }
+}
+
+/**
+ * The Agent Phase, from the player's side of the glass. Ability uses come first (they are the
+ * turn's actions), then the moves the player could actually watch — a hidden agent crossing the
+ * map in the dark stays out of it entirely, while one whose *effect* landed is reported
+ * anonymously rather than dropped.
+ */
+function agentsSection(
+  catalog: ContentCatalog,
+  after: GameState,
+  events: readonly ActivityEvent[],
+): TurnSummarySection | null {
+  const lines: TurnReportLine[] = [];
+  for (const ev of events) {
+    if (ev.kind === "agent_ability_used") {
+      lines.push({ text: describeAgentAbilityUse(catalog, after, ev), tone: "bad" });
+    }
+  }
+  for (const ev of events) {
+    if (ev.kind !== "agent_moved") {
+      continue;
+    }
+    if (
+      !isOpposingAgentMoveVisibleToPlayer(
+        after,
+        ev.agentInstanceId,
+        ev.fromLocationId,
+        ev.toLocationId,
+      )
+    ) {
+      continue;
+    }
+    lines.push({
+      text: `${agentName(catalog, after, ev.agentInstanceId)} moved from ${locationName(
+        catalog,
+        ev.fromLocationId,
+      )} to ${locationName(catalog, ev.toLocationId)} — ${MOVEMENT_REASONS[ev.behavior]}.`,
+      tone: "bad",
+    });
+  }
+  return section("agents", "Agents", lines);
+}
+
 function sitesSection(
   catalog: ContentCatalog,
   before: GameState,
@@ -793,6 +911,7 @@ export function buildTurnReport(
     rosterSection(catalog, before, after, events),
     assetsSection(catalog, before, after),
     sitesSection(catalog, before, after),
+    agentsSection(catalog, after, events),
     eventsSection(catalog, before, after, events),
     lairSection(catalog, before, after),
     recruitmentSection(catalog, before, after),

@@ -14,8 +14,12 @@ export type MissionSuccessOptions = {
   assignedAssetIds?: (string | null)[];
   /** When set, status_positive / status_negative traits on participants adjust success %. */
   traitsCatalog?: readonly Trait[];
-  /** Opposing agents at the mission site: each applies a flat −20% to success chance (default 0). */
-  opposingAgentPenaltyCount?: number;
+  /**
+   * Distinct challenge trait ids contributed by opposing agents at the mission site. Each one a
+   * participant does **not** hold applies a flat −20% to success chance; they never enter the
+   * required-trait ratio (default none).
+   */
+  challengeTraitIds?: readonly string[];
   /** Flat % delta from participants' dynamic traits (relationships / hero / wanted). */
   dynamicTraitDelta?: number;
   /** Flat % delta from timed event modifiers (see `GameState.activeSuccessModifiers`). */
@@ -23,7 +27,7 @@ export type MissionSuccessOptions = {
   /** Tunable modifier magnitudes (`catalog.balance`); defaults preserve legacy values. */
   balance?: Pick<
     BalanceConfig,
-    "statusPositiveBonus" | "statusNegativePenalty" | "opposingAgentPenalty"
+    "statusPositiveBonus" | "statusNegativePenalty" | "agentChallengeTraitPenalty"
   >;
 };
 
@@ -120,8 +124,8 @@ export function countMatchedAssignedSlots(
   return n;
 }
 
-/** @deprecated Read `catalog.balance.opposingAgentPenalty`; kept as the legacy default. */
-export const OPPOSING_AGENT_SUCCESS_PENALTY = DEFAULT_BALANCE.opposingAgentPenalty;
+/** @deprecated Read `catalog.balance.agentChallengeTraitPenalty`; kept as the legacy default. */
+export const AGENT_CHALLENGE_TRAIT_PENALTY = DEFAULT_BALANCE.agentChallengeTraitPenalty;
 
 export type StatusTraitSuccessEntry = {
   instanceId: string;
@@ -182,8 +186,12 @@ export type SuccessChanceBreakdown = {
   statusDelta: number;
   statusEntries: StatusTraitSuccessEntry[];
   dynamicTraitDelta: number;
-  opposingAgentCount: number;
-  opposingAgentPenaltyTotal: number;
+  /** Distinct challenge trait ids in play at the site, alphabetical. */
+  challengeTraitIds: string[];
+  /** Subset of {@link challengeTraitIds} no participant holds — the ones that actually cost. */
+  unmatchedChallengeTraitIds: string[];
+  /** `unmatchedChallengeTraitIds.length × balance.agentChallengeTraitPenalty` (positive). */
+  challengeTraitPenaltyTotal: number;
   eventSuccessModifierDelta: number;
 };
 
@@ -224,9 +232,13 @@ export function computeSuccessChanceBreakdown(
   const statusDelta = statusEntries.reduce((s, e) => s + e.delta, 0);
   const dyn = options?.dynamicTraitDelta ?? 0;
   const eventMod = options?.eventSuccessModifierDelta ?? 0;
-  const opposingAgentCount = Math.max(0, options?.opposingAgentPenaltyCount ?? 0);
-  const opposingAgentPenaltyTotal = balance.opposingAgentPenalty * opposingAgentCount;
-  const preClampPercent = base + statusDelta + dyn + eventMod - opposingAgentPenaltyTotal;
+  const challengeTraitIds = [...new Set(options?.challengeTraitIds ?? [])]
+    .filter((id) => id.length > 0)
+    .sort((a, b) => a.localeCompare(b));
+  const unmatchedChallengeTraitIds = challengeTraitIds.filter((id) => !union.has(id));
+  const challengeTraitPenaltyTotal =
+    balance.agentChallengeTraitPenalty * unmatchedChallengeTraitIds.length;
+  const preClampPercent = base + statusDelta + dyn + eventMod - challengeTraitPenaltyTotal;
   const finalPercent = Math.min(100, Math.max(0, preClampPercent));
   return {
     finalPercent,
@@ -240,8 +252,9 @@ export function computeSuccessChanceBreakdown(
     statusDelta,
     statusEntries,
     dynamicTraitDelta: dyn,
-    opposingAgentCount,
-    opposingAgentPenaltyTotal,
+    challengeTraitIds,
+    unmatchedChallengeTraitIds,
+    challengeTraitPenaltyTotal,
     eventSuccessModifierDelta: eventMod,
   };
 }
@@ -252,7 +265,7 @@ export function computeSuccessChanceBreakdown(
  * when its length matches `template.requiredAssetIds`; otherwise uses current `playerAssets`
  * with {@link matchedAssetUnits}. Then applies flat +10% per participating `status_positive`
  * trait occurrence and −20% per `status_negative`, then `dynamicTraitDelta`, then −20% per
- * `opposingAgentPenaltyCount`, clamped to [0, 100].
+ * distinct `challengeTraitIds` entry the participants do not cover, clamped to [0, 100].
  */
 export function successChancePercent(
   template: MissionTemplate,

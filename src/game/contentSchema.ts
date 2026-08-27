@@ -20,7 +20,7 @@ import type {
   Trait,
   WantedLevelTier,
 } from "./types";
-import { DEFAULT_BALANCE } from "./types";
+import { AGENT_ABILITY_IDS, AGENT_MOVEMENT_BEHAVIORS, DEFAULT_BALANCE } from "./types";
 import { OMEGA_MISSIONS_PER_STAGE } from "./omegaPlan";
 
 /* ------------------------------------------------------------------------------------------------
@@ -182,8 +182,15 @@ export const minionTemplateSchema = z.object({
   startingDynamicTraits: z.array(startingDynamicTraitSchema).optional(),
 });
 
-/** Agents share the minion template JSON shape. */
-export const agentTemplateSchema = minionTemplateSchema;
+/** Agents extend the minion template JSON shape with challenge traits + movement behavior. */
+export const agentTemplateSchema = minionTemplateSchema.extend({
+  challengeTraitIds: z.array(z.string().min(1)).default([]),
+  /* Optional here, required by `collectContentIssues`: a half-authored agent should raise one
+   * issue, not sink the whole slice while the designer is still typing. */
+  movementBehavior: z.enum(AGENT_MOVEMENT_BEHAVIORS).optional(),
+  /* Zero or more; array order is the agent's active-ability priority. */
+  abilityIds: z.array(z.enum(AGENT_ABILITY_IDS)).default([]),
+});
 
 const missionTargetTypeSchema = z.enum([
   "location",
@@ -443,7 +450,7 @@ function balanceInt(min: number, max: number, def: number): z.ZodDefault<z.ZodNu
 export const balanceConfigSchema = z.object({
   statusPositiveBonus: balanceInt(0, 100, DEFAULT_BALANCE.statusPositiveBonus),
   statusNegativePenalty: balanceInt(0, 100, DEFAULT_BALANCE.statusNegativePenalty),
-  opposingAgentPenalty: balanceInt(0, 100, DEFAULT_BALANCE.opposingAgentPenalty),
+  agentChallengeTraitPenalty: balanceInt(0, 100, DEFAULT_BALANCE.agentChallengeTraitPenalty),
   dynamicTraitModifiers: z
     .object({
       friend: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.friend),
@@ -484,7 +491,7 @@ export const balanceConfigSchema = z.object({
   infamyFailureDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamyFailureDelta),
   heatSuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.heatSuccessDelta),
   heatFailureDelta: balanceInt(-100, 100, DEFAULT_BALANCE.heatFailureDelta),
-  injuryChancePerAgentPercent: balanceInt(0, 100, DEFAULT_BALANCE.injuryChancePerAgentPercent),
+  agentInvestigatorFailureHeat: balanceInt(0, 100, DEFAULT_BALANCE.agentInvestigatorFailureHeat),
   startingMaxCommandPoints: balanceInt(1, 99, DEFAULT_BALANCE.startingMaxCommandPoints),
   rerollHireOffersCp: balanceInt(0, 99, DEFAULT_BALANCE.rerollHireOffersCp),
   startingMaxRosterSize: balanceInt(1, 99, DEFAULT_BALANCE.startingMaxRosterSize),
@@ -583,6 +590,26 @@ function normalizeMinionLikeTemplates(
       base.startingDynamicTraits = [...m.startingDynamicTraits];
     }
     return base;
+  });
+}
+
+function normalizeAgentTemplates(
+  arr: z.infer<typeof agentTemplateSchema>[],
+): AgentTemplate[] {
+  const base = normalizeMinionLikeTemplates(arr);
+  return base.map((m, i) => {
+    const row = arr[i]!;
+    const out: AgentTemplate = {
+      ...m,
+      challengeTraitIds: [...(row.challengeTraitIds ?? [])],
+    };
+    if (row.movementBehavior !== undefined) {
+      out.movementBehavior = row.movementBehavior;
+    }
+    if (row.abilityIds !== undefined && row.abilityIds.length > 0) {
+      out.abilityIds = [...row.abilityIds];
+    }
+    return out;
   });
 }
 
@@ -739,7 +766,7 @@ export function parseContentSlices(raw: RawContentSlices): {
   const slices: ParsedContentSlices = {
     traits: shape("traits", (d) => d as Trait[]),
     minions: shape("minions", normalizeMinionLikeTemplates),
-    agents: shape("agents", (d) => normalizeMinionLikeTemplates(d) as AgentTemplate[]),
+    agents: shape("agents", normalizeAgentTemplates),
     missions: shape("missions", normalizeMissionTemplates),
     locations: shape("locations", (d) => d as LocationTemplate[]),
     maps: shape("maps", (d) => d as MapTemplate[]),
@@ -808,6 +835,49 @@ function checkMinionLikeTraitRefs(
           message: `Unknown trait id "${tid}"`,
         });
       }
+    });
+  }
+}
+
+/**
+ * Every agent needs at least one challenge trait (that is the whole of an agent's mission
+ * pressure now), each a real trait id, listed once.
+ */
+function checkAgentChallengeTraits(
+  templates: readonly AgentTemplate[],
+  traitIds: ReadonlySet<string>,
+  issues: ContentIssue[],
+): void {
+  for (const a of templates) {
+    const list = a.challengeTraitIds ?? [];
+    if (list.length === 0) {
+      issues.push({
+        slice: "agents",
+        entityId: a.id,
+        path: "challengeTraitIds",
+        message: "Agent needs at least one challenge trait",
+      });
+      continue;
+    }
+    const seen = new Set<string>();
+    list.forEach((tid, i) => {
+      if (!traitIds.has(tid)) {
+        issues.push({
+          slice: "agents",
+          entityId: a.id,
+          path: `challengeTraitIds[${i}]`,
+          message: `Unknown trait id "${tid}"`,
+        });
+      }
+      if (seen.has(tid)) {
+        issues.push({
+          slice: "agents",
+          entityId: a.id,
+          path: `challengeTraitIds[${i}]`,
+          message: `Duplicate challenge trait "${tid}"`,
+        });
+      }
+      seen.add(tid);
     });
   }
 }
@@ -1176,6 +1246,29 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
     pushDuplicateIdIssues("agents", s.agents, issues);
     if (traitIds !== null) {
       checkMinionLikeTraitRefs("agents", s.agents, traitIds, issues);
+      checkAgentChallengeTraits(s.agents, traitIds, issues);
+    }
+    for (const a of s.agents) {
+      const seenAbilities = new Set<string>();
+      (a.abilityIds ?? []).forEach((abilityId, i) => {
+        if (seenAbilities.has(abilityId)) {
+          issues.push({
+            slice: "agents",
+            entityId: a.id,
+            path: `abilityIds[${i}]`,
+            message: `Duplicate ability "${abilityId}"`,
+          });
+        }
+        seenAbilities.add(abilityId);
+      });
+      if (a.movementBehavior === undefined) {
+        issues.push({
+          slice: "agents",
+          entityId: a.id,
+          path: "movementBehavior",
+          message: `Agent needs a movement behavior (${AGENT_MOVEMENT_BEHAVIORS.join(" | ")})`,
+        });
+      }
     }
     if (minionTemplateIds !== null) {
       for (const a of s.agents) {

@@ -1,4 +1,6 @@
 {
+  "agentChallengeTraitPenalty": 20,
+  "agentInvestigatorFailureHeat": 5,
   "assetsPerLocationMax": 3,
   "assetsPerLocationMin": 1,
   "dynamicTraitModifiers": {
@@ -26,7 +28,6 @@
   "infamySuccessDelta": 5,
   "initialIntelSitesAtOne": 2,
   "initialIntelSitesAtTwo": 1,
-  "injuryChancePerAgentPercent": 20,
   "locationAffinity": {
     "heroThreshold": 3,
     "hysteresis": 2,
@@ -51,7 +52,6 @@
   },
   "minionXpPerMission": 1,
   "minionXpToLevel": 3,
-  "opposingAgentPenalty": 20,
   "rerollHireOffersCp": 1,
   "securityGainPerResolvedMission": 1,
   "startingMaxCommandPoints": 5,

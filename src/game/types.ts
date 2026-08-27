@@ -145,10 +145,82 @@ export type MinionInstance = {
 };
 
 /**
- * Designer-authored opposing operative. Same JSON shape as {@link MinionTemplate}; meant for
- * non-player opposition (behavior arrives in later systems).
+ * What an agent can do beyond occupying a site. **Passive** abilities are always in effect and
+ * fire inside mission resolution; **active** ones are spent in the Agent Phase and cost the
+ * agent its move that turn. See `agentAbility.ts` for the registry and what each one does.
  */
-export type AgentTemplate = MinionTemplate;
+export type AgentAbilityId =
+  | "brawler"
+  | "investigator"
+  | "guard"
+  | "security_chief"
+  | "counterintelligence"
+  | "asset_protection";
+
+/** Every {@link AgentAbilityId}, in designer-facing order (editor dropdown + schema). */
+export const AGENT_ABILITY_IDS = [
+  "brawler",
+  "investigator",
+  "guard",
+  "security_chief",
+  "counterintelligence",
+  "asset_protection",
+] as const satisfies readonly AgentAbilityId[];
+
+/**
+ * How an agent picks where to go at the end of each turn. Every behavior names an *attractor* —
+ * the set of sites it wants to be at — and the agent relocates to one of them (see
+ * `agentMovement.ts`). Behaviors never look at what the player is allowed to see: a hidden
+ * agent hunts exactly as well as a revealed one.
+ */
+export type AgentMovementBehavior =
+  /** Sites holding an asset the current Omega phase's missions call for. */
+  | "defender"
+  /** The site of the player's most recent failed mission. */
+  | "investigator"
+  /** Wherever the minion it locked onto is currently working. */
+  | "hunter"
+  /** The site the player knows most about (highest intel). */
+  | "analyst"
+  /** Sites with at least one revealed asset slot. */
+  | "asset_protector"
+  /** Sites with the lowest security. */
+  | "opportunist";
+
+/** Every {@link AgentMovementBehavior}, in designer-facing order (editor dropdown + schema). */
+export const AGENT_MOVEMENT_BEHAVIORS = [
+  "defender",
+  "investigator",
+  "hunter",
+  "analyst",
+  "asset_protector",
+  "opportunist",
+] as const satisfies readonly AgentMovementBehavior[];
+
+/**
+ * Designer-authored opposing operative. Extends the {@link MinionTemplate} JSON shape with the
+ * challenge traits the agent brings to missions run at its location.
+ */
+export type AgentTemplate = MinionTemplate & {
+  /**
+   * One or more trait ids this agent adds as a *challenge* to every mission at its site. Each
+   * distinct challenge trait across the site's agents costs a flat
+   * `BalanceConfig.agentChallengeTraitPenalty` unless some participant holds the matching trait.
+   * Unlike required traits, these never enter the matched/total base-success ratio.
+   */
+  challengeTraitIds: string[];
+  /**
+   * End-of-turn movement rule. Optional in JSON only so a half-authored agent does not break
+   * the whole slice in the editor — `collectContentIssues` flags an agent without one, and an
+   * agent whose behavior is missing simply never moves.
+   */
+  movementBehavior?: AgentMovementBehavior;
+  /**
+   * Abilities this agent carries, in **priority order**: when several active abilities could
+   * fire in the same Agent Phase, the earliest usable one wins. Zero or more; defaults to none.
+   */
+  abilityIds?: AgentAbilityId[];
+};
 
 export type AgentCatalogVisibility = "hidden" | "revealed";
 
@@ -156,6 +228,22 @@ export type AgentCatalogVisibility = "hidden" | "revealed";
 export type AgentInstance = MinionInstance & {
   /** Player-facing visibility on location UI; spawned agents default to hidden. */
   catalogVisibility: AgentCatalogVisibility;
+  /** Snapshot of {@link AgentTemplate.challengeTraitIds} at spawn. */
+  challengeTraitIds: string[];
+  /** Snapshot of {@link AgentTemplate.movementBehavior} at spawn; `null` = stays put. */
+  movementBehavior: AgentMovementBehavior | null;
+  /** Snapshot of {@link AgentTemplate.abilityIds} at spawn, priority order preserved. */
+  abilityIds: AgentAbilityId[];
+  /**
+   * Turn this agent arrived on the map. It sits out the Agent Phase of that turn — an agent
+   * deployed by a wanted escalation acts from the following turn, not the one it landed on.
+   */
+  deployedOnTurn: number;
+  /**
+   * `hunter` only: the minion instance this agent locked onto. Set the first time the agent
+   * moves with a roster to choose from, and cleared when that minion leaves the roster.
+   */
+  huntedMinionInstanceId: string | null;
 };
 
 /** Designer-authored mission target; drives planning UI and validation. */
@@ -573,8 +661,11 @@ export type BalanceConfig = {
   statusPositiveBonus: number;
   /** Flat −% per status_negative trait occurrence on participants (stored positive). */
   statusNegativePenalty: number;
-  /** Flat −% per opposing agent at the mission's target site (stored positive). */
-  opposingAgentPenalty: number;
+  /**
+   * Flat −% per *distinct* challenge trait contributed by opposing agents at the mission's
+   * target site that no participant matches (stored positive).
+   */
+  agentChallengeTraitPenalty: number;
   dynamicTraitModifiers: DynamicTraitModifiers;
   minionAffinity: MinionAffinityConfig;
   locationAffinity: LocationAffinityConfig;
@@ -587,8 +678,11 @@ export type BalanceConfig = {
   heatSuccessDelta: number;
   /** Heat change on mission failure (typically positive; drives the wanted level). */
   heatFailureDelta: number;
-  /** Injury chance % per opposing agent when a location-backed mission fails. */
-  injuryChancePerAgentPercent: number;
+  /**
+   * Extra heat when a mission fails at a site held by an agent with the **Investigator**
+   * ability. Applied once per failed mission, however many Investigators are standing there.
+   */
+  agentInvestigatorFailureHeat: number;
   /* Turn economy */
   startingMaxCommandPoints: number;
   rerollHireOffersCp: number;
@@ -637,7 +731,7 @@ export type BalanceConfig = {
 export const DEFAULT_BALANCE: BalanceConfig = {
   statusPositiveBonus: 10,
   statusNegativePenalty: 20,
-  opposingAgentPenalty: 20,
+  agentChallengeTraitPenalty: 20,
   dynamicTraitModifiers: {
     friend: 5,
     ally: 10,
@@ -672,7 +766,7 @@ export const DEFAULT_BALANCE: BalanceConfig = {
   infamyFailureDelta: 0,
   heatSuccessDelta: 0,
   heatFailureDelta: 5,
-  injuryChancePerAgentPercent: 20,
+  agentInvestigatorFailureHeat: 5,
   startingMaxCommandPoints: 5,
   rerollHireOffersCp: 1,
   startingMaxRosterSize: 5,

@@ -1,5 +1,7 @@
 import type {
+  AgentAbilityId,
   AgentInstance,
+  AgentMovementBehavior,
   ContentCatalog,
   EventTemplate,
   LairTemplate,
@@ -29,10 +31,15 @@ import {
   templateStartingLevel,
 } from "./minion";
 import {
+  challengeTraitIdsForAgents,
   countOpposingAgentsAtLocationFromData,
+  opposingAgentsAtLocationFromData,
   revealAllOpposingAgentsAtLocation,
   spawnOpposingAgentsAfterWantedEscalation,
 } from "./agent";
+import { agentWithAbilityAtLocation, INJURED_TRAIT_ID } from "./agentAbility";
+import type { AgentMovementWorld } from "./agentMovement";
+import { runAgentPhase } from "./agentPhase";
 import {
   clampIntelLevel,
   effectiveAssetSlotVisibility,
@@ -63,11 +70,10 @@ import {
 } from "./affinity";
 import {
   canAssignParticipants,
-  successChancePercent,
+  computeSuccessChanceBreakdown,
   type MissionSuccessOptions,
 } from "./mission";
 import {
-  applyCriticalFailureInjuryRolls,
   applyMissionEffects,
   describeMissionTemplateEffects,
   orderedMissionEffects,
@@ -88,7 +94,13 @@ import {
 } from "./lair";
 import { nextMonotonicWantedTierIndex } from "./wantedLevel";
 
-export type TurnPhase = "main" | "resolve" | "summary";
+/**
+ * `main` → **Execute Plan** resolves missions → `agent` → the **Agent Phase** runs the
+ * opposition → `summary` → the player dismisses the report and `advanceToNextTurn` returns to
+ * `main`. The UI runs the two resolve steps back to back, so `agent` is a state the machine
+ * passes through rather than one the player acts in.
+ */
+export type TurnPhase = "main" | "resolve" | "agent" | "summary";
 
 /**
  * Lifecycle of the Lair Raid, the special event the **top** wanted tier spawns:
@@ -186,16 +198,13 @@ export type ActivityEventMissionCompleted = {
   /** Template effect lines in resolution order (reveal/steal first, then the rest). */
   templateEffectDescriptions: string[];
   /**
-   * True when the mission failed at a location-backed target with at least one opposing agent
-   * (critical injury rolls run after template failure effects).
+   * Distinct challenge trait ids the site's opposing agents brought to this mission (empty when
+   * none). Reported in full even for agents the player never uncovered — the fallout is visible
+   * even when the opposition was not.
    */
-  criticalFailure: boolean;
-  /** Set when `criticalFailure` is true: count of opposing agents at the mission location. */
-  criticalOpposingAgentCount?: number;
-  /** Set when `criticalFailure` is true: per-participant injury chance percent (min(100, 20 × agent count)). */
-  criticalInjuryChancePercent?: number;
-  /** Participants who gained `injured` from the critical-failure roll pass only (may be empty). */
-  criticalInjuryInstanceIds?: string[];
+  challengeTraitIds?: string[];
+  /** Subset of `challengeTraitIds` no participant matched; each cost a flat success penalty. */
+  unmatchedChallengeTraitIds?: string[];
   /**
    * Participant pairs that crossed an affinity threshold on this resolve. The score behind them
    * is never surfaced — only the band the pair moved into.
@@ -226,6 +235,36 @@ export type ActivityEvent =
       participantInstanceIds: string[];
     }
   | { kind: "mission_cancelled"; missionTemplateId: string; target: MissionTarget }
+  | {
+      /**
+       * An agent ability fired — an **active** one spent in the Agent Phase, or a **passive**
+       * one triggered during mission resolution (those carry `activeMissionId` so the report
+       * groups them under the mission they hit). Logged for every agent, hidden included;
+       * surfaces redact the ones the player cannot see rather than dropping them.
+       */
+      kind: "agent_ability_used";
+      agentInstanceId: string;
+      agentTemplateId: string;
+      abilityId: AgentAbilityId;
+      locationId: string;
+      /** `asset_protection` only: the asset pulled back into the dark. */
+      assetId?: string;
+      /** Set on passive triggers, so the mission result card can group them. */
+      activeMissionId?: string;
+    }
+  | {
+      /**
+       * One opposing agent relocated during the Agent Phase movement pass. Logged for **every**
+       * move, hidden agents included — surfaces (`turnReport.ts`, the Activity panel) filter to
+       * what the player is allowed to see.
+       */
+      kind: "agent_moved";
+      agentInstanceId: string;
+      agentTemplateId: string;
+      behavior: AgentMovementBehavior;
+      fromLocationId: string;
+      toLocationId: string;
+    }
   | {
       /**
        * A resolving mission could not run (template no longer in the catalog, or a participant
@@ -527,6 +566,42 @@ export function revealedSecurityTraitIds(
   const k = sec?.securityLevel ?? 0;
   const list = state.locationSecurityTraits[locationId] ?? [];
   return list.slice(0, Math.min(k, list.length));
+}
+
+/**
+ * Where the player most recently botched a job — the Investigator's lead. Reads this resolve's
+ * events first (newest wins), then walks the activity log backwards: newest turn bucket first
+ * (the log is prepended), and within a bucket the latest event. Missions with no site
+ * (`minion` / `none` targets) leave no scene to investigate.
+ */
+export function mostRecentFailedMissionLocationId(
+  resolveEvents: readonly ActivityEvent[],
+  activityLog: readonly TurnActivityEntry[],
+): string | null {
+  const scan = (events: readonly ActivityEvent[]): string | null => {
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const ev = events[i]!;
+      if (ev.kind !== "mission_completed" || ev.success) {
+        continue;
+      }
+      const lid = getMissionTargetLocationId(ev.target);
+      if (lid !== null) {
+        return lid;
+      }
+    }
+    return null;
+  };
+  const thisResolve = scan(resolveEvents);
+  if (thisResolve !== null) {
+    return thisResolve;
+  }
+  for (const entry of activityLog) {
+    const found = scan(entry.events);
+    if (found !== null) {
+      return found;
+    }
+  }
+  return null;
 }
 
 /** Extra required traits from the target location’s site roll + revealed security stack. */
@@ -1746,7 +1821,8 @@ export function increaseMaxConcurrentMissions(state: GameState, delta: number): 
 
 /**
  * Main Phase → Resolve Phase work → Summary.
- * Each active mission decrements `turnsRemaining`; at 0, success is rolled vs {@link successChancePercent}.
+ * Each active mission decrements `turnsRemaining`; at 0, success is rolled vs
+ * {@link computeSuccessChanceBreakdown}.
  * Pass `newInstanceId` alongside a seeded `rng` for fully deterministic resolves (it feeds
  * opposing-agent spawns); defaults to `crypto.randomUUID`.
  */
@@ -1756,7 +1832,12 @@ export function increaseMaxConcurrentMissions(state: GameState, delta: number): 
  * carry no `activeMissionId` field (e.g. `event_expired`) pass through untouched.
  */
 function withActiveMissionId(ev: ActivityEvent, activeMissionId: string): ActivityEvent {
-  if (ev.kind === "asset_gained" || ev.kind === "asset_lost" || ev.kind === "minion_leveled_up") {
+  if (
+    ev.kind === "asset_gained" ||
+    ev.kind === "asset_lost" ||
+    ev.kind === "minion_leveled_up" ||
+    ev.kind === "agent_ability_used"
+  ) {
     return { ...ev, activeMissionId };
   }
   return ev;
@@ -1875,14 +1956,17 @@ export function executePlan(
     }
 
     const missionLocId = getMissionTargetLocationId(am.target);
-    const opposingAgentPenaltyCount =
+    /* Hidden agents challenge the crew exactly like revealed ones — only the *preview* the
+     * player sees is limited to what they have uncovered (see `intel.ts`). */
+    const challengeTraitIds =
       missionLocId === null
-        ? 0
-        : countOpposingAgentsAtLocationFromData(
-            opposingAgentInstances,
-            locationAgentPresence,
-            missionLocId,
-            "all",
+        ? []
+        : challengeTraitIdsForAgents(
+            opposingAgentsAtLocationFromData(
+              opposingAgentInstances,
+              locationAgentPresence,
+              missionLocId,
+            ),
           );
 
     const dynamicTraitDelta = dynamicTraitSuccessModifierFromFullRoster(
@@ -1898,19 +1982,20 @@ export function executePlan(
      * (`state`), not the in-loop locals — resolution is simultaneous, so an earlier
      * mission's security bump this resolve must not change a later mission's requirements.
      * Pinned by tests in gameState.test.ts ("simultaneous resolution snapshot"). */
-    const pct = successChancePercent(
+    const breakdown = computeSuccessChanceBreakdown(
       template,
       participants,
       {
         ...missionSuccessOptionsForTarget(state, am.target),
         assignedAssetIds: am.plannedAssetIds,
         traitsCatalog: catalog.traits,
-        opposingAgentPenaltyCount,
+        challengeTraitIds,
         dynamicTraitDelta,
         eventSuccessModifierDelta,
         balance: catalog.balance,
       },
     );
+    const pct = breakdown.finalPercent;
     const roll = Math.floor(rng() * 100);
     const success = roll < pct;
     if (lairRaid !== undefined && template.id === lairRaid.id) {
@@ -1929,6 +2014,30 @@ export function executePlan(
       infamy: player.infamy + baselineInfamy,
       heat: player.heat + baselineHeat,
     };
+
+    /* Passive agent abilities at the target site. Both fire on failure only, and both land
+     * once per mission however many agents at the site carry them — they are properties of
+     * the site, not per-head bonuses. Hidden agents fire exactly like revealed ones. */
+    const investigatorAgent =
+      success || missionLocId === null
+        ? undefined
+        : agentWithAbilityAtLocation(
+            opposingAgentInstances,
+            locationAgentPresence,
+            missionLocId,
+            "investigator",
+          );
+    if (investigatorAgent !== undefined) {
+      player = { ...player, heat: player.heat + catalog.balance.agentInvestigatorFailureHeat };
+      resolveEvents.push({
+        kind: "agent_ability_used",
+        agentInstanceId: investigatorAgent.instanceId,
+        agentTemplateId: investigatorAgent.templateId,
+        abilityId: "investigator",
+        locationId: missionLocId!,
+        activeMissionId: am.id,
+      });
+    }
 
     const effectList = success
       ? (template.onSuccessEffects ?? [])
@@ -1951,6 +2060,43 @@ export function executePlan(
      * (e.g. add_target_minion_traits, add_random_participant_traits, add_all_participant_traits) so the XP pass and final merge below see them. */
     for (const m of player.minions) {
       instanceById.set(m.instanceId, m);
+    }
+
+    /* A Brawler puts the crew in the hospital, after the template's own failure effects have
+     * had their say. Minions already carrying the trait are left alone. */
+    const brawlerAgent =
+      success || missionLocId === null
+        ? undefined
+        : agentWithAbilityAtLocation(
+            opposingAgentInstances,
+            locationAgentPresence,
+            missionLocId,
+            "brawler",
+          );
+    if (brawlerAgent !== undefined) {
+      let anyInjured = false;
+      for (const iid of am.participantInstanceIds) {
+        const inst = instanceById.get(iid);
+        if (inst === undefined || inst.traitIds.includes(INJURED_TRAIT_ID)) {
+          continue;
+        }
+        instanceById.set(iid, { ...inst, traitIds: [...inst.traitIds, INJURED_TRAIT_ID] });
+        anyInjured = true;
+      }
+      if (anyInjured) {
+        player = {
+          ...player,
+          minions: player.minions.map((mm) => instanceById.get(mm.instanceId) ?? mm),
+        };
+        resolveEvents.push({
+          kind: "agent_ability_used",
+          agentInstanceId: brawlerAgent.instanceId,
+          agentTemplateId: brawlerAgent.templateId,
+          abilityId: "brawler",
+          locationId: missionLocId!,
+          activeMissionId: am.id,
+        });
+      }
     }
 
     /* Working a site moves each participant's own standing there by a fixed amount — no roll.
@@ -1997,34 +2143,6 @@ export function executePlan(
       minions: player.minions.map((mm) => instanceById.get(mm.instanceId) ?? mm),
     };
 
-    const isCriticalFailure =
-      !success &&
-      missionLocId !== null &&
-      opposingAgentPenaltyCount > 0;
-    let criticalInjuryInstanceIds: string[] | undefined;
-    let criticalOpposingAgentCount: number | undefined;
-    let criticalInjuryChancePercent: number | undefined;
-    if (isCriticalFailure) {
-      const chance = Math.min(
-        100,
-        catalog.balance.injuryChancePerAgentPercent * opposingAgentPenaltyCount,
-      );
-      const injury = applyCriticalFailureInjuryRolls(
-        player,
-        am.participantInstanceIds,
-        chance,
-        "injured",
-        rng,
-      );
-      player = injury.player;
-      for (const m of player.minions) {
-        instanceById.set(m.instanceId, m);
-      }
-      criticalOpposingAgentCount = opposingAgentPenaltyCount;
-      criticalInjuryChancePercent = chance;
-      criticalInjuryInstanceIds = injury.newlyInjuredInstanceIds;
-    }
-
     const infamyDeltaTotal = player.infamy - infamyBefore;
     const heatDeltaTotal = player.heat - heatBefore;
 
@@ -2044,14 +2162,12 @@ export function executePlan(
       heatDelta: heatDeltaTotal,
       baselineHeatDelta: baselineHeat,
       templateEffectDescriptions,
-      criticalFailure: isCriticalFailure,
       ...(relationshipChanges !== undefined ? { relationshipChanges } : {}),
       ...(standingChanges !== undefined ? { standingChanges } : {}),
-      ...(isCriticalFailure
+      ...(breakdown.challengeTraitIds.length > 0
         ? {
-            criticalOpposingAgentCount,
-            criticalInjuryChancePercent,
-            criticalInjuryInstanceIds,
+            challengeTraitIds: breakdown.challengeTraitIds,
+            unmatchedChallengeTraitIds: breakdown.unmatchedChallengeTraitIds,
           }
         : {}),
     });
@@ -2229,6 +2345,7 @@ export function executePlan(
       playableIds,
       state.wantedLevelTierIndex,
       wantedLevelTierIndex,
+      state.turnNumber,
       rng,
       newInstanceId,
     );
@@ -2372,7 +2489,9 @@ export function executePlan(
     ok: true,
     value: {
       ...state,
-      phase: "summary",
+      /* Missions are done; the opposition has not acted yet. `executeAgentPhase` takes it
+       * from here and lands the turn in `summary`. */
+      phase: "agent",
       player,
       activeMissions: remaining,
       availableMinionTemplateIds,
@@ -2395,6 +2514,112 @@ export function executePlan(
       minionLocationAffinities,
       lairRaidStatus,
       runEnding,
+    },
+  };
+}
+
+/**
+ * The **Agent Phase**: the opposition's turn, run straight after `executePlan`. Every agent
+ * either spends an active ability or moves (never both) — see `agentPhase.ts` for the rules.
+ * Lands the turn in `summary`, where the end-of-turn report is shown.
+ *
+ * Split out of `executePlan` deliberately: the whole phase reads nothing but the state the
+ * resolve returned, so it is its own step in the machine rather than a tail on the last one.
+ */
+export function executeAgentPhase(
+  state: GameState,
+  catalog: ContentCatalog,
+  rng: Rng,
+): Result<GameState, GameError> {
+  if (state.runEnding !== null) {
+    return { ok: false, error: { code: "run_ended", ending: state.runEnding } };
+  }
+  if (state.phase !== "agent") {
+    return {
+      ok: false,
+      error: { code: "wrong_phase", expected: "agent", actual: state.phase },
+    };
+  }
+
+  /* A hunter follows its quarry to the job it is *still* working — missions that resolved this
+   * turn are over, and their crews are home. */
+  const minionMissionLocationIds = new Map<string, string>();
+  for (const am of state.activeMissions) {
+    const lid = getMissionTargetLocationId(am.target);
+    if (lid === null) {
+      continue;
+    }
+    for (const iid of am.participantInstanceIds) {
+      minionMissionLocationIds.set(iid, lid);
+    }
+  }
+
+  const world: AgentMovementWorld = {
+    catalog,
+    playableLocationIds: locationTemplatesForOmegaPlan(catalog, state.activeOmegaPlanId).map(
+      (l) => l.id,
+    ),
+    locationAssetSlots: state.locationAssetSlots,
+    locationSecurityStates: state.locationSecurityStates,
+    locationIntelStates: state.locationIntelStates,
+    activeOmegaPlanId: state.activeOmegaPlanId,
+    activeOmegaStageIndex: state.activeOmegaStageIndex,
+    lastFailedMissionLocationId: mostRecentFailedMissionLocationId([], state.activityLog),
+    minionMissionLocationIds,
+    rosterMinionInstanceIds: state.player.minions.map((m) => m.instanceId),
+  };
+
+  const result = runAgentPhase(
+    state.opposingAgentInstances,
+    state.locationAgentPresence,
+    state.locationSecurityStates,
+    state.locationIntelStates,
+    state.locationAssetSlots,
+    world,
+    state.turnNumber,
+    rng,
+  );
+
+  const events: ActivityEvent[] = [];
+  for (const use of result.uses) {
+    events.push({
+      kind: "agent_ability_used",
+      agentInstanceId: use.agentInstanceId,
+      agentTemplateId: use.agentTemplateId,
+      abilityId: use.abilityId,
+      locationId: use.locationId,
+      ...(use.assetId !== undefined ? { assetId: use.assetId } : {}),
+    });
+  }
+  const templateIdOf = new Map(
+    result.opposingAgentInstances.map((a) => [a.instanceId, a.templateId] as const),
+  );
+  for (const mv of result.moves) {
+    events.push({
+      kind: "agent_moved",
+      agentInstanceId: mv.agentInstanceId,
+      agentTemplateId: templateIdOf.get(mv.agentInstanceId) ?? "",
+      behavior: mv.behavior,
+      fromLocationId: mv.fromLocationId,
+      toLocationId: mv.toLocationId,
+    });
+  }
+
+  return {
+    ok: true,
+    value: {
+      ...state,
+      phase: "summary",
+      opposingAgentInstances: result.opposingAgentInstances,
+      locationAgentPresence: result.locationAgentPresence,
+      locationSecurityStates: result.locationSecurityStates,
+      locationIntelStates: result.locationIntelStates,
+      locationAssetSlots: result.locationAssetSlots,
+      activityLog: mergeResolveActivityEventsIntoActivityLog(
+        state.activityLog,
+        state.turnNumber,
+        events,
+      ),
     },
   };
 }

@@ -98,6 +98,17 @@ export function collectContentReferences(catalog: ContentCatalog): ContentRefere
 
   minionLikeReferences("minions", catalog.minions, out);
   minionLikeReferences("agents", catalog.agents, out);
+  for (const a of catalog.agents) {
+    a.challengeTraitIds.forEach((tid, i) => {
+      out.push({
+        fromSlice: "agents",
+        fromId: a.id,
+        path: `challengeTraitIds[${i}]`,
+        toSlice: "traits",
+        toId: tid,
+      });
+    });
+  }
 
   for (const m of catalog.missions) {
     m.requiredTraitIds.forEach((tid, i) => {

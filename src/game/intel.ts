@@ -154,6 +154,28 @@ export function playerVisibleOpposingAgentsAtLocation(
   );
 }
 
+/**
+ * Whether the player gets to watch one agent relocate. Revealed agents are always followable;
+ * an unrevealed one is only visible while it is standing at a site the player has intel 3 on,
+ * so a move counts when **either** end of it is that well lit. Everything else stays off the
+ * report — an agent the player has never uncovered must not announce itself by moving.
+ */
+export function isOpposingAgentMoveVisibleToPlayer(
+  state: GameState,
+  agentInstanceId: string,
+  fromLocationId: string,
+  toLocationId: string,
+): boolean {
+  const agent = state.opposingAgentInstances.find((a) => a.instanceId === agentInstanceId);
+  if (agent === undefined) {
+    return false;
+  }
+  return (
+    isOpposingAgentVisibleToPlayer(agent, intelLevelForLocation(state.locationIntelStates, fromLocationId)) ||
+    isOpposingAgentVisibleToPlayer(agent, intelLevelForLocation(state.locationIntelStates, toLocationId))
+  );
+}
+
 /** Count for UI success previews — hidden opposition must not move the displayed chance. */
 export function countPlayerVisibleOpposingAgentsAtLocation(
   state: GameState,

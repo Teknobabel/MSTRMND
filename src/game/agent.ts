@@ -11,6 +11,8 @@ import { maxOpposingAgentsForWantedIndex } from "./wantedLevel";
 
 export type CreateAgentOverrides = CreateMinionOverrides & {
   catalogVisibility?: AgentCatalogVisibility;
+  /** Turn the agent lands on; it sits out that turn's Agent Phase. Defaults to 0 (pre-run). */
+  deployedOnTurn?: number;
 };
 
 /** Instantiate an agent from a catalog template (same mechanics as {@link createMinionFromTemplate}). */
@@ -19,11 +21,16 @@ export function createAgentFromTemplate(
   instanceId: string,
   overrides?: CreateAgentOverrides,
 ): AgentInstance {
-  const { catalogVisibility, ...minionOverrides } = overrides ?? {};
+  const { catalogVisibility, deployedOnTurn, ...minionOverrides } = overrides ?? {};
   const base = createMinionFromTemplate(template, instanceId, minionOverrides);
   return {
     ...base,
     catalogVisibility: catalogVisibility ?? "hidden",
+    challengeTraitIds: [...(template.challengeTraitIds ?? [])],
+    movementBehavior: template.movementBehavior ?? null,
+    abilityIds: [...(template.abilityIds ?? [])],
+    deployedOnTurn: deployedOnTurn ?? 0,
+    huntedMinionInstanceId: null,
   };
 }
 
@@ -60,13 +67,24 @@ export function getOpposingAgentsAtLocation(
   state: GameState,
   locationId: string,
 ): AgentInstance[] {
-  const row = state.locationAgentPresence.find((p) => p.locationId === locationId);
-  if (row === undefined) {
+  return opposingAgentsAtLocationFromData(
+    state.opposingAgentInstances,
+    state.locationAgentPresence,
+    locationId,
+  );
+}
+
+/** @see {@link getOpposingAgentsAtLocation} — same lookup against loose rows during a resolve. */
+export function opposingAgentsAtLocationFromData(
+  instances: readonly AgentInstance[],
+  presence: readonly LocationAgentPresence[],
+  locationId: string,
+): AgentInstance[] {
+  const row = presence.find((p) => p.locationId === locationId);
+  if (row === undefined || row.agentInstanceIds.length === 0) {
     return [];
   }
-  const byId = new Map(
-    state.opposingAgentInstances.map((a) => [a.instanceId, a] as const),
-  );
+  const byId = new Map(instances.map((a) => [a.instanceId, a] as const));
   const out: AgentInstance[] = [];
   for (const id of row.agentInstanceIds) {
     const inst = byId.get(id);
@@ -75,6 +93,22 @@ export function getOpposingAgentsAtLocation(
     }
   }
   return out;
+}
+
+/**
+ * Union of the challenge traits these agents bring to a mission, deduped and alphabetical.
+ * Two agents sharing a challenge trait cost the crew once, not twice.
+ */
+export function challengeTraitIdsForAgents(agents: readonly AgentInstance[]): string[] {
+  const out = new Set<string>();
+  for (const a of agents) {
+    for (const id of a.challengeTraitIds) {
+      if (id.length > 0) {
+        out.add(id);
+      }
+    }
+  }
+  return [...out].sort((x, y) => x.localeCompare(y));
 }
 
 /**
@@ -164,6 +198,7 @@ export function spawnOpposingAgentsAfterWantedEscalation(
   playableLocationIds: readonly string[],
   prevTierIndex: number,
   newTierIndex: number,
+  turnNumber: number,
   rng: () => number,
   newInstanceId: () => string = () => globalThis.crypto.randomUUID(),
 ): { opposingAgentInstances: AgentInstance[]; locationAgentPresence: LocationAgentPresence[] } {
@@ -194,7 +229,7 @@ export function spawnOpposingAgentsAfterWantedEscalation(
     const locId = spawnableLocationIds[Math.floor(rng() * spawnableLocationIds.length)]!;
     const row = presence.find((p) => p.locationId === locId)!;
     const instanceId = newInstanceId();
-    instances.push(createAgentFromTemplate(tpl, instanceId));
+    instances.push(createAgentFromTemplate(tpl, instanceId, { deployedOnTurn: turnNumber }));
     usedTemplates.add(tpl.id);
     row.agentInstanceIds.push(instanceId);
   }

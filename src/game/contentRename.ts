@@ -92,6 +92,9 @@ function renameTraitRefs(draft: RawContentSlices, oldId: string, newId: string):
       renameInStringArray(row, "levelUpTraitOrder", oldId, newId);
     }
   }
+  for (const row of rowsOf(draft.agents)) {
+    renameInStringArray(row, "challengeTraitIds", oldId, newId);
+  }
   for (const sliceKey of ["missions", "events"] as const) {
     for (const row of rowsOf(draft[sliceKey])) {
       renameInStringArray(row, "requiredTraitIds", oldId, newId);

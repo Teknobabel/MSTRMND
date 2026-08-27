@@ -55,7 +55,12 @@ describe("collectContentReferences", () => {
   it("finds unreferenced (dead) content candidates", () => {
     expect(unreferencedIds(catalog, refs, "assets")).toEqual(["as-cash"]);
     /* t-sec is only rolled at runtime (site security), so no catalog entity references it. */
-    expect(unreferencedIds(catalog, refs, "traits")).toEqual(["t-sec", "t-pos", "t-neg"]);
+    expect(unreferencedIds(catalog, refs, "traits")).toEqual([
+      "t-sec",
+      "t-pos",
+      "t-neg",
+      "injured",
+    ]);
   });
 
   it("resolves every reference in the real content catalog", () => {

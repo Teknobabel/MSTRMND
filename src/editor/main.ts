@@ -122,8 +122,20 @@ function defaultRowForSlice(
     case "assets":
       return { id, name: "New Asset" };
     case "minions":
-    case "agents":
       return { id, name: "New Template", description: "", hireCommandPoints: 0, levelUpTraitOrder: [] };
+    case "agents":
+      /* challengeTraitIds starts empty on purpose: validation flags it until the designer
+       * picks one, which is the reminder that an agent without a challenge does nothing. */
+      return {
+        id,
+        name: "New Template",
+        description: "",
+        hireCommandPoints: 0,
+        levelUpTraitOrder: [],
+        challengeTraitIds: [],
+        movementBehavior: "opportunist",
+        abilityIds: [],
+      };
     case "missions":
       return {
         id,

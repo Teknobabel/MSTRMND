@@ -8,6 +8,13 @@
 import type { MinionInstance } from "./types";
 import { parseCatalog, type ContentSliceKey } from "./contentSchema";
 import type { ContentCatalog } from "./types";
+import {
+  executeAgentPhase,
+  executePlan,
+  type GameError,
+  type GameState,
+  type Result,
+} from "./gameState";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -36,6 +43,8 @@ export function rawFixtureSlices(): FixtureSlices {
       { id: "t-level", name: "Veteran", type: "primary" },
       { id: "t-pos", name: "Inspired", type: "status_positive" },
       { id: "t-neg", name: "Shaken", type: "status_negative" },
+      /* Real content's id, so the Brawler ability lands on a trait that actually exists. */
+      { id: "injured", name: "Injured", type: "status_negative" },
     ],
     minions: [
       {
@@ -60,6 +69,8 @@ export function rawFixtureSlices(): FixtureSlices {
         name: "Spy",
         description: "Opposing spy",
         hireCommandPoints: 0,
+        challengeTraitIds: ["t-level"],
+        movementBehavior: "opportunist",
         levelUpTraitOrder: [],
       },
       {
@@ -67,6 +78,8 @@ export function rawFixtureSlices(): FixtureSlices {
         name: "Detective",
         description: "Opposing detective",
         hireCommandPoints: 0,
+        challengeTraitIds: ["t-req"],
+        movementBehavior: "investigator",
         levelUpTraitOrder: [],
       },
     ],
@@ -164,6 +177,25 @@ export function rawFixtureSlices(): FixtureSlices {
 
 export function fixtureCatalog(): ContentCatalog {
   return parseCatalog(rawFixtureSlices());
+}
+
+/**
+ * One whole turn of resolution: `executePlan` (missions) then `executeAgentPhase` (the
+ * opposition), landing in the `summary` phase. Use this wherever a test cares about the state a
+ * turn *ends* in; call `executePlan` directly only to assert on mission resolution alone.
+ * A run that ends during resolution skips the Agent Phase, exactly as the UI does.
+ */
+export function executeTurn(
+  state: GameState,
+  catalog: ContentCatalog,
+  rng: () => number,
+  newInstanceId?: () => string,
+): Result<GameState, GameError> {
+  const resolved = executePlan(state, catalog, rng, newInstanceId);
+  if (!resolved.ok || resolved.value.runEnding !== null) {
+    return resolved;
+  }
+  return executeAgentPhase(resolved.value, catalog, rng);
 }
 
 /** Deterministic RNG (mulberry32). */

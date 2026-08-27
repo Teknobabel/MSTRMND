@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ActiveMission, GameState } from "./gameState";
-import { executePlan } from "./gameState";
+
 import { buildTurnReport, type TurnSummarySection } from "./turnReport";
 import {
+  executeTurn,
   fixtureCatalog,
   makeMinionInstance,
   rawFixtureSlices,
@@ -11,6 +12,8 @@ import {
 } from "./testFixtures";
 import { parseCatalog } from "./contentSchema";
 import { createInitialGameState } from "./gameState";
+import { createAgentFromTemplate, getAgentTemplateById } from "./agent";
+import type { IntelLevel } from "./types";
 
 const catalog = fixtureCatalog();
 
@@ -40,10 +43,11 @@ function baseState(seed: number): GameState {
   };
 }
 
+/** A whole turn: mission resolution, then the Agent Phase — the state the report is built from. */
 function resolve(before: GameState, roll: number, cat = catalog): GameState {
-  const result = executePlan(before, cat, () => roll, sequentialIds("ag"));
+  const result = executeTurn(before, cat, () => roll, sequentialIds("ag"));
   if (!result.ok) {
-    throw new Error(`executePlan failed: ${JSON.stringify(result.error)}`);
+    throw new Error(`resolve failed: ${JSON.stringify(result.error)}`);
   }
   return result.value;
 }
@@ -229,6 +233,98 @@ describe("buildTurnReport — turn summary", () => {
     expect(lineTexts(report.summary, "standing")).toContain("Threat level escalated to Noticed.");
     const sites = lineTexts(report.summary, "sites");
     expect(sites.filter((t) => t.includes("deployed to"))).toHaveLength(2);
+  });
+
+  it("reports agent movement the player can watch, and hides the rest", () => {
+    /* `a-cop` is an investigator: a failure at loc-a pulls it over from loc-b. */
+    function stateWithCopAtLocB(
+      catalogVisibility: "hidden" | "revealed",
+      intelAtLocA: IntelLevel = 0,
+    ): GameState {
+      const seeded = baseState(4);
+      return {
+        ...seeded,
+        player: { ...seeded.player, minions: [makeMinionInstance("mi-1", "m-hero", [])] },
+        activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+        opposingAgentInstances: [
+          createAgentFromTemplate(getAgentTemplateById(catalog, "a-cop")!, "opp-1", {
+            catalogVisibility,
+          }),
+        ],
+        locationAgentPresence: [
+          { locationId: "loc-a", agentInstanceIds: [] },
+          { locationId: "loc-b", agentInstanceIds: ["opp-1"] },
+        ],
+        locationIntelStates: [
+          { locationId: "loc-a", intelLevel: intelAtLocA },
+          { locationId: "loc-b", intelLevel: 0 },
+        ],
+      };
+    }
+
+    const revealed = stateWithCopAtLocB("revealed");
+    expect(lineTexts(buildTurnReport(revealed, resolve(revealed, 0.99), catalog).summary, "agents")).toContain(
+      "Detective moved from Armory to First Bank — working the scene of your last failure.",
+    );
+
+    /* Same move, an agent the player has never uncovered, both sites dark: no line at all. */
+    const hidden = stateWithCopAtLocB("hidden");
+    const hiddenSites = lineTexts(buildTurnReport(hidden, resolve(hidden, 0.99), catalog).summary, "agents");
+    expect(hiddenSites.filter((t) => t.includes("moved from"))).toEqual([]);
+
+    /* Intel 3 at the destination lights the arrival up even for an unrevealed agent. */
+    const watched = stateWithCopAtLocB("hidden", 3);
+    expect(
+      lineTexts(buildTurnReport(watched, resolve(watched, 0.99), catalog).summary, "agents").filter((t) =>
+        t.includes("moved from"),
+      ),
+    ).toHaveLength(1);
+  });
+
+
+  it("names an agent the player can see and redacts one they cannot", () => {
+    /** A Security Chief standing at loc-a, at the given visibility and site intel. */
+    function stateWithChief(
+      catalogVisibility: "hidden" | "revealed",
+      intelAtLocA: IntelLevel = 0,
+    ): GameState {
+      const seeded = baseState(5);
+      const template = getAgentTemplateById(catalog, "a-spy")!;
+      return {
+        ...seeded,
+        opposingAgentInstances: [
+          {
+            ...createAgentFromTemplate(template, "opp-1", { catalogVisibility }),
+            abilityIds: ["security_chief"],
+          },
+        ],
+        locationAgentPresence: [
+          { locationId: "loc-a", agentInstanceIds: ["opp-1"] },
+          { locationId: "loc-b", agentInstanceIds: [] },
+        ],
+        locationIntelStates: [
+          { locationId: "loc-a", intelLevel: intelAtLocA },
+          { locationId: "loc-b", intelLevel: 0 },
+        ],
+      };
+    }
+
+    const seen = stateWithChief("revealed");
+    expect(lineTexts(buildTurnReport(seen, resolve(seen, 0), catalog).summary, "agents")).toContain(
+      "Spy raised the security level at First Bank.",
+    );
+
+    /* The effect is plain to see; who caused it is not. */
+    const unseen = stateWithChief("hidden");
+    expect(
+      lineTexts(buildTurnReport(unseen, resolve(unseen, 0), catalog).summary, "agents"),
+    ).toContain("An unknown agent raised the security level at First Bank.");
+
+    /* Intel 3 on the site puts a name to it again. */
+    const watched = stateWithChief("hidden", 3);
+    expect(
+      lineTexts(buildTurnReport(watched, resolve(watched, 0), catalog).summary, "agents"),
+    ).toContain("Spy raised the security level at First Bank.");
   });
 
   it("lists still-running missions and stays quiet about resolved ones when none finished", () => {

@@ -6,6 +6,7 @@ import {
   cancelMission,
   createInitialGameState,
   eligibleEventTemplates,
+  executeAgentPhase,
   executePlan,
   hireMinion,
 } from "./gameState";
@@ -18,12 +19,15 @@ import type { ContentCatalog } from "./types";
 import { dynamicTraitSuccessModifierFromFullRoster } from "./dynamicTrait";
 import { findLocationAffinity } from "./affinity";
 import {
+  executeTurn,
   fixtureCatalog,
   makeMinionInstance,
   rawFixtureSlices,
   seededRng,
   sequentialIds,
 } from "./testFixtures";
+import { createAgentFromTemplate, getAgentTemplateById } from "./agent";
+import type { AgentAbilityId } from "./types";
 
 const catalog = fixtureCatalog();
 
@@ -53,6 +57,48 @@ function baseState(seed: number): GameState {
   };
 }
 
+/** Drop `templateId`'s agent onto `locationId` at the given visibility, carrying `abilityIds`. */
+function withAgentAt(
+  state: GameState,
+  locationId: string,
+  templateId: string,
+  instanceId: string,
+  catalogVisibility: "hidden" | "revealed",
+  abilityIds: AgentAbilityId[] = [],
+): GameState {
+  const template = getAgentTemplateById(catalog, templateId)!;
+  return {
+    ...state,
+    opposingAgentInstances: [
+      ...state.opposingAgentInstances,
+      { ...createAgentFromTemplate(template, instanceId, { catalogVisibility }), abilityIds },
+    ],
+    locationAgentPresence: state.locationAgentPresence.map((row) =>
+      row.locationId === locationId
+        ? { ...row, agentInstanceIds: [...row.agentInstanceIds, instanceId] }
+        : row,
+    ),
+  };
+}
+
+/** @see {@link withAgentAt} */
+function withAgentAtLocA(
+  state: GameState,
+  templateId: string,
+  instanceId: string,
+  catalogVisibility: "hidden" | "revealed",
+): GameState {
+  return withAgentAt(state, "loc-a", templateId, instanceId, catalogVisibility);
+}
+
+/** Where `instanceId` stands on the map, or `null` when it is on no presence row. */
+function agentLocationId(state: GameState, instanceId: string): string | null {
+  return (
+    state.locationAgentPresence.find((r) => r.agentInstanceIds.includes(instanceId))?.locationId ??
+    null
+  );
+}
+
 function completedEvents(state: GameState) {
   return state.activityLog
     .flatMap((e) => e.events)
@@ -69,7 +115,7 @@ describe("createInitialGameState", () => {
     let cur = state;
     const offersByTurn: { turn: number; offer: string | null }[] = [];
     for (let i = 0; i < 3; i += 1) {
-      const r = executePlan(cur, catalog, seededRng(3 + i), sequentialIds("ag"));
+      const r = executeTurn(cur, catalog, seededRng(3 + i), sequentialIds("ag"));
       expect(r.ok).toBe(true);
       if (!r.ok) {
         return;
@@ -166,6 +212,377 @@ describe("createInitialGameState", () => {
   });
 });
 
+describe("opposing agent challenge traits", () => {
+  /** One minion on ms-basic at loc-a, with whatever traits the case needs. */
+  function stateWithCrew(traitIds: string[]): GameState {
+    const state = baseState(1);
+    return {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [makeMinionInstance("mi-1", "m-hero", traitIds)],
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+    };
+  }
+
+  it("charges a flat penalty for a challenge trait the crew cannot match", () => {
+    /* a-spy challenges t-level; the crew brings only the mission's required t-req. */
+    const state = withAgentAtLocA(stateWithCrew(["t-req"]), "a-spy", "opp-1", "revealed");
+    const result = executePlan(state, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const done = completedEvents(result.value);
+    expect(done[0]!.successChancePercent).toBe(80);
+    expect(done[0]!.challengeTraitIds).toEqual(["t-level"]);
+    expect(done[0]!.unmatchedChallengeTraitIds).toEqual(["t-level"]);
+  });
+
+  it("waives the penalty when a participant holds the matching trait", () => {
+    const state = withAgentAtLocA(
+      stateWithCrew(["t-req", "t-level"]),
+      "a-spy",
+      "opp-1",
+      "revealed",
+    );
+    const result = executePlan(state, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const done = completedEvents(result.value);
+    /* Matching a challenge trait avoids the hit; it never adds to the base chance. */
+    expect(done[0]!.successChancePercent).toBe(100);
+    expect(done[0]!.unmatchedChallengeTraitIds).toEqual([]);
+  });
+
+  it("applies challenges from hidden agents the player never uncovered", () => {
+    const state = withAgentAtLocA(stateWithCrew(["t-req"]), "a-spy", "opp-1", "hidden");
+    const result = executePlan(state, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(completedEvents(result.value)[0]!.successChancePercent).toBe(80);
+  });
+
+  it("stacks distinct challenges across agents and never injures on failure", () => {
+    /* a-spy → t-level, a-cop → t-req; the crew matches t-req only, so one 20% hit lands. */
+    let state = withAgentAtLocA(stateWithCrew(["t-req"]), "a-spy", "opp-1", "revealed");
+    state = withAgentAtLocA(state, "a-cop", "opp-2", "revealed");
+    const result = executePlan(state, catalog, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const next = result.value;
+    const done = completedEvents(next);
+    expect(done[0]!.successChancePercent).toBe(80);
+    expect(done[0]!.success).toBe(false);
+    expect(done[0]!.challengeTraitIds).toEqual(["t-level", "t-req"]);
+    expect(done[0]!.unmatchedChallengeTraitIds).toEqual(["t-level"]);
+    /* Failing next to agents no longer risks the Injured trait. */
+    const mi1 = next.player.minions.find((m) => m.instanceId === "mi-1");
+    expect(mi1?.traitIds).not.toContain("t-neg");
+  });
+});
+
+describe("agent abilities", () => {
+  /** Two minions with no useful traits on ms-basic at loc-a: base 0%, so the mission fails. */
+  function doomedMissionAtLocA(): GameState {
+    const state = baseState(1);
+    return {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [
+          makeMinionInstance("mi-1", "m-hero", []),
+          makeMinionInstance("mi-2", "m-buddy", []),
+        ],
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1", "mi-2"] })],
+    };
+  }
+
+  function abilityEvents(state: GameState) {
+    return state.activityLog
+      .flatMap((e) => e.events)
+      .filter((e) => e.kind === "agent_ability_used");
+  }
+
+  it("Brawler injures every participant of a failed mission at its site", () => {
+    const state = withAgentAt(doomedMissionAtLocA(), "loc-a", "a-spy", "opp-1", "revealed", [
+      "brawler",
+    ]);
+    const result = executeTurn(state, catalog, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const next = result.value;
+    expect(completedEvents(next)[0]!.success).toBe(false);
+    for (const iid of ["mi-1", "mi-2"]) {
+      expect(next.player.minions.find((m) => m.instanceId === iid)?.traitIds).toContain("injured");
+    }
+    expect(abilityEvents(next).map((e) => e.abilityId)).toContain("brawler");
+  });
+
+  it("Brawler spares a crew that succeeded, and a mission run somewhere else", () => {
+    const state = baseState(1);
+    const withCrew: GameState = {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [makeMinionInstance("mi-1", "m-hero", ["t-req"])],
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+    };
+    const placed = withAgentAt(withCrew, "loc-b", "a-spy", "opp-1", "revealed", ["brawler"]);
+    const result = executeTurn(placed, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(
+      result.value.player.minions.find((m) => m.instanceId === "mi-1")?.traitIds,
+    ).not.toContain("injured");
+  });
+
+  it("Investigator adds heat over the baseline, once per failure however many carry it", () => {
+    const plain = executeTurn(doomedMissionAtLocA(), catalog, () => 0.99, sequentialIds("ag"));
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) {
+      return;
+    }
+    expect(plain.value.player.heat).toBe(5); /* baseline heatFailureDelta alone */
+
+    let state = withAgentAt(doomedMissionAtLocA(), "loc-a", "a-spy", "opp-1", "revealed", [
+      "investigator",
+    ]);
+    state = withAgentAt(state, "loc-a", "a-cop", "opp-2", "hidden", ["investigator"]);
+    const result = executeTurn(state, catalog, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.player.heat).toBe(10); /* 5 baseline + 5 from the site */
+    expect(
+      abilityEvents(result.value).filter((e) => e.abilityId === "investigator"),
+    ).toHaveLength(1);
+  });
+
+  it("fires an active ability in the Agent Phase and logs it", () => {
+    const state = withAgentAt(baseState(1), "loc-a", "a-spy", "opp-1", "revealed", [
+      "security_chief",
+    ]);
+    const result = executeTurn(state, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const next = result.value;
+    expect(next.locationSecurityStates.find((s) => s.locationId === "loc-a")?.securityLevel).toBe(
+      1,
+    );
+    expect(abilityEvents(next)).toEqual([
+      {
+        kind: "agent_ability_used",
+        agentInstanceId: "opp-1",
+        agentTemplateId: "a-spy",
+        abilityId: "security_chief",
+        locationId: "loc-a",
+      },
+    ]);
+  });
+
+  it("lets hidden agents act without revealing them", () => {
+    const state = withAgentAt(baseState(1), "loc-a", "a-spy", "opp-1", "hidden", [
+      "security_chief",
+    ]);
+    const result = executeTurn(state, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(
+      result.value.locationSecurityStates.find((s) => s.locationId === "loc-a")?.securityLevel,
+    ).toBe(1);
+    expect(
+      result.value.opposingAgentInstances.find((a) => a.instanceId === "opp-1")?.catalogVisibility,
+    ).toBe("hidden");
+  });
+});
+
+describe("the Agent Phase as its own step", () => {
+  it("executePlan stops at `agent` and executeAgentPhase carries it to `summary`", () => {
+    const resolved = executePlan(baseState(1), catalog, () => 0, sequentialIds("ag"));
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    expect(resolved.value.phase).toBe("agent");
+
+    const agentPhase = executeAgentPhase(resolved.value, catalog, seededRng(1));
+    expect(agentPhase.ok).toBe(true);
+    if (!agentPhase.ok) {
+      return;
+    }
+    expect(agentPhase.value.phase).toBe("summary");
+  });
+
+  it("refuses to run outside the agent phase", () => {
+    const result = executeAgentPhase(baseState(1), catalog, seededRng(1));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error.code).toBe("wrong_phase");
+  });
+
+  it("leaves an agent deployed by this turn's escalation where the spawn put it", () => {
+    const state = baseState(2);
+    const doomed: GameState = {
+      ...state,
+      player: { ...state.player, minions: [makeMinionInstance("mi-1", "m-hero", [])] },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+    };
+    /* Failing pushes heat to 5, escalating the tier and deploying agents mid-resolve. */
+    const result = executeTurn(doomed, catalog, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const next = result.value;
+    const spawnedIds = new Set(
+      next.opposingAgentInstances.filter((a) => a.deployedOnTurn === 1).map((a) => a.instanceId),
+    );
+    expect(spawnedIds.size).toBeGreaterThan(0);
+    expect(
+      next.activityLog
+        .flatMap((e) => e.events)
+        .filter((e) => e.kind === "agent_moved" && spawnedIds.has(e.agentInstanceId)),
+    ).toEqual([]);
+  });
+});
+
+describe("opposing agent movement", () => {
+  /* `a-cop` is an investigator and `a-spy` an opportunist in the fixture catalog. */
+
+  /** One minion with no useful traits on ms-basic at loc-a: base 0%, so the mission always fails. */
+  function stateWithDoomedMissionAtLocA(): GameState {
+    const state = baseState(1);
+    return {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [makeMinionInstance("mi-1", "m-hero", [])],
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+    };
+  }
+
+  function movedEvents(state: GameState) {
+    return state.activityLog
+      .flatMap((e) => e.events)
+      .filter((e) => e.kind === "agent_moved");
+  }
+
+  it("sends an investigator to the site the player just failed at, and logs the move", () => {
+    const state = withAgentAt(stateWithDoomedMissionAtLocA(), "loc-b", "a-cop", "opp-1", "revealed");
+    const result = executeTurn(state, catalog, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const next = result.value;
+    expect(completedEvents(next)[0]!.success).toBe(false);
+    expect(agentLocationId(next, "opp-1")).toBe("loc-a");
+    expect(movedEvents(next)).toEqual([
+      {
+        kind: "agent_moved",
+        agentInstanceId: "opp-1",
+        agentTemplateId: "a-cop",
+        behavior: "investigator",
+        fromLocationId: "loc-b",
+        toLocationId: "loc-a",
+      },
+    ]);
+  });
+
+  it("moves hidden agents too, without revealing them", () => {
+    const state = withAgentAt(stateWithDoomedMissionAtLocA(), "loc-b", "a-cop", "opp-1", "hidden");
+    const result = executeTurn(state, catalog, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const next = result.value;
+    expect(agentLocationId(next, "opp-1")).toBe("loc-a");
+    const agent = next.opposingAgentInstances.find((a) => a.instanceId === "opp-1");
+    expect(agent?.catalogVisibility).toBe("hidden");
+  });
+
+  it("holds position when the behavior has nothing to chase", () => {
+    /* No mission has failed yet, so the investigator has no scene to work. */
+    const state = withAgentAt(baseState(1), "loc-b", "a-cop", "opp-1", "revealed");
+    const result = executeTurn(state, catalog, () => 0, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(agentLocationId(result.value, "opp-1")).toBe("loc-b");
+    expect(movedEvents(result.value)).toEqual([]);
+  });
+
+  it("remembers a failure from an earlier turn", () => {
+    /* Turn 1 fails at loc-a with the agent parked there, so it has no reason to move yet. */
+    const first = executeTurn(
+      withAgentAt(stateWithDoomedMissionAtLocA(), "loc-a", "a-cop", "opp-1", "revealed"),
+      catalog,
+      () => 0.99,
+      sequentialIds("ag"),
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+    expect(agentLocationId(first.value, "opp-1")).toBe("loc-a");
+
+    /* Shove it to loc-b and resolve a quiet turn: the old failure still pulls it back. */
+    const nextTurn = advanceToNextTurn(first.value);
+    expect(nextTurn.ok).toBe(true);
+    if (!nextTurn.ok) {
+      return;
+    }
+    const relocated: GameState = {
+      ...nextTurn.value,
+      locationAgentPresence: [
+        { locationId: "loc-a", agentInstanceIds: [] },
+        { locationId: "loc-b", agentInstanceIds: ["opp-1"] },
+      ],
+    };
+    const second = executeTurn(relocated, catalog, () => 0, sequentialIds("ag"));
+    expect(second.ok).toBe(true);
+    if (!second.ok) {
+      return;
+    }
+    expect(agentLocationId(second.value, "opp-1")).toBe("loc-a");
+  });
+
+  it("sends an opportunist to the softest site once security rises where it stands", () => {
+    /* Resolving at loc-a raises its security to 1, leaving loc-b the softer site. */
+    const state = withAgentAt(stateWithDoomedMissionAtLocA(), "loc-a", "a-spy", "opp-1", "revealed");
+    const result = executeTurn(state, catalog, () => 0.99, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(agentLocationId(result.value, "opp-1")).toBe("loc-b");
+  });
+});
+
 describe("executePlan", () => {
   it("rejects when not in the main phase", () => {
     const state = { ...baseState(1), phase: "summary" as const };
@@ -186,7 +603,7 @@ describe("executePlan", () => {
       },
       activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
     };
-    const result = executePlan(state, catalog, () => 0, sequentialIds("ag"));
+    const result = executeTurn(state, catalog, () => 0, sequentialIds("ag"));
     expect(result.ok).toBe(true);
     if (!result.ok) {
       return;
