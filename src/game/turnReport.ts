@@ -75,6 +75,8 @@ export type MissionResultReport = {
   omegaSlotIndex: number | null;
   participantInstanceIds: string[];
   plannedAssetIds: (string | null)[];
+  /** Support assets the player spent on this mission (see `ActiveMission.supportAssetIds`). */
+  supportAssetIds: string[];
   outcome: MissionOutcome;
   /** `null` for aborted missions (no roll happened). */
   roll: number | null;
@@ -327,6 +329,7 @@ function buildMissionReports(
       omegaSlotIndex: am?.omegaSlotIndex ?? null,
       participantInstanceIds: am?.participantInstanceIds ?? [],
       plannedAssetIds: am?.plannedAssetIds ?? [],
+      supportAssetIds: am?.supportAssetIds ?? [],
       startedOnTurn: am?.startedOnTurn ?? null,
     };
     if (ev.kind === "mission_aborted") {

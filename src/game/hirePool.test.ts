@@ -35,6 +35,7 @@ function playerAt(infamy: number, minions: MinionInstance[] = []): PlayerState {
     maxHireOffers: 10,
     maxConcurrentMissions: 2,
     maxParticipantsPerMission: 3,
+    maxSupportAssets: 1,
     pendingBonusCommandPoints: 0,
   };
 }

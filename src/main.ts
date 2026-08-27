@@ -35,9 +35,12 @@ import { isOccupiedAssetSlot } from "./game/types";
 import {
   canAssignParticipants,
   computeSuccessChanceBreakdown,
+  describeSupportAssetAbility,
+  isSupportAsset,
   mergedRequiredTraitIdsSorted,
   missionAllowsTargetLocation,
   missionTargetTypeTargetsLocation,
+  supportAbilitiesForAssetIds,
   type MissionTargetLocationFilters,
   type SuccessChanceBreakdown,
 } from "./game/mission";
@@ -495,6 +498,33 @@ function plannedAssetSlotsDisplay(
     .join(", ");
 }
 
+/** `Name — what it does` per committed support asset, for a stat-row tooltip. */
+function supportAssetTooltipLines(
+  catalog: ReturnType<typeof loadContent>,
+  supportAssetIds: readonly string[],
+): string[] {
+  return supportAssetIds.map((id) => {
+    const a = catalog.assets.find((x) => x.id === id);
+    if (a?.supportAbility === undefined) {
+      return `${a?.name ?? id} — no effect`;
+    }
+    return `${a.name} — ${describeSupportAssetAbility(a.supportAbility)}`;
+  });
+}
+
+/** Comma-joined names of the support assets a mission is carrying. */
+function supportAssetsDisplay(
+  catalog: ReturnType<typeof loadContent>,
+  supportAssetIds: readonly string[],
+): string {
+  if (supportAssetIds.length === 0) {
+    return "—";
+  }
+  return supportAssetIds
+    .map((id) => catalog.assets.find((a) => a.id === id)?.name ?? id)
+    .join(", ");
+}
+
 function minionNameByInstanceId(
   catalog: ReturnType<typeof loadContent>,
   roster: readonly MinionInstance[],
@@ -623,6 +653,12 @@ function formatAssignMissionError(err: GameError): string {
       return `Wrong asset in slot ${err.slotIndex + 1} (expected ${err.expectedAssetId}).`;
     case "not_enough_assets":
       return `Not enough ${err.assetId} (need ${err.need}, have ${err.have}).`;
+    case "too_many_support_assets":
+      return `Too many support assets (${err.got}; you have ${err.max} slot${
+        err.max === 1 ? "" : "s"
+      }).`;
+    case "not_a_support_asset":
+      return `${err.assetId} has no support ability and cannot ride along.`;
     case "no_current_event_offer":
       return "No rotating event is available right now.";
     case "event_mission_mismatch":
@@ -662,6 +698,9 @@ function initGameController(
   const minionsList = req<HTMLElement>("assign-minions-list");
   const assignAssetSlotsFieldset = req<HTMLFieldSetElement>("assign-asset-slots-fieldset");
   const assignAssetSlotsList = req<HTMLElement>("assign-asset-slots-list");
+  const assignSupportAssetsFieldset = req<HTMLFieldSetElement>("assign-support-assets-fieldset");
+  const assignSupportAssetsLabel = req<HTMLElement>("assign-support-assets-label");
+  const assignSupportAssetsList = req<HTMLElement>("assign-support-assets-list");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
   const btnExec = req<HTMLButtonElement>("btn-execute-plan");
   const btnRerollHire = req<HTMLButtonElement>("btn-reroll-hire");
@@ -719,6 +758,12 @@ function initGameController(
   );
   /** Parallel to planned mission's `requiredAssetIds` (rebuilt when mission pick changes). */
   const assignAssetSlotAssetIds: (string | null)[] = [];
+  /**
+   * Staged **support** assets, one entry per open support slot. Length tracks
+   * `player.maxSupportAssets` (which lair upgrades move mid-run), so it is resized on every
+   * render rather than pinned to the planned mission.
+   */
+  const assignSupportAssetIds: (string | null)[] = [];
   let assignMissionTemplateId: string | null = null;
   let assignMissionSource: MissionSource | null = null;
   let assignOmegaStageIndex: number | null = null;
@@ -864,6 +909,9 @@ function initGameController(
     for (let i = 0; i < assignSlotInstanceIds.length; i += 1) {
       assignSlotInstanceIds[i] = null;
     }
+    for (let i = 0; i < assignSupportAssetIds.length; i += 1) {
+      assignSupportAssetIds[i] = null;
+    }
     clearAssignMissionTarget();
   }
 
@@ -929,6 +977,60 @@ function initGameController(
     if (assignAssetSlotAssetIds.length > n) {
       assignAssetSlotAssetIds.length = n;
     }
+  }
+
+  /**
+   * Keep the staged support slots aligned with the player's current cap. Growing the cap adds
+   * empty slots; shrinking it drops the tail (and whatever was staged there).
+   */
+  function syncAssignSupportSlotArray(): void {
+    const n = Math.max(0, state.player.maxSupportAssets);
+    while (assignSupportAssetIds.length < n) {
+      assignSupportAssetIds.push(null);
+    }
+    if (assignSupportAssetIds.length > n) {
+      assignSupportAssetIds.length = n;
+    }
+  }
+
+  /**
+   * Drop staged assets the player can no longer cover. Required slots are walked first, then
+   * support slots, so if inventory shrinks under a plan (an `exchange_assets` payout, say) the
+   * optional extras are the ones given up.
+   */
+  function reconcileStagedAssetSlots(): void {
+    syncAssignSupportSlotArray();
+    const budget = new Map<string, number>();
+    const take = (assetId: string): boolean => {
+      const left = budget.get(assetId) ?? state.player.assets[assetId] ?? 0;
+      if (left < 1) {
+        return false;
+      }
+      budget.set(assetId, left - 1);
+      return true;
+    };
+    for (let i = 0; i < assignAssetSlotAssetIds.length; i += 1) {
+      const id = assignAssetSlotAssetIds[i];
+      if (id !== null && id !== undefined && !take(id)) {
+        assignAssetSlotAssetIds[i] = null;
+      }
+    }
+    for (let i = 0; i < assignSupportAssetIds.length; i += 1) {
+      const id = assignSupportAssetIds[i];
+      if (id === null || id === undefined) {
+        continue;
+      }
+      const tpl = content.assets.find((a) => a.id === id);
+      if (tpl === undefined || !isSupportAsset(tpl) || !take(id)) {
+        assignSupportAssetIds[i] = null;
+      }
+    }
+  }
+
+  /** Support asset ids actually staged right now, in slot order (empties dropped). */
+  function stagedSupportAssetIds(): string[] {
+    syncAssignSupportSlotArray();
+    return assignSupportAssetIds.filter((id): id is string => id !== null);
   }
 
   function reconcileTargetWithMission(): void {
@@ -1369,17 +1471,25 @@ function initGameController(
         `Timed event modifier: ${formatSignedPercent(breakdown.eventSuccessModifierDelta)}.`,
       );
     }
+    if (breakdown.supportAssetDelta !== 0) {
+      lines.push(`Support assets: ${formatSignedPercent(breakdown.supportAssetDelta)}.`);
+    }
     if (breakdown.challengeTraitIds.length > 0) {
       const unmatched = new Set(breakdown.unmatchedChallengeTraitIds);
       lines.push(
         `Agent challenge traits at target (from agents you can see): ${breakdown.challengeTraitIds
-          .map(
-            (tid) =>
-              `${traitDisplayNames(content, [tid])}${unmatched.has(tid) ? " (unmatched)" : " (covered)"}`,
-          )
+          .map((tid) => {
+            const name = traitDisplayNames(content, [tid]);
+            if (breakdown.challengeTraitsIgnored) {
+              return `${name} (ignored)`;
+            }
+            return `${name}${unmatched.has(tid) ? " (unmatched)" : " (covered)"}`;
+          })
           .join(", ")}.`,
       );
-      if (breakdown.unmatchedChallengeTraitIds.length > 0) {
+      if (breakdown.challengeTraitsIgnored) {
+        lines.push("A support asset ignores agent challenge traits: no penalty.");
+      } else if (breakdown.unmatchedChallengeTraitIds.length > 0) {
         lines.push(
           `Unmatched challenge traits: ${breakdown.unmatchedChallengeTraitIds.length} * -${content.balance.agentChallengeTraitPenalty}% = -${breakdown.challengeTraitPenaltyTotal}%.`,
         );
@@ -1393,13 +1503,38 @@ function initGameController(
     return lines;
   }
 
+  /**
+   * Inventory units of `assetId` already spoken for by the staged plan — required slots and
+   * support slots both reserve from the same pile, so both are counted here.
+   */
+  function stagedAssetUnits(assetId: string, exclude?: { list: "required" | "support"; index: number }): number {
+    let n = 0;
+    for (let i = 0; i < assignAssetSlotAssetIds.length; i += 1) {
+      if (exclude?.list === "required" && exclude.index === i) {
+        continue;
+      }
+      if (assignAssetSlotAssetIds[i] === assetId) {
+        n += 1;
+      }
+    }
+    for (let i = 0; i < assignSupportAssetIds.length; i += 1) {
+      if (exclude?.list === "support" && exclude.index === i) {
+        continue;
+      }
+      if (assignSupportAssetIds[i] === assetId) {
+        n += 1;
+      }
+    }
+    return n;
+  }
+
   function renderAssignAssetSlots(): void {
     assignAssetSlotsList.innerHTML = "";
     const m = selectedMissionTemplate();
     const req = m?.requiredAssetIds ?? [];
     if (!assignMissionTemplateId || req.length === 0) {
       assignAssetSlotsFieldset.hidden = true;
-      renderAssetsPanel();
+      renderAssignSupportAssets();
       return;
     }
     assignAssetSlotsFieldset.hidden = false;
@@ -1443,12 +1578,10 @@ function initGameController(
           return;
         }
         const owned = state.player.assets[parsed.assetId] ?? 0;
-        let usedElsewhere = 0;
-        for (let j = 0; j < assignAssetSlotAssetIds.length; j += 1) {
-          if (j !== slotIndex && assignAssetSlotAssetIds[j] === parsed.assetId) {
-            usedElsewhere += 1;
-          }
-        }
+        const usedElsewhere = stagedAssetUnits(parsed.assetId, {
+          list: "required",
+          index: slotIndex,
+        });
         if (owned - usedElsewhere < 1) {
           return;
         }
@@ -1501,6 +1634,127 @@ function initGameController(
     }
 
     assignAssetSlotsList.appendChild(wrap);
+    renderAssignSupportAssets();
+  }
+
+  /**
+   * The optional support-asset slots. Unlike required slots these are not tied to the planned
+   * mission — any owned asset with a `supportAbility` fits any slot — so the row is shown
+   * whenever a mission is staged and the player has at least one slot.
+   */
+  function renderAssignSupportAssets(): void {
+    assignSupportAssetsList.innerHTML = "";
+    syncAssignSupportSlotArray();
+    const cap = assignSupportAssetIds.length;
+    if (!assignMissionTemplateId || cap === 0) {
+      assignSupportAssetsFieldset.hidden = true;
+      renderAssetsPanel();
+      return;
+    }
+    assignSupportAssetsFieldset.hidden = false;
+    assignSupportAssetsLabel.textContent = `Support Assets (optional · ${cap} slot${
+      cap === 1 ? "" : "s"
+    })`;
+    const mainOnly = state.phase === "main";
+    const wrap = document.createElement("div");
+    wrap.className = "assign-minion-slots assign-asset-slots assign-support-asset-slots";
+
+    for (let slotIndex = 0; slotIndex < cap; slotIndex += 1) {
+      const slot = document.createElement("div");
+      slot.className = "assign-minion-slot assign-asset-slot assign-support-asset-slot";
+      slot.dataset.supportSlotIndex = String(slotIndex);
+
+      slot.addEventListener("dragenter", (e) => {
+        e.preventDefault();
+        slot.classList.add("assign-minion-slot--dragover");
+      });
+      slot.addEventListener("dragleave", () => {
+        slot.classList.remove("assign-minion-slot--dragover");
+      });
+      slot.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        const dt = e.dataTransfer;
+        if (dt) {
+          dt.dropEffect = "copy";
+        }
+      });
+      slot.addEventListener("drop", (e) => {
+        e.preventDefault();
+        slot.classList.remove("assign-minion-slot--dragover");
+        const raw = e.dataTransfer?.getData("text/plain")?.trim();
+        if (!raw) {
+          return;
+        }
+        const parsed = parseDragPayload(raw);
+        if (parsed?.kind !== "mastermind-asset-card") {
+          return;
+        }
+        const tpl = content.assets.find((a) => a.id === parsed.assetId);
+        if (tpl === undefined || !isSupportAsset(tpl)) {
+          return;
+        }
+        const owned = state.player.assets[parsed.assetId] ?? 0;
+        const usedElsewhere = stagedAssetUnits(parsed.assetId, {
+          list: "support",
+          index: slotIndex,
+        });
+        if (owned - usedElsewhere < 1) {
+          return;
+        }
+        assignSupportAssetIds[slotIndex] = parsed.assetId;
+        renderAssignMinionSlots();
+        onAssignSlotsChanged();
+      });
+
+      const placed = assignSupportAssetIds[slotIndex] ?? null;
+      if (placed === null) {
+        const ph = document.createElement("span");
+        ph.className = "assign-minion-slot-placeholder";
+        ph.textContent = `Support ${slotIndex + 1} · empty`;
+        slot.appendChild(ph);
+      } else {
+        const tpl = content.assets.find((a) => a.id === placed);
+        const chip = document.createElement("div");
+        chip.className = "assign-minion-chip assign-asset-chip";
+        chip.appendChild(createCardArtImg(resolveAssetCardArt(tpl), "card-art--chip"));
+        const chipMain = document.createElement("div");
+        chipMain.className = "assign-minion-chip-main";
+        const chipLabel = document.createElement("span");
+        chipLabel.className = "assign-minion-chip-label";
+        chipLabel.textContent = tpl?.name ?? placed;
+        chipMain.appendChild(chipLabel);
+        if (tpl?.supportAbility !== undefined) {
+          const effect = document.createElement("span");
+          effect.className = "assign-minion-chip-trait";
+          effect.textContent = describeSupportAssetAbility(tpl.supportAbility);
+          chipMain.appendChild(effect);
+        }
+        chip.appendChild(chipMain);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "assign-minion-chip-remove";
+        removeBtn.setAttribute("aria-label", `Remove ${tpl?.name ?? "asset"} from support slot`);
+        removeBtn.textContent = "×";
+        removeBtn.disabled = !mainOnly;
+        removeBtn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          assignSupportAssetIds[slotIndex] = null;
+          renderAssignMinionSlots();
+          onAssignSlotsChanged();
+        });
+        removeBtn.addEventListener("mousedown", (ev) => {
+          ev.stopPropagation();
+        });
+        chip.appendChild(removeBtn);
+        slot.appendChild(chip);
+      }
+
+      wrap.appendChild(slot);
+    }
+
+    assignSupportAssetsList.appendChild(wrap);
     renderAssetsPanel();
   }
 
@@ -2749,19 +3003,16 @@ function initGameController(
     }
 
     for (const { assetId, quantity, template } of rows) {
-      let usedInPlan = 0;
-      for (let j = 0; j < assignAssetSlotAssetIds.length; j += 1) {
-        if (assignAssetSlotAssetIds[j] === assetId) {
-          usedInPlan += 1;
-        }
-      }
-      const available = Math.max(0, quantity - usedInPlan);
+      const available = Math.max(0, quantity - stagedAssetUnits(assetId));
       const mainOnly = state.phase === "main";
 
       const article = document.createElement("article");
       article.className = "asset-card";
       if (gridMode) {
         article.classList.add("asset-card--grid-tile");
+      }
+      if (template !== undefined && isSupportAsset(template)) {
+        article.classList.add("asset-card--support");
       }
       if (available <= 0) {
         article.classList.add("asset-card--unavailable");
@@ -2784,10 +3035,17 @@ function initGameController(
 
       const dl = document.createElement("dl");
       dl.className = "asset-card-stats";
-      appendMinionStatRows(dl, [
+      const assetRows: Array<{ label: string; value: string }> = [
         { label: "Available", value: String(available) },
         { label: "Owned", value: String(quantity) },
-      ]);
+      ];
+      if (template?.supportAbility !== undefined) {
+        assetRows.push({
+          label: "Support",
+          value: describeSupportAssetAbility(template.supportAbility),
+        });
+      }
+      appendMinionStatRows(dl, assetRows);
       body.appendChild(dl);
 
       const descText = template?.description?.trim();
@@ -2910,13 +3168,15 @@ function initGameController(
         lid,
         content.balance.dynamicTraitModifiers,
       );
+      const supportAbilities = supportAbilitiesForAssetIds(am.supportAssetIds, content.assets);
       const successOpts = {
-        ...missionSuccessOptionsForTarget(state, am.target),
+        ...missionSuccessOptionsForTarget(state, am.target, supportAbilities),
         traitsCatalog: content.traits,
         balance: content.balance,
         challengeTraitIds,
         dynamicTraitDelta,
         eventSuccessModifierDelta: totalEventSuccessModifierDelta(),
+        supportAbilities,
         ...(mission.requiredAssetIds.length > 0
           ? { assignedAssetIds: am.plannedAssetIds }
           : { playerAssets: state.player.assets }),
@@ -2950,6 +3210,13 @@ function initGameController(
             ),
           },
         );
+      }
+      if (am.supportAssetIds.length > 0) {
+        rows.push({
+          label: "Support assets",
+          value: supportAssetsDisplay(content, am.supportAssetIds),
+          tooltipLines: supportAssetTooltipLines(content, am.supportAssetIds),
+        });
       }
       let successValue: string;
       let successTooltip: readonly string[] | undefined;
@@ -4466,6 +4733,12 @@ function initGameController(
         });
       }
     }
+    if (m.supportAssetIds.length > 0) {
+      rows.push({
+        label: "Support assets",
+        value: supportAssetsDisplay(content, m.supportAssetIds),
+      });
+    }
     appendMinionStatRows(dl, rows);
     heroText.appendChild(dl);
     hero.appendChild(heroText);
@@ -4699,6 +4972,7 @@ function initGameController(
     const p = state.player;
     reconcileAssignSlots();
     syncAssignAssetSlotArrayWithMission();
+    reconcileStagedAssetSlots();
 
     organizationNameEl.textContent = state.organizationName;
     playerNameEl.textContent = state.playerName;
@@ -4786,6 +5060,7 @@ function initGameController(
       { length: mt.requiredAssetIds.length },
       (_, i) => assignAssetSlotAssetIds[i] ?? null,
     );
+    const supportAssetIds = stagedSupportAssetIds();
     const missionTemplateId = assignMissionTemplateId;
     const missionSource = assignMissionSource;
     dispatch(
@@ -4801,6 +5076,7 @@ function initGameController(
           missionSource === "omega" ? assignOmegaSlotIndex : null,
           checked,
           plannedAssetIds,
+          supportAssetIds,
         ),
       {
         onApplied: clearAllAssignSlots,

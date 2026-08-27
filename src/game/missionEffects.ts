@@ -78,6 +78,8 @@ function describeMissionEffect(effect: MissionEffect): string {
       return `Max hire offers ${signedInt(effect.delta)}`;
     case "max_participants_per_mission_delta":
       return `Max participants per mission ${signedInt(effect.delta)}`;
+    case "max_support_assets_delta":
+      return `Max support assets per mission ${signedInt(effect.delta)}`;
     case "max_command_points_per_turn_delta":
       return `Max command points per turn ${signedInt(effect.delta)}`;
     case "security_level_delta_global":
@@ -735,6 +737,11 @@ function applyPlayerStatDeltas(player: PlayerState, effect: MissionEffect): Play
     case "max_participants_per_mission_delta": {
       const next = Math.max(MIN_STAT_CAP, player.maxParticipantsPerMission + effect.delta);
       return { ...player, maxParticipantsPerMission: next };
+    }
+    case "max_support_assets_delta": {
+      /* Floor 0, not 1: a run with no support slots is a valid (and the pre-upgrade) state. */
+      const next = Math.max(0, player.maxSupportAssets + effect.delta);
+      return { ...player, maxSupportAssets: next };
     }
     case "max_command_points_per_turn_delta": {
       const prevMax = player.maxCommandPoints;

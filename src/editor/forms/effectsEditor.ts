@@ -53,6 +53,7 @@ const EFFECT_FIELD_DEFS: Record<EffectKind, FieldDef[]> = {
   max_roster_size_delta: [DELTA],
   max_hire_offers_delta: [DELTA],
   max_participants_per_mission_delta: [DELTA],
+  max_support_assets_delta: [DELTA],
   max_command_points_per_turn_delta: [DELTA],
   security_level_delta_global: [DELTA],
   security_level_delta_by_location_type: [DELTA, { key: "locationType", input: "locationType" }],

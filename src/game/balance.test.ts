@@ -100,6 +100,7 @@ describe("balance knobs steer executePlan and run setup", () => {
       omegaSlotIndex: null,
       participantInstanceIds: ["mi-1"],
       plannedAssetIds: [],
+      supportAssetIds: [],
       turnsRemaining: 1,
       startedOnTurn: 1,
     };

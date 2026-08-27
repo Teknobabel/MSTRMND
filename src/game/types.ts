@@ -316,6 +316,8 @@ export type MissionEffect =
   | { kind: "max_roster_size_delta"; delta: number }
   | { kind: "max_hire_offers_delta"; delta: number }
   | { kind: "max_participants_per_mission_delta"; delta: number }
+  /** Adds delta to how many support assets may ride along on one mission; floor 0. */
+  | { kind: "max_support_assets_delta"; delta: number }
   | { kind: "max_command_points_per_turn_delta"; delta: number }
   /** Adds delta to security at every playable location; clamped per-site to [0, locationLevel]. */
   | { kind: "security_level_delta_global"; delta: number }
@@ -532,12 +534,60 @@ export type MapTemplate = {
   locationIds: string[];
 };
 
+/**
+ * What a **support asset** does when the player brings it along on a mission. Support assets
+ * are optional extras dropped into the mission's support slots (see
+ * `PlayerState.maxSupportAssets`); they are consumed on assign exactly like required assets,
+ * but they never enter the required-trait / required-asset success ratio — each one bends one
+ * rule of the resolve instead.
+ *
+ * - `success_chance_bonus` — flat `+percent` on the mission's success chance (stacks across
+ *   slots, like every other flat modifier).
+ * - `prevent_security_increase` — the mission cannot leave security at its target site higher
+ *   than it found it: the automatic post-resolve bump is skipped, and any net rise this
+ *   mission's own effects caused there is given back. A reduction still stands.
+ * - `prevent_heat_increase` — the mission cannot end with the player's heat higher than it
+ *   started (baseline failure heat, an Investigator's bonus heat, and `heat_delta` effects all
+ *   included). Reductions still land.
+ * - `prevent_injuries` — no participant comes home with the `injured` trait they did not
+ *   already have (blocks the Brawler and any effect that would have applied it).
+ * - `ignore_agent_challenge_traits` — the site's opposing agents contribute no challenge
+ *   traits, so their flat penalty is zero however many are in play.
+ * - `ignore_security_traits` — the target site's **revealed security** traits drop out of the
+ *   required-trait set. The site's own `locationRequiredTraits` are untouched.
+ */
+export type SupportAssetAbility =
+  | { kind: "success_chance_bonus"; percent: number }
+  | { kind: "prevent_security_increase" }
+  | { kind: "prevent_heat_increase" }
+  | { kind: "prevent_injuries" }
+  | { kind: "ignore_agent_challenge_traits" }
+  | { kind: "ignore_security_traits" };
+
+export type SupportAssetAbilityKind = SupportAssetAbility["kind"];
+
+/** Every support ability kind, in the order the editor's picker lists them. */
+export const SUPPORT_ASSET_ABILITY_KINDS: readonly SupportAssetAbilityKind[] = [
+  "success_chance_bonus",
+  "prevent_security_increase",
+  "prevent_heat_increase",
+  "prevent_injuries",
+  "ignore_agent_challenge_traits",
+  "ignore_security_traits",
+];
+
 export type Asset = {
   id: string;
   name: string;
   description?: string;
   /** Optional card art URL (site root path under `public/`). */
   cardArt?: string;
+  /**
+   * Marks this asset as a **support asset** and says what it does on a mission. Absent ⇒ the
+   * asset is inert cargo: it can still be a mission's `requiredAssetIds` entry, a steal target
+   * or a `gain_assets` payout, but it cannot be dropped into a support slot.
+   */
+  supportAbility?: SupportAssetAbility;
 };
 
 export type OmegaPlanStage = {
@@ -745,6 +795,11 @@ export type BalanceConfig = {
   startingMaxHireOffers: number;
   startingMaxConcurrentMissions: number;
   startingMaxParticipantsPerMission: number;
+  /**
+   * Support asset slots a mission opens with at the start of a run. Lair upgrades raise it via
+   * `max_support_assets_delta`. `0` turns the whole support-asset system off for a run.
+   */
+  startingMaxSupportAssets: number;
   /** Fixed participant cap for event missions (ignores the player's normal cap). */
   eventMaxParticipants: number;
   /**
@@ -827,6 +882,7 @@ export const DEFAULT_BALANCE: BalanceConfig = {
   startingMaxHireOffers: 3,
   startingMaxConcurrentMissions: 2,
   startingMaxParticipantsPerMission: 3,
+  startingMaxSupportAssets: 1,
   eventMaxParticipants: 3,
   eventCooldownTurnsMin: 0,
   eventCooldownTurnsMax: 3,

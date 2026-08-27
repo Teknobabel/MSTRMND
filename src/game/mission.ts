@@ -1,4 +1,5 @@
 import type {
+  Asset,
   BalanceConfig,
   IntelLevel,
   LocationLevel,
@@ -8,6 +9,8 @@ import type {
   MissionTargetType,
   MissionTemplate,
   SecurityLevel,
+  SupportAssetAbility,
+  SupportAssetAbilityKind,
   Trait,
 } from "./types";
 import { DEFAULT_BALANCE } from "./types";
@@ -99,6 +102,84 @@ export function missionAllowsTargetLocation(
   );
 }
 
+/* ---------------------------------------------------------------------------------------
+ * Support assets
+ *
+ * A support asset is any catalog `Asset` carrying a `supportAbility`. The player drops them
+ * into a mission's support slots (`PlayerState.maxSupportAssets` of them), they are spent on
+ * assign like required assets, and each one bends one rule of the resolve. Two of the six
+ * abilities move the success chance and are read here; the other four are read at resolve
+ * time in `gameState.ts` (see `SupportAssetAbility`).
+ * ------------------------------------------------------------------------------------- */
+
+/** Whether this catalog asset may be placed in a support slot at all. */
+export function isSupportAsset(asset: Asset): boolean {
+  return asset.supportAbility !== undefined;
+}
+
+/**
+ * The abilities a list of committed support asset ids brings, in the order the ids were
+ * committed. Ids that are not in the catalog, or name an asset with no ability, are skipped —
+ * a support slot never fails a resolve, it just contributes nothing.
+ */
+export function supportAbilitiesForAssetIds(
+  assetIds: readonly string[],
+  assets: readonly Asset[],
+): SupportAssetAbility[] {
+  const byId = new Map(assets.map((a) => [a.id, a] as const));
+  const out: SupportAssetAbility[] = [];
+  for (const id of assetIds) {
+    const ability = byId.get(id)?.supportAbility;
+    if (ability !== undefined) {
+      out.push(ability);
+    }
+  }
+  return out;
+}
+
+/** One-line player-facing gist of a support ability, for cards and tooltips. */
+export function describeSupportAssetAbility(ability: SupportAssetAbility): string {
+  switch (ability.kind) {
+    case "success_chance_bonus":
+      return `${ability.percent >= 0 ? "+" : ""}${ability.percent}% mission success chance`;
+    case "prevent_security_increase":
+      return "Target site's security does not rise from this mission";
+    case "prevent_heat_increase":
+      return "This mission cannot raise your heat";
+    case "prevent_injuries":
+      return "No participant comes home injured";
+    case "ignore_agent_challenge_traits":
+      return "Opposing agents' challenge traits cost nothing";
+    case "ignore_security_traits":
+      return "Revealed security traits are not required";
+    default: {
+      const _exhaustive: never = ability;
+      return String(_exhaustive);
+    }
+  }
+}
+
+/** Whether any committed support asset carries `kind`. Duplicate flags do not stack. */
+export function hasSupportAbility(
+  abilities: readonly SupportAssetAbility[] | undefined,
+  kind: SupportAssetAbilityKind,
+): boolean {
+  return (abilities ?? []).some((a) => a.kind === kind);
+}
+
+/** Total flat success % from `success_chance_bonus` support assets (these *do* stack). */
+export function supportSuccessChanceBonus(
+  abilities: readonly SupportAssetAbility[] | undefined,
+): number {
+  let total = 0;
+  for (const a of abilities ?? []) {
+    if (a.kind === "success_chance_bonus") {
+      total += a.percent;
+    }
+  }
+  return total;
+}
+
 export type MissionSuccessOptions = {
   /** Extra required trait ids from situational modifiers; merged with template (deduped). */
   additionalRequiredTraitIds?: string[];
@@ -122,6 +203,14 @@ export type MissionSuccessOptions = {
   dynamicTraitDelta?: number;
   /** Flat % delta from timed event modifiers (see `GameState.activeSuccessModifiers`). */
   eventSuccessModifierDelta?: number;
+  /**
+   * Abilities of the support assets committed to this mission (resolve them with
+   * {@link supportAbilitiesForAssetIds}). Only `success_chance_bonus` and
+   * `ignore_agent_challenge_traits` mean anything to the success formula; the rest are read at
+   * resolve time. `ignore_security_traits` is applied *before* this call, by whoever builds
+   * `additionalRequiredTraitIds`.
+   */
+  supportAbilities?: readonly SupportAssetAbility[];
   /** Tunable modifier magnitudes (`catalog.balance`); defaults preserve legacy values. */
   balance?: Pick<
     BalanceConfig,
@@ -290,7 +379,14 @@ export type SuccessChanceBreakdown = {
   unmatchedChallengeTraitIds: string[];
   /** `unmatchedChallengeTraitIds.length × balance.agentChallengeTraitPenalty` (positive). */
   challengeTraitPenaltyTotal: number;
+  /**
+   * An `ignore_agent_challenge_traits` support asset zeroed the penalty. The traits are still
+   * listed in {@link challengeTraitIds} so the UI can show what was shrugged off.
+   */
+  challengeTraitsIgnored: boolean;
   eventSuccessModifierDelta: number;
+  /** Flat % from `success_chance_bonus` support assets. */
+  supportAssetDelta: number;
 };
 
 export function computeSuccessChanceBreakdown(
@@ -330,13 +426,23 @@ export function computeSuccessChanceBreakdown(
   const statusDelta = statusEntries.reduce((s, e) => s + e.delta, 0);
   const dyn = options?.dynamicTraitDelta ?? 0;
   const eventMod = options?.eventSuccessModifierDelta ?? 0;
+  const supportAssetDelta = supportSuccessChanceBonus(options?.supportAbilities);
   const challengeTraitIds = [...new Set(options?.challengeTraitIds ?? [])]
     .filter((id) => id.length > 0)
     .sort((a, b) => a.localeCompare(b));
-  const unmatchedChallengeTraitIds = challengeTraitIds.filter((id) => !union.has(id));
+  /* A support asset that ignores challenge traits zeroes the penalty outright — the traits
+   * stay on the breakdown so the player can see what the asset bought them. */
+  const challengeTraitsIgnored = hasSupportAbility(
+    options?.supportAbilities,
+    "ignore_agent_challenge_traits",
+  );
+  const unmatchedChallengeTraitIds = challengeTraitsIgnored
+    ? []
+    : challengeTraitIds.filter((id) => !union.has(id));
   const challengeTraitPenaltyTotal =
     balance.agentChallengeTraitPenalty * unmatchedChallengeTraitIds.length;
-  const preClampPercent = base + statusDelta + dyn + eventMod - challengeTraitPenaltyTotal;
+  const preClampPercent =
+    base + statusDelta + dyn + eventMod + supportAssetDelta - challengeTraitPenaltyTotal;
   const finalPercent = Math.min(100, Math.max(0, preClampPercent));
   return {
     finalPercent,
@@ -353,7 +459,9 @@ export function computeSuccessChanceBreakdown(
     challengeTraitIds,
     unmatchedChallengeTraitIds,
     challengeTraitPenaltyTotal,
+    challengeTraitsIgnored,
     eventSuccessModifierDelta: eventMod,
+    supportAssetDelta,
   };
 }
 
@@ -362,8 +470,10 @@ export function computeSuccessChanceBreakdown(
  * (required trait count + required asset occurrence count). Uses `assignedAssetIds`
  * when its length matches `template.requiredAssetIds`; otherwise uses current `playerAssets`
  * with {@link matchedAssetUnits}. Then applies flat +10% per participating `status_positive`
- * trait occurrence and −20% per `status_negative`, then `dynamicTraitDelta`, then −20% per
- * distinct `challengeTraitIds` entry the participants do not cover, clamped to [0, 100].
+ * trait occurrence and −20% per `status_negative`, then `dynamicTraitDelta`, then the flat
+ * bonus from `success_chance_bonus` support assets, then −20% per distinct
+ * `challengeTraitIds` entry the participants do not cover (skipped entirely when a support
+ * asset ignores them), clamped to [0, 100].
  */
 export function successChancePercent(
   template: MissionTemplate,

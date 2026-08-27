@@ -157,6 +157,12 @@
     "name": "Sigma-7 exfil window",
     "description": "Beat the rotating cordon; the window is measured in elevator cycles.",
     "durationTurns": 3,
+    "onSuccessEffects": [
+      {
+        "kind": "max_support_assets_delta",
+        "delta": 1
+      }
+    ],
     "requiredTraitIds": [
       "soldier",
       "fast",
@@ -239,6 +245,12 @@
     "name": "Third Rail distraction",
     "description": "Crowd physics as cover while the real move happens three blocks east.",
     "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "max_support_assets_delta",
+        "delta": 1
+      }
+    ],
     "requiredTraitIds": [
       "politician",
       "charismatic",
@@ -278,6 +290,12 @@
     "name": "Hollow Crown social pass",
     "description": "Engineer a plausible reason to be exactly where the crown forbids.",
     "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "max_support_assets_delta",
+        "delta": 1
+      }
+    ],
     "requiredTraitIds": [
       "spy",
       "persuasive",

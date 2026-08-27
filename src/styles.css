@@ -3184,6 +3184,23 @@ body {
   cursor: default;
 }
 
+/* Support slots read as optional: cooler accent, dimmer empty state than a required slot. */
+.assign-support-asset-slot {
+  border-color: var(--line-1);
+}
+
+.assign-support-asset-slot:has(.assign-minion-chip) {
+  border-left: 2px solid var(--cyan);
+}
+
+.assign-support-asset-slot .assign-minion-chip-trait {
+  color: var(--cyan);
+}
+
+.asset-card--support {
+  border-left: 2px solid var(--cyan);
+}
+
 .assign-minion-chip {
   position: relative;
   display: flex;

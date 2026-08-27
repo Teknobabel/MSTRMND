@@ -41,6 +41,7 @@ function activeMission(overrides: Partial<ActiveMission>): ActiveMission {
     omegaSlotIndex: null,
     participantInstanceIds: [],
     plannedAssetIds: [],
+    supportAssetIds: [],
     turnsRemaining: 1,
     startedOnTurn: 1,
     ...overrides,

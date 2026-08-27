@@ -19,6 +19,7 @@ function stubMission(overrides?: Partial<ActiveMission>): ActiveMission {
     omegaSlotIndex: null,
     participantInstanceIds: [],
     plannedAssetIds: [],
+    supportAssetIds: [],
     turnsRemaining: 0,
     startedOnTurn: 1,
     ...overrides,

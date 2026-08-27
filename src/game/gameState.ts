@@ -26,6 +26,7 @@ import type {
   MissionTargetType,
   MissionTemplate,
   SecurityLevel,
+  SupportAssetAbility,
 } from "./types";
 import { DEFAULT_BALANCE, isOccupiedAssetSlot } from "./types";
 import {
@@ -76,10 +77,13 @@ import {
 import {
   canAssignParticipants,
   computeSuccessChanceBreakdown,
+  hasSupportAbility,
+  isSupportAsset,
   missionAllowsTargetLocationIntel,
   missionAllowsTargetLocationLevel,
   missionAllowsTargetLocationSecurity,
   missionAllowsTargetLocationType,
+  supportAbilitiesForAssetIds,
   type MissionSuccessOptions,
 } from "./mission";
 import {
@@ -164,6 +168,12 @@ export type PlayerState = {
   /** Max minions assignable to a single mission (default 3). */
   maxParticipantsPerMission: number;
   /**
+   * Max **support** assets that may ride along on one mission (`0` = the system is off).
+   * Starts at `balance.startingMaxSupportAssets` and is raised by lair upgrades carrying
+   * `max_support_assets_delta`.
+   */
+  maxSupportAssets: number;
+  /**
    * One-shot bonus CP added on top of `maxCommandPoints` at the next `advanceToNextTurn` refill,
    * then cleared.
    */
@@ -185,6 +195,13 @@ export type ActiveMission = {
    * `null` = that slot was left empty at assign. Deducted from `player.assets` when the mission starts.
    */
   plannedAssetIds: (string | null)[];
+  /**
+   * Optional **support** assets committed to this mission (0–`player.maxSupportAssets` ids, in
+   * the order the player placed them). Deducted from `player.assets` alongside
+   * {@link ActiveMission.plannedAssetIds} when the mission starts, and refunded together with
+   * them on cancel or abort. Every id here names a catalog asset with a `supportAbility`.
+   */
+  supportAssetIds: string[];
   turnsRemaining: number;
   /** `GameState.turnNumber` when this mission was assigned (Main Phase). */
   startedOnTurn: number;
@@ -551,6 +568,8 @@ export type GameError =
       actual: string;
     }
   | { code: "not_enough_assets"; assetId: string; need: number; have: number }
+  | { code: "too_many_support_assets"; max: number; got: number }
+  | { code: "not_a_support_asset"; assetId: string }
   | { code: "no_current_event_offer" }
   | { code: "run_ended"; ending: RunEnding }
   | {
@@ -642,9 +661,18 @@ export function mostRecentFailedMissionLocationId(
 }
 
 /** Extra required traits from the target location’s site roll + revealed security stack. */
+/**
+ * The situational required traits a target site adds: its per-run `locationRequiredTraits`
+ * plus whatever of its security stack is currently revealed.
+ *
+ * An `ignore_security_traits` support asset drops the **security** half only — the site's own
+ * required traits are a property of the place, not of its guard posture, so no support asset
+ * waves them away.
+ */
 export function missionSuccessOptionsForTarget(
   state: GameState,
   target: MissionTarget,
+  supportAbilities?: readonly SupportAssetAbility[],
 ): MissionSuccessOptions {
   const lid = getMissionTargetLocationId(target);
   if (lid === null) {
@@ -656,9 +684,11 @@ export function missionSuccessOptionsForTarget(
       merged.add(id);
     }
   }
-  for (const id of revealedSecurityTraitIds(state, lid)) {
-    if (id.length > 0) {
-      merged.add(id);
+  if (!hasSupportAbility(supportAbilities, "ignore_security_traits")) {
+    for (const id of revealedSecurityTraitIds(state, lid)) {
+      if (id.length > 0) {
+        merged.add(id);
+      }
     }
   }
   if (merged.size === 0) {
@@ -990,6 +1020,7 @@ export function createInitialGameState(
     maxHireOffers: catalog.balance.startingMaxHireOffers,
     maxConcurrentMissions: catalog.balance.startingMaxConcurrentMissions,
     maxParticipantsPerMission: catalog.balance.startingMaxParticipantsPerMission,
+    maxSupportAssets: catalog.balance.startingMaxSupportAssets,
     pendingBonusCommandPoints: 0,
   };
   const runLocations = locationTemplatesForOmegaPlan(catalog, activeOmegaPlanId);
@@ -1392,6 +1423,8 @@ export function assignMission(
   omegaSlotIndex: number | null,
   participantInstanceIds: string[],
   plannedAssetIds: (string | null)[],
+  /** Optional support assets to bring; defaults to none so old call sites keep working. */
+  supportAssetIds: readonly string[] = [],
 ): Result<GameState, GameError> {
   if (state.phase !== "main") {
     return { ok: false, error: { code: "wrong_phase", expected: "main", actual: state.phase } };
@@ -1749,12 +1782,35 @@ export function assignMission(
       };
     }
   }
+  /* Support assets are optional extras, so they are checked on their own terms: a cap on how
+   * many fit, and a catalog check that each one actually does something. They share the
+   * inventory tally below with the required slots — one unit is one unit. */
+  if (supportAssetIds.length > state.player.maxSupportAssets) {
+    return {
+      ok: false,
+      error: {
+        code: "too_many_support_assets",
+        max: state.player.maxSupportAssets,
+        got: supportAssetIds.length,
+      },
+    };
+  }
+  for (const assetId of supportAssetIds) {
+    const asset = catalog.assets.find((a) => a.id === assetId);
+    if (asset === undefined || !isSupportAsset(asset)) {
+      return { ok: false, error: { code: "not_a_support_asset", assetId } };
+    }
+  }
+
   const assetDeductionTally = new Map<string, number>();
   for (let i = 0; i < requiredAssetIds.length; i += 1) {
     if (plannedAssetIds[i] !== null) {
       const id = requiredAssetIds[i]!;
       assetDeductionTally.set(id, (assetDeductionTally.get(id) ?? 0) + 1);
     }
+  }
+  for (const assetId of supportAssetIds) {
+    assetDeductionTally.set(assetId, (assetDeductionTally.get(assetId) ?? 0) + 1);
   }
   for (const [assetId, needQty] of assetDeductionTally) {
     const haveQty = state.player.assets[assetId] ?? 0;
@@ -1797,6 +1853,7 @@ export function assignMission(
     omegaSlotIndex: missionSource === "omega" ? omegaSlotIndex : null,
     participantInstanceIds: [...participantInstanceIds],
     plannedAssetIds: [...plannedAssetIds],
+    supportAssetIds: [...supportAssetIds],
     turnsRemaining: missionTemplate.durationTurns,
     startedOnTurn: state.turnNumber,
   };
@@ -1853,6 +1910,9 @@ export function cancelMission(
     if (p !== null) {
       refundAssets.set(p, (refundAssets.get(p) ?? 0) + 1);
     }
+  }
+  for (const p of am.supportAssetIds) {
+    refundAssets.set(p, (refundAssets.get(p) ?? 0) + 1);
   }
   const refundedAssets: Record<string, number> = { ...state.player.assets };
   for (const [assetId, qty] of refundAssets) {
@@ -2032,6 +2092,9 @@ export function executePlan(
           refund.set(pa, (refund.get(pa) ?? 0) + 1);
         }
       }
+      for (const sa of am.supportAssetIds) {
+        refund.set(sa, (refund.get(sa) ?? 0) + 1);
+      }
       if (refund.size > 0) {
         const nextAssets = { ...player.assets };
         for (const [assetId, qty] of refund) {
@@ -2080,6 +2143,18 @@ export function executePlan(
 
     const eventSuccessModifierDelta = activeSuccessModifiers.reduce((s, m) => s + m.delta, 0);
 
+    /* What the player packed. Two of these abilities bend the success chance (handled inside
+     * the breakdown); the other four are enforced further down this block, each by holding the
+     * mission to the state it found rather than by skipping one specific rule — that way a
+     * template effect cannot sneak past the promise the asset made. */
+    const supportAbilities = supportAbilitiesForAssetIds(am.supportAssetIds, catalog.assets);
+    const preventSecurityIncrease = hasSupportAbility(
+      supportAbilities,
+      "prevent_security_increase",
+    );
+    const preventHeatIncrease = hasSupportAbility(supportAbilities, "prevent_heat_increase");
+    const preventInjuries = hasSupportAbility(supportAbilities, "prevent_injuries");
+
     /* Deliberate: site required/security traits come from the START-of-turn snapshot
      * (`state`), not the in-loop locals — resolution is simultaneous, so an earlier
      * mission's security bump this resolve must not change a later mission's requirements.
@@ -2088,12 +2163,13 @@ export function executePlan(
       template,
       participants,
       {
-        ...missionSuccessOptionsForTarget(state, am.target),
+        ...missionSuccessOptionsForTarget(state, am.target, supportAbilities),
         assignedAssetIds: am.plannedAssetIds,
         traitsCatalog: catalog.traits,
         challengeTraitIds,
         dynamicTraitDelta,
         eventSuccessModifierDelta,
+        supportAbilities,
         balance: catalog.balance,
       },
     );
@@ -2105,6 +2181,19 @@ export function executePlan(
     }
     const infamyBefore = player.infamy;
     const heatBefore = player.heat;
+    /* Baselines for the "prevent" support assets: the state this mission found, restored below
+     * once everything it could do has been done. */
+    const securityBefore =
+      missionLocId === null
+        ? null
+        : securityLevelForLocation(locationSecurityStates, missionLocId);
+    const alreadyInjuredIds = preventInjuries
+      ? new Set(
+          am.participantInstanceIds.filter((iid) =>
+            (instanceById.get(iid)?.traitIds ?? []).includes(INJURED_TRAIT_ID),
+          ),
+        )
+      : null;
     const baselineInfamy = success
       ? catalog.balance.infamySuccessDelta
       : catalog.balance.infamyFailureDelta;
@@ -2165,9 +2254,11 @@ export function executePlan(
     }
 
     /* A Brawler puts the crew in the hospital, after the template's own failure effects have
-     * had their say. Minions already carrying the trait are left alone. */
+     * had their say. Minions already carrying the trait are left alone, and a `prevent_injuries`
+     * support asset stops the ability firing at all — no bruises, and no misleading log row
+     * saying the Brawler landed one. Injuries a *template effect* granted are undone below. */
     const brawlerAgent =
-      success || missionLocId === null
+      success || missionLocId === null || preventInjuries
         ? undefined
         : agentWithAbilityAtLocation(
             opposingAgentInstances,
@@ -2199,6 +2290,38 @@ export function executePlan(
           activeMissionId: am.id,
         });
       }
+    }
+
+    /* --- Support-asset promises, cashed in --------------------------------------------
+     * Each of these holds one dimension of the outcome to where the mission found it, after
+     * everything that could have moved it (baseline, passive agent abilities, the template's
+     * own effects) has run. Improvements are never rolled back — only rises. */
+    if (preventInjuries && alreadyInjuredIds !== null) {
+      let anyHealed = false;
+      for (const iid of am.participantInstanceIds) {
+        const inst = instanceById.get(iid);
+        if (
+          inst === undefined ||
+          alreadyInjuredIds.has(iid) ||
+          !inst.traitIds.includes(INJURED_TRAIT_ID)
+        ) {
+          continue;
+        }
+        instanceById.set(iid, {
+          ...inst,
+          traitIds: inst.traitIds.filter((t) => t !== INJURED_TRAIT_ID),
+        });
+        anyHealed = true;
+      }
+      if (anyHealed) {
+        player = {
+          ...player,
+          minions: player.minions.map((mm) => instanceById.get(mm.instanceId) ?? mm),
+        };
+      }
+    }
+    if (preventHeatIncrease && player.heat > heatBefore) {
+      player = { ...player, heat: heatBefore };
     }
 
     /* Working a site moves each participant's own standing there by a fixed amount — no roll.
@@ -2300,11 +2423,27 @@ export function executePlan(
 
     const secLoc = getMissionTargetLocationId(am.target);
     if (secLoc !== null) {
-      locationSecurityStates = raiseSecurityAfterMissionAtLocation(
-        locationSecurityStates,
-        catalog,
-        secLoc,
-      );
+      if (preventSecurityIncrease) {
+        /* The site's guard never got tighter than it already was: no automatic bump, and any
+         * net rise the template's own effects caused here is given back. A *reduction* still
+         * stands — the asset caps the mission's effect on security, it does not freeze it.
+         * The agents at the site are still flushed into the open below: this hides the traces,
+         * not the crew that was standing there watching. */
+        if (securityBefore !== null) {
+          const after = securityLevelForLocation(locationSecurityStates, secLoc);
+          if (after > securityBefore) {
+            locationSecurityStates = locationSecurityStates.map((st) =>
+              st.locationId === secLoc ? { ...st, securityLevel: securityBefore } : st,
+            );
+          }
+        }
+      } else {
+        locationSecurityStates = raiseSecurityAfterMissionAtLocation(
+          locationSecurityStates,
+          catalog,
+          secLoc,
+        );
+      }
       const agentsAtSite = countOpposingAgentsAtLocationFromData(
         opposingAgentInstances,
         locationAgentPresence,
@@ -2491,6 +2630,7 @@ export function executePlan(
             omegaSlotIndex: null,
             participantInstanceIds: [],
             plannedAssetIds: [],
+            supportAssetIds: [],
             turnsRemaining: 0,
             startedOnTurn: state.turnNumber,
           };

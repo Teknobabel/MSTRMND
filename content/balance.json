@@ -59,6 +59,7 @@
   "startingMaxHireOffers": 3,
   "startingMaxParticipantsPerMission": 3,
   "startingMaxRosterSize": 5,
+  "startingMaxSupportAssets": 1,
   "statusNegativePenalty": 20,
   "statusPositiveBonus": 10
 }

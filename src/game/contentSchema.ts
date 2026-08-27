@@ -21,6 +21,7 @@ import type {
   SecurityLevel,
   PlayerProfile,
   StartingDynamicTrait,
+  SupportAssetAbility,
   Trait,
   WantedLevelTier,
 } from "./types";
@@ -279,6 +280,10 @@ export const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnio
     delta: deltaSchema,
   }),
   z.object({
+    kind: z.literal("max_support_assets_delta"),
+    delta: z.number().int().min(-50).max(50),
+  }),
+  z.object({
     kind: z.literal("max_participants_per_mission_delta"),
     delta: deltaSchema,
   }),
@@ -443,11 +448,28 @@ export const omegaPlanTemplateSchema = z.object({
   victoryNarrative: z.array(z.string().min(1)).optional(),
 });
 
+/** What a support asset does on a mission (see {@link SupportAssetAbility}). */
+export const supportAssetAbilitySchema: z.ZodType<SupportAssetAbility> = z.discriminatedUnion(
+  "kind",
+  [
+    z.object({
+      kind: z.literal("success_chance_bonus"),
+      percent: z.number().int().min(-100).max(100),
+    }),
+    z.object({ kind: z.literal("prevent_security_increase") }),
+    z.object({ kind: z.literal("prevent_heat_increase") }),
+    z.object({ kind: z.literal("prevent_injuries") }),
+    z.object({ kind: z.literal("ignore_agent_challenge_traits") }),
+    z.object({ kind: z.literal("ignore_security_traits") }),
+  ],
+);
+
 export const assetSchema: z.ZodType<Asset> = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
   cardArt: z.string().min(1).optional(),
+  supportAbility: supportAssetAbilitySchema.optional(),
 });
 
 export const playerProfileSchema: z.ZodType<PlayerProfile> = z.object({
@@ -524,6 +546,7 @@ export const balanceConfigSchema = z.object({
     12,
     DEFAULT_BALANCE.startingMaxParticipantsPerMission,
   ),
+  startingMaxSupportAssets: balanceInt(0, 12, DEFAULT_BALANCE.startingMaxSupportAssets),
   eventMaxParticipants: balanceInt(1, 12, DEFAULT_BALANCE.eventMaxParticipants),
   eventCooldownTurnsMin: balanceInt(0, 99, DEFAULT_BALANCE.eventCooldownTurnsMin),
   eventCooldownTurnsMax: balanceInt(0, 99, DEFAULT_BALANCE.eventCooldownTurnsMax),

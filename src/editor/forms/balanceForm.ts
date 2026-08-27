@@ -158,6 +158,14 @@ const GROUPS: BalanceGroup[] = [
         max: 12,
       },
       {
+        key: "startingMaxSupportAssets",
+        label: "Starting support asset slots",
+        tooltip:
+          "How many optional support assets may ride along on one mission at the start of a run. Support assets are spent like required assets but bend a rule of the resolve instead of counting toward success. Lair upgrades raise this; 0 turns the system off for the run.",
+        min: 0,
+        max: 12,
+      },
+      {
         key: "eventMaxParticipants",
         label: "Event crew size cap",
         tooltip:

@@ -22,7 +22,10 @@
   {
     "id": "burner_network",
     "name": "Burner Network",
-    "description": "Disposable devices and SIMs that vanish after use."
+    "description": "Disposable devices and SIMs that vanish after use.",
+    "supportAbility": {
+      "kind": "prevent_heat_increase"
+    }
   },
   {
     "id": "chemical_precursors",
@@ -52,7 +55,10 @@
   {
     "id": "cryptographic_keys",
     "name": "Cryptographic Keys",
-    "description": "Secrets that open vaults, servers, and dead drops."
+    "description": "Secrets that open vaults, servers, and dead drops.",
+    "supportAbility": {
+      "kind": "ignore_security_traits"
+    }
   },
   {
     "id": "deep_cover_ids",
@@ -67,7 +73,10 @@
   {
     "id": "drone_swarm",
     "name": "Drone Swarm",
-    "description": "Disposable eyes and distractions in the sky."
+    "description": "Disposable eyes and distractions in the sky.",
+    "supportAbility": {
+      "kind": "ignore_agent_challenge_traits"
+    }
   },
   {
     "id": "explosives",
@@ -91,12 +100,19 @@
   {
     "id": "hazmat_gear",
     "name": "Hazmat Gear",
-    "description": "Suits and detectors for hostile environments."
+    "description": "Suits and detectors for hostile environments.",
+    "supportAbility": {
+      "kind": "prevent_injuries"
+    }
   },
   {
     "id": "insider_contacts",
     "name": "Insider Contacts",
-    "description": "People on payroll who pick up the phone."
+    "description": "People on payroll who pick up the phone.",
+    "supportAbility": {
+      "kind": "success_chance_bonus",
+      "percent": 15
+    }
   },
   {
     "id": "judicial_leverage",
@@ -116,7 +132,11 @@
   {
     "id": "money",
     "name": "Money",
-    "description": "Spendable currency for operations."
+    "description": "Spendable currency for operations.",
+    "supportAbility": {
+      "kind": "success_chance_bonus",
+      "percent": 10
+    }
   },
   {
     "id": "offshore_accounts",
@@ -151,7 +171,10 @@
   {
     "id": "signal_jammers",
     "name": "Signal Jammers",
-    "description": "Local denial for drones, radios, and door locks."
+    "description": "Local denial for drones, radios, and door locks.",
+    "supportAbility": {
+      "kind": "prevent_security_increase"
+    }
   },
   {
     "id": "stolen_art",

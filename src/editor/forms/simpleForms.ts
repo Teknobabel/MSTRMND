@@ -1,4 +1,6 @@
 import { artFieldRow } from "../artField";
+import { SUPPORT_ASSET_ABILITY_KINDS } from "../../game/types";
+import type { SupportAssetAbilityKind } from "../../game/types";
 import type { FormCtx } from "./context";
 import {
   el,
@@ -82,10 +84,68 @@ export function renderTraitForm(container: HTMLElement, ctx: FormCtx): void {
   );
 }
 
+/** Player-facing gist of each support ability, for the editor picker. */
+const SUPPORT_ABILITY_LABELS: Record<SupportAssetAbilityKind, string> = {
+  success_chance_bonus: "success_chance_bonus — flat +% to mission success",
+  prevent_security_increase: "prevent_security_increase — target site's security cannot rise",
+  prevent_heat_increase: "prevent_heat_increase — the mission cannot raise heat",
+  prevent_injuries: "prevent_injuries — no participant comes home injured",
+  ignore_agent_challenge_traits:
+    "ignore_agent_challenge_traits — opposing agents' challenge traits cost nothing",
+  ignore_security_traits: "ignore_security_traits — revealed security traits are not required",
+};
+
+const NO_SUPPORT_ABILITY = "";
+
 export function renderAssetForm(container: HTMLElement, ctx: FormCtx): void {
   idAndName(container, ctx);
   descriptionRow(container, ctx, true);
   cardArtRow(container, ctx);
+
+  const ability = ctx.row.supportAbility as { kind?: string; percent?: number } | undefined;
+  const currentKind = typeof ability?.kind === "string" ? ability.kind : NO_SUPPORT_ABILITY;
+  container.appendChild(
+    formRow(
+      "supportAbility",
+      selectInput(
+        [
+          { value: NO_SUPPORT_ABILITY, label: "(none — not a support asset)" },
+          ...SUPPORT_ASSET_ABILITY_KINDS.map((k) => ({ value: k, label: SUPPORT_ABILITY_LABELS[k] })),
+        ],
+        currentKind,
+        (v) =>
+          ctx.update((row) => {
+            if (v === NO_SUPPORT_ABILITY) {
+              delete row.supportAbility;
+            } else if (v === "success_chance_bonus") {
+              row.supportAbility = { kind: v, percent: ability?.percent ?? 10 };
+            } else {
+              row.supportAbility = { kind: v };
+            }
+          }),
+      ),
+    ),
+  );
+  if (currentKind === "success_chance_bonus") {
+    container.appendChild(
+      formRow(
+        "supportAbility.percent",
+        numberInput(
+          ability?.percent ?? 10,
+          (v) =>
+            ctx.update((row) => {
+              row.supportAbility = { kind: "success_chance_bonus", percent: v };
+            }),
+          { min: -100, max: 100 },
+        ),
+      ),
+    );
+  }
+  container.appendChild(
+    hint(
+      "An asset with a support ability can ride along in a mission's support slots (spent on assign, like a required asset). Assets without one are inert cargo — still stealable, still usable as requiredAssetIds.",
+    ),
+  );
 }
 
 export function renderLocationForm(container: HTMLElement, ctx: FormCtx): void {
