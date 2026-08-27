@@ -40,8 +40,11 @@ import {
   omegaStageRequiredMissions,
 } from "./omegaPlan";
 import {
+  currentLairUpgradeLevel,
   getLairById,
+  isLairUpgradeLevelUnlocked,
   lairUpgradeLevelIndexOfMission,
+  lairUpgradeLevelMinInfamy,
   lairUpgradeLevels,
 } from "./lair";
 
@@ -889,7 +892,38 @@ function lairSection(
       tone: "neutral",
     });
   }
+  /* An infamy-gated level is visible the whole time; the turn it becomes runnable is the
+   * news, so report the crossing rather than leaving the player to re-read the card. */
+  const currentAfter = currentLairUpgradeLevel(
+    after.activeLairId,
+    after.completedLairUpgradeMissionIds,
+    catalog,
+  );
+  if (currentAfter !== null && lairUpgradeLevelMinInfamy(currentAfter.level) > 0) {
+    const wasOpen =
+      isLairUpgradeLevelUnlocked(currentAfter.level, before.player.infamy) &&
+      currentLairUpgradeLevelIndexOf(before, catalog) === currentAfter.index;
+    if (!wasOpen && isLairUpgradeLevelUnlocked(currentAfter.level, after.player.infamy)) {
+      lines.push({
+        text: `Upgrade level ${currentAfter.index + 1} is now within reach — ${lairUpgradeLevelMinInfamy(
+          currentAfter.level,
+        )} infamy met.`,
+        tone: "good",
+      });
+    }
+  }
   return section("lair", "Lair", lines);
+}
+
+/** Ladder position of a snapshot, for comparing "same level" across a resolve. */
+function currentLairUpgradeLevelIndexOf(state: GameState, catalog: ContentCatalog): number {
+  return (
+    currentLairUpgradeLevel(
+      state.activeLairId,
+      state.completedLairUpgradeMissionIds,
+      catalog,
+    )?.index ?? -1
+  );
 }
 
 /**

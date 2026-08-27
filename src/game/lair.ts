@@ -69,6 +69,19 @@ export function availableLairUpgradeMissionIds(
   return current === null ? [] : [...current.level.missionIds];
 }
 
+/** Infamy a level demands before its missions may be started (0 ⇒ ungated). */
+export function lairUpgradeLevelMinInfamy(level: LairUpgradeLevel): number {
+  return Math.max(0, level.minInfamy ?? 0);
+}
+
+/**
+ * Whether the player has the standing to start this level's missions. Only the *ability* to
+ * unlock is gated — the level is still shown, so a locked tier reads as a goal, not a secret.
+ */
+export function isLairUpgradeLevelUnlocked(level: LairUpgradeLevel, infamy: number): boolean {
+  return infamy >= lairUpgradeLevelMinInfamy(level);
+}
+
 /** Index of the upgrade level `missionId` belongs to on this lair, or `-1` if it is not one. */
 export function lairUpgradeLevelIndexOfMission(
   activeLairId: string | null,

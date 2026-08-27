@@ -36,6 +36,9 @@ import {
   canAssignParticipants,
   computeSuccessChanceBreakdown,
   mergedRequiredTraitIdsSorted,
+  missionAllowsTargetLocation,
+  missionTargetTypeTargetsLocation,
+  type MissionTargetLocationFilters,
   type SuccessChanceBreakdown,
 } from "./game/mission";
 import {
@@ -59,7 +62,9 @@ import {
 } from "./game/turnReport";
 import { loadContent } from "./game/loadContent";
 import {
+  getLocationById,
   locationTemplatesForOmegaPlan,
+  securityLevelForLocation,
 } from "./game/locationCatalog";
 import { challengeTraitIdsForAgents, getAgentTemplateById } from "./game/agent";
 import { agentAbilityDef, agentAbilityName } from "./game/agentAbility";
@@ -75,6 +80,7 @@ import {
 import {
   currentLairUpgradeLevel,
   getLairById,
+  lairUpgradeLevelMinInfamy,
   lairUpgradeLevels,
 } from "./game/lair";
 import {
@@ -539,6 +545,31 @@ function formatMissionTargetTypeLabel(tt: MissionTargetType): string {
   return map[tt];
 }
 
+/**
+ * Human-readable summary of a mission's site filters, e.g. "Military or Economic · Level 3".
+ * Returns null when the mission takes any site (no filters authored).
+ */
+function formatTargetLocationFilters(filters: MissionTargetLocationFilters): string | null {
+  const parts: string[] = [];
+  const types = filters.targetLocationTypes;
+  if (types !== undefined && types.length > 0) {
+    parts.push(types.map((t) => LOCATION_CATEGORY_LABEL[t]).join(" or "));
+  }
+  const levels = filters.targetLocationLevels;
+  if (levels !== undefined && levels.length > 0) {
+    parts.push(`Level ${levels.join(" or ")}`);
+  }
+  const intel = filters.targetLocationIntelLevels;
+  if (intel !== undefined && intel.length > 0) {
+    parts.push(`Intel ${intel.join(" or ")}`);
+  }
+  const security = filters.targetLocationSecurityLevels;
+  if (security !== undefined && security.length > 0) {
+    parts.push(`Security ${security.join(" or ")}`);
+  }
+  return parts.length === 0 ? null : parts.join(" · ");
+}
+
 function formatAssignMissionError(err: GameError): string {
   switch (err.code) {
     case "wrong_phase":
@@ -565,6 +596,14 @@ function formatAssignMissionError(err: GameError): string {
       return `Unknown location: ${err.locationId}.`;
     case "location_not_on_active_map":
       return "Target location is not on the active map.";
+    case "target_location_type_not_allowed":
+      return `This mission only targets ${err.allowed.map((t) => LOCATION_CATEGORY_LABEL[t]).join(" or ")} locations.`;
+    case "target_location_level_not_allowed":
+      return `This mission only targets level ${err.allowed.join(" or ")} locations.`;
+    case "target_location_intel_not_allowed":
+      return `This mission needs intel ${err.allowed.join(" or ")} at the target (currently ${err.intelLevel}).`;
+    case "target_location_security_not_allowed":
+      return `This mission needs security ${err.allowed.join(" or ")} at the target (currently ${err.securityLevel}).`;
     case "unknown_asset_slot":
     case "empty_asset_slot":
     case "asset_visibility_mismatch":
@@ -906,7 +945,25 @@ function initGameController(
     }
     if (!missionTargetMatchesTemplate(m.targetType, assignTarget)) {
       assignTarget = null;
+      return;
     }
+    if (!targetPassesMissionLocationFilters(m, assignTarget)) {
+      assignTarget = null;
+    }
+  }
+
+  /**
+   * Whether a staged target's site clears the mission's `targetLocationTypes` /
+   * `targetLocationLevels`. Targets with no site (`minion` / `none`) always pass.
+   */
+  function targetPassesMissionLocationFilters(
+    filters: MissionTargetLocationFilters,
+    target: MissionTarget,
+  ): boolean {
+    if (target.kind !== "location" && target.kind !== "asset") {
+      return true;
+    }
+    return locationPassesMissionFilters(filters, target.locationId);
   }
 
   function updateAssignTargetFieldVisibility(): void {
@@ -929,7 +986,11 @@ function initGameController(
       minion: "Target Minion",
       none: "Target",
     };
-    assignTargetLabelEl.textContent = labels[m.targetType];
+    const siteFilters = missionTargetTypeTargetsLocation(m.targetType)
+      ? formatTargetLocationFilters(m)
+      : null;
+    assignTargetLabelEl.textContent =
+      siteFilters === null ? labels[m.targetType] : `${labels[m.targetType]} — ${siteFilters}`;
   }
 
   function onAssignSlotsChanged(): void {
@@ -1051,6 +1112,25 @@ function initGameController(
     return null;
   }
 
+  /**
+   * Site filters against one location. Intel and security come from **current** run state, so
+   * which sites a mission accepts shifts as surveillance and heat move during the run.
+   */
+  function locationPassesMissionFilters(
+    filters: MissionTargetLocationFilters,
+    locationId: string,
+  ): boolean {
+    const location = getLocationById(content, locationId);
+    if (location === undefined) {
+      return true;
+    }
+    return missionAllowsTargetLocation(filters, {
+      location,
+      intelLevel: intelLevelAtLocation(state, locationId),
+      securityLevel: securityLevelForLocation(state.locationSecurityStates, locationId),
+    });
+  }
+
   function targetPayloadMatchesPlannedMission(
     payload: Exclude<AnyDragPayload, MissionDragPayload>,
   ): boolean {
@@ -1062,13 +1142,21 @@ function initGameController(
       return false;
     }
     if (m.targetType === "location") {
-      return payload.kind === "mastermind-location";
+      return payload.kind === "mastermind-location" && locationPassesMissionFilters(m, payload.locationId);
     }
     if (m.targetType === "asset_hidden") {
-      return payload.kind === "mastermind-asset" && payload.visibility === "hidden";
+      return (
+        payload.kind === "mastermind-asset" &&
+        payload.visibility === "hidden" &&
+        locationPassesMissionFilters(m, payload.locationId)
+      );
     }
     if (m.targetType === "asset_revealed") {
-      return payload.kind === "mastermind-asset" && payload.visibility === "revealed";
+      return (
+        payload.kind === "mastermind-asset" &&
+        payload.visibility === "revealed" &&
+        locationPassesMissionFilters(m, payload.locationId)
+      );
     }
     if (m.targetType === "minion") {
       return payload.kind === "mastermind-minion";
@@ -1734,6 +1822,13 @@ function initGameController(
         btnAssign.title = "Target does not match mission type";
         return;
       }
+      /* Intel and security can move under a target staged on an earlier turn, so re-check the
+       * site filters here rather than letting the click fail. */
+      if (!targetPassesMissionLocationFilters(missionTemplate, assignTarget)) {
+        btnAssign.disabled = true;
+        btnAssign.title = `Target site does not meet: ${formatTargetLocationFilters(missionTemplate) ?? "this mission's requirements"}`;
+        return;
+      }
     }
     const atMissionCap =
       state.activeMissions.length >= state.player.maxConcurrentMissions;
@@ -1942,8 +2037,12 @@ function initGameController(
         mergedRequiredTraitIdsForDisplay !== undefined
           ? mergedRequiredTraitIdsForDisplay
           : mission.requiredTraitIds;
+      const siteFilters = missionTargetTypeTargetsLocation(mission.targetType)
+        ? formatTargetLocationFilters(mission)
+        : null;
       rows.push(
         { label: "Mission target type", value: formatMissionTargetTypeLabel(mission.targetType) },
+        ...(siteFilters !== null ? [{ label: "Target must be", value: siteFilters }] : []),
         { label: "Start cost", value: `${mission.startCommandPoints} CP` },
         {
           label: "Duration",
@@ -3061,7 +3160,8 @@ function initGameController(
    * panel and the Missions menu. Its missions are mutually exclusive — starting one closes the
    * level while it runs, completing one locks the rest out for the run — so the offer carries
    * the rule line and the per-card badges that say so. Levels below are settled; levels above
-   * stay hidden until their turn.
+   * stay hidden until their turn. A level under its `minInfamy` is still shown in full, with
+   * the standing it wants spelled out: infamy gates starting the work, never seeing it.
    */
   function lairUpgradeOffer(): {
     label: string;
@@ -3093,6 +3193,8 @@ function initGameController(
     const running = state.activeMissions.find(
       (am) => am.missionSource === "lair" && level.missionIds.includes(am.missionTemplateId),
     );
+    const needInfamy = lairUpgradeLevelMinInfamy(level);
+    const infamyLocked = state.player.infamy < needInfamy;
     const entries: AvailableMissionEntry[] = [...level.missionIds]
       .sort(compareMissionIdsByName)
       .map((mid) => {
@@ -3103,6 +3205,12 @@ function initGameController(
               running.missionTemplateId === mid
                 ? ({ label: "In Progress", kind: "inprogress" } as const)
                 : ({ label: "Locked", kind: "locked" } as const),
+          };
+        }
+        if (infamyLocked) {
+          return {
+            missionTemplateId: mid,
+            status: { label: `${needInfamy} Infamy`, kind: "locked" } as const,
           };
         }
         return {
@@ -3119,9 +3227,11 @@ function initGameController(
     const note =
       running !== undefined
         ? `${missionDisplayName(running.missionTemplateId)} is underway — the other choices stay closed until it resolves.`
-        : level.missionIds.length > 1
-          ? "Pick one. Completing it installs that upgrade, locks the others out for this run, and opens the next level."
-          : "Completing it installs this upgrade and opens the next level.";
+        : infamyLocked
+          ? `Needs ${needInfamy} infamy to begin (you have ${state.player.infamy}).`
+          : level.missionIds.length > 1
+            ? "Pick one. Completing it installs that upgrade, locks the others out for this run, and opens the next level."
+            : "Completing it installs this upgrade and opens the next level.";
     return { label, note, emptyText: "No pending upgrades.", entries };
   }
 

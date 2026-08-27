@@ -1,5 +1,103 @@
-import type { BalanceConfig, MinionInstance, MissionTemplate, Trait } from "./types";
+import type {
+  BalanceConfig,
+  IntelLevel,
+  LocationLevel,
+  LocationTemplate,
+  LocationType,
+  MinionInstance,
+  MissionTargetType,
+  MissionTemplate,
+  SecurityLevel,
+  Trait,
+} from "./types";
 import { DEFAULT_BALANCE } from "./types";
+
+/**
+ * The site filters a designer may put on a mission. Both are optional and independent: an
+ * absent (or empty) list means that dimension is unrestricted.
+ */
+export type MissionTargetLocationFilters = Pick<
+  MissionTemplate,
+  | "targetLocationTypes"
+  | "targetLocationLevels"
+  | "targetLocationIntelLevels"
+  | "targetLocationSecurityLevels"
+>;
+
+/**
+ * Everything the site filters judge a candidate site on: its catalog row plus the two
+ * per-run levels, which live in `GameState` rather than the location template.
+ */
+export type MissionTargetSite = {
+  location: LocationTemplate;
+  intelLevel: IntelLevel;
+  securityLevel: SecurityLevel;
+};
+
+/**
+ * Target types whose runtime target resolves to a map location — the only ones the site
+ * filters can mean anything for (`minion` / `none` targets have no site).
+ */
+export function missionTargetTypeTargetsLocation(targetType: MissionTargetType): boolean {
+  return (
+    targetType === "location" || targetType === "asset_hidden" || targetType === "asset_revealed"
+  );
+}
+
+/** Whether `targetLocationTypes` admits `locationType` (absent / empty ⇒ every type). */
+export function missionAllowsTargetLocationType(
+  filters: MissionTargetLocationFilters,
+  locationType: LocationType,
+): boolean {
+  const allowed = filters.targetLocationTypes;
+  return allowed === undefined || allowed.length === 0 || allowed.includes(locationType);
+}
+
+/** Whether `targetLocationLevels` admits `locationLevel` (absent / empty ⇒ every level). */
+export function missionAllowsTargetLocationLevel(
+  filters: MissionTargetLocationFilters,
+  locationLevel: LocationLevel,
+): boolean {
+  const allowed = filters.targetLocationLevels;
+  return allowed === undefined || allowed.length === 0 || allowed.includes(locationLevel);
+}
+
+/**
+ * Whether `targetLocationIntelLevels` admits `intelLevel` (absent / empty ⇒ every level).
+ * Takes the level rather than the site because intel is **per-run state**, not catalog data.
+ */
+export function missionAllowsTargetLocationIntel(
+  filters: MissionTargetLocationFilters,
+  intelLevel: IntelLevel,
+): boolean {
+  const allowed = filters.targetLocationIntelLevels;
+  return allowed === undefined || allowed.length === 0 || allowed.includes(intelLevel);
+}
+
+/**
+ * Whether `targetLocationSecurityLevels` admits `securityLevel` (absent / empty ⇒ every
+ * level). Per-run state, like {@link missionAllowsTargetLocationIntel}.
+ */
+export function missionAllowsTargetLocationSecurity(
+  filters: MissionTargetLocationFilters,
+  securityLevel: SecurityLevel,
+): boolean {
+  const allowed = filters.targetLocationSecurityLevels;
+  return allowed === undefined || allowed.length === 0 || allowed.includes(securityLevel);
+}
+
+/** Every site filter at once — what the planning UI asks before it accepts a drop. */
+export function missionAllowsTargetLocation(
+  filters: MissionTargetLocationFilters,
+  site: MissionTargetSite,
+): boolean {
+  return (
+    missionAllowsTargetLocationType(filters, site.location.locationType) &&
+    missionAllowsTargetLocationLevel(filters, site.location.locationLevel) &&
+    missionAllowsTargetLocationIntel(filters, site.intelLevel) &&
+    missionAllowsTargetLocationSecurity(filters, site.securityLevel)
+  );
+}
 
 export type MissionSuccessOptions = {
   /** Extra required trait ids from situational modifiers; merged with template (deduped). */

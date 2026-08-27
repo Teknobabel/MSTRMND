@@ -396,6 +396,45 @@ describe("buildTurnReport — turn summary", () => {
     expect(events.some((t) => t.startsWith('"Global Summit" expired unclaimed'))).toBe(true);
   });
 
+  it("calls out an infamy-gated upgrade level the turn it comes within reach", () => {
+    const raw = rawFixtureSlices();
+    (raw.missions as Record<string, unknown>[]).push({
+      id: "ms-up-gated",
+      name: "Gated Upgrade",
+      description: "Lair upgrade behind a standing gate",
+      targetType: "none",
+      startCommandPoints: 0,
+      requiredTraitIds: ["t-req"],
+      durationTurns: 1,
+    });
+    raw.lairs[0] = {
+      ...raw.lairs[0],
+      upgradeLevels: [{ minInfamy: 5, missionIds: ["ms-up-gated"] }],
+    };
+    const cat = parseCatalog(raw);
+    const seeded = createInitialGameState(cat, seededRng(1));
+    const before: GameState = {
+      ...seeded,
+      locationRequiredTraits: { "loc-a": [], "loc-b": [] },
+      locationSecurityTraits: { "loc-a": ["t-sec"], "loc-b": [] },
+      player: {
+        ...seeded.player,
+        infamy: 0,
+        minions: [makeMinionInstance("mi-1", "m-hero", ["t-req"])],
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+    };
+    /* The successful mission pays +5 infamy, exactly the level's bar. */
+    const lair = lineTexts(buildTurnReport(before, resolve(before, 0, cat), cat).summary, "lair");
+    expect(lair.some((t) => t.includes("Upgrade level 1 is now within reach"))).toBe(true);
+
+    /* Already over the bar beforehand ⇒ nothing to announce. */
+    const alreadyOpen: GameState = { ...before, player: { ...before.player, infamy: 10 } };
+    expect(
+      lineTexts(buildTurnReport(alreadyOpen, resolve(alreadyOpen, 0, cat), cat).summary, "lair"),
+    ).toEqual([]);
+  });
+
   it("drops sections that have nothing to report", () => {
     const before = baseState(7);
     const report = buildTurnReport(before, resolve(before, 0.5), catalog);

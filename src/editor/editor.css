@@ -327,6 +327,22 @@ textarea {
   flex: 1;
 }
 
+/* Small multi-select: a row of labelled checkboxes (mission site filters, etc.). */
+.ed-check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.ed-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
 /* One lair upgrade tier inside the levels list: title + optional name + its mission choices. */
 .ed-upgrade-level {
   flex: 1;

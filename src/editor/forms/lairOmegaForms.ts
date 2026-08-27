@@ -113,6 +113,20 @@ export function renderLairForm(container: HTMLElement, ctx: FormCtx): void {
             ),
           );
           wrap.appendChild(
+            formRow(
+              "minInfamy (0 = no gate)",
+              numberInput(
+                num(item, "minInfamy"),
+                (v) => {
+                  const nextLevel: Row = { ...item };
+                  setOrDelete(nextLevel, "minInfamy", v > 0 ? Math.round(v) : undefined, true);
+                  replace(nextLevel);
+                },
+                { min: 0, max: 100 },
+              ),
+            ),
+          );
+          wrap.appendChild(
             listEditor(
               strArray(item, "missionIds"),
               (nextIds) => {
@@ -130,7 +144,7 @@ export function renderLairForm(container: HTMLElement, ctx: FormCtx): void {
         "+ Add level",
       ),
       hint(
-        "Each level's missions are mutually exclusive: completing one installs it, locks the others out for the run, and opens the next level. The player only ever sees the next level with nothing installed. Ids must be unique across the whole ladder and must not appear in availableMissionIds or be Core Missions.",
+        "Each level's missions are mutually exclusive: completing one installs it, locks the others out for the run, and opens the next level. The player only ever sees the next level with nothing installed. minInfamy gates starting the work, not seeing it — a level under the bar is still shown, with the standing it wants. Ids must be unique across the whole ladder and must not appear in availableMissionIds or be Core Missions.",
       ),
       ...(migratedFromLegacy
         ? [

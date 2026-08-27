@@ -8,9 +8,12 @@ import type {
   LocationAssetPlacement,
   LocationAssetSlot,
   LocationAgentPresence,
+  IntelLevel,
   LocationIntelState,
+  LocationLevel,
   LocationSecurityState,
   LocationTemplate,
+  LocationType,
   MinionInstance,
   MinionLocationAffinity,
   MinionLocationStandingChange,
@@ -22,6 +25,7 @@ import type {
   MissionTarget,
   MissionTargetType,
   MissionTemplate,
+  SecurityLevel,
 } from "./types";
 import { DEFAULT_BALANCE, isOccupiedAssetSlot } from "./types";
 import {
@@ -54,6 +58,7 @@ import {
   rollInitialLocationIntelStates,
   rollLocationRequiredTraits,
   rollLocationSecurityTraits,
+  securityLevelForLocation,
 } from "./locationCatalog";
 import { dynamicTraitSuccessModifierFromFullRoster } from "./dynamicTrait";
 import {
@@ -71,6 +76,10 @@ import {
 import {
   canAssignParticipants,
   computeSuccessChanceBreakdown,
+  missionAllowsTargetLocationIntel,
+  missionAllowsTargetLocationLevel,
+  missionAllowsTargetLocationSecurity,
+  missionAllowsTargetLocationType,
   type MissionSuccessOptions,
 } from "./mission";
 import {
@@ -90,6 +99,8 @@ import {
   getLairById,
   isLairUpgradeMission,
   lairUpgradeLevelIndexOfMission,
+  lairUpgradeLevelMinInfamy,
+  lairUpgradeLevels,
   resolveRunLairId,
 } from "./lair";
 import { nextMonotonicWantedTierIndex } from "./wantedLevel";
@@ -499,8 +510,34 @@ export type GameError =
   | { code: "mission_not_on_lair"; missionId: string }
   /** A sibling choice from the same (mutually exclusive) upgrade level is already running. */
   | { code: "lair_upgrade_level_busy"; missionId: string; runningMissionId: string }
+  /** The level is visible but the player lacks the infamy its `minInfamy` demands. */
+  | { code: "lair_upgrade_infamy_locked"; missionId: string; need: number; have: number }
   | { code: "lair_mission_already_in_pool"; missionId: string }
   | { code: "wrong_target_kind"; expected: MissionTargetType; actual: string }
+  | {
+      code: "target_location_type_not_allowed";
+      locationId: string;
+      locationType: LocationType;
+      allowed: LocationType[];
+    }
+  | {
+      code: "target_location_level_not_allowed";
+      locationId: string;
+      locationLevel: LocationLevel;
+      allowed: LocationLevel[];
+    }
+  | {
+      code: "target_location_intel_not_allowed";
+      locationId: string;
+      intelLevel: IntelLevel;
+      allowed: IntelLevel[];
+    }
+  | {
+      code: "target_location_security_not_allowed";
+      locationId: string;
+      securityLevel: SecurityLevel;
+      allowed: SecurityLevel[];
+    }
   | { code: "unknown_asset_slot"; locationId: string; slotIndex: number }
   | { code: "empty_asset_slot"; locationId: string; slotIndex: number }
   | { code: "asset_visibility_mismatch"; locationId: string; slotIndex: number }
@@ -1432,6 +1469,20 @@ export function assignMission(
           },
         };
       }
+      /* Standing gate: the level stays visible below its `minInfamy`, it just cannot be run. */
+      const level = lairUpgradeLevels(state.activeLairId, catalog)[levelIndex];
+      const needInfamy = level !== undefined ? lairUpgradeLevelMinInfamy(level) : 0;
+      if (state.player.infamy < needInfamy) {
+        return {
+          ok: false,
+          error: {
+            code: "lair_upgrade_infamy_locked",
+            missionId: missionTemplateId,
+            need: needInfamy,
+            have: state.player.infamy,
+          },
+        };
+      }
     }
   } else if (missionSource === "omega") {
     if (state.activeOmegaPlanId === null) {
@@ -1516,13 +1567,64 @@ export function assignMission(
 
   if (target.kind === "location" || target.kind === "asset") {
     const lid = target.locationId;
-    if (!locationById(catalog, lid)) {
+    const location = locationById(catalog, lid);
+    if (!location) {
       return { ok: false, error: { code: "unknown_location", locationId: lid } };
     }
     if (!activeLocationIds(catalog, state.activeOmegaPlanId).has(lid)) {
       return {
         ok: false,
         error: { code: "location_not_on_active_map", locationId: lid },
+      };
+    }
+    /* Designer-authored site filters: a mission may be written for military sites only, or
+     * for level 3 sites only, independent of which target *kind* it takes. */
+    if (!missionAllowsTargetLocationType(missionTemplate, location.locationType)) {
+      return {
+        ok: false,
+        error: {
+          code: "target_location_type_not_allowed",
+          locationId: lid,
+          locationType: location.locationType,
+          allowed: [...(missionTemplate.targetLocationTypes ?? [])],
+        },
+      };
+    }
+    if (!missionAllowsTargetLocationLevel(missionTemplate, location.locationLevel)) {
+      return {
+        ok: false,
+        error: {
+          code: "target_location_level_not_allowed",
+          locationId: lid,
+          locationLevel: location.locationLevel,
+          allowed: [...(missionTemplate.targetLocationLevels ?? [])],
+        },
+      };
+    }
+    /* Intel and security are per-run state, so these two are read at start time only: a
+     * mission already in flight is never called back by either moving under it. */
+    const intelLevel = intelLevelForLocation(state.locationIntelStates, lid);
+    if (!missionAllowsTargetLocationIntel(missionTemplate, intelLevel)) {
+      return {
+        ok: false,
+        error: {
+          code: "target_location_intel_not_allowed",
+          locationId: lid,
+          intelLevel,
+          allowed: [...(missionTemplate.targetLocationIntelLevels ?? [])],
+        },
+      };
+    }
+    const securityLevel = securityLevelForLocation(state.locationSecurityStates, lid);
+    if (!missionAllowsTargetLocationSecurity(missionTemplate, securityLevel)) {
+      return {
+        ok: false,
+        error: {
+          code: "target_location_security_not_allowed",
+          locationId: lid,
+          securityLevel,
+          allowed: [...(missionTemplate.targetLocationSecurityLevels ?? [])],
+        },
       };
     }
   }

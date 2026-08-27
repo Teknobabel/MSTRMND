@@ -15,7 +15,7 @@ import {
   availableLairUpgradeMissionIds,
   currentLairUpgradeLevel,
 } from "./lair";
-import type { ContentCatalog } from "./types";
+import type { ContentCatalog, IntelLevel, SecurityLevel } from "./types";
 import { dynamicTraitSuccessModifierFromFullRoster } from "./dynamicTrait";
 import { findLocationAffinity } from "./affinity";
 import {
@@ -1042,6 +1042,140 @@ describe("assignMission / cancelMission", () => {
     }
   });
 
+  /* Fixture sites: `loc-a` is economic/level 2, `loc-b` is military/level 1. */
+  function filteredCatalog(filters: Record<string, unknown>): ContentCatalog {
+    const raw = rawFixtureSlices();
+    const missions = raw.missions as Record<string, unknown>[];
+    missions[0] = { ...missions[0], ...filters };
+    return parseCatalog(raw);
+  }
+
+  /** Roster state with the two per-run site levels pinned, so filters read known values. */
+  function stateWithSiteLevels(
+    intel: Record<string, IntelLevel>,
+    security: Record<string, SecurityLevel>,
+  ): GameState {
+    const base = stateWithRoster();
+    return {
+      ...base,
+      locationIntelStates: base.locationIntelStates.map((r) => ({
+        ...r,
+        intelLevel: intel[r.locationId] ?? 0,
+      })),
+      locationSecurityStates: base.locationSecurityStates.map((r) => ({
+        ...r,
+        securityLevel: security[r.locationId] ?? 0,
+      })),
+    };
+  }
+
+  function assignAt(cat: ContentCatalog, locationId: string, from: GameState = stateWithRoster()) {
+    return assignMission(
+      from,
+      cat,
+      "am-x",
+      "ms-basic",
+      { kind: "location", locationId },
+      "lair",
+      null,
+      null,
+      ["mi-1"],
+      [],
+    );
+  }
+
+  it("rejects a target location whose type is outside `targetLocationTypes`", () => {
+    const cat = filteredCatalog({ targetLocationTypes: ["military"] });
+    expect(assignAt(cat, "loc-b").ok).toBe(true);
+
+    const rejected = assignAt(cat, "loc-a");
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) {
+      expect(rejected.error).toEqual({
+        code: "target_location_type_not_allowed",
+        locationId: "loc-a",
+        locationType: "economic",
+        allowed: ["military"],
+      });
+    }
+  });
+
+  it("rejects a target location whose level is outside `targetLocationLevels`", () => {
+    const cat = filteredCatalog({ targetLocationLevels: [2] });
+    expect(assignAt(cat, "loc-a").ok).toBe(true);
+
+    const rejected = assignAt(cat, "loc-b");
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) {
+      expect(rejected.error).toEqual({
+        code: "target_location_level_not_allowed",
+        locationId: "loc-b",
+        locationLevel: 1,
+        allowed: [2],
+      });
+    }
+  });
+
+  it("requires every authored site filter to pass, and takes any site with none authored", () => {
+    /* Military is `loc-b`, but level 2 is `loc-a` — no fixture site satisfies both. */
+    const both = filteredCatalog({
+      targetLocationTypes: ["military"],
+      targetLocationLevels: [2],
+    });
+    expect(assignAt(both, "loc-a").ok).toBe(false);
+    expect(assignAt(both, "loc-b").ok).toBe(false);
+
+    /* A list naming several values admits any of them. */
+    const either = filteredCatalog({ targetLocationTypes: ["military", "economic"] });
+    expect(assignAt(either, "loc-a").ok).toBe(true);
+    expect(assignAt(either, "loc-b").ok).toBe(true);
+
+    /* Unfiltered (the fixture as authored) still takes both sites. */
+    expect(assignAt(catalog, "loc-a").ok).toBe(true);
+    expect(assignAt(catalog, "loc-b").ok).toBe(true);
+  });
+
+  it("rejects a target whose current intel is outside `targetLocationIntelLevels`", () => {
+    const cat = filteredCatalog({ targetLocationIntelLevels: [2, 3] });
+    const scouted = stateWithSiteLevels({ "loc-a": 2 }, {});
+    expect(assignAt(cat, "loc-a", scouted).ok).toBe(true);
+
+    const rejected = assignAt(cat, "loc-b", scouted);
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) {
+      expect(rejected.error).toEqual({
+        code: "target_location_intel_not_allowed",
+        locationId: "loc-b",
+        intelLevel: 0,
+        allowed: [2, 3],
+      });
+    }
+  });
+
+  it("rejects a target whose current security is outside `targetLocationSecurityLevels`", () => {
+    const cat = filteredCatalog({ targetLocationSecurityLevels: [0] });
+    const hardened = stateWithSiteLevels({}, { "loc-a": 1 });
+    expect(assignAt(cat, "loc-b", hardened).ok).toBe(true);
+
+    const rejected = assignAt(cat, "loc-a", hardened);
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) {
+      expect(rejected.error).toEqual({
+        code: "target_location_security_not_allowed",
+        locationId: "loc-a",
+        securityLevel: 1,
+        allowed: [0],
+      });
+    }
+  });
+
+  it("re-reads intel and security per assign, so a site drifts in and out of range", () => {
+    const cat = filteredCatalog({ targetLocationIntelLevels: [3] });
+    expect(assignAt(cat, "loc-a", stateWithSiteLevels({ "loc-a": 2 }, {})).ok).toBe(false);
+    /* Surveillance lands: the very same mission now takes the very same site. */
+    expect(assignAt(cat, "loc-a", stateWithSiteLevels({ "loc-a": 3 }, {})).ok).toBe(true);
+  });
+
   it("rejects when planned assets exceed inventory", () => {
     const result = assignMission(
       stateWithRoster(),
@@ -1742,6 +1876,50 @@ describe("lair upgrade levels", () => {
     if (!lockedOut.ok) {
       expect(lockedOut.error.code).toBe("mission_not_on_lair");
     }
+  });
+
+  it("shows an infamy-gated level but refuses to start it until the standing is there", () => {
+    const raw = rawFixtureSlices();
+    const missions = raw.missions as Record<string, unknown>[];
+    missions.push({
+      id: "ms-up-gated",
+      name: "Gated Upgrade",
+      description: "Lair upgrade behind a standing gate",
+      targetType: "none",
+      startCommandPoints: 0,
+      requiredTraitIds: ["t-req"],
+      durationTurns: 1,
+    });
+    raw.lairs[0] = {
+      ...raw.lairs[0],
+      upgradeLevels: [{ minInfamy: 20, missionIds: ["ms-up-gated"] }],
+    };
+    const cat = parseCatalog(raw);
+    const state = ladderState(cat);
+    expect(cat.lairs[0]?.upgradeLevels[0]?.minInfamy).toBe(20);
+
+    /* Infamy gates starting the work, never seeing it — the level is still the current offer. */
+    expect(
+      availableLairUpgradeMissionIds(state.activeLairId, state.completedLairUpgradeMissionIds, cat),
+    ).toEqual(["ms-up-gated"]);
+
+    const tooEarly = startUpgrade({ ...state, player: { ...state.player, infamy: 19 } }, cat, "ms-up-gated");
+    expect(tooEarly.ok).toBe(false);
+    if (!tooEarly.ok) {
+      expect(tooEarly.error).toEqual({
+        code: "lair_upgrade_infamy_locked",
+        missionId: "ms-up-gated",
+        need: 20,
+        have: 19,
+      });
+    }
+
+    const atThreshold = startUpgrade(
+      { ...state, player: { ...state.player, infamy: 20 } },
+      cat,
+      "ms-up-gated",
+    );
+    expect(atThreshold.ok).toBe(true);
   });
 
   it("leaves nothing on offer once every level is installed", () => {

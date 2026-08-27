@@ -3,14 +3,28 @@ import {
   minionTemplateSchema,
   missionTemplateSchema,
 } from "../../game/contentSchema";
-import { computeSuccessChanceBreakdown } from "../../game/mission";
+import {
+  computeSuccessChanceBreakdown,
+  missionTargetTypeTargetsLocation,
+} from "../../game/mission";
 import { createMinionFromTemplate } from "../../game/minion";
-import type { MinionInstance, MinionTemplate, MissionTemplate, Trait } from "../../game/types";
+import type {
+  IntelLevel,
+  LocationLevel,
+  LocationType,
+  MinionInstance,
+  MinionTemplate,
+  MissionTargetType,
+  MissionTemplate,
+  SecurityLevel,
+  Trait,
+} from "../../game/types";
 import { artFieldRow } from "../artField";
 import type { FormCtx } from "./context";
 import { effectsListFieldset } from "./effectsEditor";
 import {
   bool,
+  checkboxGroup,
   checkboxInput,
   el,
   fieldset,
@@ -18,6 +32,7 @@ import {
   hint,
   idOptions,
   listEditor,
+  numArray,
   numberInput,
   selectInput,
   setOrDelete,
@@ -29,6 +44,26 @@ import {
 } from "../widgets";
 
 const TARGET_TYPES = ["location", "asset_hidden", "asset_revealed", "minion", "none"] as const;
+
+const LOCATION_TYPE_OPTIONS: readonly { value: LocationType; label: string }[] = [
+  { value: "political", label: "Political" },
+  { value: "military", label: "Military" },
+  { value: "economic", label: "Economic" },
+];
+
+const LOCATION_LEVEL_OPTIONS: readonly { value: LocationLevel; label: string }[] = [
+  { value: 1, label: "1" },
+  { value: 2, label: "2" },
+  { value: 3, label: "3" },
+];
+
+/** Per-run levels (intel, security) both run 0–3, so one option table serves both. */
+const ZERO_TO_THREE_OPTIONS: readonly { value: IntelLevel & SecurityLevel; label: string }[] = [
+  { value: 0, label: "0" },
+  { value: 1, label: "1" },
+  { value: 2, label: "2" },
+  { value: 3, label: "3" },
+];
 
 /** Preview participant picks; module-level so they survive re-renders. */
 const previewTemplateIds: (string | null)[] = [null, null, null];
@@ -181,6 +216,66 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
             row.targetType = v;
           }),
       ),
+    ),
+  );
+  const targetType = (str(ctx.row, "targetType") || "none") as MissionTargetType;
+  container.appendChild(
+    formRow(
+      "targetLocationTypes",
+      checkboxGroup(
+        LOCATION_TYPE_OPTIONS,
+        strArray(ctx.row, "targetLocationTypes") as LocationType[],
+        (v) =>
+          ctx.update((row) => {
+            setOrDelete(row, "targetLocationTypes", v, true);
+          }),
+      ),
+    ),
+  );
+  container.appendChild(
+    formRow(
+      "targetLocationLevels",
+      checkboxGroup(
+        LOCATION_LEVEL_OPTIONS,
+        numArray(ctx.row, "targetLocationLevels") as LocationLevel[],
+        (v) =>
+          ctx.update((row) => {
+            setOrDelete(row, "targetLocationLevels", v, true);
+          }),
+      ),
+    ),
+  );
+  container.appendChild(
+    formRow(
+      "targetLocationIntelLevels",
+      checkboxGroup(
+        ZERO_TO_THREE_OPTIONS,
+        numArray(ctx.row, "targetLocationIntelLevels") as IntelLevel[],
+        (v) =>
+          ctx.update((row) => {
+            setOrDelete(row, "targetLocationIntelLevels", v, true);
+          }),
+      ),
+    ),
+  );
+  container.appendChild(
+    formRow(
+      "targetLocationSecurityLevels",
+      checkboxGroup(
+        ZERO_TO_THREE_OPTIONS,
+        numArray(ctx.row, "targetLocationSecurityLevels") as SecurityLevel[],
+        (v) =>
+          ctx.update((row) => {
+            setOrDelete(row, "targetLocationSecurityLevels", v, true);
+          }),
+      ),
+    ),
+  );
+  container.appendChild(
+    hint(
+      missionTargetTypeTargetsLocation(targetType)
+        ? "Restricts which sites this mission may be aimed at; all four rows must pass. Nothing ticked in a row means that row is unrestricted. Intel and security are per-run state, checked when the mission is started — a site can drift in and out of range during a run."
+        : `Ignored while targetType is "${targetType}" — site filters only apply to location, asset_hidden, and asset_revealed targets.`,
     ),
   );
   container.appendChild(

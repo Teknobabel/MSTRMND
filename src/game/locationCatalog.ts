@@ -5,6 +5,7 @@ import type {
   LocationSecurityState,
   LocationTemplate,
   MapTemplate,
+  SecurityLevel,
 } from "./types";
 import { getOmegaPlanById } from "./omegaPlan";
 
@@ -22,6 +23,14 @@ export function maxSecurityLevelForLocation(
 ): number {
   const loc = getLocationById(catalog, locationId);
   return loc !== undefined ? loc.locationLevel : 3;
+}
+
+/** Security at `locationId`; a site with no row (not playable this run) reads as 0. */
+export function securityLevelForLocation(
+  states: readonly LocationSecurityState[],
+  locationId: string,
+): SecurityLevel {
+  return states.find((s) => s.locationId === locationId)?.securityLevel ?? 0;
 }
 
 /**

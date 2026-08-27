@@ -59,6 +59,35 @@ export function checkboxInput(
   return input;
 }
 
+/**
+ * Row of checkboxes over a fixed option set (a small multi-select). Commits the full
+ * selection in option order, so authored lists stay canonically ordered.
+ */
+export function checkboxGroup<T extends string | number>(
+  options: readonly { value: T; label: string }[],
+  selected: readonly T[],
+  onCommit: (values: T[]) => void,
+): HTMLElement {
+  const row = el("div", "ed-check-row");
+  for (const opt of options) {
+    const label = el("label", "ed-check");
+    const box = el("input");
+    box.type = "checkbox";
+    box.checked = selected.includes(opt.value);
+    box.addEventListener("change", () => {
+      const checked = box.checked;
+      onCommit(
+        options
+          .filter((o) => (o.value === opt.value ? checked : selected.includes(o.value)))
+          .map((o) => o.value),
+      );
+    });
+    label.append(box, document.createTextNode(` ${opt.label}`));
+    row.appendChild(label);
+  }
+  return row;
+}
+
 export function textArea(value: string, onCommit: (v: string) => void): HTMLTextAreaElement {
   const input = el("textarea");
   input.value = value;
@@ -218,6 +247,13 @@ export function num(row: Row, key: string, fallback = 0): number {
 
 export function bool(row: Row, key: string): boolean {
   return row[key] === true;
+}
+
+export function numArray(row: Row, key: string): number[] {
+  const v = row[key];
+  return Array.isArray(v)
+    ? v.filter((x): x is number => typeof x === "number" && Number.isFinite(x))
+    : [];
 }
 
 export function strArray(row: Row, key: string): string[] {

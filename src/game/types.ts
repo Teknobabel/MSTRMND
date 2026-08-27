@@ -366,6 +366,39 @@ export type MissionTemplate = {
   coreMission?: boolean;
   /** What the player must pick in the target planning slot (if any). */
   targetType: MissionTargetType;
+  /**
+   * Restricts which sites this mission may be aimed at, by the target location's
+   * `locationType`. Absent or empty ⇒ any type. Only meaningful for a `targetType` that
+   * resolves to a location (`location`, `asset_hidden`, `asset_revealed`).
+   */
+  targetLocationTypes?: LocationType[];
+  /**
+   * Restricts which sites this mission may be aimed at, by the target location's
+   * `locationLevel`. Absent or empty ⇒ any level. Same `targetType` rule as
+   * {@link MissionTemplate.targetLocationTypes}.
+   */
+  targetLocationLevels?: LocationLevel[];
+  /**
+   * Restricts which sites this mission may be aimed at, by the player's **current** intel at
+   * the target location. Absent or empty ⇒ any intel. Same `targetType` rule as
+   * {@link MissionTemplate.targetLocationTypes}.
+   *
+   * Unlike the other two filters this reads **per-run state**, not the location catalog, so
+   * the same mission opens and closes sites as surveillance raises intel and events lower it.
+   * It is checked when the mission is **started**; intel moving afterwards does not call a
+   * mission in flight back.
+   */
+  targetLocationIntelLevels?: IntelLevel[];
+  /**
+   * Restricts which sites this mission may be aimed at, by the target location's **current**
+   * security. Absent or empty ⇒ any security. Same `targetType` rule as
+   * {@link MissionTemplate.targetLocationTypes}, and the same start-time-only check as
+   * {@link MissionTemplate.targetLocationIntelLevels}.
+   *
+   * Security is capped per site at that location's `locationLevel`, so a filter naming only
+   * high values implicitly excludes the low-level sites that can never reach them.
+   */
+  targetLocationSecurityLevels?: SecurityLevel[];
   /** Applied in order when the mission resolves successfully (after baseline infamy). */
   onSuccessEffects?: MissionEffect[];
   /** Applied in order when the mission resolves as a failure (after baseline infamy). */
@@ -446,6 +479,9 @@ export type LocationAgentPresence = {
 /** Designer-authored category for a location. */
 export type LocationType = "political" | "military" | "economic";
 
+/** Designer difficulty / importance tier for a location. */
+export type LocationLevel = 1 | 2 | 3;
+
 export type LocationTemplate = {
   id: string;
   name: string;
@@ -455,11 +491,17 @@ export type LocationTemplate = {
   /** Political, Military, or Economic (designer). */
   locationType: LocationType;
   /** Designer difficulty or importance tier, 1–3. */
-  locationLevel: 1 | 2 | 3;
+  locationLevel: LocationLevel;
 };
 
 /** Where an active mission was started from (lair pool vs current Omega row vs rotating event). */
 export type MissionSource = "lair" | "omega" | "event";
+
+/**
+ * How hard a site is to work: raised by resolving missions there, capped per site at that
+ * location's authored `locationLevel`.
+ */
+export type SecurityLevel = 0 | 1 | 2 | 3;
 
 /**
  * Per-run security at a location (not in catalog JSON). Updated by gameplay systems.
@@ -467,7 +509,7 @@ export type MissionSource = "lair" | "omega" | "event";
 export type LocationSecurityState = {
   locationId: string;
   /** Rises after missions resolve at this site; new runs start at 0, capped at 3. */
-  securityLevel: 0 | 1 | 2 | 3;
+  securityLevel: SecurityLevel;
 };
 
 /** How much the player knows about a site; each step unlocks a fixed kind of knowledge. */
@@ -546,6 +588,13 @@ export type WantedLevelTier = {
 export type LairUpgradeLevel = {
   /** Optional designer label for the tier; UI falls back to `Level N`. */
   name?: string;
+  /**
+   * Player **infamy** needed to *start* any of this level's missions. Absent (or 0) ⇒ no gate.
+   * This gates **capability only, never visibility**: the level is shown as soon as it is the
+   * next open one, with the requirement stated, so the player can see what they are working
+   * toward. Checked against `player.infamy` at `assignMission`.
+   */
+  minInfamy?: number;
   /** Mutually exclusive upgrade mission template ids (at least one). */
   missionIds: string[];
 };

@@ -207,6 +207,109 @@ describe("parseContentCatalog", () => {
   });
 });
 
+describe("mission target site filters", () => {
+  /** `missions[0]` is `ms-basic` (targetType "location"); `missions[1]` is `ms-asset` ("none"). */
+  function withFilters(index: number, extra: Record<string, unknown>) {
+    const raw = rawFixtureSlices();
+    raw.missions[index] = { ...raw.missions[index], ...extra };
+    return parseContentCatalog(raw);
+  }
+
+  it("accepts filters on a location-resolving targetType and normalizes them onto the template", () => {
+    const { catalog, issues } = withFilters(0, {
+      targetLocationTypes: ["military", "economic"],
+      targetLocationLevels: [3],
+      targetLocationIntelLevels: [2, 3],
+      targetLocationSecurityLevels: [0],
+    });
+    expect(issues).toEqual([]);
+    const mission = catalog?.missions.find((m) => m.id === "ms-basic");
+    expect(mission?.targetLocationTypes).toEqual(["military", "economic"]);
+    expect(mission?.targetLocationLevels).toEqual([3]);
+    expect(mission?.targetLocationIntelLevels).toEqual([2, 3]);
+    expect(mission?.targetLocationSecurityLevels).toEqual([0]);
+  });
+
+  it("drops empty filter lists so an unrestricted mission carries no key", () => {
+    const { catalog, issues } = withFilters(0, {
+      targetLocationTypes: [],
+      targetLocationLevels: [],
+      targetLocationIntelLevels: [],
+      targetLocationSecurityLevels: [],
+    });
+    expect(issues).toEqual([]);
+    const mission = catalog?.missions.find((m) => m.id === "ms-basic");
+    expect(mission?.targetLocationTypes).toBeUndefined();
+    expect(mission?.targetLocationLevels).toBeUndefined();
+    expect(mission?.targetLocationIntelLevels).toBeUndefined();
+    expect(mission?.targetLocationSecurityLevels).toBeUndefined();
+  });
+
+  it("keeps 0 as a meaningful filter value for the per-run levels", () => {
+    /* 0 is a real level ("unscouted", "unhardened"), not an absent filter. */
+    const { catalog, issues } = withFilters(0, {
+      targetLocationIntelLevels: [0],
+      targetLocationSecurityLevels: [0],
+    });
+    expect(issues).toEqual([]);
+    const mission = catalog?.missions.find((m) => m.id === "ms-basic");
+    expect(mission?.targetLocationIntelLevels).toEqual([0]);
+    expect(mission?.targetLocationSecurityLevels).toEqual([0]);
+  });
+
+  it("flags filters on a targetType that resolves to no location", () => {
+    const { issues } = withFilters(1, { targetLocationTypes: ["military"] });
+    expect(issues).toEqual([
+      {
+        slice: "missions",
+        entityId: "ms-asset",
+        path: "targetLocationTypes",
+        message: 'targetLocationTypes needs a location-resolving targetType (got "none")',
+      },
+    ]);
+  });
+
+  it("flags duplicate entries within a filter list", () => {
+    const { issues } = withFilters(0, { targetLocationLevels: [2, 2] });
+    expect(issues).toEqual([
+      {
+        slice: "missions",
+        entityId: "ms-basic",
+        path: "targetLocationLevels[1]",
+        message: 'Duplicate targetLocationLevels entry "2"',
+      },
+    ]);
+  });
+
+  it("flags the per-run filters on a targetType that resolves to no location", () => {
+    expect(withFilters(1, { targetLocationIntelLevels: [1] }).issues).toEqual([
+      {
+        slice: "missions",
+        entityId: "ms-asset",
+        path: "targetLocationIntelLevels",
+        message: 'targetLocationIntelLevels needs a location-resolving targetType (got "none")',
+      },
+    ]);
+    expect(withFilters(1, { targetLocationSecurityLevels: [1] }).issues).toEqual([
+      {
+        slice: "missions",
+        entityId: "ms-asset",
+        path: "targetLocationSecurityLevels",
+        message: 'targetLocationSecurityLevels needs a location-resolving targetType (got "none")',
+      },
+    ]);
+  });
+
+  it("rejects values outside the location type / level vocabularies", () => {
+    expect(withFilters(0, { targetLocationTypes: ["nautical"] }).catalog).toBeNull();
+    expect(withFilters(0, { targetLocationLevels: [4] }).catalog).toBeNull();
+    /* Per-run levels run 0–3; location levels start at 1. */
+    expect(withFilters(0, { targetLocationIntelLevels: [4] }).catalog).toBeNull();
+    expect(withFilters(0, { targetLocationSecurityLevels: [-1] }).catalog).toBeNull();
+    expect(withFilters(0, { targetLocationLevels: [0] }).catalog).toBeNull();
+  });
+});
+
 describe("optional agent features", () => {
   /** Everything past the minion-template shape is optional on an agent. */
   function withAgent(extra: Record<string, unknown>) {

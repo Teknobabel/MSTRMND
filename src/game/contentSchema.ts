@@ -6,8 +6,11 @@ import type {
   ContentCatalog,
   EventTemplate,
   LairTemplate,
+  IntelLevel,
   LairUpgradeLevel,
+  LocationLevel,
   LocationTemplate,
+  LocationType,
   MapTemplate,
   MinionTemplate,
   MissionEffect,
@@ -15,6 +18,7 @@ import type {
   MissionTargetType,
   OmegaPlanStage,
   OmegaPlanTemplate,
+  SecurityLevel,
   PlayerProfile,
   StartingDynamicTrait,
   Trait,
@@ -22,6 +26,7 @@ import type {
 } from "./types";
 import { AGENT_ABILITY_IDS, AGENT_MOVEMENT_BEHAVIORS, DEFAULT_BALANCE } from "./types";
 import { OMEGA_MISSIONS_PER_STAGE } from "./omegaPlan";
+import { missionTargetTypeTargetsLocation } from "./mission";
 
 /* ------------------------------------------------------------------------------------------------
  * Content manifest — the single source of truth for which slices exist and where they live.
@@ -202,7 +207,15 @@ const missionTargetTypeSchema = z.enum([
 
 const deltaSchema = z.number().int().min(-50).max(50);
 
-const locationLevelEffectSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
+const locationLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
+
+/** The 0–3 range shared by per-run intel and security levels. */
+const zeroToThreeLevelSchema = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+]);
 
 const locationTypeSchema = z.enum(["political", "military", "economic"]);
 
@@ -285,7 +298,7 @@ export const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnio
   z.object({
     kind: z.literal("security_level_delta_by_location_level"),
     delta: deltaSchema,
-    locationLevel: locationLevelEffectSchema,
+    locationLevel: locationLevelSchema,
   }),
   z.object({
     kind: z.literal("intel_level_delta_global"),
@@ -299,7 +312,7 @@ export const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnio
   z.object({
     kind: z.literal("intel_level_delta_by_location_level"),
     delta: deltaSchema,
-    locationLevel: locationLevelEffectSchema,
+    locationLevel: locationLevelSchema,
   }),
   z.object({
     kind: z.literal("remove_trait_from_all_minions"),
@@ -322,7 +335,7 @@ export const missionEffectSchema: z.ZodType<MissionEffect> = z.discriminatedUnio
   z.object({
     kind: z.literal("reveal_hidden_assets_by_location_level"),
     count: z.number().int().min(0).max(99),
-    locationLevel: locationLevelEffectSchema,
+    locationLevel: locationLevelSchema,
   }),
   z.object({
     kind: z.literal("grant_command_points_next_turn"),
@@ -342,6 +355,11 @@ export const missionTemplateSchema = z
     description: z.string(),
     cardArt: z.string().min(1).optional(),
     targetType: missionTargetTypeSchema,
+    /** Optional site filters; only meaningful for a location-resolving `targetType`. */
+    targetLocationTypes: z.array(locationTypeSchema).optional(),
+    targetLocationLevels: z.array(locationLevelSchema).optional(),
+    targetLocationIntelLevels: z.array(zeroToThreeLevelSchema).optional(),
+    targetLocationSecurityLevels: z.array(zeroToThreeLevelSchema).optional(),
     startCommandPoints: z.coerce.number().int().min(0),
     requiredTraitIds: z.array(z.string().min(1)).default([]),
     requiredAssetIds: z.array(z.string().min(1)).default([]),
@@ -371,6 +389,11 @@ export const eventTemplateSchema = z.object({
   description: z.string(),
   cardArt: z.string().min(1).optional(),
   targetType: missionTargetTypeSchema,
+  /** Optional site filters; only meaningful for a location-resolving `targetType`. */
+  targetLocationTypes: z.array(locationTypeSchema).optional(),
+  targetLocationLevels: z.array(locationLevelSchema).optional(),
+  targetLocationIntelLevels: z.array(zeroToThreeLevelSchema).optional(),
+  targetLocationSecurityLevels: z.array(zeroToThreeLevelSchema).optional(),
   startCommandPoints: z.coerce.number().int().min(0),
   requiredTraitIds: z.array(z.string().min(1)).default([]),
   requiredAssetIds: z.array(z.string().min(1)).default([]),
@@ -392,7 +415,7 @@ export const locationTemplateSchema: z.ZodType<LocationTemplate> = z.object({
   description: z.string(),
   cardArt: z.string().min(1).optional(),
   locationType: locationTypeSchema,
-  locationLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  locationLevel: locationLevelSchema,
 });
 
 export const mapTemplateSchema: z.ZodType<MapTemplate> = z.object({
@@ -526,6 +549,8 @@ export const balanceConfigSchema = z.object({
 /** One mutually exclusive upgrade tier on a lair. */
 export const lairUpgradeLevelSchema = z.object({
   name: z.string().min(1).optional(),
+  /** Infamy needed to start this level's missions (gates unlocking, not visibility). */
+  minInfamy: z.coerce.number().int().min(0).max(100).optional(),
   missionIds: z.array(z.string().min(1)).min(1),
 });
 
@@ -612,6 +637,36 @@ function normalizeAgentTemplates(
   });
 }
 
+/**
+ * Copies the optional site filters onto a normalized template, dropping empty lists so an
+ * unrestricted mission has no key at all (matches how the content files are authored).
+ */
+function applyTargetLocationFilters(
+  base: MissionTemplate,
+  row: {
+    targetLocationTypes?: LocationType[];
+    targetLocationLevels?: LocationLevel[];
+    targetLocationIntelLevels?: IntelLevel[];
+    targetLocationSecurityLevels?: SecurityLevel[];
+  },
+): void {
+  if (row.targetLocationTypes !== undefined && row.targetLocationTypes.length > 0) {
+    base.targetLocationTypes = [...row.targetLocationTypes];
+  }
+  if (row.targetLocationLevels !== undefined && row.targetLocationLevels.length > 0) {
+    base.targetLocationLevels = [...row.targetLocationLevels];
+  }
+  if (row.targetLocationIntelLevels !== undefined && row.targetLocationIntelLevels.length > 0) {
+    base.targetLocationIntelLevels = [...row.targetLocationIntelLevels];
+  }
+  if (
+    row.targetLocationSecurityLevels !== undefined &&
+    row.targetLocationSecurityLevels.length > 0
+  ) {
+    base.targetLocationSecurityLevels = [...row.targetLocationSecurityLevels];
+  }
+}
+
 function normalizeMissionTemplates(
   arr: z.infer<typeof missionTemplateSchema>[],
 ): MissionTemplate[] {
@@ -629,6 +684,7 @@ function normalizeMissionTemplates(
     if (m.coreMission === true) {
       base.coreMission = true;
     }
+    applyTargetLocationFilters(base, m);
     if (m.cardArt !== undefined) {
       base.cardArt = m.cardArt;
     }
@@ -655,6 +711,7 @@ function normalizeEventTemplates(arr: z.infer<typeof eventTemplateSchema>[]): Ev
       durationTurns: m.durationTurns,
       lifetimeTurns: m.lifetimeTurns,
     };
+    applyTargetLocationFilters(base, m);
     if (m.minInfamy !== undefined && m.minInfamy > 0) {
       base.minInfamy = m.minInfamy;
     }
@@ -726,6 +783,7 @@ function normalizeLairUpgradeLevels(
   if (l.upgradeLevels.length > 0) {
     return l.upgradeLevels.map((lvl) => ({
       ...(lvl.name !== undefined ? { name: lvl.name } : {}),
+      ...(lvl.minInfamy !== undefined && lvl.minInfamy > 0 ? { minInfamy: lvl.minInfamy } : {}),
       missionIds: [...lvl.missionIds],
     }));
   }
@@ -1046,6 +1104,58 @@ export function effectKindTargetTypeRequirement(
 }
 
 /** Effect placement rules + effect-level refs. Shared by missions and events. */
+/**
+ * Site filters (`targetLocationTypes` / `targetLocationLevels`) only bite on a target that
+ * resolves to a location, so a filter on a `minion` / `none` mission is dead authoring.
+ * Duplicates are flagged too — harmless at runtime, but always a mistake in the file.
+ */
+function checkTargetLocationFilters(
+  slice: ContentSliceKey,
+  entityId: string,
+  template: {
+    targetType: MissionTargetType;
+    targetLocationTypes?: LocationType[];
+    targetLocationLevels?: LocationLevel[];
+    targetLocationIntelLevels?: IntelLevel[];
+    targetLocationSecurityLevels?: SecurityLevel[];
+  },
+  issues: ContentIssue[],
+): void {
+  const targetsLocation = missionTargetTypeTargetsLocation(template.targetType);
+  type FilterValue = LocationType | LocationLevel | IntelLevel | SecurityLevel;
+  const fields: Array<{ path: string; values: FilterValue[] | undefined }> = [
+    { path: "targetLocationTypes", values: template.targetLocationTypes },
+    { path: "targetLocationLevels", values: template.targetLocationLevels },
+    { path: "targetLocationIntelLevels", values: template.targetLocationIntelLevels },
+    { path: "targetLocationSecurityLevels", values: template.targetLocationSecurityLevels },
+  ];
+  for (const { path, values } of fields) {
+    if (values === undefined || values.length === 0) {
+      continue;
+    }
+    if (!targetsLocation) {
+      issues.push({
+        slice,
+        entityId,
+        path,
+        message: `${path} needs a location-resolving targetType (got "${template.targetType}")`,
+      });
+    }
+    const seen = new Set<FilterValue>();
+    values.forEach((v, i) => {
+      if (seen.has(v)) {
+        issues.push({
+          slice,
+          entityId,
+          path: `${path}[${i}]`,
+          message: `Duplicate ${path} entry "${v}"`,
+        });
+      }
+      seen.add(v);
+    });
+  }
+}
+
 function checkMissionEffects(
   slice: "missions" | "events",
   templateId: string,
@@ -1328,6 +1438,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
         );
       }
       checkUnlockForbidden("missions", m.id, m.onFailureEffects, "onFailureEffects", issues);
+      checkTargetLocationFilters("missions", m.id, m, issues);
     }
   }
 
@@ -1542,6 +1653,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
         );
       }
       checkUnlockForbidden("events", ev.id, ev.onFailureEffects, "onFailureEffects", issues);
+      checkTargetLocationFilters("events", ev.id, ev, issues);
     }
     /* One raid at most: the top wanted tier spawns a single event by id, so a second one
      * would be authored content that can never reach the table. */
