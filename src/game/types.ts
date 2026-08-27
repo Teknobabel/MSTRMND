@@ -203,16 +203,18 @@ export const AGENT_MOVEMENT_BEHAVIORS = [
  */
 export type AgentTemplate = MinionTemplate & {
   /**
-   * One or more trait ids this agent adds as a *challenge* to every mission at its site. Each
-   * distinct challenge trait across the site's agents costs a flat
+   * Trait ids this agent adds as a *challenge* to every mission at its site. Each distinct
+   * challenge trait across the site's agents costs a flat
    * `BalanceConfig.agentChallengeTraitPenalty` unless some participant holds the matching trait.
    * Unlike required traits, these never enter the matched/total base-success ratio.
+   *
+   * Optional: an agent with none poses no trait challenge and is felt only through its
+   * abilities, its movement, or simply standing there.
    */
   challengeTraitIds: string[];
   /**
-   * End-of-turn movement rule. Optional in JSON only so a half-authored agent does not break
-   * the whole slice in the editor — `collectContentIssues` flags an agent without one, and an
-   * agent whose behavior is missing simply never moves.
+   * Agent Phase movement rule. Optional — an agent without one holds whatever site it is on
+   * for the whole run, which is a legitimate way to author a fixture guarding one place.
    */
   movementBehavior?: AgentMovementBehavior;
   /**
@@ -371,15 +373,19 @@ export type MissionTemplate = {
 };
 
 /**
- * Event mission template (same fields as {@link MissionTemplate} plus optional expire effects).
- * Stored in `content/events.json`.
+ * Event mission template (a {@link MissionTemplate} with a shelf life). Stored in
+ * `content/events.json`.
  */
 export type EventTemplate = MissionTemplate & {
   /**
    * Turns this event stays on the table as the current offer — the window the player has to
    * start it. Counts down once per `executePlan`; hitting 0 without the event having been
-   * started fires `expireEffects` and clears the offer. Starting it stops the countdown:
+   * started fires `onFailureEffects` and clears the offer. Starting it stops the countdown:
    * the mission then decides the outcome via `onSuccessEffects` / `onFailureEffects`.
+   *
+   * Ignoring an event and botching it are the **same outcome**: there is no separate expiry
+   * effect list, so `onFailureEffects` is the single place a designer writes what going wrong
+   * costs, however it went wrong.
    */
   lifetimeTurns: number;
   /**
@@ -390,15 +396,14 @@ export type EventTemplate = MissionTemplate & {
   minInfamy?: number;
   /** Player **heat** needed for this event to enter the draw pool. Absent (or 0) ⇒ no gate. */
   minHeat?: number;
-  /** Applied automatically if the offer's lifetime runs out before the player starts it. */
-  expireEffects?: MissionEffect[];
   /**
    * Marks a **system-spawned** event. Special events are never in the random draw pool
    * (`eligibleEventTemplates` filters them out); the rule that owns them puts them on the
    * table directly, overriding the event cooldown.
    *
    * `"lair_raid"` — the run-ending raid the **top wanted tier** spawns. Letting its offer
-   * expire, or failing its mission, ends the run (`GameState.runEnding`). Completing it
+   * expire, or failing its mission, ends the run (`GameState.runEnding`) — the same outcome
+   * either way, which is the rule for every event. Completing it
    * stands the top tier down until heat climbs back to its `minHeat`. At most one event in the
    * catalog may carry it (checked in `collectContentIssues`).
    */

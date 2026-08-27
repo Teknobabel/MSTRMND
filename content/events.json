@@ -4,14 +4,14 @@
     "name": "Global crackdown",
     "description": "Coordinated sweeps spike heat everywhere. Lobby fast or take the hit.",
     "durationTurns": 1,
-    "expireEffects": [
+    "lifetimeTurns": 3,
+    "minHeat": 40,
+    "onFailureEffects": [
       {
         "kind": "security_level_delta_global",
         "delta": 2
       }
     ],
-    "lifetimeTurns": 3,
-    "minHeat": 40,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "politician"
@@ -44,15 +44,15 @@
     "name": "Military lockdown",
     "description": "Bases seal cordons; if nobody steadies the generals, bases stay hot.",
     "durationTurns": 1,
-    "expireEffects": [
+    "lifetimeTurns": 3,
+    "minHeat": 20,
+    "onFailureEffects": [
       {
         "kind": "security_level_delta_by_location_type",
         "delta": 2,
         "locationType": "military"
       }
     ],
-    "lifetimeTurns": 3,
-    "minHeat": 20,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "soldier"
@@ -86,15 +86,15 @@
     "name": "Tier-3 oversight audit",
     "description": "Senior auditors descend on your hardest sites. Contain them or scrutiny climbs.",
     "durationTurns": 2,
-    "expireEffects": [
+    "lifetimeTurns": 3,
+    "minInfamy": 35,
+    "onFailureEffects": [
       {
         "kind": "security_level_delta_by_location_level",
         "delta": 1,
         "locationLevel": 3
       }
     ],
-    "lifetimeTurns": 3,
-    "minInfamy": 35,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "spy",
@@ -188,14 +188,14 @@
     "name": "Gang war spillover",
     "description": "Street war spills into your logistics. Break it up or your people catch stray fire.",
     "durationTurns": 1,
-    "expireEffects": [
+    "lifetimeTurns": 3,
+    "onFailureEffects": [
       {
         "kind": "add_trait_to_random_minions",
         "count": 2,
         "traitId": "injured"
       }
     ],
-    "lifetimeTurns": 3,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "bodyguard",
@@ -230,15 +230,15 @@
     "name": "Oversight pressure",
     "description": "Watchdogs circle; miss the charm offensive and every plan feels tighter.",
     "durationTurns": 1,
-    "expireEffects": [
+    "lifetimeTurns": 3,
+    "minInfamy": 15,
+    "onFailureEffects": [
       {
         "kind": "add_success_chance_modifier",
         "delta": -10,
         "turns": 2
       }
     ],
-    "lifetimeTurns": 3,
-    "minInfamy": 15,
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "politician",
@@ -314,14 +314,14 @@
     "name": "Infiltrator warning",
     "description": "A mole tips both ways—move on it or the crackdown finds you first.",
     "durationTurns": 2,
-    "expireEffects": [
+    "lifetimeTurns": 3,
+    "minHeat": 20,
+    "onFailureEffects": [
       {
         "kind": "security_level_delta_global",
         "delta": 1
       }
     ],
-    "lifetimeTurns": 3,
-    "minHeat": 20,
     "onSuccessEffects": [
       {
         "kind": "reveal_hidden_assets_global",
@@ -345,14 +345,14 @@
     "name": "Counterintelligence sweep",
     "description": "Their spooks are re-papering every site. Get inside the sweep or go blind.",
     "durationTurns": 1,
-    "expireEffects": [
+    "lifetimeTurns": 3,
+    "minHeat": 20,
+    "onFailureEffects": [
       {
         "kind": "intel_level_delta_global",
         "delta": -1
       }
     ],
-    "lifetimeTurns": 3,
-    "minHeat": 20,
     "onSuccessEffects": [
       {
         "kind": "intel_level_delta_global",

@@ -760,7 +760,52 @@ describe("executePlan", () => {
     expect(kinds).not.toContain("event_rotated_in");
   });
 
-  it("fires expire effects when the lifetime runs out unstarted, then decays modifiers", () => {
+  it("charges the same failure effects whether the event was botched or simply ignored", () => {
+    /* ev-1's onFailureEffects grant +2 CP. Ignoring the offer... */
+    const ignored: GameState = {
+      ...baseState(6),
+      currentEventTemplateId: "ev-1",
+      currentEventTurnsRemaining: 1,
+    };
+    const expired = executePlan(ignored, catalog, () => 0, sequentialIds("ag"));
+    expect(expired.ok).toBe(true);
+    if (!expired.ok) {
+      return;
+    }
+
+    /* ...and running it into the ground both land on the same list. A Shaken minion drops
+     * the chance to 80, so a roll of 99 fails it. */
+    const state = baseState(6);
+    const botched: GameState = {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [makeMinionInstance("mi-1", "m-hero", ["t-neg"])],
+      },
+      currentEventTemplateId: null,
+      activeMissions: [
+        activeMission({
+          missionTemplateId: "ev-1",
+          missionSource: "event",
+          target: { kind: "none" },
+          participantInstanceIds: ["mi-1"],
+        }),
+      ],
+    };
+    const failed = executePlan(botched, catalog, () => 0.99, sequentialIds("ag"));
+    expect(failed.ok).toBe(true);
+    if (!failed.ok) {
+      return;
+    }
+    expect(completedEvents(failed.value)[0]!.success).toBe(false);
+
+    expect(failed.value.player.pendingBonusCommandPoints).toBe(
+      expired.value.player.pendingBonusCommandPoints,
+    );
+    expect(failed.value.player.pendingBonusCommandPoints).toBe(2);
+  });
+
+  it("fires onFailureEffects when the lifetime runs out unstarted, then decays modifiers", () => {
     const state: GameState = {
       ...baseState(6),
       currentEventTemplateId: "ev-1",
@@ -778,7 +823,7 @@ describe("executePlan", () => {
       return;
     }
     const next = result.value;
-    expect(next.player.pendingBonusCommandPoints).toBe(2); /* ev-1 grants +2 CP on expire */
+    expect(next.player.pendingBonusCommandPoints).toBe(2); /* ev-1's onFailureEffects: +2 CP */
     expect(next.activeSuccessModifiers).toEqual([{ delta: 5, turnsRemaining: 1 }]);
     const kinds = next.activityLog.flatMap((e) => e.events).map((e) => e.kind);
     expect(kinds).toContain("event_expired");

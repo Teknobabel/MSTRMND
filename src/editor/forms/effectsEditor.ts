@@ -215,10 +215,10 @@ function effectRowEditor(
   return box;
 }
 
-/** One effects list (onSuccessEffects / onFailureEffects / expireEffects). */
+/** One effects list (onSuccessEffects / onFailureEffects). */
 export function effectsListFieldset(
   legend: string,
-  key: "onSuccessEffects" | "onFailureEffects" | "expireEffects",
+  key: "onSuccessEffects" | "onFailureEffects",
   ctx: FormCtx,
 ): HTMLElement {
   const targetType = (str(ctx.row, "targetType") || "none") as MissionTargetType;

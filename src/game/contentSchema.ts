@@ -375,14 +375,13 @@ export const eventTemplateSchema = z.object({
   requiredTraitIds: z.array(z.string().min(1)).default([]),
   requiredAssetIds: z.array(z.string().min(1)).default([]),
   durationTurns: z.coerce.number().int().min(1),
-  /** Turns the offer stays on the table before `expireEffects` fire (designer-set, ≥ 1). */
+  /** Turns the offer stays on the table before `onFailureEffects` fire (designer-set, ≥ 1). */
   lifetimeTurns: z.coerce.number().int().min(1).max(99),
   /** Optional draw-pool gates: the event is only offered once the player reaches these. */
   minInfamy: z.coerce.number().int().min(0).max(100).optional(),
   minHeat: z.coerce.number().int().min(0).max(100).optional(),
   onSuccessEffects: z.array(missionEffectSchema).optional(),
   onFailureEffects: z.array(missionEffectSchema).optional(),
-  expireEffects: z.array(missionEffectSchema).optional(),
   /** System-spawned event marker; kept out of the random draw pool (see `EventTemplate.special`). */
   special: z.literal("lair_raid").optional(),
 });
@@ -671,9 +670,6 @@ function normalizeEventTemplates(arr: z.infer<typeof eventTemplateSchema>[]): Ev
     if (m.onFailureEffects !== undefined && m.onFailureEffects.length > 0) {
       base.onFailureEffects = [...m.onFailureEffects];
     }
-    if (m.expireEffects !== undefined && m.expireEffects.length > 0) {
-      base.expireEffects = [...m.expireEffects];
-    }
     if (m.special !== undefined) {
       base.special = m.special;
     }
@@ -840,8 +836,8 @@ function checkMinionLikeTraitRefs(
 }
 
 /**
- * Every agent needs at least one challenge trait (that is the whole of an agent's mission
- * pressure now), each a real trait id, listed once.
+ * Challenge traits are optional — an agent may carry none, and simply poses no trait challenge.
+ * What it lists must be real trait ids, each named once.
  */
 function checkAgentChallengeTraits(
   templates: readonly AgentTemplate[],
@@ -850,15 +846,6 @@ function checkAgentChallengeTraits(
 ): void {
   for (const a of templates) {
     const list = a.challengeTraitIds ?? [];
-    if (list.length === 0) {
-      issues.push({
-        slice: "agents",
-        entityId: a.id,
-        path: "challengeTraitIds",
-        message: "Agent needs at least one challenge trait",
-      });
-      continue;
-    }
     const seen = new Set<string>();
     list.forEach((tid, i) => {
       if (!traitIds.has(tid)) {
@@ -1261,14 +1248,6 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
         }
         seenAbilities.add(abilityId);
       });
-      if (a.movementBehavior === undefined) {
-        issues.push({
-          slice: "agents",
-          entityId: a.id,
-          path: "movementBehavior",
-          message: `Agent needs a movement behavior (${AGENT_MOVEMENT_BEHAVIORS.join(" | ")})`,
-        });
-      }
     }
     if (minionTemplateIds !== null) {
       for (const a of s.agents) {
@@ -1561,21 +1540,8 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
           assetIds,
           issues,
         );
-        checkMissionEffects(
-          "events",
-          ev.id,
-          ev.targetType,
-          ev.expireEffects ?? [],
-          "expireEffects",
-          missionIds,
-          upgradeLadderMissionIds,
-          traitIds,
-          assetIds,
-          issues,
-        );
       }
       checkUnlockForbidden("events", ev.id, ev.onFailureEffects, "onFailureEffects", issues);
-      checkUnlockForbidden("events", ev.id, ev.expireEffects, "expireEffects", issues);
     }
     /* One raid at most: the top wanted tier spawns a single event by id, so a second one
      * would be authored content that can never reach the table. */

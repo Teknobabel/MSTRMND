@@ -416,7 +416,7 @@ export type GameState = {
   currentEventTemplateId: string | null;
   /**
    * Turns of offer lifetime left for {@link currentEventTemplateId}; decremented once per
-   * `executePlan`, and at 0 the offer expires (its `expireEffects` fire). 0 when no offer.
+   * `executePlan`, and at 0 the offer expires (its `onFailureEffects` fire). 0 when no offer.
    */
   currentEventTurnsRemaining: number;
   /**
@@ -2375,9 +2375,10 @@ export function executePlan(
     } else {
       nextCurrentEventTurnsRemaining -= 1;
       if (nextCurrentEventTurnsRemaining <= 0) {
-        /* Lifetime ran out unstarted: the player takes the consequences. */
+        /* Lifetime ran out unstarted. Ignoring an event costs exactly what botching it
+         * costs — there is no separate expiry list, so this is `onFailureEffects`. */
         const et = eventTemplateById(catalog, nextCurrentEventTemplateId);
-        const expireList = et?.expireEffects ?? [];
+        const expireList = et?.onFailureEffects ?? [];
         if (expireList.length > 0) {
           const stubAm: ActiveMission = {
             id: "__event_expire__",

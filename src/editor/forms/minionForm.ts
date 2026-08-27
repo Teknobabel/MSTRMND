@@ -202,7 +202,7 @@ export function renderMinionForm(container: HTMLElement, ctx: FormCtx): void {
     behaviorRow.appendChild(
       hint(
         MOVEMENT_BEHAVIOR_OPTIONS.find((o) => o.value === behavior)?.brief ??
-          "Every agent moves once at the end of each turn, after missions resolve. Pick what it chases.",
+          "Optional. An agent with a behavior moves once per Agent Phase (unless it spent its action on an active ability); one without stays put for the whole run.",
       ),
     );
     container.appendChild(behaviorRow);
@@ -246,7 +246,7 @@ export function renderMinionForm(container: HTMLElement, ctx: FormCtx): void {
           () => traitIds[0] ?? null,
         ),
         hint(
-          "Each DISTINCT challenge trait at the site costs a flat penalty (balance: Challenge trait penalty %) unless someone on the crew has the matching trait. These sit outside the required-trait ratio, so matching one never raises the base chance — it only avoids the hit. Agents need at least one.",
+          "Each DISTINCT challenge trait at the site costs a flat penalty (balance: Challenge trait penalty %) unless someone on the crew has the matching trait. These sit outside the required-trait ratio, so matching one never raises the base chance — it only avoids the hit. Leave the list empty for an agent that poses no trait challenge.",
         ),
       ),
     );

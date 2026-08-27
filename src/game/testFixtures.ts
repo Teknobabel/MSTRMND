@@ -161,7 +161,7 @@ export function rawFixtureSlices(): FixtureSlices {
         startCommandPoints: 0,
         durationTurns: 1,
         lifetimeTurns: 2,
-        expireEffects: [{ kind: "grant_command_points_next_turn", amount: 2 }],
+        onFailureEffects: [{ kind: "grant_command_points_next_turn", amount: 2 }],
       },
     ],
     organizationNames: ["Test Syndicate"],

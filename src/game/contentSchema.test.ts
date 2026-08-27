@@ -207,6 +207,68 @@ describe("parseContentCatalog", () => {
   });
 });
 
+describe("optional agent features", () => {
+  /** Everything past the minion-template shape is optional on an agent. */
+  function withAgent(extra: Record<string, unknown>) {
+    const raw = rawFixtureSlices();
+    raw.agents = [
+      ...raw.agents,
+      {
+        id: "a-bare",
+        name: "Bystander",
+        description: "Carries none of the optional agent features",
+        hireCommandPoints: 0,
+        levelUpTraitOrder: [],
+        ...extra,
+      },
+    ];
+    return parseContentCatalog(raw);
+  }
+
+  it("accepts an agent with no challenge traits, no abilities, and no movement behavior", () => {
+    const { catalog, issues } = withAgent({});
+    expect(issues).toEqual([]);
+    expect(catalog).not.toBeNull();
+    const bare = catalog?.agents.find((a) => a.id === "a-bare");
+    expect(bare?.challengeTraitIds).toEqual([]);
+    expect(bare?.abilityIds).toBeUndefined();
+    expect(bare?.movementBehavior).toBeUndefined();
+  });
+
+  it("accepts an agent carrying only one of the three", () => {
+    expect(withAgent({ abilityIds: ["guard"] }).issues).toEqual([]);
+    expect(withAgent({ movementBehavior: "analyst" }).issues).toEqual([]);
+    expect(withAgent({ challengeTraitIds: ["t-req"] }).issues).toEqual([]);
+  });
+
+  it("still rejects what an agent does list being wrong", () => {
+    expect(withAgent({ challengeTraitIds: ["nope"] }).issues).toEqual([
+      {
+        slice: "agents",
+        entityId: "a-bare",
+        path: "challengeTraitIds[0]",
+        message: 'Unknown trait id "nope"',
+      },
+    ]);
+    expect(withAgent({ challengeTraitIds: ["t-req", "t-req"] }).issues).toEqual([
+      {
+        slice: "agents",
+        entityId: "a-bare",
+        path: "challengeTraitIds[1]",
+        message: 'Duplicate challenge trait "t-req"',
+      },
+    ]);
+    expect(withAgent({ abilityIds: ["guard", "guard"] }).issues).toEqual([
+      {
+        slice: "agents",
+        entityId: "a-bare",
+        path: "abilityIds[1]",
+        message: 'Duplicate ability "guard"',
+      },
+    ]);
+  });
+});
+
 describe("parseCatalog (throwing wrapper)", () => {
   it("throws a ContentValidationError carrying every issue", () => {
     const raw = rawFixtureSlices();

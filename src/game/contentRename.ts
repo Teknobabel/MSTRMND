@@ -57,7 +57,7 @@ function renameRecordKey(row: Row, key: string, oldId: string, newId: string): v
   }
 }
 
-const EFFECT_LIST_KEYS = ["onSuccessEffects", "onFailureEffects", "expireEffects"] as const;
+const EFFECT_LIST_KEYS = ["onSuccessEffects", "onFailureEffects"] as const;
 
 function forEachEffect(row: Row, fn: (eff: Row) => void): void {
   for (const key of EFFECT_LIST_KEYS) {

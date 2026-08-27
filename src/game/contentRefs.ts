@@ -130,7 +130,6 @@ export function collectContentReferences(catalog: ContentCatalog): ContentRefere
     });
     effectReferences("events", ev.id, ev.onSuccessEffects, "onSuccessEffects", out);
     effectReferences("events", ev.id, ev.onFailureEffects, "onFailureEffects", out);
-    effectReferences("events", ev.id, ev.expireEffects, "expireEffects", out);
   }
 
   for (const map of catalog.maps) {

@@ -188,6 +188,31 @@ describe("active abilities", () => {
     expect(levelAt(result.locationSecurityStates, "loc-b")).toBe(0);
   });
 
+  it("an agent carrying none of the optional features simply stands there", () => {
+    const bare = agent([], { challengeTraitIds: [] });
+    const result = run(bare, "loc-b");
+    expect(result.uses).toEqual([]);
+    expect(result.moves).toEqual([]);
+    expect(result.locationSecurityStates).toEqual(security);
+    expect(result.locationIntelStates).toEqual(intel);
+    expect(result.locationAssetSlots).toEqual(assets);
+    expect(result.locationAgentPresence).toEqual(presenceAt("loc-b"));
+  });
+
+  it("an agent with only abilities acts but never moves", () => {
+    const actor = agent(["security_chief"], { challengeTraitIds: [] });
+    const result = run(actor, "loc-b");
+    expect(result.uses.map((u) => u.abilityId)).toEqual(["security_chief"]);
+    expect(result.moves).toEqual([]);
+  });
+
+  it("an agent with only a movement behavior moves but never acts", () => {
+    const wanderer = agent([], { challengeTraitIds: [], movementBehavior: "analyst" });
+    const result = run(wanderer, "loc-b");
+    expect(result.uses).toEqual([]);
+    expect(result.moves.map((m) => m.toLocationId)).toEqual(["loc-a"]);
+  });
+
   it("leaves the caller's rows untouched", () => {
     const before = JSON.stringify({ security, intel, assets });
     run(agent(["security_chief", "asset_protection"]));

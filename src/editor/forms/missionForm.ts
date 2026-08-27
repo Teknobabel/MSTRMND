@@ -136,7 +136,7 @@ function renderPreview(ctx: FormCtx): HTMLElement {
   return body;
 }
 
-/** Shared form for missions and events (events add expireEffects; requirements may be empty). */
+/** Shared form for missions and events (events add a lifetime + gates; requirements may be empty). */
 export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
   const isEvent = ctx.slice === "events";
 
@@ -237,7 +237,9 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
       ),
     );
     container.appendChild(
-      hint("Turns the offer stays on the table. Not started in time ⇒ expireEffects fire."),
+      hint(
+        "Turns the offer stays on the table. Not started in time ⇒ onFailureEffects fire — ignoring an event costs the same as botching it.",
+      ),
     );
     container.appendChild(
       formRow(
@@ -327,16 +329,15 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
   }
 
   container.appendChild(effectsListFieldset("onSuccessEffects", "onSuccessEffects", ctx));
-  container.appendChild(effectsListFieldset("onFailureEffects", "onFailureEffects", ctx));
-  if (isEvent) {
-    container.appendChild(
-      effectsListFieldset(
-        "expireEffects (fires when lifetimeTurns runs out unstarted)",
-        "expireEffects",
-        ctx,
-      ),
-    );
-  }
+  container.appendChild(
+    effectsListFieldset(
+      isEvent
+        ? "onFailureEffects (mission failed — or the offer expired unstarted)"
+        : "onFailureEffects",
+      "onFailureEffects",
+      ctx,
+    ),
+  );
 
   container.appendChild(fieldset("Success chance preview", renderPreview(ctx)));
 }

@@ -124,8 +124,8 @@ function defaultRowForSlice(
     case "minions":
       return { id, name: "New Template", description: "", hireCommandPoints: 0, levelUpTraitOrder: [] };
     case "agents":
-      /* challengeTraitIds starts empty on purpose: validation flags it until the designer
-       * picks one, which is the reminder that an agent without a challenge does nothing. */
+      /* Challenge traits, abilities, and a movement behavior are all optional, so a new agent
+       * starts with none of them rather than being handed a behavior it never asked for. */
       return {
         id,
         name: "New Template",
@@ -133,7 +133,6 @@ function defaultRowForSlice(
         hireCommandPoints: 0,
         levelUpTraitOrder: [],
         challengeTraitIds: [],
-        movementBehavior: "opportunist",
         abilityIds: [],
       };
     case "missions":
