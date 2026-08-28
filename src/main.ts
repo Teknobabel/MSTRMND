@@ -2946,9 +2946,7 @@ function initGameController(
         dispatch((s) => hireMinion(s, content, tpl.id, crypto.randomUUID()));
       });
 
-      actions.appendChild(hireBtn);
-      body.appendChild(actions);
-
+      card.appendChild(hireBtn);
       container.appendChild(card);
     }
 
@@ -2974,8 +2972,6 @@ function initGameController(
       });
       body.appendChild(dl);
 
-      const actions = document.createElement("div");
-      actions.className = "minions-card-actions";
       const hireBtn = document.createElement("button");
       hireBtn.type = "button";
       hireBtn.className = "btn btn-primary minions-card-hire";
@@ -3005,8 +3001,7 @@ function initGameController(
         dispatch((s) => rehireMinion(s, content, rehireInst.instanceId));
       });
 
-      actions.appendChild(hireBtn);
-      body.appendChild(actions);
+      card.appendChild(hireBtn);
       container.appendChild(card);
     }
   }
