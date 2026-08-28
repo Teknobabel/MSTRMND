@@ -100,6 +100,7 @@ import { maxHireableStartingLevel, nextHireLevelInfamyThreshold } from "./game/m
 import { initNavigation, type NavigationApi } from "./navigation";
 import { initStageScale } from "./ui/stageScale";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
+import { initGlobalTooltips } from "./ui/tooltip";
 import {
   appendCardArtShell,
   createCardArtImg,
@@ -111,12 +112,31 @@ import {
   resolveMinionCardArt,
 } from "./ui/cardArt";
 
-/** What each intel step unlocks at a site (hover text on the location card's Intel row). */
+/** What each intel step unlocks at a site (hover text on the location card's Intel Level label). */
 const INTEL_LEVEL_TOOLTIP_LINES: readonly string[] = [
   "0 — assets and agents here stay secret unless uncovered another way",
   "1 — every asset slot is listed (contents still unknown)",
   "2 — asset contents are identified and count as revealed for missions",
   "3 — opposing agents here are visible, including any that arrive later",
+];
+
+/** Hover text for the location card's Security Level label. */
+const SECURITY_LEVEL_TOOLTIP_LINES: readonly string[] = [
+  "Defensive alert level at this site (0 up to the location level).",
+  "Each point reveals 1 security trait, adding it to the required traits for missions here.",
+  "Increases by +1 when a mission targeting this site completes.",
+];
+
+/** Hover text for the location card's Site Traits label. */
+const SITE_TRAITS_TOOLTIP_LINES: readonly string[] = [
+  "Inherent traits determined by location level (Level 1: 0, Level 2: 1, Level 3: 2).",
+  "Added to the required traits for all missions targeting this location or its assets.",
+];
+
+/** Hover text for the location card's Security Traits label. */
+const SECURITY_TRAITS_TOOLTIP_LINES: readonly string[] = [
+  "Per-run defensive traits hidden until revealed by the site's security level.",
+  "Revealed security traits are added to mission requirements for this location.",
 ];
 
 /** Tabs left-to-right; locations filtered and sorted by name within each. */
@@ -2009,10 +2029,18 @@ function initGameController(
         {
           label: "Intel level",
           value: `${targetIntel} / ${MAX_INTEL_LEVEL}`,
-          tooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
+          labelTooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
         },
-        { label: "Site traits", value: siteTraitsLabel },
-        { label: "Security traits", value: securityTraitsLabel },
+        {
+          label: "Site traits",
+          value: siteTraitsLabel,
+          labelTooltipLines: SITE_TRAITS_TOOLTIP_LINES,
+        },
+        {
+          label: "Security traits",
+          value: securityTraitsLabel,
+          labelTooltipLines: SECURITY_TRAITS_TOOLTIP_LINES,
+        },
       ]);
       body.appendChild(dl);
       wrap.appendChild(article);
@@ -2498,18 +2526,21 @@ function initGameController(
     const baseRows: Array<{
       label: string;
       value: string;
+      valueEl?: HTMLElement;
       tooltipLines?: readonly string[];
+      labelTooltipLines?: readonly string[];
     }> = [
       { label: "Location type", value: formatLocationTypeLabel(loc.locationType) },
       { label: "Location level", value: String(loc.locationLevel) },
       {
         label: "Security level",
         value: securityLevel !== undefined ? String(securityLevel) : "—",
+        labelTooltipLines: SECURITY_LEVEL_TOOLTIP_LINES,
       },
       {
         label: "Intel level",
         value: `${intelLevel} / ${MAX_INTEL_LEVEL}`,
-        tooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
+        labelTooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
       },
       {
         label: "Site traits",
@@ -2520,6 +2551,7 @@ function initGameController(
                 content,
                 [...siteRequiredTraitIds].sort((a, b) => a.localeCompare(b)),
               ),
+        labelTooltipLines: SITE_TRAITS_TOOLTIP_LINES,
       },
       {
         label: "Security traits",
@@ -2528,6 +2560,7 @@ function initGameController(
           locationSecurityTraitIds,
           securityLevel,
         ),
+        labelTooltipLines: SECURITY_TRAITS_TOOLTIP_LINES,
       },
     ];
     appendMinionStatRows(dl, baseRows);
@@ -2608,7 +2641,7 @@ function initGameController(
       const displayValue =
         knowledge === "identified"
           ? (assetNameById.get(slot.assetId) ?? slot.assetId)
-          : "Asset";
+          : "Hidden";
       if (enableAssignDrag) {
         const targetVisibility = knowledge === "identified" ? "revealed" : "hidden";
         const chip = document.createElement("span");
@@ -2644,11 +2677,15 @@ function initGameController(
       value: string;
       valueEl?: HTMLElement;
       tooltipLines?: readonly string[];
+      labelTooltipLines?: readonly string[];
     }>,
   ): void {
-    for (const { label, value, valueEl, tooltipLines } of rows) {
+    for (const { label, value, valueEl, tooltipLines, labelTooltipLines } of rows) {
       const dt = document.createElement("dt");
       dt.textContent = label;
+      if (labelTooltipLines !== undefined && labelTooltipLines.length > 0) {
+        dt.title = labelTooltipLines.join("\n");
+      }
       const dd = document.createElement("dd");
       if (valueEl !== undefined) {
         dd.appendChild(valueEl);
@@ -5380,3 +5417,4 @@ const navigation = initNavigation({
 startRunFromMenu = initGameController(catalog, navigation, runSetup).startRun;
 
 initStageScale();
+initGlobalTooltips();

@@ -2290,6 +2290,15 @@ body {
   align-self: baseline;
 }
 
+.asset-card-stats dt[title],
+.location-card-stats dt[title],
+.minions-card-stats dt[title],
+.asset-card-stats dt[data-tooltip],
+.location-card-stats dt[data-tooltip],
+.minions-card-stats dt[data-tooltip] {
+  cursor: help;
+}
+
 .asset-card-stats dd,
 .location-card-stats dd,
 .minions-card-stats dd {
@@ -2406,7 +2415,7 @@ body {
   color: var(--red-bright);
 }
 
-/* Mission outcome hover tooltip */
+/* Mission outcome hover tooltip & Global Tooltip */
 .mission-outcome-tooltip-anchor {
   position: relative;
   display: block;
@@ -2421,15 +2430,12 @@ body {
   margin: 0;
 }
 
-.mission-outcome-tooltip-panel {
-  display: none;
-  position: absolute;
-  z-index: 80;
-  left: 0;
-  top: calc(100% + 4px);
+.mission-outcome-tooltip-panel,
+.app-global-tooltip {
   min-width: min(100%, 220px);
   max-width: min(340px, calc(100vw - 2rem));
   padding: 0.5rem 0.6rem;
+  font-family: var(--font-body);
   font-size: 0.74rem;
   font-weight: 500;
   line-height: 1.45;
@@ -2441,8 +2447,27 @@ body {
     0 0 18px var(--red-glow-soft);
 }
 
+.mission-outcome-tooltip-panel {
+  display: none;
+  position: absolute;
+  z-index: 80;
+  left: 0;
+  top: calc(100% + 4px);
+}
+
 .mission-outcome-tooltip-anchor:hover .mission-outcome-tooltip-panel,
 .mission-outcome-tooltip-anchor:focus-within .mission-outcome-tooltip-panel {
+  display: block;
+}
+
+.app-global-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.app-global-tooltip.is-visible {
   display: block;
 }
 
