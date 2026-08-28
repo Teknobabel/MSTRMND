@@ -1,264 +1,132 @@
 [
   {
-    "id": "fed_case_officer_vernon",
-    "name": "Case Officer Vernon",
-    "description": "Task-force lead; paperwork first, warrants when the net is already up.",
+    "id": "agent_sterling",
+    "name": "Agent Sterling",
+    "description": "The world's most decorated spy. Arrives at your crime scenes before you do.",
     "abilityIds": [
       "investigator"
     ],
     "challengeTraitIds": [
-      "politician",
-      "clever"
+      "infiltrator"
     ],
     "hireCommandPoints": 0,
     "levelUpTraitOrder": [
-      "hacker",
-      "spy",
-      "resilient",
-      "loyal"
+      "tactician",
+      "brilliant"
     ],
     "movementBehavior": "investigator",
     "startingTraitIds": [
-      "tactician",
-      "intelligent"
+      "infiltrator",
+      "stealthy"
     ]
   },
   {
-    "id": "interceptor_singh",
-    "name": "Wire Interceptor Singh",
-    "description": "SIGINT chaser; lives in metadata and hates dead drops.",
+    "id": "captain_meteor",
+    "name": "Captain Meteor",
+    "description": "Cape, jawline, zero sense of jurisdiction. Punches first, testifies later.",
+    "abilityIds": [
+      "brawler"
+    ],
+    "challengeTraitIds": [
+      "enforcer",
+      "fearless"
+    ],
+    "hireCommandPoints": 0,
+    "levelUpTraitOrder": [
+      "brutal",
+      "swift"
+    ],
+    "movementBehavior": "hunter",
+    "startingTraitIds": [
+      "enforcer",
+      "fearless"
+    ]
+  },
+  {
+    "id": "director_vane",
+    "name": "Director Vane",
+    "description": "Runs the global task force from a bulletproof corner office. Trusts no one, insures everything.",
+    "abilityIds": [
+      "guard",
+      "security_chief"
+    ],
+    "challengeTraitIds": [
+      "tactician"
+    ],
+    "hireCommandPoints": 0,
+    "levelUpTraitOrder": [
+      "brilliant",
+      "manipulator"
+    ],
+    "movementBehavior": "defender",
+    "startingTraitIds": [
+      "tactician",
+      "connected"
+    ]
+  },
+  {
+    "id": "professor_ion",
+    "name": "Professor Ion",
+    "description": "The only mind alive that can un-derive your schematics. Keeps trying.",
     "abilityIds": [
       "counterintelligence"
     ],
     "challengeTraitIds": [
-      "hacker",
-      "fast"
+      "scientist",
+      "brilliant"
     ],
     "hireCommandPoints": 0,
     "levelUpTraitOrder": [
-      "spy",
-      "tactician",
-      "fast",
-      "lucky"
+      "engineer",
+      "hacker"
     ],
     "movementBehavior": "analyst",
     "startingTraitIds": [
-      "hacker"
+      "scientist",
+      "brilliant"
     ]
   },
   {
-    "id": "tactical_lead_morales",
-    "name": "Tactical Lead Morales",
-    "description": "Door-kicker when the quiet phase ends; coordinates local assets.",
+    "id": "marshal_steel",
+    "name": "Marshal Steel",
+    "description": "Hardens whatever she stands next to. Doors, budgets, resolve.",
     "abilityIds": [
-      "brawler"
-    ],
-    "challengeTraitIds": [
-      "soldier",
-      "strong"
-    ],
-    "hireCommandPoints": 0,
-    "levelUpTraitOrder": [
-      "tactician",
-      "bodyguard",
-      "fast",
-      "clever"
-    ],
-    "movementBehavior": "hunter",
-    "startingTraitIds": [
-      "soldier",
-      "resilient"
-    ]
-  },
-  {
-    "id": "station_chief_ashcroft",
-    "name": "Station Chief Ashcroft",
-    "description": "Runs the residency like a chess clock—quiet cables, loud consequences.",
-    "abilityIds": [
-      "guard",
       "security_chief"
     ],
     "challengeTraitIds": [
-      "spy",
-      "intelligent"
+      "enforcer"
     ],
     "hireCommandPoints": 0,
     "levelUpTraitOrder": [
-      "intelligent",
-      "persuasive",
-      "hacker",
-      "loyal"
-    ],
-    "movementBehavior": "defender",
-    "startingTraitIds": [
-      "spy",
-      "tactician"
-    ]
-  },
-  {
-    "id": "silvia_cross",
-    "name": "Silvia Cross",
-    "description": "Embassy circuits and charity boards; her smile files better reports than microphones.",
-    "challengeTraitIds": [
-      "charismatic",
-      "persuasive"
-    ],
-    "hireCommandPoints": 0,
-    "levelUpTraitOrder": [
-      "persuasive",
-      "politician",
-      "sneaky",
-      "lucky"
-    ],
-    "movementBehavior": "analyst",
-    "startingTraitIds": [
-      "spy",
-      "charismatic"
-    ]
-  },
-  {
-    "id": "dr_aldric_frost",
-    "name": "Dr. Aldric Frost",
-    "description": "Prototype labs under plausible patents; the blast radius is always someone else's problem.",
-    "abilityIds": [
-      "asset_protection"
-    ],
-    "challengeTraitIds": [
-      "scientist",
-      "engineer"
-    ],
-    "hireCommandPoints": 0,
-    "levelUpTraitOrder": [
-      "intelligent",
-      "hacker",
       "tactician",
-      "clever"
-    ],
-    "movementBehavior": "defender",
-    "startingTraitIds": [
-      "scientist",
-      "engineer"
-    ]
-  },
-  {
-    "id": "marksman_orlov",
-    "name": "Marksman Orlov",
-    "description": "Long corridors, longer sightlines; prefers one shot and a clean exit visa.",
-    "abilityIds": [
-      "brawler"
-    ],
-    "challengeTraitIds": [
-      "sneaky",
-      "bodyguard"
-    ],
-    "hireCommandPoints": 0,
-    "levelUpTraitOrder": [
-      "sneaky",
-      "agile",
-      "resilient",
-      "lucky"
-    ],
-    "movementBehavior": "hunter",
-    "startingTraitIds": [
-      "soldier",
-      "fast"
-    ]
-  },
-  {
-    "id": "ghost_thief_valente",
-    "name": "Ghost Thief Valente",
-    "description": "Slips past seals and stories; when the painting moves, the alarm thinks it's dust.",
-    "abilityIds": [
-      "asset_protection"
-    ],
-    "challengeTraitIds": [
-      "thief",
-      "agile"
-    ],
-    "hireCommandPoints": 0,
-    "levelUpTraitOrder": [
-      "agile",
-      "clever",
-      "spy",
-      "fast"
+      "fearless"
     ],
     "movementBehavior": "opportunist",
     "startingTraitIds": [
-      "thief",
-      "sneaky"
+      "enforcer",
+      "brutal"
     ]
   },
   {
-    "id": "ministerial_aide_holloway",
-    "name": "Ministerial Aide Holloway",
-    "description": "Drafts policy until the ink smells like leverage; never leaves fingerprints on the brief.",
+    "id": "agent_wraith",
+    "name": "Agent Wraith",
+    "description": "A reformed cat burglar hired to think like you. Unsettlingly good at it.",
     "abilityIds": [
-      "investigator"
-    ],
-    "challengeTraitIds": [
-      "politician",
-      "tactician"
-    ],
-    "hireCommandPoints": 0,
-    "levelUpTraitOrder": [
-      "intelligent",
-      "charismatic",
-      "tactician",
-      "loyal"
-    ],
-    "movementBehavior": "investigator",
-    "startingTraitIds": [
-      "politician",
-      "persuasive"
-    ]
-  },
-  {
-    "id": "armorer_beck",
-    "name": "Armorer Beck",
-    "description": "Quartermaster energy—catalog numbers for toys that were never supposed to exist.",
-    "abilityIds": [
-      "guard",
       "asset_protection"
     ],
     "challengeTraitIds": [
-      "engineer",
-      "resilient"
+      "thief",
+      "stealthy"
     ],
     "hireCommandPoints": 0,
     "levelUpTraitOrder": [
-      "scientist",
-      "tactician",
-      "clever",
-      "lucky"
+      "swift",
+      "brilliant"
     ],
     "movementBehavior": "asset_protector",
     "startingTraitIds": [
-      "engineer",
-      "hacker"
-    ]
-  },
-  {
-    "id": "casino_fixer_lombard",
-    "name": "Casino Fixer Lombard",
-    "description": "Monte Carlo carpet and velvet rope leverage; the house always texts him first.",
-    "abilityIds": [
-      "security_chief"
-    ],
-    "challengeTraitIds": [
-      "charismatic",
-      "thief"
-    ],
-    "hireCommandPoints": 0,
-    "levelUpTraitOrder": [
-      "persuasive",
-      "spy",
       "thief",
-      "fast"
-    ],
-    "movementBehavior": "opportunist",
-    "startingTraitIds": [
-      "charismatic",
-      "lucky"
+      "stealthy"
     ]
   }
 ]

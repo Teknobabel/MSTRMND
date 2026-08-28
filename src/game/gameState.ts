@@ -3,6 +3,7 @@ import type {
   AgentInstance,
   AgentMovementBehavior,
   ContentCatalog,
+  DynamicTrait,
   EventTemplate,
   LairTemplate,
   LocationAssetPlacement,
@@ -72,6 +73,7 @@ import {
   rollStartingTemplateAffinities,
   rollStartingTemplateLocationAffinities,
   seedStartingAffinities,
+  seedStartingLocationAffinities,
   syncMinionDynamicTraits,
 } from "./affinity";
 import {
@@ -1200,7 +1202,12 @@ function withRefreshedAffinities(state: GameState, catalog: ContentCatalog): Gam
     catalog.balance.minionAffinity,
   );
   const minionLocationAffinities = applyTemplateLocationSeeds(
-    state.minionLocationAffinities,
+    seedStartingLocationAffinities(
+      state.minionLocationAffinities,
+      state.player.minions,
+      (templateId) => minionTemplateById(catalog, templateId)?.startingDynamicTraits,
+      catalog.balance.locationAffinity,
+    ),
     state.player.minions,
     state.minionLocationAffinitySeeds,
     catalog.balance.locationAffinity,
@@ -1218,6 +1225,62 @@ function withRefreshedAffinities(state: GameState, catalog: ContentCatalog): Gam
       ),
     },
   };
+}
+
+/** Id the hire-pool probe borrows; never reaches a real roster, so it cannot collide with one. */
+const HIRE_PREVIEW_INSTANCE_ID = "\u0000hire-preview";
+
+/**
+ * Runs `instance` through the same projection a real hire would and reads back its pills.
+ *
+ * A hire card can only be trusted if it asks the roster the question rather than reading the
+ * template: bonds need the other half already hired, and both Hero/Wanted and the run's opening
+ * roll live in the affinity tables, not on the template.
+ */
+function dynamicTraitsAfterAdding(
+  state: GameState,
+  catalog: ContentCatalog,
+  instance: MinionInstance,
+): DynamicTrait[] {
+  const probe = withRefreshedAffinities(
+    {
+      ...state,
+      player: { ...state.player, minions: [...state.player.minions, instance] },
+    },
+    catalog,
+  );
+  return (
+    probe.player.minions.find((m) => m.instanceId === instance.instanceId)?.dynamicTraits ?? []
+  );
+}
+
+/** Dynamic traits {@link hireMinion} would give a fresh hire of `templateId` right now. */
+export function previewHireDynamicTraits(
+  state: GameState,
+  catalog: ContentCatalog,
+  templateId: string,
+): DynamicTrait[] {
+  const template = minionTemplateById(catalog, templateId);
+  if (template === undefined) {
+    return [];
+  }
+  return dynamicTraitsAfterAdding(
+    state,
+    catalog,
+    createMinionFromTemplate(template, HIRE_PREVIEW_INSTANCE_ID),
+  );
+}
+
+/**
+ * Dynamic traits {@link rehireMinion} would restore to a fired minion. Their affinity rows
+ * outlived the firing, so this is their real standing rather than the snapshot on the queue entry.
+ */
+export function previewRehireDynamicTraits(
+  state: GameState,
+  catalog: ContentCatalog,
+  instance: MinionInstance,
+): DynamicTrait[] {
+  return dynamicTraitsAfterAdding(state, catalog, instance);
 }
 
 export function hireMinion(

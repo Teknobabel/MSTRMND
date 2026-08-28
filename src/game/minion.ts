@@ -1,36 +1,9 @@
-import type {
-  BalanceConfig,
-  DynamicTrait,
-  MinionInstance,
-  MinionTemplate,
-  StartingDynamicTrait,
-} from "./types";
+import type { BalanceConfig, MinionInstance, MinionTemplate } from "./types";
 import { DEFAULT_BALANCE } from "./types";
 
 export type CreateMinionOverrides = Partial<
   Pick<MinionInstance, "currentLevel" | "currentExperience" | "traitIds" | "dynamicTraits">
 >;
-
-/**
- * Only the location bonds come across at hire. Minion-to-minion starting bonds seed the pair
- * affinity table instead (`seedStartingAffinities` in `affinity.ts`), which then projects them
- * back onto both minions — a relationship needs the other half of the pair on the roster, and
- * the pair is what owns the score.
- */
-function dynamicTraitsFromStarting(
-  traits: readonly StartingDynamicTrait[] | undefined,
-): DynamicTrait[] {
-  if (traits === undefined || traits.length === 0) {
-    return [];
-  }
-  const out: DynamicTrait[] = [];
-  for (const s of traits) {
-    if (!("targetMinionTemplateId" in s)) {
-      out.push({ kind: s.kind, locationId: s.locationId });
-    }
-  }
-  return out;
-}
 
 /** Level a template's hires start at (`startingLevel`, floored at 1). */
 export function templateStartingLevel(template: MinionTemplate): number {
@@ -77,10 +50,9 @@ export function createMinionFromTemplate(
   const starting = template.startingTraitIds ?? [];
   const traitIds =
     overrides?.traitIds !== undefined ? [...overrides.traitIds] : [...starting];
-  const dynamicTraits =
-    overrides?.dynamicTraits !== undefined
-      ? [...overrides.dynamicTraits]
-      : dynamicTraitsFromStarting(template.startingDynamicTraits);
+  /* Nothing from `startingDynamicTraits` lands here: both tracks seed the affinity tables in
+   * `affinity.ts`, which then project every pill back onto the instance. */
+  const dynamicTraits = overrides?.dynamicTraits !== undefined ? [...overrides.dynamicTraits] : [];
   let instance: MinionInstance = {
     instanceId,
     templateId: template.id,

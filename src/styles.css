@@ -3020,6 +3020,25 @@ body {
   background: rgba(80, 24, 116, 0.3);
 }
 
+/* Mission-card requirement pills: filled + solid border = the player currently
+   has the trait/asset; hollow + dotted border + dim text = they don't. */
+.mission-req-pills {
+  display: inline;
+}
+
+.minions-trait-pill--req-have {
+  border-style: solid;
+  border-color: var(--line-2);
+  color: var(--text-0);
+}
+
+.minions-trait-pill--req-missing {
+  border-style: dotted;
+  border-color: var(--text-3);
+  background: transparent;
+  color: var(--text-3);
+}
+
 .minions-card-actions {
   margin-top: 0.5rem;
   display: flex;

@@ -13,7 +13,6 @@ import type {
   DynamicTraitKind,
   DynamicTraitModifiers,
   MinionInstance,
-  StartingDynamicTrait,
 } from "./types";
 import { DEFAULT_BALANCE } from "./types";
 import { pairKey } from "./affinity";
@@ -239,34 +238,4 @@ export function dynamicTraitDisplayLabel(
   const locName =
     catalog.locations.find((l) => l.id === dt.locationId)?.name ?? dt.locationId;
   return dt.kind === "hero" ? `Hero of ${locName}` : `Wanted in ${locName}`;
-}
-
-/** Hire-card preview lines for `MinionTemplate.startingDynamicTraits`. */
-export function formatStartingDynamicTraitsPreview(
-  catalog: ContentCatalog,
-  traits: readonly StartingDynamicTrait[] | undefined,
-): string[] {
-  if (traits === undefined || traits.length === 0) {
-    return [];
-  }
-  return traits.map((s) => {
-    if ("targetMinionTemplateId" in s) {
-      const n =
-        catalog.minions.find((m) => m.id === s.targetMinionTemplateId)?.name ??
-        s.targetMinionTemplateId;
-      switch (s.kind) {
-        case "friend":
-          return `Friend of ${n}`;
-        case "ally":
-          return `Ally of ${n}`;
-        case "rival":
-          return `Rival of ${n}`;
-        case "hatred":
-          return `Hatred for ${n}`;
-      }
-    }
-    const locName =
-      catalog.locations.find((l) => l.id === s.locationId)?.name ?? s.locationId;
-    return s.kind === "hero" ? `Hero of ${locName}` : `Wanted in ${locName}`;
-  });
 }

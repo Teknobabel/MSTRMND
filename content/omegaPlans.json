@@ -1,76 +1,40 @@
 [
   {
-    "id": "operation_nightfall",
-    "name": "Operation Nightfall",
-    "description": "Digital breach, logistics hardening, then a timed lift from a hostile annex.",
-    "mapId": "metro_night",
+    "id": "project_midnight_sun",
+    "name": "Project Midnight Sun",
+    "description": "An orbital mirror array that can turn noon to midnight over any capital on Earth — or focus dawn into a lance of fire. Steal its heart, raise it into orbit, and dictate terms to a darkened world. The core can be taken by force, extorted, or bought; the world's answer can be silenced, seduced, or bankrupted. Choose your path.",
+    "mapId": "the_global_stage",
     "stages": [
       {
         "missionIds": [
-          "breach_server",
-          "vector_null_infil",
-          "cold_storage_placement"
+          "om1_convoy",
+          "om1_committee",
+          "om1_buyout"
         ],
-        "requiredMissions": 3
+        "requiredMissions": 1
       },
       {
         "missionIds": [
-          "kestrel_black_relay",
-          "extract_asset",
-          "phantom_reach_cartography"
+          "om2_skywatch",
+          "om2_ministry",
+          "om2_aerodyne"
         ],
-        "requiredMissions": 3
+        "requiredMissions": 2
       },
       {
         "missionIds": [
-          "helix_sample_lift",
-          "sigma_seven_exfil_window",
-          "archive_seal_breach"
+          "om3_interceptors",
+          "om3_assembly",
+          "om3_markets"
         ],
-        "requiredMissions": 3
+        "requiredMissions": 2
       }
     ],
     "victoryNarrative": [
-      "PLACEHOLDER — final beat for Operation Nightfall. The annex goes dark on schedule and stays dark. By the time the duty officer finds the gap in the logs, the cold storage is empty and the manifest says it always was.",
-      "PLACEHOLDER — closing line. Nobody raises an alarm, because there is nothing left to raise one about. The city wakes up owned and does not notice."
+      "At 11:58 local time, the sky over the World Assembly dims. Not a cloud, not an eclipse — a shadow with edges, cast by ten thousand mirrors turning in perfect silence four hundred kilometers up. By 12:01 the markets have noticed. By 12:04, the generals. By 12:07, everyone else.",
+      "Your broadcast is forty seconds long. You do not shout. You do not demand. You simply list the cities, the hours of daylight remaining to each, and an account number. The interceptors never launch; the ministries never object; the money is already moving. It turns out the world was for sale after all — it just needed someone to name the price.",
+      "In the caldera of Mount Cinder, the Obsidian Throne is warm from the afternoon light you have graciously permitted. Somewhere below, a henchman is already painting your next scheme on the war room wall. The Midnight Sun hangs overhead, patient as winter. Let them have their little daylight. It's yours now, on loan."
     ],
-    "victoryTitle": "Nightfall Complete"
-  },
-  {
-    "id": "operation_sunrise",
-    "name": "Operation Sunrise",
-    "description": "Social entry, corridor control, and a public distraction masking the real cut.",
-    "mapId": "training_grid",
-    "stages": [
-      {
-        "missionIds": [
-          "iron_veil_meet",
-          "hollow_crown_social",
-          "third_rail_distraction"
-        ],
-        "requiredMissions": 3
-      },
-      {
-        "missionIds": [
-          "viper_hand_corridor",
-          "apex_contingency_overwatch",
-          "nocturne_route_harden"
-        ],
-        "requiredMissions": 3
-      },
-      {
-        "missionIds": [
-          "black_ledger_sweep",
-          "extract_asset",
-          "directive_null_intercept"
-        ],
-        "requiredMissions": 3
-      }
-    ],
-    "victoryNarrative": [
-      "PLACEHOLDER — final beat for Operation Sunrise. The distraction runs exactly as long as it needs to, and the real cut happens three blocks away while every camera in the district points the other way.",
-      "PLACEHOLDER — closing line. The ledger balances to the cent, signed by people who will spend years insisting they signed nothing."
-    ],
-    "victoryTitle": "Sunrise Complete"
+    "victoryTitle": "The Sun Sets at Noon"
   }
 ]

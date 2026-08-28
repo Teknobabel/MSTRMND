@@ -1,601 +1,935 @@
 [
   {
-    "id": "breach_server",
-    "name": "Breach the server",
-    "description": "Gain access before the trace completes.",
+    "id": "case_the_site",
+    "name": "Case the Joint",
+    "description": "Put eyes on the target until its secrets start showing.",
     "coreMission": true,
     "durationTurns": 1,
-    "onFailureEffects": [
-      {
-        "kind": "heat_delta",
-        "amount": 100
-      }
-    ],
     "onSuccessEffects": [
       {
-        "kind": "heat_delta",
-        "amount": 100
-      }
-    ],
-    "requiredTraitIds": [
-      "hacker"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "location"
-  },
-  {
-    "id": "hub_rig_upgrade",
-    "name": "Rig the dead hub",
-    "description": "Lay trunk lines so buried ops can surface in the mission roster.",
-    "durationTurns": 2,
-    "onSuccessEffects": [
-      {
-        "kind": "unlock_lair_mission",
-        "missionId": "archive_seal_breach"
-      },
-      {
-        "kind": "max_concurrent_missions_delta",
+        "kind": "intel_level_delta",
         "delta": 1
       }
     ],
     "requiredTraitIds": [
-      "hacker"
+      "infiltrator"
     ],
-    "startCommandPoints": 2,
+    "startCommandPoints": 1,
+    "targetType": "location"
+  },
+  {
+    "id": "lie_low",
+    "name": "Lie Low",
+    "description": "Burn the safehouses, feed the press a decoy, let the trail go cold.",
+    "coreMission": true,
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": -10
+      }
+    ],
+    "requiredTraitIds": [
+      "connected"
+    ],
+    "startCommandPoints": 1,
     "targetType": "none"
   },
   {
-    "id": "extract_asset",
-    "name": "Extract the asset",
-    "description": "Escort the contact out under pressure.",
-    "coreMission": true,
+    "id": "run_the_rackets",
+    "name": "Run the Rackets",
+    "description": "Protection, smuggling, a crooked card room — the classics still pay.",
     "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "dirty_money"
+        ]
+      }
+    ],
+    "requiredTraitIds": [
+      "enforcer",
+      "connected"
+    ],
+    "startCommandPoints": 1,
+    "targetLocationLevels": [
+      1,
+      2
+    ],
+    "targetLocationTypes": [
+      "economic"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "smash_and_grab",
+    "name": "Smash and Grab",
+    "description": "Subtlety is for people who can't lift a vault door.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "steal_target_asset"
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
+    "requiredTraitIds": [
+      "enforcer",
+      "brutal"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "asset_revealed"
+  },
+  {
+    "id": "ghost_heist",
+    "name": "The Ghost Heist",
+    "description": "In and out through the vents. The mark finds an empty case and a calling card.",
+    "durationTurns": 2,
     "onSuccessEffects": [
       {
         "kind": "steal_target_asset"
       }
     ],
     "requiredTraitIds": [
+      "thief",
+      "stealthy",
       "hacker"
+    ],
+    "startCommandPoints": 3,
+    "targetType": "asset_hidden"
+  },
+  {
+    "id": "inside_job",
+    "name": "Inside Job",
+    "description": "A bribed supervisor, a rewritten patrol roster, and suddenly nobody is watching.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "security_level_delta",
+        "delta": -2
+      }
+    ],
+    "requiredTraitIds": [
+      "infiltrator",
+      "hacker"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "location"
+  },
+  {
+    "id": "honey_trap",
+    "name": "The Honey Trap",
+    "description": "Someone important is about to make a very well-documented mistake.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "blackmail_dossier"
+        ]
+      }
+    ],
+    "requiredTraitIds": [
+      "manipulator",
+      "magnetic"
+    ],
+    "startCommandPoints": 2,
+    "targetLocationTypes": [
+      "political"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "hire_mercenaries",
+    "name": "Hire Mercenaries",
+    "description": "Cash up front, no questions, and a company of guns that speak invoice.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "mercenary_contracts"
+        ]
+      }
+    ],
+    "requiredAssetIds": [
+      "dirty_money"
+    ],
+    "requiredTraitIds": [
+      "connected"
     ],
     "startCommandPoints": 1,
-    "targetType": "asset_revealed"
-  },
-  {
-    "id": "vector_null_infil",
-    "name": "Vector Null infiltration",
-    "description": "Slip the perimeter before the shift change; leave no badge trail.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "spy",
-      "sneaky",
-      "hacker"
-    ],
-    "startCommandPoints": 3,
     "targetType": "none"
   },
   {
-    "id": "black_ledger_sweep",
-    "name": "Black Ledger sweep",
-    "description": "Sanitize the node before the syndicate reconciles the float.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "thief",
-      "clever",
-      "hacker"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "cold_storage_placement",
-    "name": "Cold Storage placement",
-    "description": "Stage the payload where audits look benign and cameras look away.",
-    "durationTurns": 3,
-    "requiredTraitIds": [
-      "engineer",
-      "tactician",
-      "sneaky"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "none"
-  },
-  {
-    "id": "apex_contingency_overwatch",
-    "name": "Apex Contingency overwatch",
-    "description": "Hold the corridor until the package clears the mezzanine choke.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "soldier",
-      "tactician",
-      "resilient"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "none"
-  },
-  {
-    "id": "ninth_circle_cutout",
-    "name": "Ninth Circle cutout burn",
-    "description": "Retire a cutout identity while the cell still believes the cover holds.",
+    "id": "paper_empire",
+    "name": "Paper Empire",
+    "description": "Incorporate, dissolve, repeat — until the money forgets its own name.",
     "durationTurns": 1,
-    "requiredTraitIds": [
-      "hacker",
-      "tactician",
-      "loyal"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "location"
-  },
-  {
-    "id": "phantom_reach_cartography",
-    "name": "Phantom Reach cartography",
-    "description": "Map ingress vectors the consortium forgot to classify.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "spy",
-      "tactician",
-      "intelligent"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "none"
-  },
-  {
-    "id": "iron_veil_meet",
-    "name": "Iron Veil meet",
-    "description": "A smile, a folder, and a lie that buys twelve minutes at the desk.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "politician",
-      "charismatic",
-      "persuasive"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "none"
-  },
-  {
-    "id": "sigma_seven_exfil_window",
-    "name": "Sigma-7 exfil window",
-    "description": "Beat the rotating cordon; the window is measured in elevator cycles.",
-    "durationTurns": 3,
     "onSuccessEffects": [
       {
-        "kind": "max_support_assets_delta",
-        "delta": 1
+        "kind": "gain_assets",
+        "assetIds": [
+          "shell_companies"
+        ]
       }
     ],
-    "requiredTraitIds": [
-      "soldier",
-      "fast",
-      "tactician"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "none"
-  },
-  {
-    "id": "midnight_annex_survey",
-    "name": "Midnight Annex survey",
-    "description": "Quiet measurements on a site the annex pretends is dormant.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "thief",
-      "agile",
-      "clever"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "location"
-  },
-  {
-    "id": "cascade_failure_deny",
-    "name": "Cascade Failure denial",
-    "description": "Trip safeguards so the failure reads like incompetence, not intent.",
-    "durationTurns": 3,
     "requiredAssetIds": [
-      "explosives",
-      "signal_jammers"
+      "dirty_money"
     ],
     "requiredTraitIds": [
-      "engineer",
-      "hacker",
-      "scientist"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "location"
-  },
-  {
-    "id": "glass_dagger_pickup",
-    "name": "Glass Dagger pickup",
-    "description": "Retrieve the dead drop before the initiative rotates the blind.",
-    "durationTurns": 1,
-    "requiredTraitIds": [
-      "thief",
-      "loyal",
-      "sneaky"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "location"
-  },
-  {
-    "id": "helix_sample_lift",
-    "name": "Helix Ascendant sample lift",
-    "description": "Lift the sample from the lab edge while compliance tours the clean room.",
-    "durationTurns": 3,
-    "requiredTraitIds": [
-      "scientist",
-      "sneaky",
-      "engineer"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "none"
-  },
-  {
-    "id": "kestrel_black_relay",
-    "name": "Kestrel Black relay",
-    "description": "Stand up a relay the wetworks annex can trust for one broadcast only.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "hacker",
-      "tactician",
-      "resilient"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "none"
-  },
-  {
-    "id": "third_rail_distraction",
-    "name": "Third Rail distraction",
-    "description": "Crowd physics as cover while the real move happens three blocks east.",
-    "durationTurns": 1,
-    "onSuccessEffects": [
-      {
-        "kind": "max_support_assets_delta",
-        "delta": 1
-      }
-    ],
-    "requiredTraitIds": [
-      "politician",
-      "charismatic",
-      "fast"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "archive_seal_breach",
-    "name": "Archive of Last Resorts breach",
-    "description": "Crack the seal without tripping the quiet board's audit ping.",
-    "durationTurns": 3,
-    "requiredTraitIds": [
-      "thief",
-      "hacker",
-      "intelligent"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "none"
-  },
-  {
-    "id": "viper_hand_corridor",
-    "name": "Viper's Hand corridor lock",
-    "description": "Own the choke long enough for the syndicate to move the principal.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "bodyguard",
-      "strong",
-      "tactician"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "none"
-  },
-  {
-    "id": "hollow_crown_social",
-    "name": "Hollow Crown social pass",
-    "description": "Engineer a plausible reason to be exactly where the crown forbids.",
-    "durationTurns": 2,
-    "onSuccessEffects": [
-      {
-        "kind": "max_support_assets_delta",
-        "delta": 1
-      }
-    ],
-    "requiredTraitIds": [
-      "spy",
-      "persuasive",
-      "clever"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "none"
-  },
-  {
-    "id": "nocturne_route_harden",
-    "name": "Nocturne Logistics hardening",
-    "description": "Harden the route against spot checks; logistics hates surprises.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "soldier",
-      "resilient",
-      "tactician"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "none"
-  },
-  {
-    "id": "directive_null_intercept",
-    "name": "Directive Null-Three intercept",
-    "description": "Intercept the briefing packet before oversight routes the rewrite.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "hacker",
-      "spy",
-      "intelligent"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "none"
-  },
-  {
-    "id": "obsidian_reach_deadzone",
-    "name": "Obsidian Reach dead zone",
-    "description": "Carve a comms dead zone so the reach hears static, not footsteps.",
-    "durationTurns": 3,
-    "requiredTraitIds": [
-      "engineer",
-      "hacker",
-      "scientist"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "location"
-  },
-  {
-    "id": "redline_directive_cut",
-    "name": "Redline Directive cut",
-    "description": "Cut the directive chain at the node that still thinks it's redundant.",
-    "durationTurns": 1,
-    "requiredTraitIds": [
-      "hacker",
-      "clever",
-      "lucky"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "location"
-  },
-  {
-    "id": "omega_protocol_mirror",
-    "name": "Omega Protocol mirror",
-    "description": "Mirror legitimate traffic until the protocol group signs off on the forgery.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "hacker",
-      "tactician",
-      "intelligent"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "location"
-  },
-  {
-    "id": "shadow_directorate_plant",
-    "name": "Shadow Directorate plant",
-    "description": "Plant the narrative asset where the directorate's own analysts will find it.",
-    "durationTurns": 3,
-    "requiredTraitIds": [
-      "spy",
-      "politician",
-      "persuasive"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "location"
-  },
-  {
-    "id": "vanta_cell_sanitize",
-    "name": "Vanta Operations sanitize",
-    "description": "Scrub prints and fibers before the cell's morning sweep hits the floor.",
-    "durationTurns": 1,
-    "requiredTraitIds": [
-      "thief",
-      "sneaky",
-      "agile"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "location"
-  },
-  {
-    "id": "cipher_key_rotation",
-    "name": "Cipher Key rotation",
-    "description": "Rotate keys under the directorate's nose; they must believe it's maintenance.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "hacker",
-      "engineer",
-      "tactician"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "location"
-  },
-  {
-    "id": "grey_commission_witness",
-    "name": "Grey Commission witness",
-    "description": "Become the witness the commission cannot dismiss without admitting the leak.",
-    "durationTurns": 3,
-    "requiredTraitIds": [
-      "politician",
-      "charismatic",
-      "intelligent"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "location"
-  },
-  {
-    "id": "burner_doctrine_purge",
-    "name": "Burner Doctrine purge",
-    "description": "Purge the doctrine cache while the collective still argues jurisdiction.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "soldier",
-      "hacker",
-      "resilient"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "location"
-  },
-  {
-    "id": "threshold_crossing_hold",
-    "name": "Threshold Crossing hold",
-    "description": "Hold the crossing until the bureau's convoy commits past the point of return.",
-    "durationTurns": 3,
-    "requiredTraitIds": [
-      "bodyguard",
-      "tactician",
-      "resilient"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "location"
-  },
-  {
-    "id": "rook_bishop_feint",
-    "name": "Rook & Bishop feint",
-    "description": "A visible feint so strategic misses the piece sliding along the diagonal.",
-    "durationTurns": 1,
-    "requiredTraitIds": [
-      "tactician",
-      "clever",
-      "lucky"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "location"
-  },
-  {
-    "id": "project_eclipse_blind",
-    "name": "Project ECLIPSE blind",
-    "description": "Blind oversight sensors for one orbit; oversight blames weather.",
-    "durationTurns": 3,
-    "requiredTraitIds": [
-      "scientist",
-      "engineer",
-      "hacker"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "location"
-  },
-  {
-    "id": "subversion_protocol_lock",
-    "name": "Subversion Protocol Seven lock",
-    "description": "Lock the protocol floor while seven still thinks the alarm is a drill.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "soldier",
-      "engineer",
-      "tactician"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "location"
-  },
-  {
-    "id": "quiet_board_minutes",
-    "name": "Quiet Board minutes lift",
-    "description": "Lift minutes that never made the deck—only the board's quiet copy.",
-    "durationTurns": 2,
-    "requiredAssetIds": [
-      "counterfeit_passports"
-    ],
-    "requiredTraitIds": [
-      "thief",
-      "spy",
-      "intelligent"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "location"
-  },
-  {
-    "id": "argent_serpent_handshake",
-    "name": "Argent Serpent handshake",
-    "description": "Seal the handshake the collective will deny if pressed by daylight.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "politician",
-      "persuasive",
-      "loyal"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "location"
-  },
-  {
-    "id": "deep_cover_cartography_seed",
-    "name": "Deep Cover Cartography seed",
-    "description": "Seed falsified charts so cartography sells the wrong story upstream.",
-    "durationTurns": 2,
-    "requiredTraitIds": [
-      "spy",
-      "hacker",
-      "clever"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "location"
-  },
-  {
-    "id": "counterweight_diversion",
-    "name": "Counterweight diversion",
-    "description": "Tip the counterweight; let the initiative chase balance while you move.",
-    "durationTurns": 1,
-    "requiredTraitIds": [
-      "engineer",
-      "lucky",
-      "fast"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "location"
-  },
-  {
-    "id": "last_light_strategic_cut",
-    "name": "Last Light strategic cut",
-    "description": "Cut the strategic uplink before last light reroutes through the backup mesh.",
-    "durationTurns": 3,
-    "requiredTraitIds": [
-      "hacker",
-      "scientist",
-      "tactician"
-    ],
-    "startCommandPoints": 4,
-    "targetType": "location"
-  },
-  {
-    "id": "surveil_site",
-    "name": "Case the site",
-    "description": "Sit on the site long enough to learn what it is really holding.",
-    "durationTurns": 1,
-    "onSuccessEffects": [
-      {
-        "kind": "intel_level_delta",
-        "delta": 1
-      }
-    ],
-    "requiredTraitIds": [
-      "spy"
+      "manipulator"
     ],
     "startCommandPoints": 1,
-    "targetType": "location"
+    "targetType": "none"
   },
   {
-    "id": "deep_surveillance_net",
-    "name": "Deep surveillance net",
-    "description": "Wire the block for sound and pictures, then read the whole site at leisure.",
-    "durationTurns": 2,
-    "onFailureEffects": [
+    "id": "fence_the_loot",
+    "name": "Fence the Loot",
+    "description": "Gold is lovely, but liquidity is lovelier.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
       {
-        "kind": "intel_level_delta",
-        "delta": -1
+        "kind": "gain_assets",
+        "assetIds": [
+          "dirty_money",
+          "dirty_money"
+        ]
       }
     ],
+    "requiredAssetIds": [
+      "gold_bullion"
+    ],
+    "requiredTraitIds": [
+      "connected"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "none"
+  },
+  {
+    "id": "broker_the_secrets",
+    "name": "Broker the Secrets",
+    "description": "Sell the file back to the people it embarrasses. Keep a copy, obviously.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "dirty_money",
+          "blackmail_dossier"
+        ]
+      }
+    ],
+    "requiredAssetIds": [
+      "state_secrets"
+    ],
+    "requiredTraitIds": [
+      "manipulator"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "none"
+  },
+  {
+    "id": "arm_the_militia",
+    "name": "Arm the Militia",
+    "description": "One prototype, reverse-engineered and mass-produced for very grateful clients.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "mercenary_contracts",
+          "dirty_money"
+        ]
+      }
+    ],
+    "requiredAssetIds": [
+      "prototype_railgun"
+    ],
+    "requiredTraitIds": [
+      "connected"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "none"
+  },
+  {
+    "id": "satellite_scan",
+    "name": "Satellite Deep Scan",
+    "description": "The Panopticon Uplink turns its lens on one site and reads its mail.",
+    "durationTurns": 1,
     "onSuccessEffects": [
       {
         "kind": "intel_level_delta",
         "delta": 2
       }
     ],
-    "requiredAssetIds": [
-      "surveillance_archive"
+    "requiredTraitIds": [
+      "hacker"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "location"
+  },
+  {
+    "id": "medical_rotation",
+    "name": "Infirmary Rotation",
+    "description": "A week in the cliffside ward. Bones set, nerves steadied, complaints ignored.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "remove_trait_from_all_minions",
+        "traitId": "injured"
+      },
+      {
+        "kind": "remove_trait_from_all_minions",
+        "traitId": "shaken"
+      }
     ],
     "requiredTraitIds": [
-      "spy",
-      "sneaky"
+      "scientist"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "none"
+  },
+  {
+    "id": "spin_the_presses",
+    "name": "Spin the Presses",
+    "description": "The Mint hums all night. The bills even smell real.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "dirty_money"
+        ]
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
+    "requiredTraitIds": [
+      "engineer"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_ops_center",
+    "name": "Operations Nerve Center",
+    "description": "A wall of screens, a better chair, and the capacity to run one more scheme at a time.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "max_concurrent_missions_delta",
+        "delta": 1
+      }
+    ],
+    "requiredTraitIds": [
+      "tactician",
+      "engineer"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_barracks",
+    "name": "Excavated Barracks",
+    "description": "Blast out the east lava tube. Bunks for a bigger, louder family.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "max_roster_size_delta",
+        "delta": 2
+      }
+    ],
+    "requiredTraitIds": [
+      "enforcer",
+      "engineer"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_workshop",
+    "name": "Fabrication Workshop",
+    "description": "Lathes, lasers, and a gadget bench. Every op leaves with one more toy.",
+    "durationTurns": 1,
+    "onSuccessEffects": [
+      {
+        "kind": "max_support_assets_delta",
+        "delta": 1
+      },
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "emp_scrambler"
+        ]
+      }
+    ],
+    "requiredTraitIds": [
+      "engineer",
+      "brilliant"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_panopticon",
+    "name": "Panopticon Uplink",
+    "description": "A stolen satellite constellation gets a new employer. The world grows legible.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "intel_level_delta_global",
+        "delta": 1
+      },
+      {
+        "kind": "unlock_lair_mission",
+        "missionId": "satellite_scan"
+      }
+    ],
+    "requiredTraitIds": [
+      "hacker",
+      "engineer"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_infirmary",
+    "name": "Cliffside Infirmary",
+    "description": "Surgical suites with an ocean view. Henchcare is the best care.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "remove_trait_from_all_minions",
+        "traitId": "injured"
+      },
+      {
+        "kind": "unlock_lair_mission",
+        "missionId": "medical_rotation"
+      }
+    ],
+    "requiredTraitIds": [
+      "scientist",
+      "engineer"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_mint",
+    "name": "Counterfeit Mint",
+    "description": "Intaglio presses liberated from three national treasuries, reunited at last.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "dirty_money",
+          "dirty_money"
+        ]
+      },
+      {
+        "kind": "unlock_lair_mission",
+        "missionId": "spin_the_presses"
+      }
+    ],
+    "requiredTraitIds": [
+      "thief",
+      "engineer"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_war_room",
+    "name": "Holographic War Room",
+    "description": "The whole planet in glowing miniature, and room for one more schemer at the table.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "max_participants_per_mission_delta",
+        "delta": 1
+      },
+      {
+        "kind": "max_command_points_per_turn_delta",
+        "delta": 1
+      }
+    ],
+    "requiredTraitIds": [
+      "tactician",
+      "brilliant"
     ],
     "startCommandPoints": 3,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_propaganda",
+    "name": "Propaganda Broadcast Array",
+    "description": "Your legend, in surround sound, on every frequency the world still trusts.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 10
+      },
+      {
+        "kind": "add_success_chance_modifier",
+        "delta": 10,
+        "turns": 3
+      }
+    ],
+    "requiredTraitIds": [
+      "manipulator",
+      "engineer"
+    ],
+    "startCommandPoints": 3,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_doomsday_vault",
+    "name": "Doomsday Vault",
+    "description": "Blast doors thick enough to survive your own inventions. Stocked accordingly.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "max_support_assets_delta",
+        "delta": 1
+      },
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "decoy_doubles",
+          "ghost_protocol"
+        ]
+      }
+    ],
+    "requiredTraitIds": [
+      "scientist",
+      "engineer"
+    ],
+    "startCommandPoints": 3,
+    "targetType": "none"
+  },
+  {
+    "id": "upg_obsidian_throne",
+    "name": "The Obsidian Throne",
+    "description": "Every empire needs a chair. Yours seats a legend and commands a view of the caldera.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 10
+      },
+      {
+        "kind": "max_command_points_per_turn_delta",
+        "delta": 1
+      }
+    ],
+    "requiredTraitIds": [
+      "manipulator",
+      "magnetic"
+    ],
+    "startCommandPoints": 3,
+    "targetType": "none"
+  },
+  {
+    "id": "om1_convoy",
+    "name": "Ambush the Fusion Convoy",
+    "description": "The core crosses the mountains under armed escort at dawn. Take it on the road.",
+    "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 10
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 10
+      },
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "fusion_core",
+          "prototype_railgun"
+        ]
+      }
+    ],
+    "requiredAssetIds": [
+      "mercenary_contracts"
+    ],
+    "requiredTraitIds": [
+      "enforcer",
+      "tactician",
+      "swift"
+    ],
+    "startCommandPoints": 3,
+    "targetLocationLevels": [
+      1,
+      2
+    ],
+    "targetLocationTypes": [
+      "military"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "om1_committee",
+    "name": "Own the Defense Committee",
+    "description": "Five signatures release the core to a contractor that exists only on your letterhead.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 10
+      },
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "fusion_core"
+        ]
+      },
+      {
+        "kind": "security_level_delta_by_location_type",
+        "delta": -1,
+        "locationType": "political"
+      }
+    ],
+    "requiredAssetIds": [
+      "blackmail_dossier"
+    ],
+    "requiredTraitIds": [
+      "manipulator",
+      "magnetic",
+      "infiltrator"
+    ],
+    "startCommandPoints": 3,
+    "targetLocationLevels": [
+      1,
+      2
+    ],
+    "targetLocationTypes": [
+      "political"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "om1_buyout",
+    "name": "Black Market Buyout",
+    "description": "Somewhere between customs seizures, a fusion core is for sale. Outbid everyone.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 10
+      },
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "fusion_core",
+          "gold_bullion"
+        ]
+      }
+    ],
+    "requiredAssetIds": [
+      "dirty_money",
+      "dirty_money"
+    ],
+    "requiredTraitIds": [
+      "connected",
+      "thief",
+      "manipulator"
+    ],
+    "startCommandPoints": 3,
+    "targetLocationLevels": [
+      1,
+      2
+    ],
+    "targetLocationTypes": [
+      "economic"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "om2_skywatch",
+    "name": "Seize the Skywatch Uplink",
+    "description": "Whoever owns the dish owns the sky. Storm the station and repoint it at your array.",
+    "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 10
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 10
+      },
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "emp_scrambler"
+        ]
+      }
+    ],
+    "requiredAssetIds": [
+      "mercenary_contracts"
+    ],
+    "requiredTraitIds": [
+      "enforcer",
+      "engineer",
+      "tactician"
+    ],
+    "startCommandPoints": 3,
+    "targetLocationIntelLevels": [
+      1,
+      2,
+      3
+    ],
+    "targetLocationLevels": [
+      2,
+      3
+    ],
+    "targetLocationTypes": [
+      "military"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "om2_ministry",
+    "name": "Capture the Ministry",
+    "description": "The launch licenses, the airspace waivers, the denials — all signed by people you own.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 10
+      },
+      {
+        "kind": "heat_delta",
+        "amount": -10
+      }
+    ],
+    "requiredAssetIds": [
+      "blackmail_dossier"
+    ],
+    "requiredTraitIds": [
+      "manipulator",
+      "tactician",
+      "connected"
+    ],
+    "startCommandPoints": 3,
+    "targetLocationIntelLevels": [
+      1,
+      2,
+      3
+    ],
+    "targetLocationLevels": [
+      2,
+      3
+    ],
+    "targetLocationTypes": [
+      "political"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "om2_aerodyne",
+    "name": "Hostile Takeover: AeroDyne",
+    "description": "Buy the launch pads with money that doesn't exist through companies that never did.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 10
+      },
+      {
+        "kind": "grant_command_points_next_turn",
+        "amount": 3
+      }
+    ],
+    "requiredAssetIds": [
+      "shell_companies",
+      "dirty_money"
+    ],
+    "requiredTraitIds": [
+      "manipulator",
+      "connected",
+      "brilliant"
+    ],
+    "startCommandPoints": 3,
+    "targetLocationIntelLevels": [
+      1,
+      2,
+      3
+    ],
+    "targetLocationLevels": [
+      2,
+      3
+    ],
+    "targetLocationTypes": [
+      "economic"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "om3_interceptors",
+    "name": "Blind the Interceptors",
+    "description": "The Citadel's launch grid goes dark for ninety minutes. The Midnight Sun rises unchallenged.",
+    "durationTurns": 3,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 10
+      },
+      {
+        "kind": "add_all_participant_traits",
+        "traitIds": [
+          "shaken"
+        ]
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 15
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 15
+      }
+    ],
+    "requiredAssetIds": [
+      "mercenary_contracts"
+    ],
+    "requiredTraitIds": [
+      "enforcer",
+      "hacker",
+      "tactician"
+    ],
+    "startCommandPoints": 4,
+    "targetLocationIntelLevels": [
+      2,
+      3
+    ],
+    "targetLocationLevels": [
+      3
+    ],
+    "targetLocationTypes": [
+      "military"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "om3_assembly",
+    "name": "Seize the World Assembly",
+    "description": "Walk to the podium, smile for the cameras, and read the world your terms.",
+    "durationTurns": 3,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 10
+      },
+      {
+        "kind": "add_all_participant_traits",
+        "traitIds": [
+          "shaken"
+        ]
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 20
+      }
+    ],
+    "requiredAssetIds": [
+      "blackmail_dossier"
+    ],
+    "requiredTraitIds": [
+      "manipulator",
+      "magnetic",
+      "fearless"
+    ],
+    "startCommandPoints": 4,
+    "targetLocationIntelLevels": [
+      2,
+      3
+    ],
+    "targetLocationLevels": [
+      3
+    ],
+    "targetLocationTypes": [
+      "political"
+    ],
+    "targetType": "location"
+  },
+  {
+    "id": "om3_markets",
+    "name": "Ransom the World Markets",
+    "description": "Every ledger on Earth clears through Meridian. Tonight, it clears through you.",
+    "durationTurns": 3,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 10
+      },
+      {
+        "kind": "add_all_participant_traits",
+        "traitIds": [
+          "shaken"
+        ]
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 15
+      },
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "dirty_money",
+          "dirty_money",
+          "dirty_money"
+        ]
+      }
+    ],
+    "requiredAssetIds": [
+      "shell_companies",
+      "dirty_money"
+    ],
+    "requiredTraitIds": [
+      "hacker",
+      "manipulator",
+      "brilliant"
+    ],
+    "startCommandPoints": 4,
+    "targetLocationIntelLevels": [
+      2,
+      3
+    ],
+    "targetLocationLevels": [
+      3
+    ],
+    "targetLocationTypes": [
+      "economic"
+    ],
     "targetType": "location"
   }
 ]

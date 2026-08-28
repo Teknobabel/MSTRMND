@@ -19,6 +19,7 @@ import {
   setLocationAffinityScore,
   standingAt,
   seedStartingAffinities,
+  seedStartingLocationAffinities,
   setPairAffinityScore,
   syncMinionDynamicTraits,
 } from "./affinity";
@@ -471,6 +472,38 @@ describe("rollStartingTemplateLocationAffinities", () => {
   it("degrades quietly with nothing to pair up", () => {
     expect(rollStartingTemplateLocationAffinities([], ["l1"], seededRng(1), locCfg)).toEqual([]);
     expect(rollStartingTemplateLocationAffinities(["t1"], [], seededRng(1), locCfg)).toEqual([]);
+  });
+});
+
+describe("seedStartingLocationAffinities", () => {
+  const starting = (templateId: string) =>
+    templateId === "m-hero"
+      ? ([
+          { kind: "wanted", locationId: "loc-a" },
+          { kind: "friend", targetMinionTemplateId: "m-buddy" },
+        ] as const)
+      : undefined;
+  const roster = [makeMinionInstance("mi-1", "m-hero", [])];
+
+  it("seeds a designer standing at that band's own threshold, with nobody else needed", () => {
+    expect(seedStartingLocationAffinities([], roster, starting, locCfg)).toEqual([
+      {
+        minionInstanceId: "mi-1",
+        locationId: "loc-a",
+        score: locCfg.wantedThreshold,
+        standing: "wanted",
+      },
+    ]);
+  });
+
+  it("ignores the bond entries, which belong to the pair track", () => {
+    const seeded = seedStartingLocationAffinities([], roster, starting, locCfg);
+    expect(seeded).toHaveLength(1);
+  });
+
+  it("never overwrites a score the run has already moved", () => {
+    const earned = setLocationAffinityScore([], "mi-1", "loc-a", 3, locCfg);
+    expect(seedStartingLocationAffinities(earned, roster, starting, locCfg)).toEqual(earned);
   });
 });
 

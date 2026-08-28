@@ -5,54 +5,34 @@
     "type": "primary"
   },
   {
-    "id": "spy",
-    "name": "Spy",
+    "id": "infiltrator",
+    "name": "Infiltrator",
     "type": "primary"
   },
   {
-    "id": "soldier",
-    "name": "Soldier",
-    "type": "primary"
-  },
-  {
-    "id": "bodyguard",
-    "name": "Bodyguard",
+    "id": "enforcer",
+    "name": "Enforcer",
     "type": "primary"
   },
   {
     "id": "scientist",
-    "name": "Scientist",
+    "name": "Mad Scientist",
     "type": "primary"
   },
   {
     "id": "engineer",
-    "name": "Engineer",
+    "name": "Gadgeteer",
     "type": "primary"
   },
   {
     "id": "thief",
-    "name": "Thief",
+    "name": "Master Thief",
     "type": "primary"
   },
   {
-    "id": "politician",
-    "name": "Politician",
+    "id": "manipulator",
+    "name": "Manipulator",
     "type": "primary"
-  },
-  {
-    "id": "injured",
-    "name": "Injured",
-    "type": "status_negative"
-  },
-  {
-    "id": "loyal",
-    "name": "Loyal",
-    "type": "secondary"
-  },
-  {
-    "id": "burnout",
-    "name": "Burnout",
-    "type": "status_negative"
   },
   {
     "id": "tactician",
@@ -60,48 +40,38 @@
     "type": "primary"
   },
   {
-    "id": "charismatic",
-    "name": "Charismatic",
+    "id": "stealthy",
+    "name": "Stealthy",
     "type": "secondary"
   },
   {
-    "id": "persuasive",
-    "name": "Persuasive",
+    "id": "brutal",
+    "name": "Brutal",
     "type": "secondary"
   },
   {
-    "id": "clever",
-    "name": "Clever",
+    "id": "swift",
+    "name": "Swift",
     "type": "secondary"
   },
   {
-    "id": "intelligent",
-    "name": "Intelligent",
+    "id": "brilliant",
+    "name": "Brilliant",
     "type": "secondary"
   },
   {
-    "id": "sneaky",
-    "name": "Sneaky",
+    "id": "magnetic",
+    "name": "Magnetic",
     "type": "secondary"
   },
   {
-    "id": "fast",
-    "name": "Fast",
+    "id": "fearless",
+    "name": "Fearless",
     "type": "secondary"
   },
   {
-    "id": "strong",
-    "name": "Strong",
-    "type": "secondary"
-  },
-  {
-    "id": "agile",
-    "name": "Agile",
-    "type": "secondary"
-  },
-  {
-    "id": "resilient",
-    "name": "Resilient",
+    "id": "connected",
+    "name": "Connected",
     "type": "secondary"
   },
   {
@@ -110,8 +80,18 @@
     "type": "status_positive"
   },
   {
-    "id": "anarchist",
-    "name": "Anarchist",
-    "type": "secondary"
+    "id": "inspired",
+    "name": "Inspired",
+    "type": "status_positive"
+  },
+  {
+    "id": "injured",
+    "name": "Injured",
+    "type": "status_negative"
+  },
+  {
+    "id": "shaken",
+    "name": "Shaken",
+    "type": "status_negative"
   }
 ]

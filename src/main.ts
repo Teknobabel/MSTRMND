@@ -12,6 +12,8 @@ import {
   hireMinion,
   missionSuccessOptionsForTarget,
   missionTargetMatchesTemplate,
+  previewHireDynamicTraits,
+  previewRehireDynamicTraits,
   rehireMinion,
   rerollHireOffers,
   type ActiveMission,
@@ -39,6 +41,7 @@ import {
   isSupportAsset,
   mergedRequiredTraitIdsSorted,
   missionAllowsTargetLocation,
+  unionParticipantTraitIds,
   missionTargetTypeTargetsLocation,
   supportAbilitiesForAssetIds,
   type MissionTargetLocationFilters,
@@ -48,7 +51,6 @@ import {
   dynamicTraitDisplayLabel,
   dynamicTraitSuccessModifierBreakdownFromFullRoster,
   dynamicTraitSuccessModifierFromFullRoster,
-  formatStartingDynamicTraitsPreview,
   isPositiveDynamicTraitKind,
   type DynamicTraitSuccessBreakdownEntry,
 } from "./game/dynamicTrait";
@@ -350,39 +352,19 @@ function assignChipDynamicPillModifierClass(dt: DynamicTrait): string {
     : "assign-minion-chip-trait--dynamic-negative";
 }
 
-function previewDynamicPillModifierClass(label: string): string {
-  if (
-    label.startsWith("Friend ") ||
-    label.startsWith("Ally ") ||
-    label.startsWith("Hero ")
-  ) {
-    return "minions-trait-pill--dynamic-positive";
-  }
-  return "minions-trait-pill--dynamic-negative";
-}
-
 function appendMinionTraitsRow(
   dl: HTMLElement,
   catalog: ReturnType<typeof loadContent>,
   traitIds: string[],
-  dynamic?:
-    | { roster: MinionInstance[]; traits: readonly DynamicTrait[] }
-    | { previewLabels: readonly string[] },
+  dynamic?: { roster: MinionInstance[]; traits: readonly DynamicTrait[] },
 ): void {
   const dt = document.createElement("dt");
   dt.textContent = "Traits";
   const dd = document.createElement("dd");
   dd.className = "minions-card-traits-dd";
-  const previewLabels =
-    dynamic !== undefined && "previewLabels" in dynamic ? dynamic.previewLabels : [];
-  const rosterTraits =
-    dynamic !== undefined && "roster" in dynamic ? dynamic.traits : [];
-  const roster =
-    dynamic !== undefined && "roster" in dynamic ? dynamic.roster : [];
-  const hasStatic = traitIds.length > 0;
-  const hasDynamic = rosterTraits.length > 0;
-  const hasPreview = previewLabels.length > 0;
-  if (!hasStatic && !hasDynamic && !hasPreview) {
+  const rosterTraits = dynamic?.traits ?? [];
+  const roster = dynamic?.roster ?? [];
+  if (traitIds.length === 0 && rosterTraits.length === 0) {
     dd.textContent = "—";
     dl.appendChild(dt);
     dl.appendChild(dd);
@@ -420,15 +402,6 @@ function appendMinionTraitsRow(
     const span = document.createElement("span");
     span.className = `minions-trait-pill ${minionsDynamicPillModifierClass(dtrait)}`;
     span.textContent = dynamicTraitDisplayLabel(catalog, roster, dtrait);
-    wrap.appendChild(span);
-  }
-  for (let k = 0; k < previewLabels.length; k += 1) {
-    if (wrap.childNodes.length > 0) {
-      appendCommaSep();
-    }
-    const span = document.createElement("span");
-    span.className = `minions-trait-pill ${previewDynamicPillModifierClass(previewLabels[k]!)}`;
-    span.textContent = previewLabels[k]!;
     wrap.appendChild(span);
   }
   dd.appendChild(wrap);
@@ -476,6 +449,64 @@ function assetDisplayNames(
   return assetIds
     .map((id) => catalog.assets.find((a) => a.id === id)?.name ?? id)
     .join(", ");
+}
+
+/**
+ * Mission-card pills for required trait ids, styled like the trait pills on minion cards.
+ * Solid border when some roster minion has the trait, dotted border when none does.
+ */
+function requiredTraitPillsEl(
+  catalog: ReturnType<typeof loadContent>,
+  traitIds: string[],
+  rosterTraitIds: ReadonlySet<string>,
+): HTMLElement {
+  const wrap = document.createElement("span");
+  wrap.className = "mission-req-pills";
+  for (const tid of traitIds) {
+    const trait = catalog.traits.find((t) => t.id === tid);
+    const span = document.createElement("span");
+    span.className = "minions-trait-pill";
+    if (trait?.type === "status_negative") {
+      span.classList.add("minions-trait-pill--status-negative");
+    } else if (trait?.type === "status_positive") {
+      span.classList.add("minions-trait-pill--status-positive");
+    }
+    span.classList.add(
+      rosterTraitIds.has(tid)
+        ? "minions-trait-pill--req-have"
+        : "minions-trait-pill--req-missing",
+    );
+    span.textContent = trait?.name ?? tid;
+    wrap.appendChild(span);
+  }
+  return wrap;
+}
+
+/**
+ * Mission-card pills for required asset slots; duplicate slots consume owned quantity in
+ * order, so owning 1 of an asset a mission needs twice shows one solid and one dotted pill.
+ */
+function requiredAssetPillsEl(
+  catalog: ReturnType<typeof loadContent>,
+  assetIds: string[],
+  ownedAssets: Readonly<Record<string, number>>,
+): HTMLElement {
+  const wrap = document.createElement("span");
+  wrap.className = "mission-req-pills";
+  const remaining = new Map<string, number>();
+  for (const aid of assetIds) {
+    const left = remaining.get(aid) ?? ownedAssets[aid] ?? 0;
+    remaining.set(aid, left - 1);
+    const asset = catalog.assets.find((a) => a.id === aid);
+    const span = document.createElement("span");
+    span.className = "minions-trait-pill";
+    span.classList.add(
+      left > 0 ? "minions-trait-pill--req-have" : "minions-trait-pill--req-missing",
+    );
+    span.textContent = asset?.name ?? aid;
+    wrap.appendChild(span);
+  }
+  return wrap;
 }
 
 /** Per required-asset slot: filled name or "—" for empty. */
@@ -2285,7 +2316,7 @@ function initGameController(
 
     const dl = document.createElement("dl");
     dl.className = "asset-card-stats";
-    const rows: Array<{ label: string; value: string }> = [];
+    const rows: Array<{ label: string; value: string; valueEl?: HTMLElement }> = [];
     if (mission) {
       const traitIdsForDisplay =
         mergedRequiredTraitIdsForDisplay !== undefined
@@ -2294,6 +2325,7 @@ function initGameController(
       const siteFilters = missionTargetTypeTargetsLocation(mission.targetType)
         ? formatTargetLocationFilters(mission)
         : null;
+      const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
       rows.push(
         { label: "Mission target type", value: formatMissionTargetTypeLabel(mission.targetType) },
         ...(siteFilters !== null ? [{ label: "Target must be", value: siteFilters }] : []),
@@ -2305,12 +2337,16 @@ function initGameController(
         {
           label: "Required traits",
           value: traitDisplayNames(content, traitIdsForDisplay),
+          ...(traitIdsForDisplay.length > 0
+            ? { valueEl: requiredTraitPillsEl(content, traitIdsForDisplay, rosterTraitIds) }
+            : {}),
         },
       );
       if (mission.requiredAssetIds.length > 0) {
         rows.push({
           label: "Required assets",
           value: assetDisplayNames(content, mission.requiredAssetIds),
+          valueEl: requiredAssetPillsEl(content, mission.requiredAssetIds, state.player.assets),
         });
       }
     } else {
@@ -2495,13 +2531,20 @@ function initGameController(
 
   function appendMinionStatRows(
     dl: HTMLElement,
-    rows: Array<{ label: string; value: string; tooltipLines?: readonly string[] }>,
+    rows: Array<{
+      label: string;
+      value: string;
+      valueEl?: HTMLElement;
+      tooltipLines?: readonly string[];
+    }>,
   ): void {
-    for (const { label, value, tooltipLines } of rows) {
+    for (const { label, value, valueEl, tooltipLines } of rows) {
       const dt = document.createElement("dt");
       dt.textContent = label;
       const dd = document.createElement("dd");
-      if (tooltipLines !== undefined && tooltipLines.length > 0) {
+      if (valueEl !== undefined) {
+        dd.appendChild(valueEl);
+      } else if (tooltipLines !== undefined && tooltipLines.length > 0) {
         const span = document.createElement("span");
         span.className = "mission-success-chance-value";
         span.textContent = value;
@@ -2651,7 +2694,8 @@ function initGameController(
         { label: "XP", value: "0" },
       ]);
       appendMinionTraitsRow(dl, content, startingIds, {
-        previewLabels: formatStartingDynamicTraitsPreview(content, tpl.startingDynamicTraits),
+        roster: state.player.minions,
+        traits: previewHireDynamicTraits(state, content, tpl.id),
       });
       body.appendChild(dl);
 
@@ -2707,7 +2751,7 @@ function initGameController(
       ]);
       appendMinionTraitsRow(dl, content, rehireInst.traitIds, {
         roster: state.player.minions,
-        traits: rehireInst.dynamicTraits,
+        traits: previewRehireDynamicTraits(state, content, rehireInst),
       });
       body.appendChild(dl);
 
@@ -3139,7 +3183,12 @@ function initGameController(
       })
       .join(", ");
 
-    const rows: Array<{ label: string; value: string; tooltipLines?: readonly string[] }> = [
+    const rows: Array<{
+      label: string;
+      value: string;
+      valueEl?: HTMLElement;
+      tooltipLines?: readonly string[];
+    }> = [
       { label: "Source", value: sourceLabel },
       { label: "Target", value: formatMissionTargetSummary(am.target) },
     ];
@@ -3193,6 +3242,15 @@ function initGameController(
         {
           label: "Required traits",
           value: traitDisplayNames(content, mergedDisplay),
+          ...(mergedDisplay.length > 0
+            ? {
+                valueEl: requiredTraitPillsEl(
+                  content,
+                  mergedDisplay,
+                  unionParticipantTraitIds(state.player.minions),
+                ),
+              }
+            : {}),
         },
       );
       if (mission.requiredAssetIds.length > 0) {
@@ -3200,6 +3258,11 @@ function initGameController(
           {
             label: "Required assets",
             value: assetDisplayNames(content, mission.requiredAssetIds),
+            valueEl: requiredAssetPillsEl(
+              content,
+              mission.requiredAssetIds,
+              state.player.assets,
+            ),
           },
           {
             label: "Planned assets",

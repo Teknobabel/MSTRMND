@@ -1,51 +1,56 @@
 [
   {
-    "id": "subterranean_hub",
-    "name": "Subterranean Hub",
-    "description": "Cold-war bunker retrofitted for ops and off-site planning.",
+    "id": "mount_cinder",
+    "name": "Mount Cinder Complex",
+    "description": "A hollowed-out volcano fortress: lava-tube hangars, a caldera helipad, and excellent acoustics for monologuing.",
     "availableMissionIds": [
-      "surveil_site",
-      "deep_surveillance_net"
+      "run_the_rackets",
+      "smash_and_grab",
+      "ghost_heist",
+      "inside_job",
+      "honey_trap",
+      "hire_mercenaries",
+      "paper_empire",
+      "fence_the_loot",
+      "broker_the_secrets",
+      "arm_the_militia"
     ],
     "startingAssets": {
-      "burner_network": 1,
-      "classified_documents": 1
+      "dirty_money": 1,
+      "ghost_protocol": 1
     },
     "upgradeLevels": [
       {
-        "name": "Operations Rig",
+        "name": "Foundations",
         "missionIds": [
-          "hub_rig_upgrade",
-          "vector_null_infil"
+          "upg_ops_center",
+          "upg_barracks",
+          "upg_workshop"
         ]
       },
       {
+        "name": "Infrastructure",
+        "minInfamy": 25,
         "missionIds": [
-          "sigma_seven_exfil_window"
-        ]
-      }
-    ]
-  },
-  {
-    "id": "penthouse_safehouse",
-    "name": "Penthouse Safehouse",
-    "description": "Glass walls, better optics, faster exits.",
-    "availableMissionIds": [
-      "surveil_site",
-      "deep_surveillance_net",
-      "iron_veil_meet"
-    ],
-    "upgradeLevels": [
-      {
-        "missionIds": [
-          "viper_hand_corridor",
-          "kestrel_black_relay"
+          "upg_panopticon",
+          "upg_infirmary",
+          "upg_mint"
         ]
       },
       {
+        "name": "Ascendancy",
+        "minInfamy": 45,
         "missionIds": [
-          "third_rail_distraction",
-          "hollow_crown_social"
+          "upg_war_room",
+          "upg_propaganda"
+        ]
+      },
+      {
+        "name": "Apotheosis",
+        "minInfamy": 65,
+        "missionIds": [
+          "upg_doomsday_vault",
+          "upg_obsidian_throne"
         ]
       }
     ]

@@ -1,150 +1,236 @@
 [
   {
-    "id": "operative_alpha",
-    "name": "Operative Alpha",
-    "description": "A field agent with a knack for systems.",
-    "cardArt": "/assets/cards/custom/minion-operative-alpha.webp",
-    "hireCommandPoints": 3,
-    "levelUpTraitOrder": [
-      "hacker",
-      "tactician",
-      "lucky",
-      "burnout"
-    ],
-    "startingTraitIds": [
-      "loyal"
-    ]
-  },
-  {
-    "id": "asset_beta",
-    "name": "Asset Beta",
-    "description": "A local contact; fragile but insightful.",
+    "id": "static",
+    "name": "Static",
+    "description": "A teenage botnet wearing a hoodie. Firewalls file restraining orders against her.",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
-      "hacker",
-      "loyal",
-      "tactician"
-    ],
-    "startingLevel": 2,
-    "startingTraitIds": [
-      "injured"
-    ]
-  },
-  {
-    "id": "courier_gamma",
-    "name": "Courier Gamma",
-    "description": "Dead drops and burned phones—gets packages where they need to go.",
-    "hireCommandPoints": 2,
-    "levelUpTraitOrder": [
-      "hacker",
-      "loyal",
+      "brilliant",
+      "stealthy",
+      "infiltrator",
       "lucky",
-      "burnout"
-    ],
-    "startingTraitIds": [
-      "tactician"
-    ]
-  },
-  {
-    "id": "analyst_theta",
-    "name": "Analyst Theta",
-    "description": "Patterns in noise; spreadsheets where others see chaos.",
-    "hireCommandPoints": 3,
-    "levelUpTraitOrder": [
-      "tactician",
-      "loyal",
-      "lucky",
-      "burnout"
-    ],
-    "startingDynamicTraits": [
-      {
-        "kind": "hatred",
-        "targetMinionTemplateId": "operative_alpha"
-      }
+      "fearless"
     ],
     "startingTraitIds": [
       "hacker"
     ]
   },
   {
-    "id": "muscle_kappa",
-    "name": "Muscle Kappa",
-    "description": "When the plan needs someone to stand in the doorway.",
-    "hireCommandPoints": 4,
+    "id": "knuckles",
+    "name": "Knuckles",
+    "description": "Retired pit fighter. Solves most problems with the same two tools.",
+    "hireCommandPoints": 2,
     "levelUpTraitOrder": [
-      "loyal",
       "tactician",
-      "hacker",
-      "burnout"
+      "brutal",
+      "fearless",
+      "lucky"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "friend",
+        "targetMinionTemplateId": "fingers"
+      }
     ],
     "startingTraitIds": [
-      "injured"
+      "enforcer"
     ]
   },
   {
-    "id": "ghost_delta",
-    "name": "Ghost Delta",
-    "description": "Insertion specialist; quiet footprints, loud results.",
-    "hireCommandPoints": 4,
+    "id": "fingers",
+    "name": "Fingers",
+    "description": "Once stole a judge's gavel mid-sentencing. Keeps it on her mantel.",
+    "hireCommandPoints": 2,
     "levelUpTraitOrder": [
-      "hacker",
-      "lucky",
-      "tactician",
-      "burnout"
-    ],
-    "startingTraitIds": [
-      "loyal"
-    ]
-  },
-  {
-    "id": "brass_liaison",
-    "name": "Brass Liaison",
-    "description": "Knows which desks need a smile and which need a folder.",
-    "hireCommandPoints": 3,
-    "levelUpTraitOrder": [
-      "loyal",
-      "hacker",
-      "lucky",
-      "burnout"
-    ],
-    "startingTraitIds": [
-      "tactician"
-    ]
-  },
-  {
-    "id": "wire_jockey",
-    "name": "Wire Jockey",
-    "description": "Builds bridges—digital ones—and burns them when paid.",
-    "hireCommandPoints": 3,
-    "levelUpTraitOrder": [
-      "tactician",
-      "lucky",
-      "loyal",
-      "burnout"
+      "stealthy",
+      "swift",
+      "connected",
+      "lucky"
     ],
     "startingDynamicTraits": [
       {
         "kind": "wanted",
-        "locationId": "abandoned_substation"
+        "locationId": "meridian_bank"
       }
     ],
     "startingTraitIds": [
-      "hacker"
+      "thief"
     ]
   },
   {
-    "id": "mirror_guard",
-    "name": "Mirror Guard",
-    "description": "Personal protection with a talent for reading exits.",
-    "hireCommandPoints": 4,
+    "id": "gasket",
+    "name": "Gasket",
+    "description": "Builds doomsday devices out of vending machine parts. Warranty void everywhere.",
+    "hireCommandPoints": 2,
     "levelUpTraitOrder": [
-      "lucky",
-      "tactician",
-      "hacker",
-      "burnout"
+      "brilliant",
+      "swift",
+      "scientist",
+      "inspired"
     ],
     "startingTraitIds": [
-      "loyal"
+      "engineer"
+    ]
+  },
+  {
+    "id": "milo",
+    "name": "Smooth Milo",
+    "description": "Could sell sand to a desert, and has — twice, to the same desert.",
+    "hireCommandPoints": 3,
+    "levelUpTraitOrder": [
+      "magnetic",
+      "connected",
+      "infiltrator",
+      "lucky"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "hero",
+        "locationId": "gilded_lotus"
+      }
+    ],
+    "startingTraitIds": [
+      "manipulator"
+    ]
+  },
+  {
+    "id": "madame_vex",
+    "name": "Madame Vex",
+    "description": "Attended nine embassy galas last year under nine different names. Was the guest of honor at three.",
+    "hireCommandPoints": 3,
+    "levelUpTraitOrder": [
+      "stealthy",
+      "magnetic",
+      "manipulator",
+      "lucky"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "friend",
+        "targetMinionTemplateId": "milo"
+      }
+    ],
+    "startingLevel": 2,
+    "startingTraitIds": [
+      "infiltrator"
+    ]
+  },
+  {
+    "id": "crater",
+    "name": "Crater",
+    "description": "Demolitions artist. Insists every explosion is 'load-bearing.'",
+    "hireCommandPoints": 3,
+    "levelUpTraitOrder": [
+      "fearless",
+      "engineer",
+      "brutal",
+      "lucky"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "rival",
+        "targetMinionTemplateId": "knuckles"
+      }
+    ],
+    "startingLevel": 2,
+    "startingTraitIds": [
+      "enforcer"
+    ]
+  },
+  {
+    "id": "dr_helix",
+    "name": "Dr. Helix",
+    "description": "Lost his ethics board approval and considers it a promotion.",
+    "hireCommandPoints": 4,
+    "levelUpTraitOrder": [
+      "brilliant",
+      "engineer",
+      "fearless",
+      "inspired"
+    ],
+    "startingLevel": 2,
+    "startingTraitIds": [
+      "scientist"
+    ]
+  },
+  {
+    "id": "nightshade",
+    "name": "Nightshade",
+    "description": "Security footage of her exists only as a rumor other cameras whisper about.",
+    "hireCommandPoints": 4,
+    "levelUpTraitOrder": [
+      "stealthy",
+      "swift",
+      "enforcer",
+      "lucky"
+    ],
+    "startingLevel": 3,
+    "startingTraitIds": [
+      "infiltrator",
+      "thief"
+    ]
+  },
+  {
+    "id": "baron_flux",
+    "name": "Baron Von Flux",
+    "description": "Disgraced nobility, twice-disgraced physicist. His lab coat has epaulettes.",
+    "hireCommandPoints": 5,
+    "levelUpTraitOrder": [
+      "brilliant",
+      "fearless",
+      "hacker",
+      "inspired"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "rival",
+        "targetMinionTemplateId": "dr_helix"
+      }
+    ],
+    "startingLevel": 3,
+    "startingTraitIds": [
+      "engineer",
+      "scientist"
+    ]
+  },
+  {
+    "id": "the_duchess",
+    "name": "The Duchess",
+    "description": "Three governments have collapsed at her dinner parties. The canapés were excellent.",
+    "hireCommandPoints": 5,
+    "levelUpTraitOrder": [
+      "connected",
+      "infiltrator",
+      "tactician",
+      "inspired"
+    ],
+    "startingLevel": 4,
+    "startingTraitIds": [
+      "manipulator",
+      "magnetic"
+    ]
+  },
+  {
+    "id": "colonel_razor",
+    "name": "Colonel Razor",
+    "description": "Court-martialed for winning a war nobody authorized. Still salutes himself.",
+    "hireCommandPoints": 6,
+    "levelUpTraitOrder": [
+      "brutal",
+      "fearless",
+      "brilliant",
+      "inspired"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "hatred",
+        "targetMinionTemplateId": "the_duchess"
+      }
+    ],
+    "startingLevel": 4,
+    "startingTraitIds": [
+      "enforcer",
+      "tactician"
     ]
   }
 ]

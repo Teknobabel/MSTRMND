@@ -1,277 +1,80 @@
 [
   {
-    "id": "evt_global_crackdown",
-    "name": "Global crackdown",
-    "description": "Coordinated sweeps spike heat everywhere. Lobby fast or take the hit.",
-    "durationTurns": 1,
-    "lifetimeTurns": 3,
-    "minHeat": 40,
-    "onFailureEffects": [
-      {
-        "kind": "security_level_delta_global",
-        "delta": 2
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "politician"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_quiet_audit_window",
-    "name": "Quiet audit window",
-    "description": "Inspectors blink; a rare chance to cool the network before they look again.",
-    "durationTurns": 2,
-    "lifetimeTurns": 3,
-    "onSuccessEffects": [
-      {
-        "kind": "security_level_delta_global",
-        "delta": -2
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "hacker",
-      "clever"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_military_lockdown",
-    "name": "Military lockdown",
-    "description": "Bases seal cordons; if nobody steadies the generals, bases stay hot.",
-    "durationTurns": 1,
-    "lifetimeTurns": 3,
-    "minHeat": 20,
-    "onFailureEffects": [
-      {
-        "kind": "security_level_delta_by_location_type",
-        "delta": 2,
-        "locationType": "military"
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "soldier"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_economic_panic",
-    "name": "Economic panic",
-    "description": "Markets seize; calm the floor or watch spreads widen into your shell companies.",
-    "durationTurns": 2,
-    "lifetimeTurns": 3,
-    "onSuccessEffects": [
-      {
-        "kind": "security_level_delta_by_location_type",
-        "delta": -1,
-        "locationType": "economic"
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "politician",
-      "persuasive"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_tier3_oversight_audit",
-    "name": "Tier-3 oversight audit",
-    "description": "Senior auditors descend on your hardest sites. Contain them or scrutiny climbs.",
-    "durationTurns": 2,
-    "lifetimeTurns": 3,
-    "minInfamy": 35,
-    "onFailureEffects": [
-      {
-        "kind": "security_level_delta_by_location_level",
-        "delta": 1,
-        "locationLevel": 3
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "spy",
-      "intelligent"
-    ],
-    "startCommandPoints": 3,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_intel_dump_leak",
-    "name": "Intel dump leak",
-    "description": "A rival cache surfaces in the wild. Beat analysts to the map or lose the window.",
-    "durationTurns": 2,
-    "lifetimeTurns": 3,
-    "onSuccessEffects": [
-      {
-        "kind": "reveal_hidden_assets_global",
-        "count": 3
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "hacker",
-      "spy"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_political_disclosure",
-    "name": "Political disclosure",
-    "description": "Committee staffers trade rumors; steer the leak toward visible political fronts.",
+    "id": "evt_arms_fair",
+    "name": "Midnight Arms Fair",
+    "description": "An invitation-only bazaar drops anchor in international waters. Everything is for sale for exactly one weekend.",
     "durationTurns": 1,
     "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
-        "kind": "reveal_hidden_assets_by_location_type",
-        "count": 2,
-        "locationType": "political"
+        "kind": "gain_assets",
+        "assetIds": [
+          "mercenary_contracts"
+        ]
       }
     ],
     "requiredAssetIds": [],
     "requiredTraitIds": [
-      "politician"
+      "connected"
     ],
     "startCommandPoints": 2,
     "targetType": "none"
   },
   {
-    "id": "evt_tier1_clearance_lapse",
-    "name": "Tier-1 clearance lapse",
-    "description": "Low-clearance contractors gossip; exploit the soft perimeter before it patches.",
-    "durationTurns": 1,
+    "id": "evt_gala",
+    "name": "The Viridian Gala",
+    "description": "Every minister worth compromising is at one party tonight. The champagne loosens more than ties.",
+    "durationTurns": 2,
     "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
-        "kind": "reveal_hidden_assets_by_location_level",
-        "count": 2,
-        "locationLevel": 1
+        "kind": "gain_assets",
+        "assetIds": [
+          "blackmail_dossier"
+        ]
+      },
+      {
+        "kind": "infamy_delta",
+        "amount": 5
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "magnetic",
+      "manipulator"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_fire_sale",
+    "name": "Rival Syndicate Fire Sale",
+    "description": "A competitor's empire just collapsed. Their assets are on the curb and the vultures are circling.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "dirty_money",
+          "dirty_money",
+          "slush_fund"
+        ]
       }
     ],
     "requiredAssetIds": [],
     "requiredTraitIds": [
       "thief",
-      "clever"
-    ],
-    "startCommandPoints": 1,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_medical_rotation",
-    "name": "Medical rotation",
-    "description": "A friendly clinic rotation can scrub injuries off the roster—if you control intake.",
-    "durationTurns": 2,
-    "lifetimeTurns": 3,
-    "onSuccessEffects": [
-      {
-        "kind": "remove_trait_from_all_minions",
-        "traitId": "injured"
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "scientist"
+      "connected"
     ],
     "startCommandPoints": 2,
     "targetType": "none"
   },
   {
-    "id": "evt_gang_war",
-    "name": "Gang war spillover",
-    "description": "Street war spills into your logistics. Break it up or your people catch stray fire.",
+    "id": "evt_job_fair",
+    "name": "Henchman Job Fair",
+    "description": "Three villainous outfits folded this quarter. Their best people are reading the classifieds.",
     "durationTurns": 1,
-    "lifetimeTurns": 3,
-    "onFailureEffects": [
-      {
-        "kind": "add_trait_to_random_minions",
-        "count": 2,
-        "traitId": "injured"
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "bodyguard",
-      "tactician"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_propaganda_tailwind",
-    "name": "Propaganda tailwind",
-    "description": "Spin buys breathing room on every op—for a few resolves, anyway.",
-    "durationTurns": 2,
-    "lifetimeTurns": 3,
-    "onSuccessEffects": [
-      {
-        "kind": "add_success_chance_modifier",
-        "delta": 10,
-        "turns": 3
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "politician",
-      "charismatic"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_oversight_pressure",
-    "name": "Oversight pressure",
-    "description": "Watchdogs circle; miss the charm offensive and every plan feels tighter.",
-    "durationTurns": 1,
-    "lifetimeTurns": 3,
-    "minInfamy": 15,
-    "onFailureEffects": [
-      {
-        "kind": "add_success_chance_modifier",
-        "delta": -10,
-        "turns": 2
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "politician",
-      "persuasive"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_emergency_funding",
-    "name": "Emergency funding",
-    "description": "A back-channel appropriations rider can refill your war chest next tick.",
-    "durationTurns": 1,
-    "lifetimeTurns": 3,
-    "onSuccessEffects": [
-      {
-        "kind": "grant_command_points_next_turn",
-        "amount": 3
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "politician",
-      "clever"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_recruitment_drive",
-    "name": "Recruitment drive",
-    "description": "Charisma opens wallets and widens the hiring pool—if you stage the rally.",
-    "durationTurns": 2,
     "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
@@ -281,116 +84,266 @@
     ],
     "requiredAssetIds": [],
     "requiredTraitIds": [
-      "charismatic"
+      "magnetic"
     ],
     "startCommandPoints": 1,
     "targetType": "none"
   },
   {
-    "id": "evt_finance_hearing_prep",
-    "name": "Finance hearing prep",
-    "description": "Binders full of leverage: walk the committee with documents or eat the subpoena.",
-    "durationTurns": 2,
-    "lifetimeTurns": 3,
-    "minInfamy": 35,
+    "id": "evt_tabloid",
+    "name": "Tabloid Supervillain Frenzy",
+    "description": "The press wants a monster this news cycle. Give them a masterpiece instead.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "minInfamy": 15,
     "onSuccessEffects": [
       {
+        "kind": "infamy_delta",
+        "amount": 5
+      },
+      {
+        "kind": "add_success_chance_modifier",
+        "delta": 10,
+        "turns": 3
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "manipulator"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_cape_patrol",
+    "name": "A Cape on Patrol",
+    "description": "A freelance hero is sweeping your district, rooftop by rooftop. Discourage them — carefully.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "minHeat": 15,
+    "onFailureEffects": [
+      {
+        "kind": "add_trait_to_random_minions",
+        "count": 2,
+        "traitId": "injured"
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": -10
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "enforcer",
+      "tactician"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_task_force",
+    "name": "Global Task Force Vote",
+    "description": "The Assembly is voting on emergency powers with your name on them. The votes can still be... adjusted.",
+    "durationTurns": 2,
+    "lifetimeTurns": 3,
+    "minHeat": 25,
+    "onFailureEffects": [
+      {
         "kind": "security_level_delta_global",
+        "delta": 1
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": -10
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "manipulator",
+      "connected"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_mole",
+    "name": "Mole in the Machine",
+    "description": "Someone inside your network is selling your maps. Find them before your enemies finish buying.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "minHeat": 25,
+    "onFailureEffects": [
+      {
+        "kind": "intel_level_delta_global",
         "delta": -1
       }
     ],
-    "requiredAssetIds": [
-      "classified_documents"
+    "onSuccessEffects": [
+      {
+        "kind": "intel_level_delta_global",
+        "delta": 1
+      }
     ],
+    "requiredAssetIds": [],
     "requiredTraitIds": [
-      "politician",
-      "clever"
+      "infiltrator",
+      "brilliant"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_defector",
+    "name": "The Defecting Laureate",
+    "description": "A Nobel-caliber physicist wants out of her government lab. She's bringing her files — if the exit is clean.",
+    "durationTurns": 2,
+    "lifetimeTurns": 3,
+    "minInfamy": 30,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "state_secrets"
+        ]
+      },
+      {
+        "kind": "add_trait_to_random_minions",
+        "count": 1,
+        "traitId": "inspired"
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "infiltrator",
+      "magnetic"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_frozen_accounts",
+    "name": "Operation Frostbite",
+    "description": "Financial regulators are tracing your accounts tonight. Move the money or watch it freeze.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "minHeat": 40,
+    "onFailureEffects": [
+      {
+        "kind": "exchange_assets",
+        "gainAssetIds": [],
+        "removeAssetIds": [
+          "dirty_money",
+          "dirty_money"
+        ]
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": -5
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "manipulator",
+      "connected"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_manhunt",
+    "name": "Worldwide Manhunt",
+    "description": "Your face is on every departure board on Earth. Vanish loudly enough to be forgotten.",
+    "durationTurns": 2,
+    "lifetimeTurns": 2,
+    "minHeat": 50,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 10
+      },
+      {
+        "kind": "add_success_chance_modifier",
+        "delta": -10,
+        "turns": 2
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": -15
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "connected",
+      "stealthy"
     ],
     "startCommandPoints": 3,
     "targetType": "none"
   },
   {
-    "id": "evt_infiltrator_warning",
-    "name": "Infiltrator warning",
-    "description": "A mole tips both ways—move on it or the crackdown finds you first.",
-    "durationTurns": 2,
-    "lifetimeTurns": 3,
-    "minHeat": 20,
+    "id": "evt_copycat",
+    "name": "The Copycat",
+    "description": "Some amateur in a knockoff of your costume is claiming your work. Reputations must be defended.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "minInfamy": 50,
     "onFailureEffects": [
       {
-        "kind": "security_level_delta_global",
-        "delta": 1
+        "kind": "infamy_delta",
+        "amount": -10
       }
     ],
     "onSuccessEffects": [
       {
-        "kind": "reveal_hidden_assets_global",
-        "count": 1
+        "kind": "infamy_delta",
+        "amount": 10
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "tactician",
+      "brutal"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_eclipse",
+    "name": "The Perfect Eclipse",
+    "description": "For one night, every satellite that matters is in the wrong place. The sky belongs to whoever moves first.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "minInfamy": 60,
+    "onSuccessEffects": [
+      {
+        "kind": "add_success_chance_modifier",
+        "delta": 15,
+        "turns": 3
       },
       {
-        "kind": "security_level_delta_global",
-        "delta": -1
-      }
-    ],
-    "requiredAssetIds": [],
-    "requiredTraitIds": [
-      "hacker",
-      "spy"
-    ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_counterintel_sweep",
-    "name": "Counterintelligence sweep",
-    "description": "Their spooks are re-papering every site. Get inside the sweep or go blind.",
-    "durationTurns": 1,
-    "lifetimeTurns": 3,
-    "minHeat": 20,
-    "onFailureEffects": [
-      {
-        "kind": "intel_level_delta_global",
-        "delta": -1
-      }
-    ],
-    "onSuccessEffects": [
-      {
         "kind": "intel_level_delta_global",
         "delta": 1
       }
     ],
     "requiredAssetIds": [],
     "requiredTraitIds": [
-      "spy",
-      "clever"
+      "scientist",
+      "brilliant"
     ],
-    "startCommandPoints": 2,
-    "targetType": "none"
-  },
-  {
-    "id": "evt_harbor_manifest_leak",
-    "name": "Harbor manifest leak",
-    "description": "A clerk is selling dock paperwork cheap; economic sites are an open book for a week.",
-    "durationTurns": 1,
-    "lifetimeTurns": 3,
-    "onSuccessEffects": [
-      {
-        "kind": "intel_level_delta_by_location_type",
-        "delta": 2,
-        "locationType": "economic"
-      }
-    ],
-    "requiredAssetIds": [
-      "money"
-    ],
-    "requiredTraitIds": [],
-    "startCommandPoints": 1,
+    "startCommandPoints": 3,
     "targetType": "none"
   },
   {
     "id": "evt_lair_raid",
-    "name": "Lair raid",
-    "description": "They have the lair's coordinates and every agency you ever embarrassed is at the gate. Hold the door or the run ends here.",
+    "name": "Assault on Mount Cinder",
+    "description": "They found the volcano. Gunships in the caldera, capes on the blast doors, and every agency you ever embarrassed at the gate. Hold the mountain or lose everything.",
     "durationTurns": 1,
     "lifetimeTurns": 2,
     "onSuccessEffects": [
@@ -400,14 +353,14 @@
       },
       {
         "kind": "infamy_delta",
-        "amount": 5
+        "amount": 10
       }
     ],
     "requiredAssetIds": [],
     "requiredTraitIds": [
-      "bodyguard",
-      "soldier",
-      "tactician"
+      "enforcer",
+      "tactician",
+      "fearless"
     ],
     "special": "lair_raid",
     "startCommandPoints": 3,

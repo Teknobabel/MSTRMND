@@ -1,31 +1,31 @@
 [
   {
-    "name": "Unknown",
+    "name": "Unnoticed",
     "maxAgents": 0,
     "minHeat": 0
   },
   {
-    "name": "Nuisance",
+    "name": "Whispers",
     "maxAgents": 1,
-    "minHeat": 20
+    "minHeat": 15
   },
   {
-    "name": "Menace",
+    "name": "Person of Interest",
     "maxAgents": 2,
-    "minHeat": 40
+    "minHeat": 30
   },
   {
-    "name": "Wanted",
+    "name": "Public Enemy",
     "maxAgents": 3,
-    "minHeat": 60
+    "minHeat": 50
   },
   {
-    "name": "Villain",
+    "name": "Global Manhunt",
     "maxAgents": 4,
-    "minHeat": 80
+    "minHeat": 70
   },
   {
-    "name": "Mastermind",
+    "name": "Doomsday Alert",
     "maxAgents": 5,
     "minHeat": 100
   }

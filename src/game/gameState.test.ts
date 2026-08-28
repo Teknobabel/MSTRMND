@@ -9,6 +9,8 @@ import {
   executeAgentPhase,
   executePlan,
   hireMinion,
+  previewHireDynamicTraits,
+  previewRehireDynamicTraits,
 } from "./gameState";
 import { parseCatalog } from "./contentSchema";
 import {
@@ -2284,5 +2286,188 @@ describe("run-start location affinity seeds", () => {
     expect(
       findLocationAffinity(hired.value.minionLocationAffinities, "mi-1", seed.locationId)?.score,
     ).toBe(seed.score);
+  });
+});
+
+describe("designer-authored starting standings", () => {
+  function catalogWithStanding(): ContentCatalog {
+    const raw = rawFixtureSlices();
+    raw.minions[0] = {
+      ...(raw.minions[0] as Record<string, unknown>),
+      startingDynamicTraits: [{ kind: "wanted", locationId: "loc-a" }],
+    };
+    return parseCatalog(raw);
+  }
+
+  function stagedFor(cat: ContentCatalog, templateIds: string[]): GameState {
+    const start = createInitialGameState(cat, seededRng(4));
+    return {
+      ...start,
+      player: { ...start.player, commandPoints: 20 },
+      availableMinionTemplateIds: templateIds,
+      /* The run's own roll would otherwise decide these slots first. */
+      minionLocationAffinitySeeds: [],
+      minionAffinitySeeds: [],
+    };
+  }
+
+  it("keeps a Hero/Wanted starting trait after the hire", () => {
+    const cat = catalogWithStanding();
+    const hired = hireMinion(stagedFor(cat, ["m-hero"]), cat, "m-hero", "mi-1");
+    expect(hired.ok).toBe(true);
+    if (!hired.ok) {
+      return;
+    }
+    expect(findLocationAffinity(hired.value.minionLocationAffinities, "mi-1", "loc-a")).toEqual({
+      minionInstanceId: "mi-1",
+      locationId: "loc-a",
+      score: cat.balance.locationAffinity.wantedThreshold,
+      standing: "wanted",
+    });
+    expect(hired.value.player.minions[0]!.dynamicTraits).toEqual([
+      { kind: "wanted", locationId: "loc-a" },
+    ]);
+  });
+
+  it("lets a designer-authored standing outrank the roll for the same slot", () => {
+    const cat = catalogWithStanding();
+    const staged: GameState = {
+      ...stagedFor(cat, ["m-hero"]),
+      minionLocationAffinitySeeds: [
+        { minionTemplateId: "m-hero", locationId: "loc-a", score: 99 },
+      ],
+    };
+    const hired = hireMinion(staged, cat, "m-hero", "mi-1");
+    expect(hired.ok).toBe(true);
+    if (!hired.ok) {
+      return;
+    }
+    expect(
+      findLocationAffinity(hired.value.minionLocationAffinities, "mi-1", "loc-a")?.standing,
+    ).toBe("wanted");
+  });
+
+  it("never re-seeds a standing the run has already moved", () => {
+    const cat = catalogWithStanding();
+    const staged: GameState = {
+      ...stagedFor(cat, ["m-hero"]),
+      minionLocationAffinities: [
+        { minionInstanceId: "mi-1", locationId: "loc-a", score: 4, standing: "hero" },
+      ],
+    };
+    const hired = hireMinion(staged, cat, "m-hero", "mi-1");
+    expect(hired.ok).toBe(true);
+    if (!hired.ok) {
+      return;
+    }
+    expect(
+      findLocationAffinity(hired.value.minionLocationAffinities, "mi-1", "loc-a")?.score,
+    ).toBe(4);
+  });
+});
+
+describe("hire pool dynamic trait preview", () => {
+  function catalogWithBond(): ContentCatalog {
+    const raw = rawFixtureSlices();
+    raw.minions[0] = {
+      ...(raw.minions[0] as Record<string, unknown>),
+      startingDynamicTraits: [
+        { kind: "friend", targetMinionTemplateId: "m-buddy" },
+        { kind: "wanted", locationId: "loc-a" },
+      ],
+    };
+    return parseCatalog(raw);
+  }
+
+  function staged(cat: ContentCatalog): GameState {
+    const start = createInitialGameState(cat, seededRng(4));
+    return {
+      ...start,
+      player: { ...start.player, commandPoints: 20 },
+      availableMinionTemplateIds: ["m-hero", "m-buddy"],
+      minionAffinitySeeds: [],
+      minionLocationAffinitySeeds: [],
+    };
+  }
+
+  it("matches what the hire actually produces, bond and standing alike", () => {
+    const cat = catalogWithBond();
+    const before = staged(cat);
+
+    /* Alone: the standing lands, the bond has no other half to land on. */
+    expect(previewHireDynamicTraits(before, cat, "m-hero")).toEqual([
+      { kind: "wanted", locationId: "loc-a" },
+    ]);
+    const first = hireMinion(before, cat, "m-hero", "mi-1");
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+    expect(first.value.player.minions[0]!.dynamicTraits).toEqual([
+      { kind: "wanted", locationId: "loc-a" },
+    ]);
+
+    /* With the partner on the roster, both sides of the pair are previewed and delivered. */
+    expect(previewHireDynamicTraits(first.value, cat, "m-buddy")).toEqual([
+      { kind: "friend", targetMinionInstanceId: "mi-1" },
+    ]);
+    const second = hireMinion(first.value, cat, "m-buddy", "mi-2");
+    expect(second.ok).toBe(true);
+    if (!second.ok) {
+      return;
+    }
+    expect(second.value.player.minions[1]!.dynamicTraits).toEqual([
+      { kind: "friend", targetMinionInstanceId: "mi-1" },
+    ]);
+  });
+
+  it("previews the run's rolled standing that no template mentions", () => {
+    const start = createInitialGameState(catalog, seededRng(4));
+    const seed = start.minionLocationAffinitySeeds.find(
+      (s) => Math.abs(s.score) >= catalog.balance.locationAffinity.heroThreshold,
+    );
+    expect(seed).toBeDefined();
+    if (seed === undefined) {
+      return;
+    }
+    const before: GameState = {
+      ...start,
+      player: { ...start.player, commandPoints: 20 },
+      availableMinionTemplateIds: [seed.minionTemplateId],
+    };
+    const preview = previewHireDynamicTraits(before, catalog, seed.minionTemplateId);
+    expect(preview).toContainEqual({
+      kind: seed.score > 0 ? "hero" : "wanted",
+      locationId: seed.locationId,
+    });
+
+    const hired = hireMinion(before, catalog, seed.minionTemplateId, "mi-1");
+    expect(hired.ok).toBe(true);
+    if (!hired.ok) {
+      return;
+    }
+    expect(hired.value.player.minions[0]!.dynamicTraits).toEqual(preview);
+  });
+
+  it("leaves the state it previews against untouched", () => {
+    const cat = catalogWithBond();
+    const before = staged(cat);
+    previewHireDynamicTraits(before, cat, "m-hero");
+    expect(before.player.minions).toEqual([]);
+    expect(before.minionLocationAffinities).toEqual([]);
+    expect(before.minionAffinities).toEqual([]);
+  });
+
+  it("previews a fired minion's real standing rather than their stale pills", () => {
+    const cat = catalogWithBond();
+    const fired = makeMinionInstance("mi-9", "m-hero", []);
+    const before: GameState = {
+      ...staged(cat),
+      minionRehireQueue: [{ minion: fired, availableFromTurn: 1 }],
+    };
+    expect(previewRehireDynamicTraits(before, cat, fired)).toEqual([
+      { kind: "wanted", locationId: "loc-a" },
+    ]);
+    expect(fired.dynamicTraits).toEqual([]);
   });
 });

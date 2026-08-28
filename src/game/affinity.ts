@@ -581,6 +581,69 @@ export function rollStartingTemplateLocationAffinities(
   return out;
 }
 
+/** Score a designer-authored starting standing seeds the minion at: the band's own threshold. */
+export function seedScoreForStanding(
+  standing: MinionLocationStanding,
+  cfg: LocationAffinityConfig = DEFAULT_BALANCE.locationAffinity,
+): number {
+  switch (standing) {
+    case "hero":
+      return cfg.heroThreshold;
+    case "wanted":
+      return cfg.wantedThreshold;
+    case "neutral":
+      return 0;
+  }
+}
+
+function standingForTraitKind(kind: string): MinionLocationStanding | null {
+  switch (kind) {
+    case "hero":
+      return "hero";
+    case "wanted":
+      return "wanted";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Seeds location scores from `startingDynamicTraits` on the roster's templates — the Hero/Wanted
+ * counterpart to {@link seedStartingAffinities}. Unlike a bond, a standing needs nobody else on
+ * the roster, so it lands the moment its minion is hired; slots that already have a row are left
+ * alone, since a run's history outranks the designer's opening state.
+ */
+export function seedStartingLocationAffinities(
+  affinities: readonly MinionLocationAffinity[],
+  minions: readonly MinionInstance[],
+  startingByTemplateId: (templateId: string) => readonly StartingDynamicTrait[] | undefined,
+  cfg: LocationAffinityConfig = DEFAULT_BALANCE.locationAffinity,
+): MinionLocationAffinity[] {
+  let next = [...affinities];
+  for (const owner of minions) {
+    for (const s of startingByTemplateId(owner.templateId) ?? []) {
+      if ("targetMinionTemplateId" in s) {
+        continue;
+      }
+      const standing = standingForTraitKind(s.kind);
+      if (standing === null) {
+        continue;
+      }
+      if (findLocationAffinity(next, owner.instanceId, s.locationId) !== undefined) {
+        continue;
+      }
+      next = setLocationAffinityScore(
+        next,
+        owner.instanceId,
+        s.locationId,
+        seedScoreForStanding(standing, cfg),
+        cfg,
+      );
+    }
+  }
+  return next;
+}
+
 /**
  * Lands the run-start location table on the roster's real minions. Skips any slot the minion
  * already has a row for — a run's own history outranks the roll.

@@ -1,135 +1,86 @@
 [
   {
-    "id": "abandoned_substation",
-    "name": "Abandoned substation",
-    "description": "Hum from dead transformers; perfect cover for jammers and caches.",
-    "locationLevel": 2,
-    "locationType": "military"
-  },
-  {
-    "id": "airport_cargo_hold",
-    "name": "Airport cargo hold",
-    "description": "Rubber-stamped pallets and crews who stopped asking questions.",
-    "locationLevel": 3,
-    "locationType": "economic"
-  },
-  {
-    "id": "auction_backroom",
-    "name": "Auction backroom",
-    "description": "Polite bidding upstairs; provenance burns downstairs.",
-    "locationLevel": 2,
-    "locationType": "economic"
-  },
-  {
-    "id": "clinic_front",
-    "name": "Clinic front",
-    "description": "Flu shots in front; precursor chemistry out the service door.",
-    "locationLevel": 2,
-    "locationType": "economic"
-  },
-  {
-    "id": "courthouse_records_vault",
-    "name": "Courthouse records vault",
-    "description": "Sealed filings and favors filed between the lines.",
-    "locationLevel": 3,
-    "locationType": "political"
-  },
-  {
-    "id": "downtown_dead_drop",
-    "name": "Downtown dead drop",
-    "description": "High-traffic corner; fast in and out.",
+    "id": "harbor_armory",
+    "name": "Harborside Armory",
+    "description": "A national guard depot with rusting fences and a night crew that plays cards.",
     "locationLevel": 1,
     "locationType": "military"
   },
   {
-    "id": "embassy_service_tunnel",
-    "name": "Embassy service tunnel",
-    "description": "Laundry carts and diplomatic pouches share the same rats.",
-    "locationLevel": 3,
-    "locationType": "political"
-  },
-  {
-    "id": "fusion_research_park",
-    "name": "Fusion research park",
-    "description": "Glass campuses hiding cores that glow when the grid dips.",
-    "locationLevel": 3,
-    "locationType": "economic"
-  },
-  {
-    "id": "harbor_manifest_office",
-    "name": "Harbor manifest office",
-    "description": "Rubber stamps for containers that never matched their bills.",
-    "locationLevel": 2,
-    "locationType": "economic"
-  },
-  {
-    "id": "industrial_wharf",
-    "name": "Industrial wharf",
-    "description": "Cranes that swing wide for crates no inspector booked.",
+    "id": "fort_bastion",
+    "name": "Fort Bastion Motor Pool",
+    "description": "Armored columns fuel here before every parade — and every crackdown.",
     "locationLevel": 2,
     "locationType": "military"
   },
   {
-    "id": "legislator_smoking_room",
-    "name": "Legislator smoking room",
-    "description": "Where amendments die quietly and wallets grow loud.",
+    "id": "skywatch_station",
+    "name": "Skywatch Radar Station",
+    "description": "A mountaintop dish array that tracks everything in low orbit. Everything.",
+    "locationLevel": 2,
+    "locationType": "military"
+  },
+  {
+    "id": "the_citadel",
+    "name": "The Citadel — Strategic Command",
+    "description": "The alliance's hardened war room. Interceptors launch on its word alone.",
+    "locationLevel": 3,
+    "locationType": "military"
+  },
+  {
+    "id": "city_hall_annex",
+    "name": "City Hall Annex",
+    "description": "Permits, zoning, and the first rung of every ladder worth corrupting.",
+    "locationLevel": 1,
+    "locationType": "political"
+  },
+  {
+    "id": "grand_embassy",
+    "name": "The Grand Embassy",
+    "description": "Chandeliers, diplomatic pouches, and secrets traded over sparkling wine.",
+    "locationLevel": 2,
+    "locationType": "political"
+  },
+  {
+    "id": "broadcast_house",
+    "name": "Global Broadcasting House",
+    "description": "The feed the whole world trusts, uplinked from one very bribable tower.",
+    "locationLevel": 2,
+    "locationType": "political"
+  },
+  {
+    "id": "world_assembly",
+    "name": "World Assembly Hall",
+    "description": "Every flag on Earth under one glass dome. The podium hears everything first.",
     "locationLevel": 3,
     "locationType": "political"
   },
   {
-    "id": "marina_dead_drop",
-    "name": "Marina dead drop",
-    "description": "Locker combinations whispered over diesel and gulls.",
+    "id": "dockside_freeport",
+    "name": "Dockside Freeport",
+    "description": "Bonded warehouses where cargo changes owners faster than paperwork.",
     "locationLevel": 1,
     "locationType": "economic"
   },
   {
-    "id": "mercenary_bar",
-    "name": "Mercenary bar",
-    "description": "House vodka; contracts laminated so blood wipes clean.",
-    "locationLevel": 2,
-    "locationType": "military"
-  },
-  {
-    "id": "news_network_floor",
-    "name": "News network floor",
-    "description": "Green rooms where truth gets graded before airtime.",
-    "locationLevel": 2,
-    "locationType": "political"
-  },
-  {
-    "id": "private_bank_box_room",
-    "name": "Private bank box room",
-    "description": "Quiet desks; louder ledgers one corridor over.",
-    "locationLevel": 3,
-    "locationType": "economic"
-  },
-  {
-    "id": "rooftop_satfarm",
-    "name": "Rooftop satfarm",
-    "description": "Dishes angled just shy of legal spectrum; drones recharge beside.",
-    "locationLevel": 2,
-    "locationType": "military"
-  },
-  {
-    "id": "safehouse",
-    "name": "Safehouse",
-    "description": "Staging area for sensitive ops.",
-    "locationLevel": 2,
-    "locationType": "political"
-  },
-  {
-    "id": "shell_company_suite",
-    "name": "Shell company suite",
-    "description": "Brass plaques for firms whose desks have never been sat at.",
+    "id": "gilded_lotus",
+    "name": "Gilded Lotus Casino",
+    "description": "High rollers, higher stakes, and a vault that launders three currencies a night.",
     "locationLevel": 2,
     "locationType": "economic"
   },
   {
-    "id": "underground_server_farm",
-    "name": "Underground server farm",
-    "description": "Cold aisles humming under a bakery’s flour dust.",
+    "id": "aerodyne_campus",
+    "name": "AeroDyne Aerospace Campus",
+    "description": "Private launch contractor with orbital lift capacity and lax shareholder oversight.",
+    "locationLevel": 2,
+    "locationType": "economic"
+  },
+  {
+    "id": "meridian_bank",
+    "name": "Meridian World Bank",
+    "description": "The clearing house for half the planet's money. The other half wishes it was.",
     "locationLevel": 3,
-    "locationType": "military"
+    "locationType": "economic"
   }
 ]
