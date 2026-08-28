@@ -5,6 +5,7 @@ import { createInitialGameState } from "./gameState";
 import { createAgentFromTemplate, getAgentTemplateById } from "./agent";
 import {
   applyMissionEffects,
+  describeMissionTemplateEffects,
   orderedMissionEffects,
 } from "./missionEffects";
 import { fixtureCatalog, seededRng } from "./testFixtures";
@@ -237,3 +238,43 @@ describe("Guard passive vs security reductions", () => {
     expect(scoped.guardEvents).toBe(1);
   });
 });
+
+describe("describeMissionTemplateEffects", () => {
+  const catalog = fixtureCatalog();
+
+  it("describes individual gained assets with catalog names", () => {
+    const effects: MissionEffect[] = [
+      { kind: "gain_assets", assetIds: ["as-cash", "as-car"] },
+    ];
+    expect(describeMissionTemplateEffects(effects, catalog)).toEqual([
+      "Gain asset: Cash Reserves",
+      "Gain asset: Getaway Car",
+    ]);
+  });
+
+  it("falls back to asset ID if catalog is omitted or asset is not found", () => {
+    const effects: MissionEffect[] = [
+      { kind: "gain_assets", assetIds: ["dirty_money", "unknown_asset"] },
+    ];
+    expect(describeMissionTemplateEffects(effects)).toEqual([
+      "Gain asset: dirty_money",
+      "Gain asset: unknown_asset",
+    ]);
+  });
+
+  it("describes other mission effects with names when available", () => {
+    const effects: MissionEffect[] = [
+      { kind: "unlock_lair_mission", missionId: "ms-basic" },
+      { kind: "remove_trait_from_all_minions", traitId: "t-req" },
+      { kind: "add_trait_to_random_minions", traitId: "t-pos", count: 2 },
+      { kind: "infamy_delta", amount: 5 },
+    ];
+    expect(describeMissionTemplateEffects(effects, catalog)).toEqual([
+      "Unlocked lair mission: Case the Bank",
+      "Removed trait Infiltration from all hired minions",
+      "Granted trait Inspired to up to 2 random minion(s)",
+      "Infamy +5 (mission effect)",
+    ]);
+  });
+});
+

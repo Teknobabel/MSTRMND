@@ -733,6 +733,7 @@ function initGameController(
   const assignSupportAssetsLabel = req<HTMLElement>("assign-support-assets-label");
   const assignSupportAssetsList = req<HTMLElement>("assign-support-assets-list");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
+  const assignSubmitChanceEl = req<HTMLElement>("assign-submit-chance");
   const btnExec = req<HTMLButtonElement>("btn-execute-plan");
   const btnRerollHire = req<HTMLButtonElement>("btn-reroll-hire");
   const turnReportOverlay = req<HTMLElement>("overlay-turn-report");
@@ -820,8 +821,8 @@ function initGameController(
     if (mission === undefined) {
       return undefined;
     }
-    const successLines = describeMissionTemplateEffects(mission.onSuccessEffects ?? []);
-    const failureLines = describeMissionTemplateEffects(mission.onFailureEffects ?? []);
+    const successLines = describeMissionTemplateEffects(mission.onSuccessEffects ?? [], content);
+    const failureLines = describeMissionTemplateEffects(mission.onFailureEffects ?? [], content);
     if (successLines.length === 0 && failureLines.length === 0) {
       return undefined;
     }
@@ -2078,7 +2079,114 @@ function initGameController(
     return locationTemplatesForOmegaPlan(content, state.activeOmegaPlanId);
   }
 
+  /**
+   * Success chance for the plan as currently staged, or `null` while it is still missing a
+   * mission, a valid target, or a legal participant set — everything the Submit button itself
+   * requires of the *plan*. CP and the concurrent-mission cap are deliberately not checked: they
+   * block the click, not the arithmetic, and the number is what tells the player whether freeing
+   * one up is worth it. Empty required-asset slots are a real (lower) chance, not an unknown one.
+   *
+   * Mirrors the active-mission card: hidden agents' challenge traits stay out, so the preview
+   * only ever promises what the player can actually see.
+   */
+  function stagedSuccessChance(): {
+    breakdown: SuccessChanceBreakdown;
+    dynamicEntries: readonly DynamicTraitSuccessBreakdownEntry[];
+  } | null {
+    if (assignMissionTemplateId === null || assignMissionSource === null) {
+      return null;
+    }
+    const mission = findMissionOrEventTemplate(assignMissionTemplateId);
+    if (!mission) {
+      return null;
+    }
+    let target: MissionTarget;
+    if (mission.targetType === "none") {
+      target = { kind: "none" };
+    } else {
+      if (
+        assignTarget === null ||
+        !missionTargetMatchesTemplate(mission.targetType, assignTarget) ||
+        !targetPassesMissionLocationFilters(mission, assignTarget)
+      ) {
+        return null;
+      }
+      target = assignTarget;
+    }
+    const participantIds = getAssignParticipantIds();
+    const instanceById = new Map(state.player.minions.map((m) => [m.instanceId, m] as const));
+    const participants = participantIds
+      .map((id) => instanceById.get(id))
+      .filter((x): x is MinionInstance => x !== undefined);
+    if (!canAssignParticipants(participants, stagedParticipantCeiling())) {
+      return null;
+    }
+
+    const lid = getMissionTargetLocationId(target);
+    const supportAbilities = supportAbilitiesForAssetIds(stagedSupportAssetIds(), content.assets);
+    syncAssignAssetSlotArrayWithMission();
+    const successOpts = {
+      ...missionSuccessOptionsForTarget(state, target, supportAbilities),
+      traitsCatalog: content.traits,
+      balance: content.balance,
+      challengeTraitIds:
+        lid === null
+          ? []
+          : challengeTraitIdsForAgents(playerVisibleOpposingAgentsAtLocation(state, lid)),
+      dynamicTraitDelta: dynamicTraitSuccessModifierFromFullRoster(
+        state.player.minions,
+        participantIds,
+        lid,
+        content.balance.dynamicTraitModifiers,
+      ),
+      eventSuccessModifierDelta: totalEventSuccessModifierDelta(),
+      supportAbilities,
+      ...(mission.requiredAssetIds.length > 0
+        ? {
+            assignedAssetIds: Array.from(
+              { length: mission.requiredAssetIds.length },
+              (_, i) => assignAssetSlotAssetIds[i] ?? null,
+            ),
+          }
+        : { playerAssets: state.player.assets }),
+    };
+    return {
+      breakdown: computeSuccessChanceBreakdown(mission, participants, successOpts),
+      dynamicEntries: dynamicTraitSuccessModifierBreakdownFromFullRoster(
+        content,
+        state.player.minions,
+        participantIds,
+        lid,
+      ).entries,
+    };
+  }
+
+  function syncAssignSubmitChance(): void {
+    const staged = state.phase === "main" ? stagedSuccessChance() : null;
+    if (staged === null) {
+      assignSubmitChanceEl.hidden = true;
+      assignSubmitChanceEl.textContent = "";
+      assignSubmitChanceEl.title = "";
+      assignSubmitChanceEl.classList.remove(
+        "btn-submit-mission__chance--good",
+        "btn-submit-mission__chance--warn",
+      );
+      return;
+    }
+    const pct = staged.breakdown.finalPercent;
+    assignSubmitChanceEl.hidden = false;
+    assignSubmitChanceEl.textContent = `${pct}%`;
+    assignSubmitChanceEl.title = formatMissionSuccessChanceTooltipLines(
+      staged.breakdown,
+      staged.dynamicEntries,
+      state.player.minions,
+    ).join("\n");
+    assignSubmitChanceEl.classList.toggle("btn-submit-mission__chance--good", pct >= 70);
+    assignSubmitChanceEl.classList.toggle("btn-submit-mission__chance--warn", pct < 40);
+  }
+
   function syncAssignButtonState(): void {
+    syncAssignSubmitChance();
     const mainOnly = state.phase === "main";
     if (!mainOnly) {
       btnAssign.disabled = true;

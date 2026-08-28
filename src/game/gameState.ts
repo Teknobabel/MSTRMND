@@ -2434,7 +2434,7 @@ export function executePlan(
     const infamyDeltaTotal = player.infamy - infamyBefore;
     const heatDeltaTotal = player.heat - heatBefore;
 
-    const templateEffectDescriptions = describeMissionTemplateEffects(effectList);
+    const templateEffectDescriptions = describeMissionTemplateEffects(effectList, catalog);
 
     resolveEvents.push({
       kind: "mission_completed",
@@ -2714,7 +2714,7 @@ export function executePlan(
           resolveEvents.push({
             kind: "event_expired",
             eventTemplateId: nextCurrentEventTemplateId,
-            effectDescriptions: describeMissionTemplateEffects(expireList),
+            effectDescriptions: describeMissionTemplateEffects(expireList, catalog),
           });
           resolveEvents.push(...expired.events);
         } else {

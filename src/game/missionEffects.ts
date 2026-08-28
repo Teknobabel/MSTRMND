@@ -32,79 +32,120 @@ function signedInt(n: number): string {
   return n >= 0 ? `+${n}` : String(n);
 }
 
-function describeMissionEffect(effect: MissionEffect): string {
+function assetName(catalog: ContentCatalog | undefined, id: string): string {
+  return catalog?.assets.find((a) => a.id === id)?.name ?? id;
+}
+
+function traitName(catalog: ContentCatalog | undefined, id: string): string {
+  return catalog?.traits.find((t) => t.id === id)?.name ?? id;
+}
+
+function missionName(catalog: ContentCatalog | undefined, id: string): string {
+  return catalog?.missions.find((m) => m.id === id)?.name ?? id;
+}
+
+function describeMissionEffect(effect: MissionEffect, catalog?: ContentCatalog): string[] {
   switch (effect.kind) {
     case "reveal_target_asset":
-      return "Revealed the targeted asset";
+      return ["Revealed the targeted asset"];
     case "reveal_all_hidden_assets_at_location":
-      return "Revealed all hidden assets at the target location";
+      return ["Revealed all hidden assets at the target location"];
     case "steal_target_asset":
-      return "Stole the targeted asset into inventory";
+      return ["Stole the targeted asset into inventory"];
     case "steal_all_assets_at_location":
-      return "Revealed hidden assets at the target location, then stole all assets there into inventory";
+      return [
+        "Revealed hidden assets at the target location, then stole all assets there into inventory",
+      ];
     case "steal_all_revealed_assets_at_location":
-      return "Stole all revealed assets at the target location into inventory";
+      return ["Stole all revealed assets at the target location into inventory"];
     case "unlock_lair_mission":
-      return `Unlocked lair mission: ${effect.missionId}`;
+      return [`Unlocked lair mission: ${missionName(catalog, effect.missionId)}`];
     case "gain_assets":
-      return `Gained ${effect.assetIds.length} asset unit(s) into inventory`;
-    case "exchange_assets":
-      return `Removed up to ${effect.removeAssetIds.length} asset unit(s) from inventory (capped by holdings), then gained ${effect.gainAssetIds.length} unit(s)`;
+      return effect.assetIds.map((id) => `Gain asset: ${assetName(catalog, id)}`);
+    case "exchange_assets": {
+      const removed = effect.removeAssetIds.map((id) => assetName(catalog, id)).join(", ");
+      const gained = effect.gainAssetIds.map((id) => assetName(catalog, id)).join(", ");
+      if (removed.length > 0 && gained.length > 0) {
+        return [`Removed up to ${removed} from inventory, then gained ${gained}`];
+      }
+      if (removed.length > 0) {
+        return [`Removed up to ${removed} from inventory`];
+      }
+      return [`Gained ${gained}`];
+    }
     case "security_level_delta":
-      return `Security level at target location ${signedInt(effect.delta)}`;
+      return [`Security level at target location ${signedInt(effect.delta)}`];
     case "intel_level_delta":
-      return `Intel level at target location ${signedInt(effect.delta)}`;
+      return [`Intel level at target location ${signedInt(effect.delta)}`];
     case "intel_level_delta_global":
-      return `Intel level globally ${signedInt(effect.delta)} (all playable locations)`;
+      return [`Intel level globally ${signedInt(effect.delta)} (all playable locations)`];
     case "intel_level_delta_by_location_type":
-      return `Intel level ${signedInt(effect.delta)} at all ${effect.locationType} locations`;
+      return [`Intel level ${signedInt(effect.delta)} at all ${effect.locationType} locations`];
     case "intel_level_delta_by_location_level":
-      return `Intel level ${signedInt(effect.delta)} at all level-${effect.locationLevel} locations`;
-    case "add_target_minion_traits":
-      return `Granted ${effect.traitIds.length} trait(s) to the target minion`;
-    case "add_random_participant_traits":
-      return `Granted ${effect.traitIds.length} trait(s) to a random participant`;
-    case "add_all_participant_traits":
-      return `Granted ${effect.traitIds.length} trait(s) to all participants`;
+      return [
+        `Intel level ${signedInt(effect.delta)} at all level-${effect.locationLevel} locations`,
+      ];
+    case "add_target_minion_traits": {
+      const traits = effect.traitIds.map((id) => traitName(catalog, id)).join(", ");
+      return [`Granted trait(s) ${traits} to the target minion`];
+    }
+    case "add_random_participant_traits": {
+      const traits = effect.traitIds.map((id) => traitName(catalog, id)).join(", ");
+      return [`Granted trait(s) ${traits} to a random participant`];
+    }
+    case "add_all_participant_traits": {
+      const traits = effect.traitIds.map((id) => traitName(catalog, id)).join(", ");
+      return [`Granted trait(s) ${traits} to all participants`];
+    }
     case "infamy_delta":
-      return `Infamy ${signedInt(effect.amount)} (mission effect)`;
+      return [`Infamy ${signedInt(effect.amount)} (mission effect)`];
     case "heat_delta":
-      return `Heat ${signedInt(effect.amount)} (mission effect)`;
+      return [`Heat ${signedInt(effect.amount)} (mission effect)`];
     case "max_concurrent_missions_delta":
-      return `Max concurrent missions ${signedInt(effect.delta)}`;
+      return [`Max concurrent missions ${signedInt(effect.delta)}`];
     case "max_roster_size_delta":
-      return `Max roster size ${signedInt(effect.delta)}`;
+      return [`Max roster size ${signedInt(effect.delta)}`];
     case "max_hire_offers_delta":
-      return `Max hire offers ${signedInt(effect.delta)}`;
+      return [`Max hire offers ${signedInt(effect.delta)}`];
     case "max_participants_per_mission_delta":
-      return `Max participants per mission ${signedInt(effect.delta)}`;
+      return [`Max participants per mission ${signedInt(effect.delta)}`];
     case "max_support_assets_delta":
-      return `Max support assets per mission ${signedInt(effect.delta)}`;
+      return [`Max support assets per mission ${signedInt(effect.delta)}`];
     case "max_command_points_per_turn_delta":
-      return `Max command points per turn ${signedInt(effect.delta)}`;
+      return [`Max command points per turn ${signedInt(effect.delta)}`];
     case "security_level_delta_global":
-      return `Security level globally ${signedInt(effect.delta)} (all playable locations)`;
+      return [`Security level globally ${signedInt(effect.delta)} (all playable locations)`];
     case "security_level_delta_by_location_type":
-      return `Security level ${signedInt(effect.delta)} at all ${effect.locationType} locations`;
+      return [`Security level ${signedInt(effect.delta)} at all ${effect.locationType} locations`];
     case "security_level_delta_by_location_level":
-      return `Security level ${signedInt(effect.delta)} at all level-${effect.locationLevel} locations`;
+      return [
+        `Security level ${signedInt(effect.delta)} at all level-${effect.locationLevel} locations`,
+      ];
     case "remove_trait_from_all_minions":
-      return `Removed trait ${effect.traitId} from all hired minions`;
+      return [`Removed trait ${traitName(catalog, effect.traitId)} from all hired minions`];
     case "add_trait_to_random_minions":
-      return `Granted trait ${effect.traitId} to up to ${effect.count} random minion(s)`;
+      return [
+        `Granted trait ${traitName(catalog, effect.traitId)} to up to ${effect.count} random minion(s)`,
+      ];
     case "reveal_hidden_assets_global":
-      return `Revealed up to ${effect.count} hidden asset slot(s) globally`;
+      return [`Revealed up to ${effect.count} hidden asset slot(s) globally`];
     case "reveal_hidden_assets_by_location_type":
-      return `Revealed up to ${effect.count} hidden asset slot(s) at ${effect.locationType} sites`;
+      return [
+        `Revealed up to ${effect.count} hidden asset slot(s) at ${effect.locationType} sites`,
+      ];
     case "reveal_hidden_assets_by_location_level":
-      return `Revealed up to ${effect.count} hidden asset slot(s) at level-${effect.locationLevel} sites`;
+      return [
+        `Revealed up to ${effect.count} hidden asset slot(s) at level-${effect.locationLevel} sites`,
+      ];
     case "grant_command_points_next_turn":
-      return `Grants +${effect.amount} command points on next turn refill`;
+      return [`Grants +${effect.amount} command points on next turn refill`];
     case "add_success_chance_modifier":
-      return `Mission success chance ${signedInt(effect.delta)}% for ${effect.turns} resolve pass(es)`;
+      return [
+        `Mission success chance ${signedInt(effect.delta)}% for ${effect.turns} resolve pass(es)`,
+      ];
     default: {
       const _exhaustive: never = effect;
-      return String(_exhaustive);
+      return [String(_exhaustive)];
     }
   }
 }
@@ -155,8 +196,11 @@ export function orderedMissionEffects(effects: readonly MissionEffect[]): Missio
 }
 
 /** Human-readable lines for template mission effects, in {@link orderedMissionEffects} order. */
-export function describeMissionTemplateEffects(effects: readonly MissionEffect[]): string[] {
-  return orderedMissionEffects([...effects]).map(describeMissionEffect);
+export function describeMissionTemplateEffects(
+  effects: readonly MissionEffect[],
+  catalog?: ContentCatalog,
+): string[] {
+  return orderedMissionEffects([...effects]).flatMap((e) => describeMissionEffect(e, catalog));
 }
 
 function mapSlotAt(

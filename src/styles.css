@@ -1275,8 +1275,40 @@ body {
 }
 
 .btn-submit-mission {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   width: 100%;
   margin-top: 0.2rem;
+}
+
+/* Success chance of the staged plan; only rendered once the plan is complete enough to have one. */
+.btn-submit-mission__chance {
+  padding: 0.06rem 0.34rem;
+  border: 1px solid var(--line-1);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text-1);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  cursor: help;
+}
+
+.btn-submit-mission__chance--good {
+  color: #8df0b2;
+  border-color: var(--good-dim);
+  background: rgba(22, 84, 46, 0.3);
+}
+
+.btn-submit-mission__chance--warn {
+  color: var(--warn);
+  border-color: var(--warn-dim);
+  background: rgba(122, 84, 16, 0.28);
+}
+
+.btn-submit-mission:disabled .btn-submit-mission__chance {
+  opacity: 0.75;
 }
 
 /* ---------------- Ticker bar ---------------- */
