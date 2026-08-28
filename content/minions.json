@@ -8,8 +8,28 @@
       "brilliant",
       "stealthy",
       "infiltrator",
-      "lucky",
-      "fearless"
+      "lucky"
+    ],
+    "startingTraitIds": [
+      "hacker"
+    ]
+  },
+  {
+    "id": "glitch",
+    "name": "Glitch",
+    "description": "Doesn't hack systems so much as convince them to self-destruct out of spite.",
+    "hireCommandPoints": 2,
+    "levelUpTraitOrder": [
+      "saboteur",
+      "swift",
+      "ruthless",
+      "inspired"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "rival",
+        "targetMinionTemplateId": "static"
+      }
     ],
     "startingTraitIds": [
       "hacker"
@@ -31,6 +51,21 @@
         "kind": "friend",
         "targetMinionTemplateId": "fingers"
       }
+    ],
+    "startingTraitIds": [
+      "enforcer"
+    ]
+  },
+  {
+    "id": "tiny",
+    "name": "Tiny",
+    "description": "Two meters of quiet menace. Has never once needed to raise his voice.",
+    "hireCommandPoints": 2,
+    "levelUpTraitOrder": [
+      "intimidating",
+      "brutal",
+      "ruthless",
+      "inspired"
     ],
     "startingTraitIds": [
       "enforcer"
@@ -70,6 +105,42 @@
     ],
     "startingTraitIds": [
       "engineer"
+    ]
+  },
+  {
+    "id": "fuse",
+    "name": "Fuse",
+    "description": "Believes every structural problem is three charges away from a structural solution.",
+    "hireCommandPoints": 2,
+    "levelUpTraitOrder": [
+      "fearless",
+      "engineer",
+      "intimidating",
+      "lucky"
+    ],
+    "startingTraitIds": [
+      "saboteur"
+    ]
+  },
+  {
+    "id": "penny",
+    "name": "Penny Dreadful",
+    "description": "Keeps double books for triple agents. Her audits end careers, occasionally on purpose.",
+    "hireCommandPoints": 3,
+    "levelUpTraitOrder": [
+      "connected",
+      "meticulous",
+      "manipulator",
+      "lucky"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "hero",
+        "locationId": "meridian_bank"
+      }
+    ],
+    "startingTraitIds": [
+      "financier"
     ]
   },
   {
@@ -122,7 +193,7 @@
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "fearless",
-      "engineer",
+      "saboteur",
       "brutal",
       "lucky"
     ],
@@ -135,6 +206,50 @@
     "startingLevel": 2,
     "startingTraitIds": [
       "enforcer"
+    ]
+  },
+  {
+    "id": "sable",
+    "name": "Sable",
+    "description": "Steals reputations first, valuables second. Considers alarms a form of applause.",
+    "hireCommandPoints": 3,
+    "levelUpTraitOrder": [
+      "ruthless",
+      "swift",
+      "infiltrator",
+      "lucky"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "rival",
+        "targetMinionTemplateId": "fingers"
+      }
+    ],
+    "startingLevel": 2,
+    "startingTraitIds": [
+      "thief"
+    ]
+  },
+  {
+    "id": "torque",
+    "name": "Torque",
+    "description": "Rebuilds engines blindfolded and bridges without permits. Measures twice, detonates once.",
+    "hireCommandPoints": 3,
+    "levelUpTraitOrder": [
+      "meticulous",
+      "saboteur",
+      "brilliant",
+      "inspired"
+    ],
+    "startingDynamicTraits": [
+      {
+        "kind": "friend",
+        "targetMinionTemplateId": "gasket"
+      }
+    ],
+    "startingLevel": 2,
+    "startingTraitIds": [
+      "engineer"
     ]
   },
   {
@@ -168,6 +283,23 @@
     "startingTraitIds": [
       "infiltrator",
       "thief"
+    ]
+  },
+  {
+    "id": "the_actuary",
+    "name": "The Actuary",
+    "description": "Calculated the exact insurance value of the world. Intends to collect.",
+    "hireCommandPoints": 4,
+    "levelUpTraitOrder": [
+      "brilliant",
+      "connected",
+      "manipulator",
+      "inspired"
+    ],
+    "startingLevel": 3,
+    "startingTraitIds": [
+      "financier",
+      "meticulous"
     ]
   },
   {
@@ -217,8 +349,8 @@
     "hireCommandPoints": 6,
     "levelUpTraitOrder": [
       "brutal",
+      "ruthless",
       "fearless",
-      "brilliant",
       "inspired"
     ],
     "startingDynamicTraits": [

@@ -1124,7 +1124,9 @@ body {
 
 .missions-panel-tab,
 .locations-category-tab,
-.lair-panel-tab {
+.lair-panel-tab,
+.omega-plan-tab,
+.minions-panel-tab {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
@@ -1145,14 +1147,18 @@ body {
 
 .missions-panel-tab:hover,
 .locations-category-tab:hover,
-.lair-panel-tab:hover {
+.lair-panel-tab:hover,
+.omega-plan-tab:hover,
+.minions-panel-tab:hover {
   color: var(--text-0);
   border-color: var(--line-2);
 }
 
 .missions-panel-tab--active,
 .locations-category-tab--active,
-.lair-panel-tab--active {
+.lair-panel-tab--active,
+.omega-plan-tab--active,
+.minions-panel-tab--active {
   color: var(--red-bright);
   background: linear-gradient(180deg, rgba(232, 17, 45, 0.2), rgba(232, 17, 45, 0.06));
   border-color: var(--red);
@@ -1174,7 +1180,9 @@ body {
 }
 
 .locations-category-tabs,
-.lair-panel-tabs {
+.lair-panel-tabs,
+.omega-plan-tabs,
+.minions-panel-tabs {
   display: flex;
   flex-direction: row;
   gap: 0.3rem;
@@ -1941,19 +1949,23 @@ body {
 .omega-plan-name {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-0);
-  text-shadow: 0 0 10px var(--red-glow-soft);
 }
 
 .omega-plan-description {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   line-height: 1.4;
   color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .omega-plan-stage-hint {
@@ -2657,7 +2669,8 @@ body {
 }
 
 .locations-panel-columns,
-.lair-panel-columns {
+.lair-panel-columns,
+.minions-panel-columns {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -2668,7 +2681,8 @@ body {
 }
 
 .locations-panel-column,
-.lair-panel-column {
+.lair-panel-column,
+.minions-panel-column {
   flex: 1 1 0;
   min-width: 11rem;
   display: flex;
@@ -2677,7 +2691,8 @@ body {
 }
 
 .locations-panel-column-title,
-.lair-panel-column-title {
+.lair-panel-column-title,
+.minions-panel-column-title {
   margin: 0;
 }
 
@@ -2698,6 +2713,7 @@ body {
 
 .game-panel.game-panel--assets,
 .game-panel.game-panel--lair,
+.game-panel.game-panel--minions,
 .game-panel.game-panel--missions,
 .game-panel.game-panel--events,
 .game-panel.game-panel--plan-column {
@@ -2762,6 +2778,7 @@ body {
   display: none;
 }
 
+.minions-panel,
 .lair-panel {
   display: flex;
   flex-direction: column;
@@ -3042,15 +3059,34 @@ body {
 
 /* Trait pills */
 .minions-trait-pill {
-  display: inline-block;
-  padding: 0.08rem 0.32rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  padding: 0.08rem 0.35rem;
   margin: 0.1rem 0.05rem 0 0;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.03em;
+  line-height: 1.2;
   background: rgba(64, 26, 30, 0.45);
   border: 1px solid var(--line-1);
   color: var(--text-1);
+  vertical-align: middle;
+}
+
+.minions-trait-pill__icon {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.minions-trait-pill__label {
+  display: inline;
 }
 
 .minions-trait-pill--status-positive {
@@ -3080,7 +3116,11 @@ body {
 /* Mission-card requirement pills: filled + solid border = the player currently
    has the trait/asset; hollow + dotted border + dim text = they don't. */
 .mission-req-pills {
-  display: inline;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  vertical-align: middle;
 }
 
 .minions-trait-pill--req-have {
@@ -3199,8 +3239,23 @@ body {
   display: none !important;
 }
 
+.location-asset-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  vertical-align: middle;
+}
+
+.location-asset-drag-chip,
+.location-asset-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  vertical-align: middle;
+}
+
 .location-asset-drag-chip {
-  display: inline-block;
   cursor: grab;
   padding: 0.08rem 0.35rem;
   border: 1px dashed var(--line-2);

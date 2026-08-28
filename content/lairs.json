@@ -4,16 +4,9 @@
     "name": "Mount Cinder Complex",
     "description": "A hollowed-out volcano fortress: lava-tube hangars, a caldera helipad, and excellent acoustics for monologuing.",
     "availableMissionIds": [
-      "run_the_rackets",
       "smash_and_grab",
       "ghost_heist",
-      "inside_job",
-      "honey_trap",
-      "hire_mercenaries",
-      "paper_empire",
-      "fence_the_loot",
-      "broker_the_secrets",
-      "arm_the_militia"
+      "fence_the_loot"
     ],
     "startingAssets": {
       "dirty_money": 1,

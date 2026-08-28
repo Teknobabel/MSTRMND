@@ -110,6 +110,7 @@ import {
   resolveLocationCardArt,
   resolveMissionCardArt,
   resolveMinionCardArt,
+  resolveOmegaPlanCardArt,
 } from "./ui/cardArt";
 
 /** What each intel step unlocks at a site (hover text on the location card's Intel Level label). */
@@ -182,6 +183,30 @@ const ICON_CROSSHAIR =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>';
 const ICON_SKULL_FILLED =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2C7.1 2 3.5 5.6 3.5 10.2c0 2.9 1.5 5 3.5 6.3V20a1 1 0 0 0 1 1h1.6v-2.2h1.5V21h1.8v-2.2h1.5V21H16a1 1 0 0 0 1-1v-3.5c2-1.3 3.5-3.4 3.5-6.3C20.5 5.6 16.9 2 12 2Zm-3.2 10.8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm6.4 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"/></svg>';
+
+/* Pill SVG icon paths */
+const TRAIT_ICON_SVG_PATHS =
+  '<path d="M12 2H2v10l9.29 9.29a2.4 2.4 0 0 0 3.42 0l6.58-6.58a2.4 2.4 0 0 0 0-3.42L12 2Z"/><circle cx="7" cy="7" r="1.5"/>';
+const ASSET_ICON_SVG_PATHS =
+  '<path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z"/><path d="M2.5 9h19"/>';
+
+function createSvgPillIcon(pathsHtml: string): SVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  svg.setAttribute("class", "minions-trait-pill__icon");
+  svg.innerHTML = pathsHtml;
+  return svg;
+}
+
+function createTraitIconEl(): SVGElement {
+  return createSvgPillIcon(TRAIT_ICON_SVG_PATHS);
+}
+
+function createAssetIconEl(): SVGElement {
+  return createSvgPillIcon(ASSET_ICON_SVG_PATHS);
+}
 
 function statBlockHtml(
   iconHtml: string,
@@ -471,61 +496,95 @@ function assetDisplayNames(
     .join(", ");
 }
 
-/**
- * Mission-card pills for required trait ids, styled like the trait pills on minion cards.
- * Solid border when some roster minion has the trait, dotted border when none does.
- */
-function requiredTraitPillsEl(
+function requirementsDisplayNames(
   catalog: ReturnType<typeof loadContent>,
   traitIds: string[],
-  rosterTraitIds: ReadonlySet<string>,
+  assetIds: string[],
+): string {
+  const parts: string[] = [];
+  if (traitIds.length > 0) {
+    parts.push(traitDisplayNames(catalog, traitIds));
+  }
+  if (assetIds.length > 0) {
+    parts.push(assetDisplayNames(catalog, assetIds));
+  }
+  return parts.length > 0 ? parts.join(", ") : "—";
+}
+
+function createTraitPillEl(
+  catalog: ReturnType<typeof loadContent>,
+  traitId: string,
+  rosterTraitIds?: ReadonlySet<string>,
 ): HTMLElement {
-  const wrap = document.createElement("span");
-  wrap.className = "mission-req-pills";
-  for (const tid of traitIds) {
-    const trait = catalog.traits.find((t) => t.id === tid);
-    const span = document.createElement("span");
-    span.className = "minions-trait-pill";
-    if (trait?.type === "status_negative") {
-      span.classList.add("minions-trait-pill--status-negative");
-    } else if (trait?.type === "status_positive") {
-      span.classList.add("minions-trait-pill--status-positive");
-    }
+  const trait = catalog.traits.find((t) => t.id === traitId);
+  const span = document.createElement("span");
+  span.className = "minions-trait-pill minions-trait-pill--trait";
+  if (trait?.type === "status_negative") {
+    span.classList.add("minions-trait-pill--status-negative");
+  } else if (trait?.type === "status_positive") {
+    span.classList.add("minions-trait-pill--status-positive");
+  }
+  if (rosterTraitIds !== undefined) {
     span.classList.add(
-      rosterTraitIds.has(tid)
+      rosterTraitIds.has(traitId)
         ? "minions-trait-pill--req-have"
         : "minions-trait-pill--req-missing",
     );
-    span.textContent = trait?.name ?? tid;
-    wrap.appendChild(span);
   }
-  return wrap;
+  span.appendChild(createTraitIconEl());
+  const text = document.createElement("span");
+  text.className = "minions-trait-pill__label";
+  text.textContent = trait?.name ?? traitId;
+  span.appendChild(text);
+  return span;
+}
+
+function createAssetPillEl(
+  catalog: ReturnType<typeof loadContent>,
+  assetId: string,
+  hasAsset?: boolean,
+): HTMLElement {
+  const asset = catalog.assets.find((a) => a.id === assetId);
+  const span = document.createElement("span");
+  span.className = "minions-trait-pill minions-trait-pill--asset";
+  if (hasAsset !== undefined) {
+    span.classList.add(
+      hasAsset ? "minions-trait-pill--req-have" : "minions-trait-pill--req-missing",
+    );
+  }
+  span.appendChild(createAssetIconEl());
+  const text = document.createElement("span");
+  text.className = "minions-trait-pill__label";
+  text.textContent = asset?.name ?? assetId;
+  span.appendChild(text);
+  return span;
 }
 
 /**
- * Mission-card pills for required asset slots; duplicate slots consume owned quantity in
- * order, so owning 1 of an asset a mission needs twice shows one solid and one dotted pill.
+ * Combined mission-card requirement pills: traits first, followed by asset requirements,
+ * all on the same line with icons.
  */
-function requiredAssetPillsEl(
+function requiredMissionRequirementPillsEl(
   catalog: ReturnType<typeof loadContent>,
+  traitIds: string[],
+  rosterTraitIds: ReadonlySet<string>,
   assetIds: string[],
   ownedAssets: Readonly<Record<string, number>>,
 ): HTMLElement {
   const wrap = document.createElement("span");
   wrap.className = "mission-req-pills";
+
+  for (const tid of traitIds) {
+    wrap.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds));
+  }
+
   const remaining = new Map<string, number>();
   for (const aid of assetIds) {
     const left = remaining.get(aid) ?? ownedAssets[aid] ?? 0;
     remaining.set(aid, left - 1);
-    const asset = catalog.assets.find((a) => a.id === aid);
-    const span = document.createElement("span");
-    span.className = "minions-trait-pill";
-    span.classList.add(
-      left > 0 ? "minions-trait-pill--req-have" : "minions-trait-pill--req-missing",
-    );
-    span.textContent = asset?.name ?? aid;
-    wrap.appendChild(span);
+    wrap.appendChild(createAssetPillEl(catalog, aid, left > 0));
   }
+
   return wrap;
 }
 
@@ -648,7 +707,7 @@ function formatTargetLocationFilters(filters: MissionTargetLocationFilters): str
   if (security !== undefined && security.length > 0) {
     parts.push(`Security ${security.join(" or ")}`);
   }
-  return parts.length === 0 ? null : parts.join(" · ");
+  return parts.length === 0 ? null : parts.join(" - ");
 }
 
 function formatAssignMissionError(err: GameError): string {
@@ -737,11 +796,7 @@ function initGameController(
   const playerProfilePicEl = req<HTMLImageElement>("player-profile-pic");
   const statsEl = req<HTMLElement>("game-stats");
   const activityPanelEl = req<HTMLElement>("activity-panel");
-  const minionsRosterEl = req<HTMLElement>("minions-roster-list");
-  const minionsAvailableEl = req<HTMLElement>("minions-available-list");
-  const minionsRosterHeading = req<HTMLElement>("minions-roster-heading");
-  const minionsAvailableHeading = req<HTMLElement>("minions-available-heading");
-  const minionsHireGateEl = req<HTMLElement>("minions-hire-gate");
+  const minionsPanelEl = req<HTMLElement>("minions-panel");
   const assignMissionSlotEl = req<HTMLElement>("assign-mission-slot");
   const assignTargetSlotEl = req<HTMLElement>("assign-target-slot");
   const assignTargetFieldEl = req<HTMLElement>("assign-target-field");
@@ -755,7 +810,6 @@ function initGameController(
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
   const assignSubmitChanceEl = req<HTMLElement>("assign-submit-chance");
   const btnExec = req<HTMLButtonElement>("btn-execute-plan");
-  const btnRerollHire = req<HTMLButtonElement>("btn-reroll-hire");
   const turnReportOverlay = req<HTMLElement>("overlay-turn-report");
   const turnReportKicker = req<HTMLElement>("turn-report-kicker");
   const turnReportTitle = req<HTMLElement>("turn-report-title");
@@ -830,6 +884,8 @@ function initGameController(
 
   let locationsCategoryTab: LocationType = "economic";
   let lairPanelTab: "missions" | "upgrades" = "missions";
+  let minionsPanelTab: "roster" | "hire" = "roster";
+  let omegaPlanPanelTab: number | null = null;
   let currentMenu: GameMenu = "dashboard";
 
   function findMissionOrEventTemplate(id: string): MissionTemplate | undefined {
@@ -2023,8 +2079,15 @@ function initGameController(
         securityTraitIds,
         secLevel,
       );
+      const assetRowValue = `${visLabel} (${assetLabel})`;
+      const assetWrap = document.createElement("span");
+      assetWrap.className = "location-asset-static";
+      if (slot && isOccupiedAssetSlot(slot)) {
+        assetWrap.appendChild(createAssetIconEl());
+      }
+      assetWrap.appendChild(document.createTextNode(assetRowValue));
       appendMinionStatRows(dl, [
-        { label: "Asset", value: `${visLabel} (${assetLabel})` },
+        { label: "Asset", value: assetRowValue, valueEl: assetWrap },
         { label: "Slot", value: String(targetPick.slotIndex + 1) },
         {
           label: "Intel level",
@@ -2461,30 +2524,39 @@ function initGameController(
       const siteFilters = missionTargetTypeTargetsLocation(mission.targetType)
         ? formatTargetLocationFilters(mission)
         : null;
+      const targetTypeLabel = formatMissionTargetTypeLabel(mission.targetType);
+      const targetValue =
+        siteFilters !== null ? `${targetTypeLabel} - ${siteFilters}` : targetTypeLabel;
       const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
+      const hasReqs =
+        traitIdsForDisplay.length > 0 || mission.requiredAssetIds.length > 0;
       rows.push(
-        { label: "Mission target type", value: formatMissionTargetTypeLabel(mission.targetType) },
-        ...(siteFilters !== null ? [{ label: "Target must be", value: siteFilters }] : []),
+        { label: "Target", value: targetValue },
         { label: "Start cost", value: `${mission.startCommandPoints} CP` },
         {
           label: "Duration",
           value: `${mission.durationTurns} turn${mission.durationTurns === 1 ? "" : "s"}`,
         },
         {
-          label: "Required traits",
-          value: traitDisplayNames(content, traitIdsForDisplay),
-          ...(traitIdsForDisplay.length > 0
-            ? { valueEl: requiredTraitPillsEl(content, traitIdsForDisplay, rosterTraitIds) }
+          label: "Requirements",
+          value: requirementsDisplayNames(
+            content,
+            traitIdsForDisplay,
+            mission.requiredAssetIds,
+          ),
+          ...(hasReqs
+            ? {
+                valueEl: requiredMissionRequirementPillsEl(
+                  content,
+                  traitIdsForDisplay,
+                  rosterTraitIds,
+                  mission.requiredAssetIds,
+                  state.player.assets,
+                ),
+              }
             : {}),
         },
       );
-      if (mission.requiredAssetIds.length > 0) {
-        rows.push({
-          label: "Required assets",
-          value: assetDisplayNames(content, mission.requiredAssetIds),
-          valueEl: requiredAssetPillsEl(content, mission.requiredAssetIds, state.player.assets),
-        });
-      }
     } else {
       rows.push({ label: "Mission id", value: missionId });
     }
@@ -2613,6 +2685,7 @@ function initGameController(
       dl.appendChild(dd);
     }
 
+    const knownAssetChips: HTMLElement[] = [];
     for (let si = 0; si < assetSlots.length; si += 1) {
       const slot = assetSlots[si]!;
       const knowledge = assetSlotKnowledge(slot, intelLevel);
@@ -2620,9 +2693,6 @@ function initGameController(
         /* Intel 0: the player cannot even count the assets stored here. */
         continue;
       }
-      const dt = document.createElement("dt");
-      dt.textContent = "Asset";
-      const dd = document.createElement("dd");
       if (slot.kind === "empty") {
         if (enableAssignDrag) {
           const chip = document.createElement("span");
@@ -2630,12 +2700,13 @@ function initGameController(
           chip.draggable = false;
           chip.textContent = "—";
           chip.title = "Empty slot";
-          dd.appendChild(chip);
+          knownAssetChips.push(chip);
         } else {
-          dd.textContent = "—";
+          const chip = document.createElement("span");
+          chip.className = "location-asset-static";
+          chip.textContent = "—";
+          knownAssetChips.push(chip);
         }
-        dl.appendChild(dt);
-        dl.appendChild(dd);
         continue;
       }
       const displayValue =
@@ -2647,7 +2718,8 @@ function initGameController(
         const chip = document.createElement("span");
         chip.className = "location-asset-drag-chip";
         chip.draggable = true;
-        chip.textContent = displayValue;
+        chip.appendChild(createAssetIconEl());
+        chip.appendChild(document.createTextNode(displayValue));
         chip.title = `Drag to Plan mission target (slot ${si + 1})`;
         chip.addEventListener("dragstart", (e) => {
           e.stopPropagation();
@@ -2657,10 +2729,26 @@ function initGameController(
           );
           e.dataTransfer!.effectAllowed = "copy";
         });
-        dd.appendChild(chip);
+        knownAssetChips.push(chip);
       } else {
-        dd.textContent = displayValue;
+        const wrap = document.createElement("span");
+        wrap.className = "location-asset-static";
+        wrap.appendChild(createAssetIconEl());
+        wrap.appendChild(document.createTextNode(displayValue));
+        knownAssetChips.push(wrap);
       }
+    }
+
+    if (knownAssetChips.length > 0) {
+      const dt = document.createElement("dt");
+      dt.textContent = "Assets";
+      const dd = document.createElement("dd");
+      const container = document.createElement("span");
+      container.className = "location-asset-pills";
+      for (const chip of knownAssetChips) {
+        container.appendChild(chip);
+      }
+      dd.appendChild(container);
       dl.appendChild(dt);
       dl.appendChild(dd);
     }
@@ -2703,109 +2791,95 @@ function initGameController(
     }
   }
 
-  function renderMinionsPanel(): void {
-    const p = state.player;
-    const eligibleRehires = state.minionRehireQueue.filter(
-      (e) => state.turnNumber >= e.availableFromTurn,
-    );
-    const hireOfferCount = state.availableMinionTemplateIds.length + eligibleRehires.length;
-    minionsRosterHeading.textContent = `Your roster (${p.minions.length}/${p.maxRosterSize})`;
-    minionsAvailableHeading.textContent = `Available to hire (${hireOfferCount})`;
-
-    /* Infamy gates which startingLevel templates the pool will offer (see pickHireOfferTemplateIds). */
-    const thresholds = content.balance.hireLevelInfamyThresholds;
-    const levelCap = maxHireableStartingLevel(p.infamy, thresholds);
-    const nextGate = nextHireLevelInfamyThreshold(p.infamy, thresholds);
-    minionsHireGateEl.textContent =
-      nextGate === null
-        ? `Recruiting up to level ${levelCap} — every tier unlocked.`
-        : `Recruiting up to level ${levelCap}. Level ${levelCap + 1} recruits appear at ${nextGate} infamy (now ${p.infamy}).`;
-
-    minionsRosterEl.innerHTML = "";
+  function fillMinionsRosterInto(container: HTMLElement): void {
     if (state.player.minions.length === 0) {
       const empty = document.createElement("p");
       empty.className = "minions-panel-empty";
       empty.textContent = "None hired yet.";
-      minionsRosterEl.appendChild(empty);
-    } else {
-      const busy = busyInstanceIds(state.activeMissions);
-      const mainOnly = state.phase === "main";
-      for (const inst of state.player.minions) {
-        const tpl = content.minions.find((m) => m.id === inst.templateId);
-        const card = document.createElement("article");
-        card.className = "minions-card minions-card--roster";
-        card.dataset.assignInstanceId = inst.instanceId;
-        const isBusy = busy.has(inst.instanceId);
-        const canDrag = mainOnly && !isBusy;
-        card.draggable = canDrag;
-        if (canDrag) {
-          card.classList.add("assign-draggable-minion");
-        }
-        if (isBusy) {
-          card.classList.add("minions-card--busy");
-        }
-        const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
-        const title = document.createElement("h4");
-        title.className = "minions-card-title";
-        title.textContent = tpl?.name ?? inst.templateId;
-        body.appendChild(title);
-        const activeForMinion = state.activeMissions.find((am) =>
-          am.participantInstanceIds.includes(inst.instanceId),
-        );
-        const statusValue = activeForMinion
-          ? content.missions.find((m) => m.id === activeForMinion.missionTemplateId)
-              ?.name ?? activeForMinion.missionTemplateId
-          : "Waiting";
-        const dl = document.createElement("dl");
-        dl.className = "minions-card-stats";
-        appendMinionStatRows(dl, [
-          { label: "Status", value: statusValue },
-          { label: "CP cost", value: String(tpl?.hireCommandPoints ?? "—") },
-          { label: "Level", value: String(inst.currentLevel) },
-          { label: "XP", value: String(inst.currentExperience) },
-        ]);
-        appendMinionTraitsRow(dl, content, inst.traitIds, {
-          roster: state.player.minions,
-          traits: inst.dynamicTraits,
-        });
-        body.appendChild(dl);
-
-        const fireBtn = document.createElement("button");
-        fireBtn.type = "button";
-        fireBtn.className = "minions-card-fire";
-        fireBtn.setAttribute(
-          "aria-label",
-          `Fire ${tpl?.name ?? "minion"} from roster`,
-        );
-        fireBtn.innerHTML =
-          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
-        const canFire = mainOnly && !isBusy;
-        fireBtn.disabled = !canFire;
-        if (!mainOnly) {
-          fireBtn.title = "Only during Main Phase";
-        } else if (isBusy) {
-          fireBtn.title = "Cannot fire while on a mission";
-        } else {
-          fireBtn.title = "Remove from roster (returns to hire pool after cooldown)";
-        }
-        fireBtn.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          if (state.phase !== "main" || busy.has(inst.instanceId)) {
-            return;
-          }
-          dispatch((s) => fireMinion(s, content, inst.instanceId));
-        });
-        fireBtn.addEventListener("mousedown", (ev) => {
-          ev.stopPropagation();
-        });
-        card.appendChild(fireBtn);
-
-        minionsRosterEl.appendChild(card);
-      }
+      container.appendChild(empty);
+      return;
     }
+    const busy = busyInstanceIds(state.activeMissions);
+    const mainOnly = state.phase === "main";
+    for (const inst of state.player.minions) {
+      const tpl = content.minions.find((m) => m.id === inst.templateId);
+      const card = document.createElement("article");
+      card.className = "minions-card minions-card--roster";
+      card.dataset.assignInstanceId = inst.instanceId;
+      const isBusy = busy.has(inst.instanceId);
+      const canDrag = mainOnly && !isBusy;
+      card.draggable = canDrag;
+      if (canDrag) {
+        card.classList.add("assign-draggable-minion");
+      }
+      if (isBusy) {
+        card.classList.add("minions-card--busy");
+      }
+      const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
+      const title = document.createElement("h4");
+      title.className = "minions-card-title";
+      title.textContent = tpl?.name ?? inst.templateId;
+      body.appendChild(title);
+      const activeForMinion = state.activeMissions.find((am) =>
+        am.participantInstanceIds.includes(inst.instanceId),
+      );
+      const statusValue = activeForMinion
+        ? content.missions.find((m) => m.id === activeForMinion.missionTemplateId)
+            ?.name ?? activeForMinion.missionTemplateId
+        : "Waiting";
+      const dl = document.createElement("dl");
+      dl.className = "minions-card-stats";
+      appendMinionStatRows(dl, [
+        { label: "Status", value: statusValue },
+        { label: "CP cost", value: String(tpl?.hireCommandPoints ?? "—") },
+        { label: "Level", value: String(inst.currentLevel) },
+        { label: "XP", value: String(inst.currentExperience) },
+      ]);
+      appendMinionTraitsRow(dl, content, inst.traitIds, {
+        roster: state.player.minions,
+        traits: inst.dynamicTraits,
+      });
+      body.appendChild(dl);
 
-    minionsAvailableEl.innerHTML = "";
+      const fireBtn = document.createElement("button");
+      fireBtn.type = "button";
+      fireBtn.className = "minions-card-fire";
+      fireBtn.setAttribute(
+        "aria-label",
+        `Fire ${tpl?.name ?? "minion"} from roster`,
+      );
+      fireBtn.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+      const canFire = mainOnly && !isBusy;
+      fireBtn.disabled = !canFire;
+      if (!mainOnly) {
+        fireBtn.title = "Only during Main Phase";
+      } else if (isBusy) {
+        fireBtn.title = "Cannot fire while on a mission";
+      } else {
+        fireBtn.title = "Remove from roster (returns to hire pool after cooldown)";
+      }
+      fireBtn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (state.phase !== "main" || busy.has(inst.instanceId)) {
+          return;
+        }
+        dispatch((s) => fireMinion(s, content, inst.instanceId));
+      });
+      fireBtn.addEventListener("mousedown", (ev) => {
+        ev.stopPropagation();
+      });
+      card.appendChild(fireBtn);
+
+      container.appendChild(card);
+    }
+  }
+
+  function fillMinionsHireInto(container: HTMLElement): void {
+    const eligibleRehires = state.minionRehireQueue.filter(
+      (e) => state.turnNumber >= e.availableFromTurn,
+    );
     if (
       state.availableMinionTemplateIds.length === 0 &&
       eligibleRehires.length === 0
@@ -2816,7 +2890,7 @@ function initGameController(
         content.minions.length === 0
           ? "No minion templates in catalog."
           : "No hire offers right now.";
-      minionsAvailableEl.appendChild(empty);
+      container.appendChild(empty);
     }
     for (const templateId of state.availableMinionTemplateIds) {
       const tpl = content.minions.find((m) => m.id === templateId);
@@ -2875,7 +2949,7 @@ function initGameController(
       actions.appendChild(hireBtn);
       body.appendChild(actions);
 
-      minionsAvailableEl.appendChild(card);
+      container.appendChild(card);
     }
 
     for (const { minion: rehireInst } of eligibleRehires) {
@@ -2933,8 +3007,148 @@ function initGameController(
 
       actions.appendChild(hireBtn);
       body.appendChild(actions);
-      minionsAvailableEl.appendChild(card);
+      container.appendChild(card);
     }
+  }
+
+  function renderMinionsPanel(): void {
+    minionsPanelEl.innerHTML = "";
+    const p = state.player;
+    const eligibleRehires = state.minionRehireQueue.filter(
+      (e) => state.turnNumber >= e.availableFromTurn,
+    );
+    const hireOfferCount = state.availableMinionTemplateIds.length + eligibleRehires.length;
+
+    /* Infamy gates which startingLevel templates the pool will offer (see pickHireOfferTemplateIds). */
+    const thresholds = content.balance.hireLevelInfamyThresholds;
+    const levelCap = maxHireableStartingLevel(p.infamy, thresholds);
+    const nextGate = nextHireLevelInfamyThreshold(p.infamy, thresholds);
+    const hireGateText =
+      nextGate === null
+        ? `Recruiting up to level ${levelCap} — every tier unlocked.`
+        : `Recruiting up to level ${levelCap}. Level ${levelCap + 1} recruits appear at ${nextGate} infamy (now ${p.infamy}).`;
+
+    function buildRosterSection(isColumn: boolean): HTMLElement {
+      const section = document.createElement("section");
+      section.className = isColumn ? "minions-panel-column" : "minions-panel-section";
+      section.setAttribute("aria-label", "Hired minions");
+
+      const heading = document.createElement("h3");
+      heading.id = "minions-roster-heading";
+      heading.className = isColumn
+        ? "game-controls-heading minions-panel-column-title"
+        : "game-controls-heading";
+      heading.textContent = `Your roster (${p.minions.length}/${p.maxRosterSize})`;
+      section.appendChild(heading);
+
+      const list = document.createElement("div");
+      list.id = "minions-roster-list";
+      list.className = "minions-panel-list";
+      fillMinionsRosterInto(list);
+      section.appendChild(list);
+      return section;
+    }
+
+    function buildHireSection(isColumn: boolean): HTMLElement {
+      const section = document.createElement("section");
+      section.className = isColumn ? "minions-panel-column" : "minions-panel-section";
+      section.setAttribute("aria-label", "Minions available for hire");
+
+      const headingRow = document.createElement("div");
+      headingRow.className = "minions-section-heading-row";
+
+      const heading = document.createElement("h3");
+      heading.id = "minions-available-heading";
+      heading.className = isColumn
+        ? "game-controls-heading minions-panel-column-title"
+        : "game-controls-heading";
+      heading.textContent = `Available to hire (${hireOfferCount})`;
+      headingRow.appendChild(heading);
+
+      const btnReroll = document.createElement("button");
+      btnReroll.type = "button";
+      btnReroll.className = "btn btn-reroll-hire";
+      btnReroll.id = "btn-reroll-hire";
+      btnReroll.setAttribute("aria-label", "Reroll hire offers for 1 CP");
+      btnReroll.textContent = "Reroll";
+
+      const rerollCost = content.balance.rerollHireOffersCp;
+      const mainOnly = state.phase === "main";
+      const canRerollOffers = mainOnly && p.commandPoints >= rerollCost;
+      btnReroll.disabled = !canRerollOffers;
+      if (!mainOnly) {
+        btnReroll.title = "Only during Main Phase";
+      } else if (p.commandPoints < rerollCost) {
+        btnReroll.title = `Need ${rerollCost} CP (${p.commandPoints} available)`;
+      } else {
+        btnReroll.title = `Spend ${rerollCost} CP to draw a new hire pool`;
+      }
+      btnReroll.addEventListener("click", () => {
+        dispatch((s) => rerollHireOffers(s, content, rng));
+      });
+      headingRow.appendChild(btnReroll);
+      section.appendChild(headingRow);
+
+      const hireGate = document.createElement("p");
+      hireGate.id = "minions-hire-gate";
+      hireGate.className = "minions-hire-gate";
+      hireGate.setAttribute("aria-live", "polite");
+      hireGate.textContent = hireGateText;
+      section.appendChild(hireGate);
+
+      const list = document.createElement("div");
+      list.id = "minions-available-list";
+      list.className = "minions-panel-list";
+      fillMinionsHireInto(list);
+      section.appendChild(list);
+      return section;
+    }
+
+    if (currentMenu === "minions") {
+      const columnsWrap = document.createElement("div");
+      columnsWrap.className = "minions-panel-columns";
+      columnsWrap.appendChild(buildRosterSection(true));
+      columnsWrap.appendChild(buildHireSection(true));
+      minionsPanelEl.appendChild(columnsWrap);
+      return;
+    }
+
+    const tablist = document.createElement("div");
+    tablist.className = "minions-panel-tabs";
+    tablist.setAttribute("role", "tablist");
+    tablist.setAttribute("aria-label", "Minions sections");
+
+    const tabDefs: { id: "roster" | "hire"; label: string }[] = [
+      { id: "roster", label: "Roster" },
+      { id: "hire", label: "For Hire" },
+    ];
+    for (const def of tabDefs) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "minions-panel-tab";
+      if (def.id === minionsPanelTab) {
+        tab.classList.add("minions-panel-tab--active");
+      }
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", def.id === minionsPanelTab ? "true" : "false");
+      tab.id = `minions-panel-tab-${def.id}`;
+      tab.textContent = def.label;
+      tab.addEventListener("click", () => {
+        if (minionsPanelTab === def.id) {
+          return;
+        }
+        minionsPanelTab = def.id;
+        renderMinionsPanel();
+      });
+      tablist.appendChild(tab);
+    }
+    minionsPanelEl.appendChild(tablist);
+
+    const activePage =
+      minionsPanelTab === "roster" ? buildRosterSection(false) : buildHireSection(false);
+    activePage.setAttribute("role", "tabpanel");
+    activePage.setAttribute("aria-labelledby", `minions-panel-tab-${minionsPanelTab}`);
+    minionsPanelEl.appendChild(activePage);
   }
 
   type MissionCardDragMeta =
@@ -2999,32 +3213,23 @@ function initGameController(
       omegaPlanPanelEl.appendChild(empty);
       return;
     }
+    const currentPlan = plan;
 
     const header = document.createElement("div");
     header.className = "omega-plan-header";
-    /* Art only when authored — omega plans have no default placeholder. */
-    const headerBody =
-      plan.cardArt !== undefined ? appendCardArtShell(header, plan.cardArt) : header;
+    const headerBody = appendCardArtShell(header, resolveOmegaPlanCardArt(currentPlan));
 
     const nameEl = document.createElement("p");
     nameEl.className = "omega-plan-name";
-    nameEl.textContent = plan.name;
+    nameEl.textContent = currentPlan.name;
     headerBody.appendChild(nameEl);
 
-    const descEl = document.createElement("p");
-    descEl.className = "omega-plan-description";
-    descEl.textContent = plan.description;
-    headerBody.appendChild(descEl);
-
-    const stageHint = document.createElement("p");
-    stageHint.className = "omega-plan-stage-hint";
-    const activeStageRequired = omegaStageRequiredMissions(plan, state.activeOmegaStageIndex);
-    const activeStageDone = Math.min(
-      activeStageRequired,
-      state.omegaStageProgress[state.activeOmegaStageIndex]!.filter(Boolean).length,
-    );
-    stageHint.textContent = `Active phase: ${state.activeOmegaStageIndex + 1} · Missions complete: ${activeStageDone} of ${activeStageRequired}`;
-    headerBody.appendChild(stageHint);
+    if (currentPlan.description) {
+      const descEl = document.createElement("p");
+      descEl.className = "omega-plan-description";
+      descEl.textContent = currentPlan.description;
+      headerBody.appendChild(descEl);
+    }
 
     omegaPlanPanelEl.appendChild(header);
 
@@ -3035,12 +3240,10 @@ function initGameController(
       "Final Subjugation",
     ] as const;
 
-    const phasesWrap = document.createElement("div");
-    phasesWrap.className = "omega-plan-phases";
-
     const mainOnly = state.phase === "main";
-    for (let stageIndex = 0; stageIndex < 3; stageIndex += 1) {
-      const stage = plan.stages[stageIndex]!;
+
+    function buildPhaseSection(stageIndex: number): HTMLElement {
+      const stage = currentPlan.stages[stageIndex]!;
       const section = document.createElement("section");
       section.className = "omega-plan-phase";
       section.setAttribute("aria-label", `Phase ${stageIndex + 1}`);
@@ -3054,7 +3257,7 @@ function initGameController(
         section.classList.add("omega-plan-phase--locked");
       }
 
-      const stageRequired = omegaStageRequiredMissions(plan, stageIndex);
+      const stageRequired = omegaStageRequiredMissions(currentPlan, stageIndex);
 
       const phaseHeader = document.createElement("div");
       phaseHeader.className = "omega-phase-header";
@@ -3156,10 +3359,58 @@ function initGameController(
       }
 
       section.appendChild(missionWrap);
-      phasesWrap.appendChild(section);
+      return section;
     }
 
-    omegaPlanPanelEl.appendChild(phasesWrap);
+    if (currentMenu === "omega") {
+      const phasesWrap = document.createElement("div");
+      phasesWrap.className = "omega-plan-phases";
+      for (let stageIndex = 0; stageIndex < 3; stageIndex += 1) {
+        phasesWrap.appendChild(buildPhaseSection(stageIndex));
+      }
+      omegaPlanPanelEl.appendChild(phasesWrap);
+      return;
+    }
+
+    const tablist = document.createElement("div");
+    tablist.className = "omega-plan-tabs";
+    tablist.setAttribute("role", "tablist");
+    tablist.setAttribute("aria-label", "Omega Plan phases");
+
+    const tabDefs = [
+      { id: 0, label: "Phase 1" },
+      { id: 1, label: "Phase 2" },
+      { id: 2, label: "Phase 3" },
+    ];
+
+    const activeStageTab = omegaPlanPanelTab ?? state.activeOmegaStageIndex;
+
+    for (const def of tabDefs) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "omega-plan-tab";
+      if (def.id === activeStageTab) {
+        tab.classList.add("omega-plan-tab--active");
+      }
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", def.id === activeStageTab ? "true" : "false");
+      tab.id = `omega-plan-tab-${def.id + 1}`;
+      tab.textContent = def.label;
+      tab.addEventListener("click", () => {
+        if (omegaPlanPanelTab === def.id) {
+          return;
+        }
+        omegaPlanPanelTab = def.id;
+        renderOmegaPlanPanel();
+      });
+      tablist.appendChild(tab);
+    }
+    omegaPlanPanelEl.appendChild(tablist);
+
+    const activeSection = buildPhaseSection(activeStageTab);
+    activeSection.setAttribute("role", "tabpanel");
+    activeSection.setAttribute("aria-labelledby", `omega-plan-tab-${activeStageTab + 1}`);
+    omegaPlanPanelEl.appendChild(activeSection);
   }
 
   function renderAssetsPanel(): void {
@@ -3376,6 +3627,8 @@ function initGameController(
           : { playerAssets: state.player.assets }),
       };
       const mergedDisplay = mergedRequiredTraitIdsSorted(mission, successOpts);
+      const hasReqs =
+        mergedDisplay.length > 0 || mission.requiredAssetIds.length > 0;
       rows.push(
         { label: "Start cost", value: `${mission.startCommandPoints} CP (paid)` },
         {
@@ -3385,39 +3638,34 @@ function initGameController(
           } remaining`,
         },
         {
-          label: "Required traits",
-          value: traitDisplayNames(content, mergedDisplay),
-          ...(mergedDisplay.length > 0
+          label: "Requirements",
+          value: requirementsDisplayNames(
+            content,
+            mergedDisplay,
+            mission.requiredAssetIds,
+          ),
+          ...(hasReqs
             ? {
-                valueEl: requiredTraitPillsEl(
+                valueEl: requiredMissionRequirementPillsEl(
                   content,
                   mergedDisplay,
                   unionParticipantTraitIds(state.player.minions),
+                  mission.requiredAssetIds,
+                  state.player.assets,
                 ),
               }
             : {}),
         },
       );
       if (mission.requiredAssetIds.length > 0) {
-        rows.push(
-          {
-            label: "Required assets",
-            value: assetDisplayNames(content, mission.requiredAssetIds),
-            valueEl: requiredAssetPillsEl(
-              content,
-              mission.requiredAssetIds,
-              state.player.assets,
-            ),
-          },
-          {
-            label: "Planned assets",
-            value: plannedAssetSlotsDisplay(
-              content,
-              mission.requiredAssetIds,
-              am.plannedAssetIds,
-            ),
-          },
-        );
+        rows.push({
+          label: "Planned assets",
+          value: plannedAssetSlotsDisplay(
+            content,
+            mission.requiredAssetIds,
+            am.plannedAssetIds,
+          ),
+        });
       }
       if (am.supportAssetIds.length > 0) {
         rows.push({
@@ -4601,6 +4849,8 @@ function initGameController(
     renderAssetsPanel();
     renderMissionsPanel();
     renderLairPanel();
+    renderOmegaPlanPanel();
+    renderMinionsPanel();
   }
 
   for (const button of menuButtons) {
@@ -5177,7 +5427,6 @@ function initGameController(
 
   function refresh(): void {
     reconcileStagedEventMissionWithState();
-    const p = state.player;
     reconcileAssignSlots();
     syncAssignAssetSlotArrayWithMission();
     reconcileStagedAssetSlots();
@@ -5207,17 +5456,6 @@ function initGameController(
     renderLairPanel();
     renderActivityPanel();
     applyGameMenuVisibility();
-
-    const rerollCost = content.balance.rerollHireOffersCp;
-    const canRerollOffers = mainOnly && p.commandPoints >= rerollCost;
-    btnRerollHire.disabled = !canRerollOffers;
-    if (!mainOnly) {
-      btnRerollHire.title = "Only during Main Phase";
-    } else if (p.commandPoints < rerollCost) {
-      btnRerollHire.title = `Need ${rerollCost} CP (${p.commandPoints} available)`;
-    } else {
-      btnRerollHire.title = `Spend ${rerollCost} CP to draw a new hire pool`;
-    }
   }
 
   /**
@@ -5334,11 +5572,7 @@ function initGameController(
     skipTurnReportMissions();
   });
 
-  btnRerollHire.addEventListener("click", () => {
-    dispatch((s) => rerollHireOffers(s, content, rng));
-  });
-
-  minionsRosterEl.addEventListener("dragstart", (e) => {
+  minionsPanelEl.addEventListener("dragstart", (e) => {
     const t = e.target as HTMLElement | null;
     const card = t?.closest("[data-assign-instance-id]") as HTMLElement | null;
     if (!card?.dataset.assignInstanceId) {
@@ -5354,7 +5588,7 @@ function initGameController(
     dndDragSource = { kind: "roster" };
   });
 
-  minionsRosterEl.addEventListener("dragend", () => {
+  minionsPanelEl.addEventListener("dragend", () => {
     if (dndDragSource?.kind === "roster") {
       dndDragSource = null;
     }

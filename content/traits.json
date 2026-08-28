@@ -40,6 +40,16 @@
     "type": "primary"
   },
   {
+    "id": "saboteur",
+    "name": "Saboteur",
+    "type": "primary"
+  },
+  {
+    "id": "financier",
+    "name": "Financier",
+    "type": "primary"
+  },
+  {
     "id": "stealthy",
     "name": "Stealthy",
     "type": "secondary"
@@ -72,6 +82,21 @@
   {
     "id": "connected",
     "name": "Connected",
+    "type": "secondary"
+  },
+  {
+    "id": "intimidating",
+    "name": "Intimidating",
+    "type": "secondary"
+  },
+  {
+    "id": "ruthless",
+    "name": "Ruthless",
+    "type": "secondary"
+  },
+  {
+    "id": "meticulous",
+    "name": "Meticulous",
     "type": "secondary"
   },
   {

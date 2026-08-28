@@ -36,33 +36,6 @@
     "targetType": "none"
   },
   {
-    "id": "run_the_rackets",
-    "name": "Run the Rackets",
-    "description": "Protection, smuggling, a crooked card room — the classics still pay.",
-    "durationTurns": 1,
-    "onSuccessEffects": [
-      {
-        "kind": "gain_assets",
-        "assetIds": [
-          "dirty_money"
-        ]
-      }
-    ],
-    "requiredTraitIds": [
-      "enforcer",
-      "connected"
-    ],
-    "startCommandPoints": 1,
-    "targetLocationLevels": [
-      1,
-      2
-    ],
-    "targetLocationTypes": [
-      "economic"
-    ],
-    "targetType": "location"
-  },
-  {
     "id": "smash_and_grab",
     "name": "Smash and Grab",
     "description": "Subtlety is for people who can't lift a vault door.",
@@ -96,7 +69,7 @@
     "requiredTraitIds": [
       "thief",
       "stealthy",
-      "hacker"
+      "meticulous"
     ],
     "startCommandPoints": 3,
     "targetType": "asset_hidden"
@@ -120,73 +93,6 @@
     "targetType": "location"
   },
   {
-    "id": "honey_trap",
-    "name": "The Honey Trap",
-    "description": "Someone important is about to make a very well-documented mistake.",
-    "durationTurns": 2,
-    "onSuccessEffects": [
-      {
-        "kind": "gain_assets",
-        "assetIds": [
-          "blackmail_dossier"
-        ]
-      }
-    ],
-    "requiredTraitIds": [
-      "manipulator",
-      "magnetic"
-    ],
-    "startCommandPoints": 2,
-    "targetLocationTypes": [
-      "political"
-    ],
-    "targetType": "location"
-  },
-  {
-    "id": "hire_mercenaries",
-    "name": "Hire Mercenaries",
-    "description": "Cash up front, no questions, and a company of guns that speak invoice.",
-    "durationTurns": 1,
-    "onSuccessEffects": [
-      {
-        "kind": "gain_assets",
-        "assetIds": [
-          "mercenary_contracts"
-        ]
-      }
-    ],
-    "requiredAssetIds": [
-      "dirty_money"
-    ],
-    "requiredTraitIds": [
-      "connected"
-    ],
-    "startCommandPoints": 1,
-    "targetType": "none"
-  },
-  {
-    "id": "paper_empire",
-    "name": "Paper Empire",
-    "description": "Incorporate, dissolve, repeat — until the money forgets its own name.",
-    "durationTurns": 1,
-    "onSuccessEffects": [
-      {
-        "kind": "gain_assets",
-        "assetIds": [
-          "shell_companies"
-        ]
-      }
-    ],
-    "requiredAssetIds": [
-      "dirty_money"
-    ],
-    "requiredTraitIds": [
-      "manipulator"
-    ],
-    "startCommandPoints": 1,
-    "targetType": "none"
-  },
-  {
     "id": "fence_the_loot",
     "name": "Fence the Loot",
     "description": "Gold is lovely, but liquidity is lovelier.",
@@ -204,7 +110,7 @@
       "gold_bullion"
     ],
     "requiredTraitIds": [
-      "connected"
+      "thief"
     ],
     "startCommandPoints": 1,
     "targetType": "none"
@@ -212,7 +118,7 @@
   {
     "id": "broker_the_secrets",
     "name": "Broker the Secrets",
-    "description": "Sell the file back to the people it embarrasses. Keep a copy, obviously.",
+    "description": "Sell the stolen file back to the people it embarrasses. Keep a copy, obviously.",
     "durationTurns": 1,
     "onSuccessEffects": [
       {
@@ -235,7 +141,7 @@
   {
     "id": "arm_the_militia",
     "name": "Arm the Militia",
-    "description": "One prototype, reverse-engineered and mass-produced for very grateful clients.",
+    "description": "One stolen prototype, reverse-engineered for very grateful clients with very loyal soldiers.",
     "durationTurns": 1,
     "onSuccessEffects": [
       {
@@ -250,9 +156,32 @@
       "prototype_railgun"
     ],
     "requiredTraitIds": [
-      "connected"
+      "enforcer"
     ],
     "startCommandPoints": 1,
+    "targetType": "none"
+  },
+  {
+    "id": "forge_the_lens",
+    "name": "Forge the Midnight Lens",
+    "description": "The Foundry pours a mirror no observatory on Earth could grind. The array is waiting for it.",
+    "durationTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "gain_assets",
+        "assetIds": [
+          "midnight_lens"
+        ]
+      }
+    ],
+    "requiredAssetIds": [
+      "dirty_money"
+    ],
+    "requiredTraitIds": [
+      "engineer",
+      "scientist"
+    ],
+    "startCommandPoints": 2,
     "targetType": "none"
   },
   {
@@ -389,6 +318,10 @@
       {
         "kind": "unlock_lair_mission",
         "missionId": "satellite_scan"
+      },
+      {
+        "kind": "unlock_lair_mission",
+        "missionId": "inside_job"
       }
     ],
     "requiredTraitIds": [
@@ -448,7 +381,7 @@
   {
     "id": "upg_war_room",
     "name": "Holographic War Room",
-    "description": "The whole planet in glowing miniature, and room for one more schemer at the table.",
+    "description": "The whole planet in glowing miniature, room for one more schemer at the table — and below it all, the Foundry comes online.",
     "durationTurns": 2,
     "onSuccessEffects": [
       {
@@ -458,6 +391,10 @@
       {
         "kind": "max_command_points_per_turn_delta",
         "delta": 1
+      },
+      {
+        "kind": "unlock_lair_mission",
+        "missionId": "forge_the_lens"
       }
     ],
     "requiredTraitIds": [
@@ -470,7 +407,7 @@
   {
     "id": "upg_propaganda",
     "name": "Propaganda Broadcast Array",
-    "description": "Your legend, in surround sound, on every frequency the world still trusts.",
+    "description": "Your legend, in surround sound, on every frequency the world still trusts — and below the transmitters, the Foundry comes online.",
     "durationTurns": 2,
     "onSuccessEffects": [
       {
@@ -481,6 +418,10 @@
         "kind": "add_success_chance_modifier",
         "delta": 10,
         "turns": 3
+      },
+      {
+        "kind": "unlock_lair_mission",
+        "missionId": "forge_the_lens"
       }
     ],
     "requiredTraitIds": [
@@ -642,7 +583,6 @@
       }
     ],
     "requiredAssetIds": [
-      "dirty_money",
       "dirty_money"
     ],
     "requiredTraitIds": [
@@ -751,7 +691,7 @@
   {
     "id": "om2_aerodyne",
     "name": "Hostile Takeover: AeroDyne",
-    "description": "Buy the launch pads with money that doesn't exist through companies that never did.",
+    "description": "Collateralize the tender with bullion nobody can trace and a board nobody dares refuse.",
     "durationTurns": 2,
     "onSuccessEffects": [
       {
@@ -764,11 +704,10 @@
       }
     ],
     "requiredAssetIds": [
-      "shell_companies",
-      "dirty_money"
+      "gold_bullion"
     ],
     "requiredTraitIds": [
-      "manipulator",
+      "financier",
       "connected",
       "brilliant"
     ],
@@ -815,10 +754,11 @@
       }
     ],
     "requiredAssetIds": [
+      "midnight_lens",
       "mercenary_contracts"
     ],
     "requiredTraitIds": [
-      "enforcer",
+      "saboteur",
       "hacker",
       "tactician"
     ],
@@ -859,6 +799,7 @@
       }
     ],
     "requiredAssetIds": [
+      "midnight_lens",
       "blackmail_dossier"
     ],
     "requiredTraitIds": [
@@ -911,12 +852,12 @@
       }
     ],
     "requiredAssetIds": [
-      "shell_companies",
+      "midnight_lens",
       "dirty_money"
     ],
     "requiredTraitIds": [
       "hacker",
-      "manipulator",
+      "financier",
       "brilliant"
     ],
     "startCommandPoints": 4,

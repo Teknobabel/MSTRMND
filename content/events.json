@@ -21,6 +21,52 @@
     "targetType": "none"
   },
   {
+    "id": "evt_insider_tip",
+    "name": "Insider Tip",
+    "description": "A night-shift guard with gambling debts is selling floor plans. For one weekend, the world leaves its curtains open.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "onSuccessEffects": [
+      {
+        "kind": "reveal_hidden_assets_global",
+        "count": 3
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "connected"
+    ],
+    "startCommandPoints": 1,
+    "targetType": "none"
+  },
+  {
+    "id": "evt_vault_blueprints",
+    "name": "Stolen Vault Blueprints",
+    "description": "An architect's archive walks out the door. Every strongroom she ever designed is suddenly a diagram you own.",
+    "durationTurns": 1,
+    "lifetimeTurns": 2,
+    "minInfamy": 20,
+    "onSuccessEffects": [
+      {
+        "kind": "reveal_hidden_assets_by_location_type",
+        "count": 2,
+        "locationType": "economic"
+      },
+      {
+        "kind": "intel_level_delta_by_location_type",
+        "delta": 1,
+        "locationType": "economic"
+      }
+    ],
+    "requiredAssetIds": [],
+    "requiredTraitIds": [
+      "thief",
+      "meticulous"
+    ],
+    "startCommandPoints": 2,
+    "targetType": "none"
+  },
+  {
     "id": "evt_gala",
     "name": "The Viridian Gala",
     "description": "Every minister worth compromising is at one party tonight. The champagne loosens more than ties.",
@@ -249,7 +295,7 @@
     ],
     "requiredAssetIds": [],
     "requiredTraitIds": [
-      "manipulator",
+      "financier",
       "connected"
     ],
     "startCommandPoints": 2,
@@ -308,8 +354,8 @@
     ],
     "requiredAssetIds": [],
     "requiredTraitIds": [
-      "tactician",
-      "brutal"
+      "ruthless",
+      "intimidating"
     ],
     "startCommandPoints": 2,
     "targetType": "none"

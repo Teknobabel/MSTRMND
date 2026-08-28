@@ -56,7 +56,7 @@ const LAIR_CARDS = () =>
     return {
       index,
       name: card.querySelector(".asset-card-title")?.textContent ?? "",
-      targetType: row("Mission target type"),
+      targetType: row("Target"),
       cost: Number.parseInt(row("Start cost"), 10),
       duration: row("Duration"),
     };

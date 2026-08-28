@@ -2,7 +2,7 @@
   "agentChallengeTraitPenalty": 20,
   "agentInvestigatorFailureHeat": 5,
   "assetsPerLocationMax": 3,
-  "assetsPerLocationMin": 1,
+  "assetsPerLocationMin": 2,
   "dynamicTraitModifiers": {
     "ally": 10,
     "friend": 5,
@@ -25,7 +25,7 @@
   ],
   "infamyFailureDelta": 0,
   "infamySuccessDelta": 5,
-  "initialIntelSitesAtOne": 2,
+  "initialIntelSitesAtOne": 3,
   "initialIntelSitesAtTwo": 1,
   "locationAffinity": {
     "heroThreshold": 3,
@@ -56,8 +56,8 @@
   "startingMaxCommandPoints": 5,
   "startingMaxConcurrentMissions": 2,
   "startingMaxHireOffers": 3,
-  "startingMaxParticipantsPerMission": 3,
-  "startingMaxRosterSize": 5,
+  "startingMaxParticipantsPerMission": 2,
+  "startingMaxRosterSize": 3,
   "startingMaxSupportAssets": 1,
   "statusNegativePenalty": 20,
   "statusPositiveBonus": 10

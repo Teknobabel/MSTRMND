@@ -5,6 +5,7 @@ import type {
   LocationTemplate,
   MissionTemplate,
   MinionTemplate,
+  OmegaPlanTemplate,
 } from "../game/types";
 
 /** Shipped placeholders under `public/assets/cards/`. */
@@ -13,9 +14,14 @@ export const DEFAULT_MINION_CARD_ART = "/assets/cards/minion.png";
 export const DEFAULT_LOCATION_CARD_ART = "/assets/cards/location.png";
 export const DEFAULT_LAIR_CARD_ART = "/assets/cards/lair.png";
 export const DEFAULT_ASSET_CARD_ART = "/assets/cards/asset.png";
+export const DEFAULT_OMEGA_PLAN_CARD_ART = "/assets/cards/mission.png";
 
 export function resolveMissionCardArt(mission: MissionTemplate | undefined): string {
   return mission?.cardArt ?? DEFAULT_MISSION_CARD_ART;
+}
+
+export function resolveOmegaPlanCardArt(plan: OmegaPlanTemplate | undefined): string {
+  return plan?.cardArt ?? DEFAULT_OMEGA_PLAN_CARD_ART;
 }
 
 export function resolveMinionCardArt(template: MinionTemplate | undefined): string {

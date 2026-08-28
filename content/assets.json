@@ -15,11 +15,6 @@
     "description": "Photographs, ledgers, and one very compromising guest list."
   },
   {
-    "id": "shell_companies",
-    "name": "Shell Company Network",
-    "description": "A lattice of holding firms that owns everything and answers for nothing."
-  },
-  {
     "id": "gold_bullion",
     "name": "Gold Bullion",
     "description": "Heavy, shiny, and utterly indifferent to sanctions."
@@ -33,6 +28,11 @@
     "id": "prototype_railgun",
     "name": "Prototype Railgun",
     "description": "A weapon that officially does not exist, which makes it hard to report stolen."
+  },
+  {
+    "id": "midnight_lens",
+    "name": "Midnight Lens",
+    "description": "A meter-wide focusing mirror of impossible precision — the heart of an orbital array."
   },
   {
     "id": "fusion_core",
