@@ -842,12 +842,12 @@ export function formatStandingChange(
     catalog.locations.find((l) => l.id === change.locationId)?.name ?? change.locationId;
   switch (change.to) {
     case "hero":
-      return `${who} became a Hero of ${where}.`;
+      return `${who} gained Allies in ${where}.`;
     case "wanted":
       return `${who} became Wanted in ${where}.`;
     case "neutral":
       return change.from === "hero"
-        ? `${who} is no longer a Hero of ${where}.`
+        ? `${who} no longer has Allies in ${where}.`
         : `${who} is no longer Wanted in ${where}.`;
   }
 }

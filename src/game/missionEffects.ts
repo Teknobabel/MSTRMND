@@ -44,7 +44,7 @@ function missionName(catalog: ContentCatalog | undefined, id: string): string {
   return catalog?.missions.find((m) => m.id === id)?.name ?? id;
 }
 
-function describeMissionEffect(effect: MissionEffect, catalog?: ContentCatalog): string[] {
+export function describeMissionEffect(effect: MissionEffect, catalog?: ContentCatalog): string[] {
   switch (effect.kind) {
     case "reveal_target_asset":
       return ["Revealed the targeted asset"];
@@ -98,9 +98,9 @@ function describeMissionEffect(effect: MissionEffect, catalog?: ContentCatalog):
       return [`Granted trait(s) ${traits} to all participants`];
     }
     case "infamy_delta":
-      return [`Infamy ${signedInt(effect.amount)} (mission effect)`];
+      return [`Infamy ${signedInt(effect.amount)}`];
     case "heat_delta":
-      return [`Heat ${signedInt(effect.amount)} (mission effect)`];
+      return [`Heat ${signedInt(effect.amount)}`];
     case "max_concurrent_missions_delta":
       return [`Max concurrent missions ${signedInt(effect.delta)}`];
     case "max_roster_size_delta":

@@ -742,7 +742,7 @@ export type MinionAffinityConfig = {
  * `heroThreshold` and only gives it up once the score falls `hysteresis` further back.
  */
 export type LocationAffinityConfig = {
-  /** Score at which a minion becomes a Hero of the location. */
+  /** Score at which a minion gains Allies in the location. */
   heroThreshold: number;
   /** Score (negative) at which a minion becomes Wanted at the location. */
   wantedThreshold: number;

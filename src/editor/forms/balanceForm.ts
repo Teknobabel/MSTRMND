@@ -329,7 +329,7 @@ const DYNAMIC_MODIFIER_TOOLTIPS: Record<keyof DynamicTraitModifiers, string> = {
   ally: "Success bonus for each pair of Allies on the mission (the deeper end of Friends). Counted ONCE per pair.",
   rival: "Success penalty for each pair of Rivals on the mission. Counted ONCE per pair, not per minion.",
   hatred: "Success penalty for each pair who hate each other on the mission (the deeper end of Rivals). Counted ONCE per pair.",
-  hero: "Success bonus when the minion is a Hero of the mission's target location. Per minion.",
+  hero: "Success bonus when the minion has Allies in the mission's target location. Per minion.",
   wanted: "Success penalty when the minion is Wanted at the mission's target location. Per minion.",
 };
 
@@ -559,7 +559,7 @@ const LOCATION_AFFINITY_FIELDS: { key: LocationAffinityKey; label: string; toolt
     key: "heroThreshold",
     label: "Hero at",
     tooltip:
-      "Standing at which a minion becomes a Hero of that location (worth the Hero success bonus there). With +1 per success, 3 means three clean jobs at the same site.",
+      "Standing at which a minion gains Allies in that location (worth the Hero success bonus there). With +1 per success, 3 means three clean jobs at the same site.",
     min: 1,
     max: 100,
   },

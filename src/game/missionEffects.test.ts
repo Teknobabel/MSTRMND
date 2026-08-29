@@ -273,7 +273,7 @@ describe("describeMissionTemplateEffects", () => {
       "Unlocked lair mission: Case the Bank",
       "Removed trait Infiltration from all hired minions",
       "Granted trait Inspired to up to 2 random minion(s)",
-      "Infamy +5 (mission effect)",
+      "Infamy +5",
     ]);
   });
 });

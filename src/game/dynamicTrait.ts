@@ -237,5 +237,5 @@ export function dynamicTraitDisplayLabel(
   }
   const locName =
     catalog.locations.find((l) => l.id === dt.locationId)?.name ?? dt.locationId;
-  return dt.kind === "hero" ? `Hero of ${locName}` : `Wanted in ${locName}`;
+  return dt.kind === "hero" ? `Allies in ${locName}` : `Wanted in ${locName}`;
 }

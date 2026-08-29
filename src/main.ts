@@ -23,10 +23,12 @@ import {
   type Result,
 } from "./game/gameState";
 import type {
+  Asset,
   DynamicTrait,
   LocationAssetSlot,
   LocationType,
   MinionInstance,
+  MissionEffect,
   MissionSource,
   MissionTarget,
   MissionTargetType,
@@ -51,11 +53,13 @@ import {
   dynamicTraitDisplayLabel,
   dynamicTraitSuccessModifierBreakdownFromFullRoster,
   dynamicTraitSuccessModifierFromFullRoster,
-  isPositiveDynamicTraitKind,
   type DynamicTraitSuccessBreakdownEntry,
 } from "./game/dynamicTrait";
 import { formatRelationshipChange, formatStandingChange } from "./game/affinity";
-import { describeMissionTemplateEffects } from "./game/missionEffects";
+import {
+  describeMissionEffect,
+  orderedMissionEffects,
+} from "./game/missionEffects";
 import {
   buildRunEndReport,
   buildTurnReport,
@@ -80,7 +84,6 @@ import {
   isOpposingAgentMoveVisibleToPlayer,
   playerVisibleOpposingAgentsAtLocation,
   totalPlayerVisibleOpposingAgents,
-  MAX_INTEL_LEVEL,
 } from "./game/intel";
 import {
   currentLairUpgradeLevel,
@@ -96,7 +99,6 @@ import {
   omegaStageRequiredMissions,
 } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
-import { maxHireableStartingLevel, nextHireLevelInfamyThreshold } from "./game/minion";
 import { initNavigation, type NavigationApi } from "./navigation";
 import { initStageScale } from "./ui/stageScale";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
@@ -126,18 +128,6 @@ const SECURITY_LEVEL_TOOLTIP_LINES: readonly string[] = [
   "Defensive alert level at this site (0 up to the location level).",
   "Each point reveals 1 security trait, adding it to the required traits for missions here.",
   "Increases by +1 when a mission targeting this site completes.",
-];
-
-/** Hover text for the location card's Site Traits label. */
-const SITE_TRAITS_TOOLTIP_LINES: readonly string[] = [
-  "Inherent traits determined by location level (Level 1: 0, Level 2: 1, Level 3: 2).",
-  "Added to the required traits for all missions targeting this location or its assets.",
-];
-
-/** Hover text for the location card's Security Traits label. */
-const SECURITY_TRAITS_TOOLTIP_LINES: readonly string[] = [
-  "Per-run defensive traits hidden until revealed by the site's security level.",
-  "Revealed security traits are added to mission requirements for this location.",
 ];
 
 /** Tabs left-to-right; locations filtered and sorted by name within each. */
@@ -189,6 +179,26 @@ const TRAIT_ICON_SVG_PATHS =
   '<path d="M12 2H2v10l9.29 9.29a2.4 2.4 0 0 0 3.42 0l6.58-6.58a2.4 2.4 0 0 0 0-3.42L12 2Z"/><circle cx="7" cy="7" r="1.5"/>';
 const ASSET_ICON_SVG_PATHS =
   '<path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z"/><path d="M2.5 9h19"/>';
+const SECURITY_ICON_SVG_PATHS =
+  '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>';
+
+/* Minion, Mission & Location card stat icons */
+const MINION_STAT_ICON_CP =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" aria-hidden="true" focusable="false"><path d="M13 2 4.5 13.5H10L9 22l8.5-11.5H12L13 2Z" fill="currentColor"/></svg>';
+const MINION_STAT_ICON_LEVEL =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" aria-hidden="true" focusable="false"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>';
+const MINION_STAT_ICON_XP =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" aria-hidden="true" focusable="false"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/></svg>';
+const MISSION_STAT_ICON_TARGET =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>';
+const MISSION_STAT_ICON_DURATION =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>';
+const LOCATION_STAT_ICON_TYPE =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>';
+const LOCATION_STAT_ICON_SECURITY =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>';
+const LOCATION_STAT_ICON_INTEL =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
 
 function createSvgPillIcon(pathsHtml: string): SVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -202,6 +212,10 @@ function createSvgPillIcon(pathsHtml: string): SVGElement {
 
 function createTraitIconEl(): SVGElement {
   return createSvgPillIcon(TRAIT_ICON_SVG_PATHS);
+}
+
+function createSecurityIconEl(): SVGElement {
+  return createSvgPillIcon(SECURITY_ICON_SVG_PATHS);
 }
 
 function createAssetIconEl(): SVGElement {
@@ -385,73 +399,224 @@ function traitStatusModifierClass(trait: Trait | undefined): string {
   return "";
 }
 
-function minionsDynamicPillModifierClass(dt: DynamicTrait): string {
-  return isPositiveDynamicTraitKind(dt.kind)
-    ? "minions-trait-pill--dynamic-positive"
-    : "minions-trait-pill--dynamic-negative";
+function formatStaticTraitTooltip(trait: Trait | undefined, traitId: string): string {
+  if (!trait) {
+    return traitId;
+  }
+  if (trait.type === "status_positive") {
+    return `${trait.name} (Status)\n+10% mission success chance`;
+  }
+  if (trait.type === "status_negative") {
+    return `${trait.name} (Status)\n−20% mission success chance`;
+  }
+  if (trait.type === "primary") {
+    return `${trait.name} (Primary Trait)\nFulfills mission operational requirements`;
+  }
+  if (trait.type === "secondary") {
+    return `${trait.name} (Secondary Trait)\nFulfills mission tactical requirements`;
+  }
+  return trait.name;
 }
 
-function assignChipDynamicPillModifierClass(dt: DynamicTrait): string {
-  return isPositiveDynamicTraitKind(dt.kind)
-    ? "assign-minion-chip-trait--dynamic-positive"
-    : "assign-minion-chip-trait--dynamic-negative";
+function formatDynamicTraitTooltip(
+  catalog: ReturnType<typeof loadContent>,
+  roster: readonly MinionInstance[],
+  dt: DynamicTrait,
+): string {
+  const label = dynamicTraitDisplayLabel(catalog, roster, dt);
+  switch (dt.kind) {
+    case "friend":
+      return `${label}\nRelationship: +5% mission success when paired`;
+    case "ally":
+      return `${label}\nRelationship: +10% mission success when paired`;
+    case "rival":
+      return `${label}\nRelationship: −5% mission success when paired`;
+    case "hatred":
+      return `${label}\nRelationship: −10% mission success when paired`;
+    case "hero":
+      return `${label}\nStanding: +5% mission success at this location`;
+    case "wanted":
+      return `${label}\nStanding: −5% mission success at this location`;
+  }
 }
 
-function appendMinionTraitsRow(
-  dl: HTMLElement,
+function createTraitPillEl(
+  catalog: ReturnType<typeof loadContent>,
+  traitId: string,
+  rosterTraitIds?: ReadonlySet<string>,
+  iconKind: "trait" | "security" = "trait",
+): HTMLElement {
+  const trait = catalog.traits.find((t) => t.id === traitId);
+  const span = document.createElement("span");
+  span.className = "minions-trait-pill minions-trait-pill--trait";
+  if (iconKind === "security") {
+    span.classList.add("minions-trait-pill--security");
+  }
+  if (trait?.type === "status_negative") {
+    span.classList.add("minions-trait-pill--status-negative");
+  } else if (trait?.type === "status_positive") {
+    span.classList.add("minions-trait-pill--status-positive");
+  }
+  if (rosterTraitIds !== undefined) {
+    span.classList.add(
+      rosterTraitIds.has(traitId)
+        ? "minions-trait-pill--req-have"
+        : "minions-trait-pill--req-missing",
+    );
+  }
+  span.tabIndex = 0;
+  span.title = formatStaticTraitTooltip(trait, traitId);
+  span.appendChild(iconKind === "security" ? createSecurityIconEl() : createTraitIconEl());
+  const text = document.createElement("span");
+  text.className = "minions-trait-pill__label";
+  text.textContent = trait?.name ?? traitId;
+  span.appendChild(text);
+  return span;
+}
+
+function appendMinionTraits(
+  container: HTMLElement,
   catalog: ReturnType<typeof loadContent>,
   traitIds: string[],
   dynamic?: { roster: MinionInstance[]; traits: readonly DynamicTrait[] },
 ): void {
-  const dt = document.createElement("dt");
-  dt.textContent = "Traits";
-  const dd = document.createElement("dd");
-  dd.className = "minions-card-traits-dd";
   const rosterTraits = dynamic?.traits ?? [];
   const roster = dynamic?.roster ?? [];
   if (traitIds.length === 0 && rosterTraits.length === 0) {
-    dd.textContent = "—";
-    dl.appendChild(dt);
-    dl.appendChild(dd);
     return;
   }
-  const wrap = document.createElement("span");
-  wrap.className = "minions-card-traits-wrap";
-  const appendCommaSep = (): void => {
-    const sep = document.createElement("span");
-    sep.className = "minions-card-traits-sep";
-    sep.textContent = ", ";
-    wrap.appendChild(sep);
-  };
+
   for (let i = 0; i < traitIds.length; i += 1) {
-    if (i > 0) {
-      appendCommaSep();
-    }
     const tid = traitIds[i]!;
-    const trait = catalog.traits.find((t) => t.id === tid);
-    const span = document.createElement("span");
-    span.className = "minions-trait-pill";
-    span.textContent = trait?.name ?? tid;
-    if (trait?.type === "status_negative") {
-      span.classList.add("minions-trait-pill--status-negative");
-    } else if (trait?.type === "status_positive") {
-      span.classList.add("minions-trait-pill--status-positive");
-    }
-    wrap.appendChild(span);
+    container.appendChild(createTraitPillEl(catalog, tid));
   }
   for (let j = 0; j < rosterTraits.length; j += 1) {
-    if (wrap.childNodes.length > 0) {
-      appendCommaSep();
-    }
     const dtrait = rosterTraits[j]!;
     const span = document.createElement("span");
-    span.className = `minions-trait-pill ${minionsDynamicPillModifierClass(dtrait)}`;
-    span.textContent = dynamicTraitDisplayLabel(catalog, roster, dtrait);
-    wrap.appendChild(span);
+    span.className = "minions-trait-pill minions-trait-pill--trait";
+    span.tabIndex = 0;
+    span.title = formatDynamicTraitTooltip(catalog, roster, dtrait);
+    span.appendChild(createTraitIconEl());
+    const text = document.createElement("span");
+    text.className = "minions-trait-pill__label";
+    text.textContent = dynamicTraitDisplayLabel(catalog, roster, dtrait);
+    span.appendChild(text);
+    container.appendChild(span);
   }
-  dd.appendChild(wrap);
-  dl.appendChild(dt);
-  dl.appendChild(dd);
+}
+
+function createMinionsCardStatsRow(stats: {
+  cpCost: string | number;
+  level: string | number;
+  xp: string | number;
+}): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "minions-card-stats-row";
+
+  const cpBadge = document.createElement("div");
+  cpBadge.className = "minions-card-badge minions-card-badge--cp";
+  cpBadge.title = `CP Cost: ${stats.cpCost}`;
+  cpBadge.tabIndex = 0;
+  cpBadge.setAttribute("aria-label", `CP Cost: ${stats.cpCost}`);
+  cpBadge.innerHTML = `${MINION_STAT_ICON_CP}<span class="minions-card-badge__value">${stats.cpCost}</span>`;
+
+  const levelBadge = document.createElement("div");
+  levelBadge.className = "minions-card-badge minions-card-badge--level";
+  levelBadge.title = `Level: ${stats.level}`;
+  levelBadge.tabIndex = 0;
+  levelBadge.setAttribute("aria-label", `Level: ${stats.level}`);
+  levelBadge.innerHTML = `${MINION_STAT_ICON_LEVEL}<span class="minions-card-badge__value">${stats.level}</span>`;
+
+  const xpBadge = document.createElement("div");
+  xpBadge.className = "minions-card-badge minions-card-badge--xp";
+  xpBadge.title = `XP: ${stats.xp}`;
+  xpBadge.tabIndex = 0;
+  xpBadge.setAttribute("aria-label", `XP: ${stats.xp}`);
+  xpBadge.innerHTML = `${MINION_STAT_ICON_XP}<span class="minions-card-badge__value">${stats.xp}</span>`;
+
+  row.appendChild(cpBadge);
+  row.appendChild(levelBadge);
+  row.appendChild(xpBadge);
+  return row;
+}
+
+function createMissionCardStatsRow(stats: {
+  target: string;
+  cpCost: string | number;
+  duration: string | number;
+}): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "minions-card-stats-row";
+
+  const targetBadge = document.createElement("div");
+  targetBadge.className = "minions-card-badge minions-card-badge--target";
+  targetBadge.title = `Target: ${stats.target}`;
+  targetBadge.tabIndex = 0;
+  targetBadge.setAttribute("aria-label", `Target: ${stats.target}`);
+  targetBadge.innerHTML = `${MISSION_STAT_ICON_TARGET}<span class="minions-card-badge__value">${stats.target}</span>`;
+
+  const cpBadge = document.createElement("div");
+  cpBadge.className = "minions-card-badge minions-card-badge--cp";
+  cpBadge.title = `Cost: ${stats.cpCost}`;
+  cpBadge.tabIndex = 0;
+  cpBadge.setAttribute("aria-label", `Cost: ${stats.cpCost}`);
+  cpBadge.innerHTML = `${MINION_STAT_ICON_CP}<span class="minions-card-badge__value">${stats.cpCost}</span>`;
+
+  const durationBadge = document.createElement("div");
+  durationBadge.className = "minions-card-badge minions-card-badge--duration";
+  durationBadge.title = `Duration: ${stats.duration} turn${stats.duration === 1 || stats.duration === "1" ? "" : "s"}`;
+  durationBadge.tabIndex = 0;
+  durationBadge.setAttribute("aria-label", `Duration: ${stats.duration}`);
+  durationBadge.innerHTML = `${MISSION_STAT_ICON_DURATION}<span class="minions-card-badge__value">${stats.duration}</span>`;
+
+  row.appendChild(targetBadge);
+  row.appendChild(cpBadge);
+  row.appendChild(durationBadge);
+  return row;
+}
+
+function createLocationCardStatsRow(stats: {
+  type: string;
+  level: string | number;
+  securityLevel: string | number;
+  intelLevel: string | number;
+}): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "minions-card-stats-row";
+
+  const typeBadge = document.createElement("div");
+  typeBadge.className = "minions-card-badge minions-card-badge--type";
+  typeBadge.title = `Location Type: ${stats.type}`;
+  typeBadge.tabIndex = 0;
+  typeBadge.setAttribute("aria-label", `Location Type: ${stats.type}`);
+  typeBadge.innerHTML = `${LOCATION_STAT_ICON_TYPE}<span class="minions-card-badge__value">${stats.type}</span>`;
+
+  const levelBadge = document.createElement("div");
+  levelBadge.className = "minions-card-badge minions-card-badge--level";
+  levelBadge.title = `Location Level: ${stats.level}`;
+  levelBadge.tabIndex = 0;
+  levelBadge.setAttribute("aria-label", `Location Level: ${stats.level}`);
+  levelBadge.innerHTML = `${MINION_STAT_ICON_LEVEL}<span class="minions-card-badge__value">${stats.level}</span>`;
+
+  const securityBadge = document.createElement("div");
+  securityBadge.className = "minions-card-badge minions-card-badge--security";
+  securityBadge.title = `Security Level: ${stats.securityLevel}\n${SECURITY_LEVEL_TOOLTIP_LINES.join("\n")}`;
+  securityBadge.tabIndex = 0;
+  securityBadge.setAttribute("aria-label", `Security Level: ${stats.securityLevel}`);
+  securityBadge.innerHTML = `${LOCATION_STAT_ICON_SECURITY}<span class="minions-card-badge__value">${stats.securityLevel}</span>`;
+
+  const intelBadge = document.createElement("div");
+  intelBadge.className = "minions-card-badge minions-card-badge--intel";
+  intelBadge.title = `Intel Level: ${stats.intelLevel}\n${INTEL_LEVEL_TOOLTIP_LINES.join("\n")}`;
+  intelBadge.tabIndex = 0;
+  intelBadge.setAttribute("aria-label", `Intel Level: ${stats.intelLevel}`);
+  intelBadge.innerHTML = `${LOCATION_STAT_ICON_INTEL}<span class="minions-card-badge__value">${stats.intelLevel}</span>`;
+
+  row.appendChild(typeBadge);
+  row.appendChild(levelBadge);
+  row.appendChild(securityBadge);
+  row.appendChild(intelBadge);
+  return row;
 }
 
 function styleAssignChipTraitSpan(
@@ -470,6 +635,8 @@ function styleAssignChipTraitSpan(
     span.classList.add(mod);
   }
   span.textContent = trait?.name ?? traitId;
+  span.tabIndex = 0;
+  span.title = formatStaticTraitTooltip(trait, traitId);
 }
 
 function traitDisplayNames(
@@ -511,31 +678,32 @@ function requirementsDisplayNames(
   return parts.length > 0 ? parts.join(", ") : "—";
 }
 
-function createTraitPillEl(
+function formatStaticAssetTooltip(asset: Asset | undefined, assetId: string): string {
+  if (!asset) {
+    return assetId;
+  }
+  const header =
+    asset.supportAbility !== undefined ? `${asset.name} (Support Asset)` : `${asset.name} (Asset)`;
+  const lines: string[] = [header];
+  if (asset.supportAbility !== undefined) {
+    lines.push(describeSupportAssetAbility(asset.supportAbility));
+  }
+  if (asset.description) {
+    lines.push(asset.description);
+  }
+  return lines.join("\n");
+}
+
+function createInlineAssetSpan(
   catalog: ReturnType<typeof loadContent>,
-  traitId: string,
-  rosterTraitIds?: ReadonlySet<string>,
+  assetId: string,
 ): HTMLElement {
-  const trait = catalog.traits.find((t) => t.id === traitId);
+  const asset = catalog.assets.find((a) => a.id === assetId);
   const span = document.createElement("span");
-  span.className = "minions-trait-pill minions-trait-pill--trait";
-  if (trait?.type === "status_negative") {
-    span.classList.add("minions-trait-pill--status-negative");
-  } else if (trait?.type === "status_positive") {
-    span.classList.add("minions-trait-pill--status-positive");
-  }
-  if (rosterTraitIds !== undefined) {
-    span.classList.add(
-      rosterTraitIds.has(traitId)
-        ? "minions-trait-pill--req-have"
-        : "minions-trait-pill--req-missing",
-    );
-  }
-  span.appendChild(createTraitIconEl());
-  const text = document.createElement("span");
-  text.className = "minions-trait-pill__label";
-  text.textContent = trait?.name ?? traitId;
-  span.appendChild(text);
+  span.className = "mission-card-effects__asset";
+  span.tabIndex = 0;
+  span.title = formatStaticAssetTooltip(asset, assetId);
+  span.textContent = asset?.name ?? assetId;
   return span;
 }
 
@@ -552,12 +720,37 @@ function createAssetPillEl(
       hasAsset ? "minions-trait-pill--req-have" : "minions-trait-pill--req-missing",
     );
   }
+  span.tabIndex = 0;
+  span.title = formatStaticAssetTooltip(asset, assetId);
   span.appendChild(createAssetIconEl());
   const text = document.createElement("span");
   text.className = "minions-trait-pill__label";
   text.textContent = asset?.name ?? assetId;
   span.appendChild(text);
   return span;
+}
+
+/**
+ * Appends requirement pills (traits first, followed by asset requirements) directly to a container element.
+ */
+function appendRequiredMissionRequirementPills(
+  container: HTMLElement,
+  catalog: ReturnType<typeof loadContent>,
+  traitIds: string[],
+  rosterTraitIds: ReadonlySet<string>,
+  assetIds: string[],
+  ownedAssets: Readonly<Record<string, number>>,
+): void {
+  for (const tid of traitIds) {
+    container.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds));
+  }
+
+  const remaining = new Map<string, number>();
+  for (const aid of assetIds) {
+    const left = remaining.get(aid) ?? ownedAssets[aid] ?? 0;
+    remaining.set(aid, left - 1);
+    container.appendChild(createAssetPillEl(catalog, aid, left > 0));
+  }
 }
 
 /**
@@ -571,20 +764,16 @@ function requiredMissionRequirementPillsEl(
   assetIds: string[],
   ownedAssets: Readonly<Record<string, number>>,
 ): HTMLElement {
-  const wrap = document.createElement("span");
+  const wrap = document.createElement("div");
   wrap.className = "mission-req-pills";
-
-  for (const tid of traitIds) {
-    wrap.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds));
-  }
-
-  const remaining = new Map<string, number>();
-  for (const aid of assetIds) {
-    const left = remaining.get(aid) ?? ownedAssets[aid] ?? 0;
-    remaining.set(aid, left - 1);
-    wrap.appendChild(createAssetPillEl(catalog, aid, left > 0));
-  }
-
+  appendRequiredMissionRequirementPills(
+    wrap,
+    catalog,
+    traitIds,
+    rosterTraitIds,
+    assetIds,
+    ownedAssets,
+  );
   return wrap;
 }
 
@@ -635,6 +824,50 @@ function supportAssetsDisplay(
     .join(", ");
 }
 
+/**
+ * Appends location requirement pills: site traits first (with trait icon), followed by
+ * revealed security traits (with security icon), into a container element.
+ */
+function appendLocationRequirementPills(
+  container: HTMLElement,
+  catalog: ReturnType<typeof loadContent>,
+  siteTraitIds: readonly string[],
+  revealedSecurityTraitIds: readonly string[],
+  rosterTraitIds: ReadonlySet<string>,
+): void {
+  for (const tid of siteTraitIds) {
+    container.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds, "trait"));
+  }
+  for (const tid of revealedSecurityTraitIds) {
+    container.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds, "security"));
+  }
+}
+
+/**
+ * Combined location-card requirement pills: site traits first (with trait icon), followed by
+ * revealed security traits (with security icon), all on the same line with mission-style state styling.
+ */
+function createLocationRequirementPillsEl(
+  catalog: ReturnType<typeof loadContent>,
+  siteTraitIds: readonly string[],
+  revealedSecurityTraitIds: readonly string[],
+  rosterTraitIds: ReadonlySet<string>,
+): HTMLElement | null {
+  if (siteTraitIds.length === 0 && revealedSecurityTraitIds.length === 0) {
+    return null;
+  }
+  const wrap = document.createElement("div");
+  wrap.className = "mission-req-pills";
+  appendLocationRequirementPills(
+    wrap,
+    catalog,
+    siteTraitIds,
+    revealedSecurityTraitIds,
+    rosterTraitIds,
+  );
+  return wrap;
+}
+
 function minionNameByInstanceId(
   catalog: ReturnType<typeof loadContent>,
   roster: readonly MinionInstance[],
@@ -644,30 +877,6 @@ function minionNameByInstanceId(
   return inst !== undefined
     ? catalog.minions.find((t) => t.id === inst.templateId)?.name ?? inst.templateId
     : instanceId;
-}
-
-/** Revealed vs hidden security stack for UI (order preserved for revealed slice). */
-function formatLocationSecurityTraitsDisplay(
-  catalog: ReturnType<typeof loadContent>,
-  securityTraitIds: string[],
-  securityLevel: number | undefined,
-): string {
-  const k = securityLevel ?? 0;
-  const list = securityTraitIds;
-  if (list.length === 0) {
-    return "None";
-  }
-  const revealed = list.slice(0, Math.min(k, list.length));
-  const hiddenCount = list.length - revealed.length;
-  const revealedLabel =
-    revealed.length === 0 ? "" : traitDisplayNames(catalog, revealed);
-  if (hiddenCount === 0) {
-    return revealedLabel;
-  }
-  if (revealed.length === 0) {
-    return `Hidden (${hiddenCount})`;
-  }
-  return `${revealedLabel} · Hidden (${hiddenCount})`;
 }
 
 function formatLocationTypeLabel(locationType: string): string {
@@ -789,7 +998,6 @@ function initGameController(
   runSetup: RunSetupApi,
 ): GameControllerApi {
   let state: GameState = createInitialGameState(content, undefined, runSetup.read());
-  let missionFxTooltipSerial = 0;
 
   const organizationNameEl = req<HTMLElement>("organization-name");
   const playerNameEl = req<HTMLElement>("player-name");
@@ -892,54 +1100,122 @@ function initGameController(
     return content.missions.find((m) => m.id === id) ?? content.events.find((e) => e.id === id);
   }
 
-  /** Native tooltip text for mission card titles (success / failure template effects). */
-  function missionOutcomeEffectsTitle(mission: MissionTemplate | undefined): string | undefined {
-    if (mission === undefined) {
-      return undefined;
+  function renderMissionEffectItemEls(
+    effect: MissionEffect,
+    catalog: ReturnType<typeof loadContent>,
+    tone: "good" | "bad",
+  ): HTMLElement[] {
+    const toneClass =
+      tone === "good" ? "mission-card-effects__item--good" : "mission-card-effects__item--bad";
+
+    if (effect.kind === "gain_assets") {
+      return effect.assetIds.map((id: string) => {
+        const item = document.createElement("li");
+        item.className = `mission-card-effects__item ${toneClass}`;
+        item.append("Gain asset: ", createInlineAssetSpan(catalog, id));
+        return item;
+      });
     }
-    const successLines = describeMissionTemplateEffects(mission.onSuccessEffects ?? [], content);
-    const failureLines = describeMissionTemplateEffects(mission.onFailureEffects ?? [], content);
-    if (successLines.length === 0 && failureLines.length === 0) {
-      return undefined;
+
+    if (effect.kind === "exchange_assets") {
+      const item = document.createElement("li");
+      item.className = `mission-card-effects__item ${toneClass}`;
+      const hasRemove = effect.removeAssetIds.length > 0;
+      const hasGain = effect.gainAssetIds.length > 0;
+      if (hasRemove && hasGain) {
+        item.append("Removed up to ");
+        effect.removeAssetIds.forEach((id: string, idx: number) => {
+          if (idx > 0) item.append(", ");
+          item.appendChild(createInlineAssetSpan(catalog, id));
+        });
+        item.append(" from inventory, then gained ");
+        effect.gainAssetIds.forEach((id: string, idx: number) => {
+          if (idx > 0) item.append(", ");
+          item.appendChild(createInlineAssetSpan(catalog, id));
+        });
+      } else if (hasRemove) {
+        item.append("Removed up to ");
+        effect.removeAssetIds.forEach((id: string, idx: number) => {
+          if (idx > 0) item.append(", ");
+          item.appendChild(createInlineAssetSpan(catalog, id));
+        });
+        item.append(" from inventory");
+      } else if (hasGain) {
+        item.append("Gained ");
+        effect.gainAssetIds.forEach((id: string, idx: number) => {
+          if (idx > 0) item.append(", ");
+          item.appendChild(createInlineAssetSpan(catalog, id));
+        });
+      }
+      return [item];
     }
-    const blocks: string[] = [];
-    if (successLines.length > 0) {
-      blocks.push(["On success:", ...successLines.map((line) => `• ${line}`)].join("\n"));
-    }
-    if (failureLines.length > 0) {
-      blocks.push(["On failure:", ...failureLines.map((line) => `• ${line}`)].join("\n"));
-    }
-    return blocks.join("\n\n");
+
+    const lines = describeMissionEffect(effect, catalog);
+    return lines.map((line) => {
+      const item = document.createElement("li");
+      item.className = `mission-card-effects__item ${toneClass}`;
+      item.textContent = line;
+      return item;
+    });
   }
 
-  /** Native `title` is flaky on `draggable` cards in Chromium; use a hover panel instead. */
-  function appendMissionTitleWithFxTooltip(
-    body: HTMLElement,
+  function createMissionCardEffectsEl(
     mission: MissionTemplate | undefined,
-    displayName: string,
-  ): void {
-    const title = document.createElement("h4");
-    title.className = "asset-card-title";
-    title.textContent = displayName;
-    const tip = missionOutcomeEffectsTitle(mission);
-    if (tip === undefined) {
-      body.appendChild(title);
-      return;
+    catalog: ReturnType<typeof loadContent>,
+  ): HTMLElement | null {
+    if (mission === undefined) {
+      return null;
     }
-    missionFxTooltipSerial += 1;
-    const tipId = `mission-fx-tip-${missionFxTooltipSerial}`;
-    const wrap = document.createElement("div");
-    wrap.className = "mission-outcome-tooltip-anchor";
-    wrap.tabIndex = 0;
-    const panel = document.createElement("div");
-    panel.className = "mission-outcome-tooltip-panel";
-    panel.id = tipId;
-    panel.setAttribute("role", "tooltip");
-    panel.textContent = tip;
-    title.setAttribute("aria-describedby", tipId);
-    wrap.appendChild(title);
-    wrap.appendChild(panel);
-    body.appendChild(wrap);
+    const successEffects = orderedMissionEffects(mission.onSuccessEffects ?? []);
+    const failureEffects = orderedMissionEffects(mission.onFailureEffects ?? []);
+    if (successEffects.length === 0 && failureEffects.length === 0) {
+      return null;
+    }
+
+    const container = document.createElement("div");
+    container.className = "mission-card-effects";
+
+    if (successEffects.length > 0) {
+      const group = document.createElement("div");
+      group.className = "mission-card-effects__group mission-card-effects__group--success";
+
+      const label = document.createElement("div");
+      label.className = "mission-card-effects__label";
+      label.textContent = "On Success";
+      group.appendChild(label);
+
+      const list = document.createElement("ul");
+      list.className = "mission-card-effects__list";
+      for (const eff of successEffects) {
+        for (const item of renderMissionEffectItemEls(eff, catalog, "good")) {
+          list.appendChild(item);
+        }
+      }
+      group.appendChild(list);
+      container.appendChild(group);
+    }
+
+    if (failureEffects.length > 0) {
+      const group = document.createElement("div");
+      group.className = "mission-card-effects__group mission-card-effects__group--failure";
+
+      const label = document.createElement("div");
+      label.className = "mission-card-effects__label";
+      label.textContent = "On Failure";
+      group.appendChild(label);
+
+      const list = document.createElement("ul");
+      list.className = "mission-card-effects__list";
+      for (const eff of failureEffects) {
+        for (const item of renderMissionEffectItemEls(eff, catalog, "bad")) {
+          list.appendChild(item);
+        }
+      }
+      group.appendChild(list);
+      container.appendChild(group);
+    }
+
+    return container;
   }
 
   function totalEventSuccessModifierDelta(): number {
@@ -2066,18 +2342,13 @@ function initGameController(
           content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId;
       }
       const siteIds = state.locationRequiredTraits[targetPick.locationId] ?? [];
-      const siteTraitsLabel =
-        siteIds.length === 0
-          ? "None"
-          : traitDisplayNames(content, [...siteIds].sort((a, b) => a.localeCompare(b)));
       const secLevel = state.locationSecurityStates.find(
         (s) => s.locationId === targetPick.locationId,
       )?.securityLevel;
       const securityTraitIds = state.locationSecurityTraits[targetPick.locationId] ?? [];
-      const securityTraitsLabel = formatLocationSecurityTraitsDisplay(
-        content,
-        securityTraitIds,
-        secLevel,
+      const revealedSecIds = securityTraitIds.slice(
+        0,
+        Math.min(secLevel ?? 0, securityTraitIds.length),
       );
       const assetRowValue = `${visLabel} (${assetLabel})`;
       const assetWrap = document.createElement("span");
@@ -2087,25 +2358,31 @@ function initGameController(
       }
       assetWrap.appendChild(document.createTextNode(assetRowValue));
       appendMinionStatRows(dl, [
-        { label: "Asset", value: assetRowValue, valueEl: assetWrap },
+        {
+          label: "Asset",
+          value: assetRowValue,
+          valueEl: assetWrap,
+          dtClass: "location-card-stats__assets-dt",
+          ddClass: "location-card-stats__assets-dd",
+        },
         { label: "Slot", value: String(targetPick.slotIndex + 1) },
         {
           label: "Intel level",
-          value: `${targetIntel} / ${MAX_INTEL_LEVEL}`,
+          value: String(targetIntel),
           labelTooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
-        },
-        {
-          label: "Site traits",
-          value: siteTraitsLabel,
-          labelTooltipLines: SITE_TRAITS_TOOLTIP_LINES,
-        },
-        {
-          label: "Security traits",
-          value: securityTraitsLabel,
-          labelTooltipLines: SECURITY_TRAITS_TOOLTIP_LINES,
         },
       ]);
       body.appendChild(dl);
+      const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
+      const reqPillsEl = createLocationRequirementPillsEl(
+        content,
+        siteIds,
+        revealedSecIds,
+        rosterTraitIds,
+      );
+      if (reqPillsEl !== null) {
+        body.appendChild(reqPillsEl);
+      }
       wrap.appendChild(article);
       appendClearTarget(wrap);
       targetSlot.appendChild(wrap);
@@ -2140,8 +2417,10 @@ function initGameController(
         }
         for (const dtrait of inst.dynamicTraits) {
           const span = document.createElement("span");
-          span.className = `assign-minion-chip-trait ${assignChipDynamicPillModifierClass(dtrait)}`;
+          span.className = "assign-minion-chip-trait";
           span.textContent = dynamicTraitDisplayLabel(content, state.player.minions, dtrait);
+          span.tabIndex = 0;
+          span.title = formatDynamicTraitTooltip(content, state.player.minions, dtrait);
           traitsEl.appendChild(span);
         }
         chipMain.appendChild(traitsEl);
@@ -2448,8 +2727,10 @@ function initGameController(
           }
           for (const dtrait of inst.dynamicTraits) {
             const span = document.createElement("span");
-            span.className = `assign-minion-chip-trait ${assignChipDynamicPillModifierClass(dtrait)}`;
+            span.className = "assign-minion-chip-trait";
             span.textContent = dynamicTraitDisplayLabel(content, state.player.minions, dtrait);
+            span.tabIndex = 0;
+            span.title = formatDynamicTraitTooltip(content, state.player.minions, dtrait);
             traitsEl.appendChild(span);
           }
           chipMain.appendChild(traitsEl);
@@ -2504,7 +2785,10 @@ function initGameController(
 
     const body = appendCardArtShell(article, resolveMissionCardArt(mission));
 
-    appendMissionTitleWithFxTooltip(body, mission, mission?.name ?? missionId);
+    const title = document.createElement("h4");
+    title.className = "asset-card-title";
+    title.textContent = mission?.name ?? missionId;
+    body.appendChild(title);
 
     if (mission?.description) {
       const desc = document.createElement("p");
@@ -2513,55 +2797,47 @@ function initGameController(
       body.appendChild(desc);
     }
 
-    const dl = document.createElement("dl");
-    dl.className = "asset-card-stats";
-    const rows: Array<{ label: string; value: string; valueEl?: HTMLElement }> = [];
     if (mission) {
-      const traitIdsForDisplay =
-        mergedRequiredTraitIdsForDisplay !== undefined
-          ? mergedRequiredTraitIdsForDisplay
-          : mission.requiredTraitIds;
       const siteFilters = missionTargetTypeTargetsLocation(mission.targetType)
         ? formatTargetLocationFilters(mission)
         : null;
       const targetTypeLabel = formatMissionTargetTypeLabel(mission.targetType);
       const targetValue =
         siteFilters !== null ? `${targetTypeLabel} - ${siteFilters}` : targetTypeLabel;
+
+      const statsRow = createMissionCardStatsRow({
+        target: targetValue,
+        cpCost: mission.startCommandPoints,
+        duration: mission.durationTurns,
+      });
+
+      const traitIdsForDisplay =
+        mergedRequiredTraitIdsForDisplay !== undefined
+          ? mergedRequiredTraitIdsForDisplay
+          : mission.requiredTraitIds;
       const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
-      const hasReqs =
-        traitIdsForDisplay.length > 0 || mission.requiredAssetIds.length > 0;
-      rows.push(
-        { label: "Target", value: targetValue },
-        { label: "Start cost", value: `${mission.startCommandPoints} CP` },
-        {
-          label: "Duration",
-          value: `${mission.durationTurns} turn${mission.durationTurns === 1 ? "" : "s"}`,
-        },
-        {
-          label: "Requirements",
-          value: requirementsDisplayNames(
-            content,
-            traitIdsForDisplay,
-            mission.requiredAssetIds,
-          ),
-          ...(hasReqs
-            ? {
-                valueEl: requiredMissionRequirementPillsEl(
-                  content,
-                  traitIdsForDisplay,
-                  rosterTraitIds,
-                  mission.requiredAssetIds,
-                  state.player.assets,
-                ),
-              }
-            : {}),
-        },
+      appendRequiredMissionRequirementPills(
+        statsRow,
+        content,
+        traitIdsForDisplay,
+        rosterTraitIds,
+        mission.requiredAssetIds,
+        state.player.assets,
       );
+
+      body.appendChild(statsRow);
+
+      const effectsEl = createMissionCardEffectsEl(mission, content);
+      if (effectsEl !== null) {
+        body.appendChild(effectsEl);
+      }
     } else {
-      rows.push({ label: "Mission id", value: missionId });
+      const dl = document.createElement("dl");
+      dl.className = "asset-card-stats";
+      appendMinionStatRows(dl, [{ label: "Mission id", value: missionId }]);
+      body.appendChild(dl);
     }
-    appendMinionStatRows(dl, rows);
-    body.appendChild(dl);
+
     return article;
   }
 
@@ -2592,50 +2868,31 @@ function initGameController(
     const title = document.createElement("h4");
     title.className = "location-card-title";
     title.textContent = loc.name;
+    body.appendChild(title);
+
+    const statsRow = createLocationCardStatsRow({
+      type: formatLocationTypeLabel(loc.locationType),
+      level: loc.locationLevel,
+      securityLevel: securityLevel !== undefined ? String(securityLevel) : "—",
+      intelLevel: intelLevel,
+    });
+
+    const revealedSecIds = locationSecurityTraitIds.slice(
+      0,
+      Math.min(securityLevel ?? 0, locationSecurityTraitIds.length),
+    );
+    const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
+    appendLocationRequirementPills(
+      statsRow,
+      content,
+      siteRequiredTraitIds,
+      revealedSecIds,
+      rosterTraitIds,
+    );
+    body.appendChild(statsRow);
 
     const dl = document.createElement("dl");
     dl.className = "location-card-stats";
-    const baseRows: Array<{
-      label: string;
-      value: string;
-      valueEl?: HTMLElement;
-      tooltipLines?: readonly string[];
-      labelTooltipLines?: readonly string[];
-    }> = [
-      { label: "Location type", value: formatLocationTypeLabel(loc.locationType) },
-      { label: "Location level", value: String(loc.locationLevel) },
-      {
-        label: "Security level",
-        value: securityLevel !== undefined ? String(securityLevel) : "—",
-        labelTooltipLines: SECURITY_LEVEL_TOOLTIP_LINES,
-      },
-      {
-        label: "Intel level",
-        value: `${intelLevel} / ${MAX_INTEL_LEVEL}`,
-        labelTooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
-      },
-      {
-        label: "Site traits",
-        value:
-          siteRequiredTraitIds.length === 0
-            ? "None"
-            : traitDisplayNames(
-                content,
-                [...siteRequiredTraitIds].sort((a, b) => a.localeCompare(b)),
-              ),
-        labelTooltipLines: SITE_TRAITS_TOOLTIP_LINES,
-      },
-      {
-        label: "Security traits",
-        value: formatLocationSecurityTraitsDisplay(
-          content,
-          locationSecurityTraitIds,
-          securityLevel,
-        ),
-        labelTooltipLines: SECURITY_TRAITS_TOOLTIP_LINES,
-      },
-    ];
-    appendMinionStatRows(dl, baseRows);
     /* Agents the player has not uncovered (by play or by intel 3) are omitted entirely —
      * listing them at all would leak that the site is occupied. */
     const visibleAgents = playerVisibleOpposingAgentsAtLocation(state, loc.id);
@@ -2741,8 +2998,10 @@ function initGameController(
 
     if (knownAssetChips.length > 0) {
       const dt = document.createElement("dt");
-      dt.textContent = "Assets";
+      dt.className = "location-card-stats__assets-dt";
+      dt.textContent = "Asset";
       const dd = document.createElement("dd");
+      dd.className = "location-card-stats__assets-dd";
       const container = document.createElement("span");
       container.className = "location-asset-pills";
       for (const chip of knownAssetChips) {
@@ -2753,8 +3012,9 @@ function initGameController(
       dl.appendChild(dd);
     }
 
-    body.appendChild(title);
-    body.appendChild(dl);
+    if (dl.children.length > 0) {
+      body.appendChild(dl);
+    }
     return article;
   }
 
@@ -2766,15 +3026,23 @@ function initGameController(
       valueEl?: HTMLElement;
       tooltipLines?: readonly string[];
       labelTooltipLines?: readonly string[];
+      dtClass?: string;
+      ddClass?: string;
     }>,
   ): void {
-    for (const { label, value, valueEl, tooltipLines, labelTooltipLines } of rows) {
+    for (const { label, value, valueEl, tooltipLines, labelTooltipLines, dtClass, ddClass } of rows) {
       const dt = document.createElement("dt");
       dt.textContent = label;
+      if (dtClass !== undefined) {
+        dt.className = dtClass;
+      }
       if (labelTooltipLines !== undefined && labelTooltipLines.length > 0) {
         dt.title = labelTooltipLines.join("\n");
       }
       const dd = document.createElement("dd");
+      if (ddClass !== undefined) {
+        dd.className = ddClass;
+      }
       if (valueEl !== undefined) {
         dd.appendChild(valueEl);
       } else if (tooltipLines !== undefined && tooltipLines.length > 0) {
@@ -2820,6 +3088,16 @@ function initGameController(
       title.className = "minions-card-title";
       title.textContent = tpl?.name ?? inst.templateId;
       body.appendChild(title);
+      const statsRow = createMinionsCardStatsRow({
+        cpCost: tpl?.hireCommandPoints ?? "—",
+        level: inst.currentLevel,
+        xp: inst.currentExperience,
+      });
+      appendMinionTraits(statsRow, content, inst.traitIds, {
+        roster: state.player.minions,
+        traits: inst.dynamicTraits,
+      });
+      body.appendChild(statsRow);
       const activeForMinion = state.activeMissions.find((am) =>
         am.participantInstanceIds.includes(inst.instanceId),
       );
@@ -2831,14 +3109,7 @@ function initGameController(
       dl.className = "minions-card-stats";
       appendMinionStatRows(dl, [
         { label: "Status", value: statusValue },
-        { label: "CP cost", value: String(tpl?.hireCommandPoints ?? "—") },
-        { label: "Level", value: String(inst.currentLevel) },
-        { label: "XP", value: String(inst.currentExperience) },
       ]);
-      appendMinionTraitsRow(dl, content, inst.traitIds, {
-        roster: state.player.minions,
-        traits: inst.dynamicTraits,
-      });
       body.appendChild(dl);
 
       const fireBtn = document.createElement("button");
@@ -2904,19 +3175,17 @@ function initGameController(
       title.className = "minions-card-title";
       title.textContent = tpl.name;
       body.appendChild(title);
-      const dl = document.createElement("dl");
-      dl.className = "minions-card-stats";
+      const statsRow = createMinionsCardStatsRow({
+        cpCost: tpl.hireCommandPoints,
+        level: tpl.startingLevel ?? 1,
+        xp: 0,
+      });
       const startingIds = tpl.startingTraitIds ?? [];
-      appendMinionStatRows(dl, [
-        { label: "CP cost", value: String(tpl.hireCommandPoints) },
-        { label: "Level", value: String(tpl.startingLevel ?? 1) },
-        { label: "XP", value: "0" },
-      ]);
-      appendMinionTraitsRow(dl, content, startingIds, {
+      appendMinionTraits(statsRow, content, startingIds, {
         roster: state.player.minions,
         traits: previewHireDynamicTraits(state, content, tpl.id),
       });
-      body.appendChild(dl);
+      body.appendChild(statsRow);
 
       const actions = document.createElement("div");
       actions.className = "minions-card-actions";
@@ -2959,18 +3228,16 @@ function initGameController(
       title.className = "minions-card-title";
       title.textContent = tpl?.name ?? rehireInst.templateId;
       body.appendChild(title);
-      const dl = document.createElement("dl");
-      dl.className = "minions-card-stats";
-      appendMinionStatRows(dl, [
-        { label: "CP cost", value: String(tpl?.hireCommandPoints ?? "—") },
-        { label: "Level", value: String(rehireInst.currentLevel) },
-        { label: "XP", value: String(rehireInst.currentExperience) },
-      ]);
-      appendMinionTraitsRow(dl, content, rehireInst.traitIds, {
+      const statsRow = createMinionsCardStatsRow({
+        cpCost: tpl?.hireCommandPoints ?? "—",
+        level: rehireInst.currentLevel,
+        xp: rehireInst.currentExperience,
+      });
+      appendMinionTraits(statsRow, content, rehireInst.traitIds, {
         roster: state.player.minions,
         traits: previewRehireDynamicTraits(state, content, rehireInst),
       });
-      body.appendChild(dl);
+      body.appendChild(statsRow);
 
       const hireBtn = document.createElement("button");
       hireBtn.type = "button";
@@ -3013,15 +3280,6 @@ function initGameController(
       (e) => state.turnNumber >= e.availableFromTurn,
     );
     const hireOfferCount = state.availableMinionTemplateIds.length + eligibleRehires.length;
-
-    /* Infamy gates which startingLevel templates the pool will offer (see pickHireOfferTemplateIds). */
-    const thresholds = content.balance.hireLevelInfamyThresholds;
-    const levelCap = maxHireableStartingLevel(p.infamy, thresholds);
-    const nextGate = nextHireLevelInfamyThreshold(p.infamy, thresholds);
-    const hireGateText =
-      nextGate === null
-        ? `Recruiting up to level ${levelCap} — every tier unlocked.`
-        : `Recruiting up to level ${levelCap}. Level ${levelCap + 1} recruits appear at ${nextGate} infamy (now ${p.infamy}).`;
 
     function buildRosterSection(isColumn: boolean): HTMLElement {
       const section = document.createElement("section");
@@ -3083,13 +3341,6 @@ function initGameController(
       });
       headingRow.appendChild(btnReroll);
       section.appendChild(headingRow);
-
-      const hireGate = document.createElement("p");
-      hireGate.id = "minions-hire-gate";
-      hireGate.className = "minions-hire-gate";
-      hireGate.setAttribute("aria-live", "polite");
-      hireGate.textContent = hireGateText;
-      section.appendChild(hireGate);
 
       const list = document.createElement("div");
       list.id = "minions-available-list";
@@ -3228,7 +3479,6 @@ function initGameController(
 
     omegaPlanPanelEl.appendChild(header);
 
-    const PHASE_ROMAN = ["I", "II", "III"] as const;
     const PHASE_NAMES = [
       "Shadow Seeding",
       "Global Destabilization",
@@ -3257,10 +3507,6 @@ function initGameController(
       const phaseHeader = document.createElement("div");
       phaseHeader.className = "omega-phase-header";
       const headerText = document.createElement("div");
-      const kicker = document.createElement("p");
-      kicker.className = "omega-phase-kicker";
-      kicker.style.margin = "0";
-      kicker.textContent = `Phase ${PHASE_ROMAN[stageIndex]}`;
       const heading = document.createElement("h3");
       heading.className = "omega-plan-phase-title";
       heading.textContent = PHASE_NAMES[stageIndex]!;
@@ -3271,7 +3517,6 @@ function initGameController(
         stageRequired < stage.missionIds.length
           ? `Any ${stageRequired} of this phase's ${stage.missionIds.length} missions must succeed to advance.`
           : "Every mission in this phase must succeed to advance.";
-      headerText.appendChild(kicker);
       headerText.appendChild(heading);
       headerText.appendChild(requirement);
       phaseHeader.appendChild(headerText);
@@ -3553,7 +3798,10 @@ function initGameController(
 
     const body = appendCardArtShell(article, resolveMissionCardArt(mission));
 
-    appendMissionTitleWithFxTooltip(body, mission, mission?.name ?? am.missionTemplateId);
+    const title = document.createElement("h4");
+    title.className = "asset-card-title";
+    title.textContent = mission?.name ?? am.missionTemplateId;
+    body.appendChild(title);
 
     if (mission?.description) {
       const desc = document.createElement("p");
@@ -3735,6 +3983,11 @@ function initGameController(
       progressWrap.appendChild(head);
       progressWrap.appendChild(bar);
       body.appendChild(progressWrap);
+    }
+
+    const effectsEl = createMissionCardEffectsEl(mission, content);
+    if (effectsEl !== null) {
+      body.appendChild(effectsEl);
     }
 
     const mainOnly = state.phase === "main";

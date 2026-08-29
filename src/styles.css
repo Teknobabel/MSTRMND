@@ -831,6 +831,20 @@ body {
   flex: 1 1 100%;
 }
 
+/* Hide scrollbars across all panels in Dashboard menu view */
+.game-ui-columns-row:not(.game-ui-columns-row--single) .game-panel,
+.game-ui-columns-row:not(.game-ui-columns-row--single) .game-panel * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.game-ui-columns-row:not(.game-ui-columns-row--single) .game-panel::-webkit-scrollbar,
+.game-ui-columns-row:not(.game-ui-columns-row--single) .game-panel *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .game-ui-columns-row > .game-ui-stack-column[hidden],
 .game-panel[hidden] {
   display: none !important;
@@ -848,7 +862,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 0.7rem 0.75rem;
   border: 1px solid var(--line-1);
   clip-path: polygon(
@@ -881,6 +896,7 @@ body {
 /* Subtle per-column tint variation so panels read as grouped modules */
 .game-panel--plan-column {
   --panel-bg: rgba(19, 6, 9, 0.92);
+  overflow: hidden;
 }
 
 .game-panel--omega,
@@ -906,15 +922,15 @@ body {
 }
 
 .game-panel::before {
-  top: -1px;
-  left: -1px;
+  top: 0;
+  left: 0;
   border-top: 2px solid var(--red);
   border-left: 2px solid var(--red);
 }
 
 .game-panel::after {
-  bottom: -1px;
-  right: -1px;
+  bottom: 0;
+  right: 0;
   border-bottom: 2px solid var(--red);
   border-right: 2px solid var(--red);
 }
@@ -948,7 +964,7 @@ body {
 
 .omega-sidebar {
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .game-player-profile {
@@ -1107,7 +1123,7 @@ body {
 .game-panel.game-panel--plan-column > .plan-column-stack {
   flex: 1 1 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
@@ -1172,7 +1188,16 @@ body {
   gap: 0.45rem;
   flex: 1 1 0;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.missions-panel-page::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .missions-panel-page[hidden] {
@@ -2181,8 +2206,7 @@ body {
   z-index: 1;
 }
 
-.omega-plan-mission-card .asset-card-title,
-.omega-plan-mission-card .mission-outcome-tooltip-anchor {
+.omega-plan-mission-card .asset-card-title {
   padding-right: 5.6rem;
 }
 
@@ -2320,6 +2344,11 @@ body {
   word-break: break-word;
 }
 
+.location-card-stats dt.location-card-stats__assets-dt,
+.location-card-stats dd.location-card-stats__assets-dd {
+  grid-column: 1 / -1;
+}
+
 .asset-card-description {
   margin: 0.35rem 0 0;
   font-size: 0.76rem;
@@ -2427,23 +2456,12 @@ body {
   color: var(--red-bright);
 }
 
-/* Mission outcome hover tooltip & Global Tooltip */
-.mission-outcome-tooltip-anchor {
-  position: relative;
-  display: block;
-  width: fit-content;
-  max-width: 100%;
-  margin: 0 0 0.3rem;
-  cursor: help;
-  outline: none;
-}
-
-.mission-outcome-tooltip-anchor .asset-card-title {
-  margin: 0;
-}
-
-.mission-outcome-tooltip-panel,
+/* Global Tooltip */
 .app-global-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
   min-width: min(100%, 220px);
   max-width: min(340px, calc(100vw - 2rem));
   padding: 0.5rem 0.6rem;
@@ -2459,28 +2477,118 @@ body {
     0 0 18px var(--red-glow-soft);
 }
 
-.mission-outcome-tooltip-panel {
-  display: none;
-  position: absolute;
-  z-index: 80;
-  left: 0;
-  top: calc(100% + 4px);
-}
-
-.mission-outcome-tooltip-anchor:hover .mission-outcome-tooltip-panel,
-.mission-outcome-tooltip-anchor:focus-within .mission-outcome-tooltip-panel {
-  display: block;
-}
-
-.app-global-tooltip {
-  display: none;
-  position: fixed;
-  z-index: 9999;
-  pointer-events: none;
-}
-
 .app-global-tooltip.is-visible {
   display: block;
+}
+
+/* ============================================================
+   Mission card outcome effects
+   ============================================================ */
+
+.mission-card-effects {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--line-1);
+}
+
+.mission-card-effects__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.mission-card-effects__group--success {
+  grid-column: 1;
+}
+
+.mission-card-effects__group--failure {
+  grid-column: 2;
+}
+
+.mission-card-effects__label {
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.mission-card-effects__group--success .mission-card-effects__label {
+  color: var(--good);
+}
+
+.mission-card-effects__group--failure .mission-card-effects__label {
+  color: var(--red-bright);
+}
+
+.mission-card-effects__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.mission-card-effects__item {
+  position: relative;
+  padding-left: 0.8rem;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--text-1);
+  word-break: break-word;
+}
+
+.mission-card-effects__item::before {
+  content: "•";
+  position: absolute;
+  left: 0.05rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--text-3);
+}
+
+.mission-card-effects__item--good {
+  color: var(--text-0);
+}
+
+.mission-card-effects__item--good::before {
+  content: "▲";
+  font-size: 0.5rem;
+  line-height: 1.7;
+  color: var(--good-dim);
+}
+
+.mission-card-effects__item--bad {
+  color: var(--text-1);
+}
+
+.mission-card-effects__item--bad::before {
+  content: "▼";
+  font-size: 0.5rem;
+  line-height: 1.7;
+  color: var(--red-deep);
+}
+
+.mission-card-effects__asset {
+  cursor: help;
+  color: var(--text-0);
+  font-weight: 600;
+  text-decoration: underline dotted var(--line-2);
+  text-underline-offset: 2px;
+  outline: none;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+
+.mission-card-effects__asset:hover,
+.mission-card-effects__asset:focus-visible {
+  color: #fff;
+  text-decoration-color: var(--red-bright);
 }
 
 /* Active mission cards */
@@ -2678,6 +2786,7 @@ body {
   width: 100%;
   min-width: 0;
   overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .locations-panel-column,
@@ -2702,6 +2811,14 @@ body {
   gap: 0.45rem;
 }
 
+.game-panel.game-panel--assets .assets-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
 .assets-panel-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2709,6 +2826,7 @@ body {
   align-content: start;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .game-panel.game-panel--assets,
@@ -2783,9 +2901,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
 }
 
 .lair-panel-name {
@@ -2823,9 +2940,8 @@ body {
 }
 
 .game-panel.game-panel--missions .missions-panel-root {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
@@ -2848,6 +2964,7 @@ body {
   min-width: 0;
   min-height: 0;
   overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .missions-menu-column {
@@ -2928,9 +3045,8 @@ body {
 }
 
 .game-panel.game-panel--events .events-panel {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
@@ -3049,6 +3165,125 @@ body {
   outline-offset: 2px;
 }
 
+/* Minion card horizontal stat badges (CP, Level, XP) */
+.minions-card-stats-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.15rem 0 0.35rem;
+  flex-wrap: wrap;
+}
+
+.minions-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  padding: 0.08rem 0.35rem;
+  font-size: 0.72rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  background: rgba(30, 10, 13, 0.75);
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+  cursor: help;
+  user-select: none;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.minions-card-badge:hover,
+.minions-card-badge:focus-visible {
+  border-color: var(--line-2);
+  background: rgba(44, 13, 17, 0.95);
+  outline: none;
+}
+
+.minions-card-badge__icon {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.minions-card-badge--cp .minions-card-badge__icon {
+  color: var(--red-bright);
+}
+
+.minions-card-badge--level .minions-card-badge__icon {
+  color: var(--cyan);
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.minions-card-badge--xp .minions-card-badge__icon {
+  color: var(--warn);
+}
+
+.minions-card-badge--target .minions-card-badge__icon {
+  color: var(--cyan);
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.minions-card-badge--duration .minions-card-badge__icon {
+  color: var(--warn);
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.minions-card-badge--type .minions-card-badge__icon {
+  color: var(--cyan);
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.minions-card-badge--security .minions-card-badge__icon {
+  color: var(--red-bright);
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.minions-card-badge--intel .minions-card-badge__icon {
+  color: var(--warn);
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.minions-card-badge__value {
+  display: inline;
+  font-weight: 700;
+  color: var(--text-0);
+}
+
+.minions-card-traits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
 .minions-card-traits-dd {
   line-height: 1.5;
 }
@@ -3067,7 +3302,6 @@ body {
   align-items: center;
   gap: 0.22rem;
   padding: 0.08rem 0.35rem;
-  margin: 0.1rem 0.05rem 0 0;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -3076,6 +3310,16 @@ body {
   border: 1px solid var(--line-1);
   color: var(--text-1);
   vertical-align: middle;
+  cursor: help;
+  user-select: none;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.minions-trait-pill:hover,
+.minions-trait-pill:focus-visible {
+  border-color: var(--line-2);
+  background: rgba(84, 30, 36, 0.7);
+  outline: none;
 }
 
 .minions-trait-pill__icon {
@@ -3105,26 +3349,18 @@ body {
   background: rgba(127, 22, 33, 0.35);
 }
 
-.minions-trait-pill--dynamic-positive {
-  color: #7fd9ea;
-  border-color: #155e6e;
-  background: rgba(13, 75, 88, 0.3);
-}
-
-.minions-trait-pill--dynamic-negative {
-  color: #e8b3ff;
-  border-color: #5e1c87;
-  background: rgba(80, 24, 116, 0.3);
-}
-
 /* Mission-card requirement pills: filled + solid border = the player currently
    has the trait/asset; hollow + dotted border + dim text = they don't. */
 .mission-req-pills {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
-  vertical-align: middle;
+  margin-top: 0.25rem;
+}
+
+.mission-req-pills + .location-card-stats {
+  margin-top: 0.35rem;
 }
 
 .minions-trait-pill--req-have {
@@ -3415,20 +3651,6 @@ body {
   color: #ff9aa6;
   border-color: #8c1320;
   background: rgba(127, 22, 33, 0.35);
-  font-weight: 600;
-}
-
-.assign-minion-chip-trait--dynamic-positive {
-  color: #7fd9ea;
-  border-color: #155e6e;
-  background: rgba(13, 75, 88, 0.3);
-  font-weight: 600;
-}
-
-.assign-minion-chip-trait--dynamic-negative {
-  color: #e8b3ff;
-  border-color: #5e1c87;
-  background: rgba(80, 24, 116, 0.3);
   font-weight: 600;
 }
 

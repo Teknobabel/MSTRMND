@@ -543,12 +543,12 @@ describe("formatStandingChange", () => {
     });
 
   it("names the minion, the site, and the standing", () => {
-    expect(line("neutral", "hero")).toBe(`Operative became a Hero of ${locName}.`);
+    expect(line("neutral", "hero")).toBe(`Operative gained Allies in ${locName}.`);
     expect(line("neutral", "wanted")).toBe(`Operative became Wanted in ${locName}.`);
   });
 
   it("says which standing was lost when it lapses", () => {
-    expect(line("hero", "neutral")).toBe(`Operative is no longer a Hero of ${locName}.`);
+    expect(line("hero", "neutral")).toBe(`Operative no longer has Allies in ${locName}.`);
     expect(line("wanted", "neutral")).toBe(`Operative is no longer Wanted in ${locName}.`);
   });
 });

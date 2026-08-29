@@ -1,6 +1,6 @@
 /**
  * Global custom tooltip manager that styles all tooltips across the application
- * with the retro-tactical panel appearance (matching `.mission-outcome-tooltip-panel`).
+ * with the retro-tactical panel appearance.
  */
 
 export interface TooltipApi {
@@ -13,7 +13,7 @@ const HOVER_DELAY_MS = 1000;
 export function initGlobalTooltips(delayMs: number = HOVER_DELAY_MS): TooltipApi {
   const tooltipEl = document.createElement("div");
   tooltipEl.id = "app-global-tooltip";
-  tooltipEl.className = "mission-outcome-tooltip-panel app-global-tooltip";
+  tooltipEl.className = "app-global-tooltip";
   tooltipEl.setAttribute("role", "tooltip");
   tooltipEl.setAttribute("aria-hidden", "true");
   document.body.appendChild(tooltipEl);
@@ -111,11 +111,6 @@ export function initGlobalTooltips(delayMs: number = HOVER_DELAY_MS): TooltipApi
   ): { anchor: HTMLElement; text: string } | null {
     let curr: HTMLElement | null = start;
     while (curr && curr !== document.body && curr !== document.documentElement) {
-      // Do not intercept elements already managed by mission-outcome-tooltip-anchor
-      if (curr.classList.contains("mission-outcome-tooltip-anchor")) {
-        return null;
-      }
-
       const titleAttr = curr.getAttribute("title");
       if (titleAttr !== null && titleAttr.trim().length > 0) {
         const text = titleAttr;
