@@ -63,6 +63,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -759,13 +763,11 @@ body {
   white-space: nowrap;
 }
 
-.btn-pause-corner {
+.btn-pause-corner,
+.btn-turn-corner {
   flex: 0 0 auto;
-  width: 38px;
   height: 38px;
-  min-width: 38px;
   min-height: 38px;
-  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -775,12 +777,39 @@ body {
   color: var(--text-1);
   clip-path: none;
   border-radius: 2px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s, box-shadow 0.12s;
 }
 
-.btn-pause-corner:hover {
+.btn-pause-corner {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+}
+
+.btn-turn-corner {
+  margin: 0;
+  padding: 0 0.85rem;
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.btn-pause-corner:hover,
+.btn-turn-corner:hover {
   color: var(--red-bright);
   border-color: var(--line-2);
   background: rgba(46, 13, 17, 0.7);
+  box-shadow: 0 0 10px var(--red-glow-soft);
+}
+
+.btn-pause-corner:focus-visible,
+.btn-turn-corner:focus-visible {
+  outline: 2px solid var(--red-bright);
+  outline-offset: 1px;
 }
 
 .btn-pause-corner__icon {
@@ -1148,6 +1177,23 @@ body {
   gap: 0.45rem;
 }
 
+.plan-column-stack > .game-panel-title {
+  position: static;
+  margin: 0 -0.75rem 0.1rem;
+  top: auto;
+  flex-shrink: 0;
+}
+
+.plan-column-footer {
+  flex-shrink: 0;
+  margin: 0.2rem -0.75rem -0.7rem;
+  padding: 0.45rem 0.75rem 0.7rem;
+  background: linear-gradient(180deg, rgba(19, 6, 9, 0.92), rgba(16, 5, 8, 0.98));
+  border-top: 1px solid var(--line-0);
+  box-shadow: 0 -8px 16px -6px rgba(0, 0, 0, 0.6);
+  z-index: 2;
+}
+
 /* ---------------- Tabs ---------------- */
 
 .missions-panel-tabs {
@@ -1294,10 +1340,10 @@ body {
 .game-field-label {
   font-family: var(--font-display);
   font-size: 0.6rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--text-2);
+  color: var(--text-0);
 }
 
 .game-select {
@@ -1332,7 +1378,7 @@ body {
   justify-content: center;
   gap: 0.5rem;
   width: 100%;
-  margin-top: 0.2rem;
+  margin-top: 0;
 }
 
 /* Success chance of the staged plan; only rendered once the plan is complete enough to have one. */
@@ -1789,6 +1835,11 @@ body {
   padding-top: 0.7rem;
 }
 
+.turn-report-block:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
 .turn-report-block__title {
   margin: 0 0 0.4rem;
   font-family: var(--font-display);
@@ -2029,24 +2080,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  padding: 0.55rem;
-  border: 1px solid var(--line-1);
-  background: rgba(20, 7, 9, 0.55);
-  transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
-}
-
-.omega-plan-phase--current {
-  border-color: var(--red);
-  box-shadow: 0 0 16px var(--red-glow-soft), inset 0 0 24px rgba(232, 17, 45, 0.06);
+  transition: opacity 0.2s;
 }
 
 .omega-plan-phase--locked {
   opacity: 0.5;
   filter: saturate(0.4);
-}
-
-.omega-plan-phase--complete {
-  border-color: var(--good-dim);
 }
 
 .omega-phase-header {
@@ -3129,6 +3168,99 @@ body {
   opacity: 1;
 }
 
+/* Active-operation callouts: a small crew badge tethered to the site the mission is aimed at.
+ * The stack itself is inert so it never steals a click from a marker underneath it; only the
+ * callout boxes take the pointer, and hovering one names the operation. */
+.map-callout-stack {
+  --callout-x: -50%;
+  --callout-y: calc(-100% - 0.75rem);
+  --callout-anchor: 50%;
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  transform: translate(var(--callout-x), var(--callout-y));
+  pointer-events: none;
+  z-index: 2;
+}
+
+.map-callout-stack:hover,
+.map-callout-stack:focus-within {
+  z-index: 5;
+}
+
+/* Below the pin the marker's hover label occupies the first 1.75rem, so clear it. */
+.map-callout-stack--below {
+  --callout-y: 1.95rem;
+}
+
+.map-callout-stack--right {
+  --callout-x: -0.4rem;
+  --callout-anchor: 0.4rem;
+  align-items: flex-start;
+}
+
+.map-callout-stack--left {
+  --callout-x: calc(-100% + 0.4rem);
+  --callout-anchor: calc(100% - 0.4rem);
+  align-items: flex-end;
+}
+
+/* Leader line back to the pin, drawn from whichever edge the stack was pushed to. */
+.map-callout-stack::after {
+  content: "";
+  position: absolute;
+  left: var(--callout-anchor);
+  top: 100%;
+  width: 1px;
+  height: 0.75rem;
+  background: linear-gradient(to bottom, var(--line-2), rgba(232, 17, 45, 0.2));
+}
+
+.map-callout-stack--below::after {
+  top: auto;
+  bottom: 100%;
+  height: 1.95rem;
+  background: linear-gradient(to top, var(--line-2), rgba(232, 17, 45, 0.2));
+}
+
+.map-callout {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid var(--line-1);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 10px var(--red-glow-soft);
+  cursor: help;
+  pointer-events: auto;
+}
+
+.map-callout:hover,
+.map-callout:focus-visible {
+  border-color: var(--line-2);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 12px rgba(232, 17, 45, 0.65);
+  outline: none;
+}
+
+.map-callout__portrait.card-art {
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  border: 1px solid var(--line-1);
+  background: rgba(10, 4, 5, 0.8);
+  filter: saturate(0.85) contrast(1.05);
+}
+
+.map-callout__nocrew {
+  padding: 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  line-height: 20px;
+  color: var(--text-2);
+}
+
 .map-panel-empty {
   margin: 0;
   font-size: 0.8rem;
@@ -3651,7 +3783,13 @@ body {
   min-height: 2.75rem;
   padding: 0.35rem 0.5rem;
   border: 1px dashed var(--line-2);
-  background: rgba(14, 5, 7, 0.55);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(232, 17, 45, 0.03) 0 8px,
+      transparent 8px 16px
+    ),
+    rgba(14, 5, 7, 0.55);
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 

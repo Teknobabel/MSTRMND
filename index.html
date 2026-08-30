@@ -70,7 +70,14 @@
             <div id="game-stats" class="game-stats" aria-live="polite"></div>
             <div class="omega-statusbar__right">
               <div id="threat-level" class="threat-meter" aria-label="Threat level"></div>
-              <p id="game-hud-short" class="game-ui-stats-turn" aria-live="polite">Game</p>
+              <button
+                type="button"
+                class="btn btn-turn-corner game-ui-stats-turn"
+                id="game-hud-short"
+                aria-label="View turn activity log"
+              >
+                Turn 1
+              </button>
               <button type="button" class="btn btn-pause-corner" id="btn-pause" aria-label="Pause">
                 <svg class="btn-pause-corner__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" />
@@ -81,7 +88,7 @@
           </div>
 
           <div class="omega-body">
-            <aside class="omega-sidebar game-panel game-panel--plan-column" aria-label="Mission planning and activity">
+            <aside class="omega-sidebar game-panel game-panel--plan-column" aria-label="Mission planning">
               <header class="game-player-profile" aria-label="Player and organization">
                 <img
                   id="player-profile-pic"
@@ -147,33 +154,11 @@
                 </button>
               </nav>
               <div class="plan-column-stack">
-                <div class="missions-panel-tabs" role="tablist" aria-label="Mission planning">
-                  <button
-                    type="button"
-                    class="missions-panel-tab missions-panel-tab--active"
-                    role="tab"
-                    id="plan-column-tab-plan"
-                    aria-controls="plan-column-panel-plan"
-                    aria-selected="true"
-                  >
-                    Plan Mission
-                  </button>
-                  <button
-                    type="button"
-                    class="missions-panel-tab"
-                    role="tab"
-                    id="plan-column-tab-activity"
-                    aria-controls="plan-column-panel-activity"
-                    aria-selected="false"
-                  >
-                    Activity
-                  </button>
-                </div>
+                <h2 id="plan-panel-title" class="game-panel-title">Mission Planning</h2>
                 <div
                   id="plan-column-panel-plan"
                   class="missions-panel-page"
-                  role="tabpanel"
-                  aria-labelledby="plan-column-tab-plan"
+                  aria-labelledby="plan-panel-title"
                 >
                   <div class="game-controls">
                     <div class="game-controls-section">
@@ -195,40 +180,26 @@
                           aria-label="Mission target slot"
                         ></div>
                       </label>
-                      <fieldset id="assign-minions" class="game-fieldset">
-                        <legend class="game-field-label">Minions (drag from roster)</legend>
+                      <div id="assign-minions" class="game-field">
+                        <span class="game-field-label">Minions</span>
                         <div id="assign-minions-list"></div>
-                      </fieldset>
-                      <fieldset id="assign-asset-slots-fieldset" class="game-fieldset" hidden>
-                        <legend class="game-field-label">Required Assets (drag from Assets)</legend>
+                      </div>
+                      <div id="assign-asset-slots-fieldset" class="game-field" hidden>
+                        <span class="game-field-label">Required Assets</span>
                         <div id="assign-asset-slots-list"></div>
-                      </fieldset>
-                      <fieldset id="assign-support-assets-fieldset" class="game-fieldset" hidden>
-                        <legend class="game-field-label" id="assign-support-assets-label">
-                          Support Assets (optional)
-                        </legend>
+                      </div>
+                      <div id="assign-support-assets-fieldset" class="game-field" hidden>
+                        <span class="game-field-label" id="assign-support-assets-label">Support Assets</span>
                         <div id="assign-support-assets-list"></div>
-                      </fieldset>
-                      <button type="button" class="btn btn-submit-mission" id="btn-assign-mission">
-                        <span>Submit</span>
-                        <span id="assign-submit-chance" class="btn-submit-mission__chance" hidden></span>
-                      </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div
-                  id="plan-column-panel-activity"
-                  class="missions-panel-page"
-                  role="tabpanel"
-                  aria-labelledby="plan-column-tab-activity"
-                  hidden
-                >
-                  <div
-                    id="activity-panel"
-                    class="activity-panel"
-                    aria-live="polite"
-                    aria-relevant="additions text"
-                  ></div>
+                <div class="plan-column-footer">
+                  <button type="button" class="btn btn-submit-mission" id="btn-assign-mission">
+                    <span>Submit</span>
+                    <span id="assign-submit-chance" class="btn-submit-mission__chance" hidden></span>
+                  </button>
                 </div>
               </div>
             </aside>
@@ -315,6 +286,31 @@
               </button>
               <button type="button" class="btn btn-primary" id="btn-turn-report-continue">
                 Continue
+              </button>
+            </footer>
+          </div>
+        </div>
+
+        <div id="overlay-activity-log" class="turn-report-overlay" hidden aria-hidden="true">
+          <div class="turn-report-backdrop" id="activity-log-backdrop" aria-hidden="true"></div>
+          <div
+            class="turn-report-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="activity-log-title"
+            aria-describedby="activity-log-body"
+          >
+            <header class="turn-report-head">
+              <div class="turn-report-head__text">
+                <p id="activity-log-kicker" class="turn-report-kicker">Operations Log</p>
+                <h2 id="activity-log-title" class="turn-report-title">Turn Activity Log</h2>
+              </div>
+              <div id="activity-log-verdict" class="turn-report-verdict turn-report-verdict--tally">Turn 1</div>
+            </header>
+            <div id="activity-log-body" class="turn-report-body" tabindex="-1"></div>
+            <footer class="turn-report-actions">
+              <button type="button" class="btn btn-primary" id="btn-activity-log-close">
+                Close
               </button>
             </footer>
           </div>

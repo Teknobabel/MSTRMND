@@ -1033,16 +1033,20 @@ function initGameController(
   const playerNameEl = req<HTMLElement>("player-name");
   const playerProfilePicEl = req<HTMLImageElement>("player-profile-pic");
   const statsEl = req<HTMLElement>("game-stats");
-  const activityPanelEl = req<HTMLElement>("activity-panel");
+  const overlayActivityLog = req<HTMLElement>("overlay-activity-log");
+  const activityLogBackdrop = req<HTMLElement>("activity-log-backdrop");
+  const activityLogVerdict = req<HTMLElement>("activity-log-verdict");
+  const activityLogBody = req<HTMLElement>("activity-log-body");
+  const btnActivityLogClose = req<HTMLButtonElement>("btn-activity-log-close");
   const minionsPanelEl = req<HTMLElement>("minions-panel");
   const assignMissionSlotEl = req<HTMLElement>("assign-mission-slot");
   const assignTargetSlotEl = req<HTMLElement>("assign-target-slot");
   const assignTargetFieldEl = req<HTMLElement>("assign-target-field");
   const assignTargetLabelEl = req<HTMLElement>("assign-target-label");
   const minionsList = req<HTMLElement>("assign-minions-list");
-  const assignAssetSlotsFieldset = req<HTMLFieldSetElement>("assign-asset-slots-fieldset");
+  const assignAssetSlotsFieldset = req<HTMLElement>("assign-asset-slots-fieldset");
   const assignAssetSlotsList = req<HTMLElement>("assign-asset-slots-list");
-  const assignSupportAssetsFieldset = req<HTMLFieldSetElement>("assign-support-assets-fieldset");
+  const assignSupportAssetsFieldset = req<HTMLElement>("assign-support-assets-fieldset");
   const assignSupportAssetsLabel = req<HTMLElement>("assign-support-assets-label");
   const assignSupportAssetsList = req<HTMLElement>("assign-support-assets-list");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
@@ -1072,10 +1076,6 @@ function initGameController(
   const missionsPanelTitleEl = req<HTMLElement>("missions-panel-title");
   const lairPanelEl = req<HTMLElement>("lair-panel");
   const mapPanelEl = req<HTMLElement>("map-panel");
-  const planColumnTabPlan = req<HTMLButtonElement>("plan-column-tab-plan");
-  const planColumnTabActivity = req<HTMLButtonElement>("plan-column-tab-activity");
-  const planColumnPanelPlan = req<HTMLElement>("plan-column-panel-plan");
-  const planColumnPanelActivity = req<HTMLElement>("plan-column-panel-activity");
   const rightColumnsRowElLookup = document.querySelector<HTMLElement>(".game-ui-columns-row");
   if (rightColumnsRowElLookup === null) {
     throw new Error("Missing .game-ui-columns-row");
@@ -2008,7 +2008,7 @@ function initGameController(
         const ph = document.createElement("span");
         ph.className = "assign-minion-slot-placeholder";
         const name = content.assets.find((a) => a.id === requiredId)?.name ?? requiredId;
-        ph.textContent = `Slot ${slotIndex + 1} · ${name}`;
+        ph.textContent = `Drag a ${name}`;
         slot.appendChild(ph);
       } else {
         const tpl = content.assets.find((a) => a.id === placed);
@@ -2065,9 +2065,7 @@ function initGameController(
       return;
     }
     assignSupportAssetsFieldset.hidden = false;
-    assignSupportAssetsLabel.textContent = `Support Assets (optional · ${cap} slot${
-      cap === 1 ? "" : "s"
-    })`;
+    assignSupportAssetsLabel.textContent = "Support Assets";
     const mainOnly = state.phase === "main";
     const wrap = document.createElement("div");
     wrap.className = "assign-minion-slots assign-asset-slots assign-support-asset-slots";
@@ -2123,7 +2121,7 @@ function initGameController(
       if (placed === null) {
         const ph = document.createElement("span");
         ph.className = "assign-minion-slot-placeholder";
-        ph.textContent = `Support ${slotIndex + 1} · empty`;
+        ph.textContent = "Drag a support asset";
         slot.appendChild(ph);
       } else {
         const tpl = content.assets.find((a) => a.id === placed);
@@ -2713,7 +2711,7 @@ function initGameController(
       if (instanceId === null) {
         const ph = document.createElement("span");
         ph.className = "assign-minion-slot-placeholder";
-        ph.textContent = `Slot ${slotIndex + 1}`;
+        ph.textContent = "Drag a minion";
         slot.appendChild(ph);
       } else {
         const inst = state.player.minions.find((m) => m.instanceId === instanceId);
@@ -4662,6 +4660,69 @@ function initGameController(
   }
 
   /**
+   * Hover text for a map callout: which operation is running at this site, how far along it is,
+   * and who is on it. The same facts the Missions menu card carries, minus the planning detail.
+   */
+  function missionCalloutTooltipLines(am: ActiveMission): string[] {
+    const mission = findMissionOrEventTemplate(am.missionTemplateId);
+    const crewNames = missionCalloutParticipants(am).map(
+      (inst) => content.minions.find((t) => t.id === inst.templateId)?.name ?? inst.templateId,
+    );
+    const lines = [
+      mission?.name ?? am.missionTemplateId,
+      `Target: ${formatMissionTargetSummary(am.target)}`,
+    ];
+    if (mission !== undefined) {
+      lines.push(
+        `${am.turnsRemaining} / ${mission.durationTurns} turn${
+          mission.durationTurns === 1 ? "" : "s"
+        } remaining`,
+      );
+    }
+    lines.push(`Crew: ${crewNames.length > 0 ? crewNames.join(", ") : "—"}`);
+    return lines;
+  }
+
+  /** Roster order, not assign order, so the same crew always reads the same way. */
+  function missionCalloutParticipants(am: ActiveMission): MinionInstance[] {
+    return state.player.minions.filter((inst) =>
+      am.participantInstanceIds.includes(inst.instanceId),
+    );
+  }
+
+  /**
+   * A running operation pinned to its target site: portraits of the crew on it, with the mission
+   * itself on hover. One per active mission, so a site running two operations stacks two.
+   */
+  function createMissionCalloutEl(am: ActiveMission): HTMLElement {
+    const callout = document.createElement("div");
+    callout.className = "map-callout";
+    callout.dataset.activeMissionId = am.id;
+    callout.tabIndex = 0;
+    callout.setAttribute("role", "img");
+    const tipLines = missionCalloutTooltipLines(am);
+    callout.title = tipLines.join("\n");
+    callout.setAttribute("aria-label", tipLines.join(". "));
+
+    const crew = missionCalloutParticipants(am);
+    if (crew.length === 0) {
+      /* Unmanned operations still deserve a pin: show the marker, not an empty box. */
+      const solo = document.createElement("span");
+      solo.className = "map-callout__nocrew";
+      solo.textContent = "—";
+      callout.appendChild(solo);
+    } else {
+      for (const inst of crew) {
+        const tpl = content.minions.find((t) => t.id === inst.templateId);
+        callout.appendChild(
+          createCardArtImg(resolveMinionCardArt(tpl), "map-callout__portrait"),
+        );
+      }
+    }
+    return callout;
+  }
+
+  /**
    * The run's map with its sites plotted on it. Markers carry the same drag payload as location
    * cards, so the map is a second way to pick a mission target rather than a picture of one.
    */
@@ -4702,6 +4763,21 @@ function initGameController(
       assignTarget?.kind === "location" || assignTarget?.kind === "asset"
         ? assignTarget.locationId
         : null;
+
+    /* Missions aimed at a site, or at an asset sitting in one, both hang off that site's pin. */
+    const missionsByLocation = new Map<string, ActiveMission[]>();
+    for (const am of state.activeMissions) {
+      const lid = getMissionTargetLocationId(am.target);
+      if (lid === null) {
+        continue;
+      }
+      const running = missionsByLocation.get(lid);
+      if (running === undefined) {
+        missionsByLocation.set(lid, [am]);
+      } else {
+        running.push(am);
+      }
+    }
 
     for (const marker of map.markers ?? []) {
       const loc = getLocationById(content, marker.locationId);
@@ -4769,6 +4845,28 @@ function initGameController(
       pin.appendChild(label);
 
       plot.appendChild(pin);
+
+      const running = missionsByLocation.get(loc.id) ?? [];
+      if (running.length > 0) {
+        const stack = document.createElement("div");
+        stack.className = "map-callout-stack";
+        stack.style.left = `${marker.x}%`;
+        stack.style.top = `${marker.y}%`;
+        /* Sit above the pin unless that would run off the top of the plot, and pull the stack
+         * back inside the frame when the pin hugs a side. */
+        if (marker.y < 22) {
+          stack.classList.add("map-callout-stack--below");
+        }
+        if (marker.x < 15) {
+          stack.classList.add("map-callout-stack--right");
+        } else if (marker.x > 85) {
+          stack.classList.add("map-callout-stack--left");
+        }
+        for (const am of running) {
+          stack.appendChild(createMissionCalloutEl(am));
+        }
+        plot.appendChild(stack);
+      }
     }
 
     mapPanelEl.appendChild(plot);
@@ -4938,14 +5036,35 @@ function initGameController(
     lairPanelEl.appendChild(list);
   }
 
-  function renderActivityPanel(): void {
-    activityPanelEl.innerHTML = "";
+  function activityEventTone(ev: ActivityEvent): "neutral" | "good" | "bad" {
+    switch (ev.kind) {
+      case "mission_completed":
+        return ev.success ? "good" : "bad";
+      case "minion_hired":
+      case "minion_rehired":
+      case "minion_leveled_up":
+      case "asset_gained":
+        return "good";
+      case "mission_aborted":
+      case "asset_lost":
+      case "agent_ability_used":
+        return "bad";
+      case "run_ended":
+        return ev.ending.kind === "victory" ? "good" : "bad";
+      default:
+        return "neutral";
+    }
+  }
+
+  function renderActivityLogModal(): void {
+    activityLogVerdict.textContent = `Turn ${state.turnNumber}`;
+    activityLogBody.innerHTML = "";
     const log = state.activityLog;
     if (log.length === 0) {
       const empty = document.createElement("p");
-      empty.className = "activity-panel-empty";
+      empty.className = "turn-report-description";
       empty.textContent = "No activity yet.";
-      activityPanelEl.appendChild(empty);
+      activityLogBody.appendChild(empty);
       return;
     }
 
@@ -5110,58 +5229,62 @@ function initGameController(
     for (let i = 0; i < log.length; i += 1) {
       const entry = log[i]!;
       const section = document.createElement("section");
-      section.className = "activity-turn";
+      section.className = "turn-report-block";
       const headingId = `activity-turn-h-${i}`;
       section.setAttribute("aria-labelledby", headingId);
 
       const heading = document.createElement("h3");
       heading.id = headingId;
-      heading.className = "activity-turn-heading";
+      heading.className = "turn-report-block__title";
       heading.textContent = `Turn ${entry.turnNumber}`;
       section.appendChild(heading);
 
       const ul = document.createElement("ul");
-      ul.className = "activity-event-list";
+      ul.className = "turn-report-lines";
       const { events } = entry;
-      if (events.length === 0) {
+      const visibleEvents = events.filter(
+        (ev) =>
+          ev.kind !== "agent_moved" ||
+          isOpposingAgentMoveVisibleToPlayer(
+            state,
+            ev.agentInstanceId,
+            ev.fromLocationId,
+            ev.toLocationId,
+          ),
+      );
+
+      if (visibleEvents.length === 0) {
         const li = document.createElement("li");
-        li.className = "activity-event";
+        li.className = "turn-report-line";
         li.textContent = "No missions completed this resolve.";
         ul.appendChild(li);
       } else {
-        for (const ev of events) {
-          /* Agent movement is logged for every agent; only the moves the player could watch
-           * belong in the feed (see `isOpposingAgentMoveVisibleToPlayer`). */
-          if (
-            ev.kind === "agent_moved" &&
-            !isOpposingAgentMoveVisibleToPlayer(
-              state,
-              ev.agentInstanceId,
-              ev.fromLocationId,
-              ev.toLocationId,
-            )
-          ) {
-            continue;
-          }
+        for (const ev of visibleEvents) {
           const li = document.createElement("li");
-          li.className = "activity-event";
+          const tone = activityEventTone(ev);
+          li.className =
+            tone === "neutral" ? "turn-report-line" : `turn-report-line turn-report-line--${tone}`;
           li.textContent = formatActivityEvent(ev);
           ul.appendChild(li);
         }
       }
       section.appendChild(ul);
-      activityPanelEl.appendChild(section);
+      activityLogBody.appendChild(section);
     }
   }
 
-  function setPlanColumnTab(which: "plan" | "activity"): void {
-    const isPlan = which === "plan";
-    planColumnTabPlan.classList.toggle("missions-panel-tab--active", isPlan);
-    planColumnTabActivity.classList.toggle("missions-panel-tab--active", !isPlan);
-    planColumnTabPlan.setAttribute("aria-selected", String(isPlan));
-    planColumnTabActivity.setAttribute("aria-selected", String(!isPlan));
-    planColumnPanelPlan.hidden = !isPlan;
-    planColumnPanelActivity.hidden = isPlan;
+  function openActivityLogModal(): void {
+    renderActivityLogModal();
+    activityLogBody.scrollTop = 0;
+    overlayActivityLog.hidden = false;
+    overlayActivityLog.setAttribute("aria-hidden", "false");
+    btnActivityLogClose.focus();
+  }
+
+  function closeActivityLogModal(): void {
+    overlayActivityLog.hidden = true;
+    overlayActivityLog.setAttribute("aria-hidden", "true");
+    hudShort.focus();
   }
 
   function applyGameMenuVisibility(): void {
@@ -5253,11 +5376,23 @@ function initGameController(
     });
   }
 
-  planColumnTabPlan.addEventListener("click", () => {
-    setPlanColumnTab("plan");
+  hudShort.addEventListener("click", () => {
+    openActivityLogModal();
   });
-  planColumnTabActivity.addEventListener("click", () => {
-    setPlanColumnTab("activity");
+
+  btnActivityLogClose.addEventListener("click", () => {
+    closeActivityLogModal();
+  });
+
+  activityLogBackdrop.addEventListener("click", () => {
+    closeActivityLogModal();
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !overlayActivityLog.hidden) {
+      e.stopPropagation();
+      closeActivityLogModal();
+    }
   });
 
   function renderStatusBar(): void {
@@ -5828,7 +5963,7 @@ function initGameController(
     renderStatusBar();
     renderThreatMeter();
     renderGlobalTicker();
-    hudShort.textContent = `Turn ${state.turnNumber} · ${state.phase} phase`;
+    hudShort.textContent = `Turn ${state.turnNumber}`;
 
     const mainOnly = state.phase === "main";
     btnExec.hidden = !mainOnly;
@@ -5843,7 +5978,9 @@ function initGameController(
     renderMissionsPanel();
     renderLairPanel();
     renderMapPanel();
-    renderActivityPanel();
+    if (!overlayActivityLog.hidden) {
+      renderActivityLogModal();
+    }
     applyGameMenuVisibility();
   }
 
