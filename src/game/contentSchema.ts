@@ -540,10 +540,6 @@ export const balanceConfigSchema = z.object({
       missionFailure: balanceInt(-100, 100, DEFAULT_BALANCE.locationAffinity.missionFailure),
     })
     .default({ ...DEFAULT_BALANCE.locationAffinity }),
-  infamySuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamySuccessDelta),
-  infamyFailureDelta: balanceInt(-100, 100, DEFAULT_BALANCE.infamyFailureDelta),
-  heatSuccessDelta: balanceInt(-100, 100, DEFAULT_BALANCE.heatSuccessDelta),
-  heatFailureDelta: balanceInt(-100, 100, DEFAULT_BALANCE.heatFailureDelta),
   agentInvestigatorFailureHeat: balanceInt(0, 100, DEFAULT_BALANCE.agentInvestigatorFailureHeat),
   startingMaxCommandPoints: balanceInt(1, 99, DEFAULT_BALANCE.startingMaxCommandPoints),
   rerollHireOffersCp: balanceInt(0, 99, DEFAULT_BALANCE.rerollHireOffersCp),

@@ -5,7 +5,17 @@
     "description": "An invitation-only bazaar drops anchor in international waters. Everything is for sale for exactly one weekend.",
     "durationTurns": 1,
     "lifetimeTurns": 3,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 5
+      },
       {
         "kind": "gain_assets",
         "assetIds": [
@@ -26,6 +36,12 @@
     "description": "A night-shift guard with gambling debts is selling floor plans. For one weekend, the world leaves its curtains open.",
     "durationTurns": 1,
     "lifetimeTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "reveal_hidden_assets_global",
@@ -46,6 +62,12 @@
     "durationTurns": 1,
     "lifetimeTurns": 2,
     "minInfamy": 20,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "reveal_hidden_assets_by_location_type",
@@ -72,16 +94,22 @@
     "description": "Every minister worth compromising is at one party tonight. The champagne loosens more than ties.",
     "durationTurns": 2,
     "lifetimeTurns": 3,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 10
+      },
       {
         "kind": "gain_assets",
         "assetIds": [
           "blackmail_dossier"
         ]
-      },
-      {
-        "kind": "infamy_delta",
-        "amount": 5
       }
     ],
     "requiredAssetIds": [],
@@ -98,7 +126,17 @@
     "description": "A competitor's empire just collapsed. Their assets are on the curb and the vultures are circling.",
     "durationTurns": 1,
     "lifetimeTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 5
+      },
       {
         "kind": "gain_assets",
         "assetIds": [
@@ -124,6 +162,10 @@
     "lifetimeTurns": 3,
     "onSuccessEffects": [
       {
+        "kind": "infamy_delta",
+        "amount": 2
+      },
+      {
         "kind": "max_hire_offers_delta",
         "delta": 1
       }
@@ -142,10 +184,16 @@
     "durationTurns": 1,
     "lifetimeTurns": 2,
     "minInfamy": 15,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 5
+        "amount": 10
       },
       {
         "kind": "add_success_chance_modifier",
@@ -169,12 +217,20 @@
     "minHeat": 15,
     "onFailureEffects": [
       {
+        "kind": "heat_delta",
+        "amount": 5
+      },
+      {
         "kind": "add_trait_to_random_minions",
         "count": 2,
         "traitId": "injured"
       }
     ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 8
+      },
       {
         "kind": "heat_delta",
         "amount": -10
@@ -196,6 +252,10 @@
     "lifetimeTurns": 3,
     "minHeat": 25,
     "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      },
       {
         "kind": "security_level_delta_global",
         "delta": 1
@@ -224,6 +284,10 @@
     "minHeat": 25,
     "onFailureEffects": [
       {
+        "kind": "heat_delta",
+        "amount": 3
+      },
+      {
         "kind": "intel_level_delta_global",
         "delta": -1
       }
@@ -249,7 +313,17 @@
     "durationTurns": 2,
     "lifetimeTurns": 3,
     "minInfamy": 30,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 6
+      },
       {
         "kind": "gain_assets",
         "assetIds": [
@@ -278,6 +352,10 @@
     "lifetimeTurns": 2,
     "minHeat": 40,
     "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      },
       {
         "kind": "exchange_assets",
         "gainAssetIds": [],
@@ -311,7 +389,7 @@
     "onFailureEffects": [
       {
         "kind": "heat_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "add_success_chance_modifier",
@@ -349,7 +427,7 @@
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 10
+        "amount": 15
       }
     ],
     "requiredAssetIds": [],
@@ -367,6 +445,12 @@
     "durationTurns": 1,
     "lifetimeTurns": 2,
     "minInfamy": 60,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "add_success_chance_modifier",
@@ -394,12 +478,12 @@
     "lifetimeTurns": 2,
     "onSuccessEffects": [
       {
-        "kind": "heat_delta",
-        "amount": -25
+        "kind": "infamy_delta",
+        "amount": 15
       },
       {
-        "kind": "infamy_delta",
-        "amount": 10
+        "kind": "heat_delta",
+        "amount": -25
       }
     ],
     "requiredAssetIds": [],

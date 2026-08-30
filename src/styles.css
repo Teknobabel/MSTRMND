@@ -3577,12 +3577,30 @@ body {
   vertical-align: middle;
 }
 
-.location-asset-drag-chip {
-  cursor: grab;
+.location-asset-drag-chip,
+.location-asset-pills .location-asset-static {
   padding: 0.08rem 0.35rem;
   border: 1px dashed var(--line-2);
   background: rgba(46, 13, 17, 0.5);
   color: var(--text-1);
+}
+
+.location-asset-drag-chip {
+  cursor: grab;
+}
+
+.location-asset-drag-chip--revealed,
+.location-asset-static--revealed {
+  border-style: solid;
+}
+
+.location-asset-drag-chip--hidden,
+.location-asset-static--hidden,
+.location-asset-drag-chip--unknown,
+.location-asset-static--unknown,
+.location-asset-drag-chip--empty,
+.location-asset-static--empty {
+  border-style: dashed;
 }
 
 .location-asset-drag-chip:hover {

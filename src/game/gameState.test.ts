@@ -359,7 +359,7 @@ describe("agent abilities", () => {
     if (!plain.ok) {
       return;
     }
-    expect(plain.value.player.heat).toBe(5); /* baseline heatFailureDelta alone */
+    expect(plain.value.player.heat).toBe(5); /* the template's own failure heat alone */
 
     let state = withAgentAt(doomedMissionAtLocA(), "loc-a", "a-spy", "opp-1", "revealed", [
       "investigator",
@@ -596,6 +596,44 @@ describe("executePlan", () => {
     }
   });
 
+  it("moves neither stat when the template authors no standing effects", () => {
+    /* The flat +5 infamy / +5 heat outcome bonus is gone: a mission is worth exactly what its
+     * own `infamy_delta` / `heat_delta` effects say, and authoring none is a valid choice. */
+    const raw = rawFixtureSlices();
+    const basic = raw.missions[0] as Record<string, unknown>;
+    delete basic.onSuccessEffects;
+    delete basic.onFailureEffects;
+    const quiet = parseCatalog(raw);
+
+    for (const [rng, label] of [
+      [() => 0, "success"],
+      [() => 0.99, "failure"],
+    ] as const) {
+      let state = createInitialGameState(quiet, seededRng(1));
+      state = {
+        ...state,
+        locationRequiredTraits: { "loc-a": [], "loc-b": [] },
+        locationSecurityTraits: { "loc-a": [], "loc-b": [] },
+        player: {
+          ...state.player,
+          /* `t-req` on a success roll, stripped on the failure roll to force 0%. */
+          minions: [
+            makeMinionInstance("mi-1", "m-hero", label === "success" ? ["t-req"] : []),
+          ],
+        },
+        activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+      };
+      const result = executePlan(state, quiet, rng, sequentialIds("ag"));
+      expect(result.ok, label).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+      expect(completedEvents(result.value)[0]?.success, label).toBe(label === "success");
+      expect(result.value.player.infamy, label).toBe(0);
+      expect(result.value.player.heat, label).toBe(0);
+    }
+  });
+
   it("resolves a fully-matched mission: success, XP, +1 security, +infamy, no heat", () => {
     let state = baseState(1);
     state = {
@@ -616,8 +654,6 @@ describe("executePlan", () => {
     expect(done).toHaveLength(1);
     expect(done[0]!.success).toBe(true);
     expect(done[0]!.successChancePercent).toBe(100);
-    expect(done[0]!.baselineInfamyDelta).toBe(5);
-    expect(done[0]!.baselineHeatDelta).toBe(0);
     expect(next.player.infamy).toBe(5);
     expect(next.player.heat).toBe(0); /* success is clean: no heat */
     expect(next.wantedLevelTierIndex).toBe(0); /* wanted level tracks heat, not infamy */

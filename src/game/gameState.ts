@@ -219,12 +219,13 @@ export type ActivityEventMissionCompleted = {
   /** Roll in [0, 100) compared to success chance */
   roll: number;
   successChancePercent: number;
+  /**
+   * Total infamy change this mission caused: the outcome's `infamy_delta` effects plus
+   * anything else that moved it during the resolve, after the 0-100 clamp.
+   */
   infamyDelta: number;
-  /** Baseline infamy from success/failure before template effects. */
-  baselineInfamyDelta: number;
+  /** Total heat change, same accounting (includes an Investigator's bonus failure heat). */
   heatDelta: number;
-  /** Baseline heat from success/failure before template effects. */
-  baselineHeatDelta: number;
   /** Template effect lines in resolution order (reveal/steal first, then the rest). */
   templateEffectDescriptions: string[];
   /**
@@ -2288,17 +2289,6 @@ export function executePlan(
           ),
         )
       : null;
-    const baselineInfamy = success
-      ? catalog.balance.infamySuccessDelta
-      : catalog.balance.infamyFailureDelta;
-    const baselineHeat = success
-      ? catalog.balance.heatSuccessDelta
-      : catalog.balance.heatFailureDelta;
-    player = {
-      ...player,
-      infamy: player.infamy + baselineInfamy,
-      heat: player.heat + baselineHeat,
-    };
 
     /* Passive agent abilities at the target site. Both fire on failure only, and both land
      * once per mission however many agents at the site carry them — they are properties of
@@ -2388,8 +2378,8 @@ export function executePlan(
 
     /* --- Support-asset promises, cashed in --------------------------------------------
      * Each of these holds one dimension of the outcome to where the mission found it, after
-     * everything that could have moved it (baseline, passive agent abilities, the template's
-     * own effects) has run. Improvements are never rolled back — only rises. */
+     * everything that could have moved it (passive agent abilities, the template's own
+     * effects) has run. Improvements are never rolled back — only rises. */
     if (preventInjuries && alreadyInjuredIds !== null) {
       let anyHealed = false;
       for (const iid of am.participantInstanceIds) {
@@ -2477,9 +2467,7 @@ export function executePlan(
       roll,
       successChancePercent: pct,
       infamyDelta: infamyDeltaTotal,
-      baselineInfamyDelta: baselineInfamy,
       heatDelta: heatDeltaTotal,
-      baselineHeatDelta: baselineHeat,
       templateEffectDescriptions,
       ...(relationshipChanges !== undefined ? { relationshipChanges } : {}),
       ...(standingChanges !== undefined ? { standingChanges } : {}),

@@ -345,7 +345,7 @@ describe("resolve-time abilities", () => {
       },
     };
     const bare = resolveWith(noTrait, cat, 0.99);
-    expect(bare.player.heat).toBe(cat.balance.heatFailureDelta);
+    expect(bare.player.heat).toBe(5); /* `ms-basic`'s authored failure heat */
 
     const guarded = resolveWith(
       { ...noTrait, activeMissions: [{ ...noTrait.activeMissions[0]!, supportAssetIds: ["sup-cool"] }] },

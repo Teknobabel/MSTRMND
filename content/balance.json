@@ -16,15 +16,11 @@
   "eventMaxParticipants": 3,
   "fireRehireCooldownTurns": 3,
   "firstEventTurn": 3,
-  "heatFailureDelta": 5,
-  "heatSuccessDelta": 0,
   "hireLevelInfamyThresholds": [
     20,
     40,
     60
   ],
-  "infamyFailureDelta": 0,
-  "infamySuccessDelta": 5,
   "initialIntelSitesAtOne": 3,
   "initialIntelSitesAtTwo": 1,
   "locationAffinity": {

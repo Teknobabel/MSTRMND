@@ -401,9 +401,13 @@ export type MissionTemplate = {
    * high values implicitly excludes the low-level sites that can never reach them.
    */
   targetLocationSecurityLevels?: SecurityLevel[];
-  /** Applied in order when the mission resolves successfully (after baseline infamy). */
+  /**
+   * Applied in order when the mission resolves successfully. There is no flat outcome bonus
+   * behind these: a mission is worth exactly the `infamy_delta` / `heat_delta` it authors here,
+   * so standing is tuned per mission rather than globally.
+   */
   onSuccessEffects?: MissionEffect[];
-  /** Applied in order when the mission resolves as a failure (after baseline infamy). */
+  /** Applied in order when the mission resolves as a failure. Same rule as `onSuccessEffects`. */
   onFailureEffects?: MissionEffect[];
 };
 
@@ -561,8 +565,8 @@ export type MapTemplate = {
  *   than it found it: the automatic post-resolve bump is skipped, and any net rise this
  *   mission's own effects caused there is given back. A reduction still stands.
  * - `prevent_heat_increase` — the mission cannot end with the player's heat higher than it
- *   started (baseline failure heat, an Investigator's bonus heat, and `heat_delta` effects all
- *   included). Reductions still land.
+ *   started (the template's own `heat_delta` effects and an Investigator's bonus heat alike).
+ *   Reductions still land.
  * - `prevent_injuries` — no participant comes home with the `injured` trait they did not
  *   already have (blocks the Brawler and any effect that would have applied it).
  * - `ignore_agent_challenge_traits` — the site's opposing agents contribute no challenge
@@ -788,14 +792,6 @@ export type BalanceConfig = {
   minionAffinity: MinionAffinityConfig;
   locationAffinity: LocationAffinityConfig;
   /* Infamy, heat & risk */
-  /** Infamy change on mission success (typically positive — the reputation the player builds). */
-  infamySuccessDelta: number;
-  /** Infamy change on mission failure (typically 0). */
-  infamyFailureDelta: number;
-  /** Heat change on mission success (typically 0 — clean jobs draw no attention). */
-  heatSuccessDelta: number;
-  /** Heat change on mission failure (typically positive; drives the wanted level). */
-  heatFailureDelta: number;
   /**
    * Extra heat when a mission fails at a site held by an agent with the **Investigator**
    * ability. Applied once per failed mission, however many Investigators are standing there.
@@ -885,10 +881,6 @@ export const DEFAULT_BALANCE: BalanceConfig = {
     missionSuccess: 1,
     missionFailure: -1,
   },
-  infamySuccessDelta: 5,
-  infamyFailureDelta: 0,
-  heatSuccessDelta: 0,
-  heatFailureDelta: 5,
   agentInvestigatorFailureHeat: 5,
   startingMaxCommandPoints: 5,
   rerollHireOffersCp: 1,

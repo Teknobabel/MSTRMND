@@ -5,7 +5,17 @@
     "description": "Put eyes on the target until its secrets start showing.",
     "coreMission": true,
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 4
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 2
+      },
       {
         "kind": "intel_level_delta",
         "delta": 1
@@ -23,6 +33,12 @@
     "description": "Burn the safehouses, feed the press a decoy, let the trail go cold.",
     "coreMission": true,
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "heat_delta",
@@ -40,13 +56,23 @@
     "name": "Smash and Grab",
     "description": "Subtlety is for people who can't lift a vault door.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 8
+      }
+    ],
     "onSuccessEffects": [
       {
-        "kind": "steal_target_asset"
+        "kind": "infamy_delta",
+        "amount": 6
       },
       {
         "kind": "heat_delta",
-        "amount": 5
+        "amount": 6
+      },
+      {
+        "kind": "steal_target_asset"
       }
     ],
     "requiredTraitIds": [
@@ -61,7 +87,17 @@
     "name": "The Ghost Heist",
     "description": "In and out through the vents. The mark finds an empty case and a calling card.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 8
+      },
       {
         "kind": "steal_target_asset"
       }
@@ -79,7 +115,17 @@
     "name": "Inside Job",
     "description": "A bribed supervisor, a rewritten patrol roster, and suddenly nobody is watching.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 6
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 2
+      },
       {
         "kind": "security_level_delta",
         "delta": -2
@@ -97,7 +143,17 @@
     "name": "Fence the Loot",
     "description": "Gold is lovely, but liquidity is lovelier.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 1
+      },
       {
         "kind": "gain_assets",
         "assetIds": [
@@ -120,7 +176,17 @@
     "name": "Broker the Secrets",
     "description": "Sell the stolen file back to the people it embarrasses. Keep a copy, obviously.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 6
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 4
+      },
       {
         "kind": "gain_assets",
         "assetIds": [
@@ -143,7 +209,17 @@
     "name": "Arm the Militia",
     "description": "One stolen prototype, reverse-engineered for very grateful clients with very loyal soldiers.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 6
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 7
+      },
       {
         "kind": "gain_assets",
         "assetIds": [
@@ -168,6 +244,10 @@
     "durationTurns": 2,
     "onSuccessEffects": [
       {
+        "kind": "infamy_delta",
+        "amount": 2
+      },
+      {
         "kind": "gain_assets",
         "assetIds": [
           "midnight_lens"
@@ -189,6 +269,12 @@
     "name": "Satellite Deep Scan",
     "description": "The Panopticon Uplink turns its lens on one site and reads its mail.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 2
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "intel_level_delta",
@@ -227,16 +313,26 @@
     "name": "Spin the Presses",
     "description": "The Mint hums all night. The bills even smell real.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 3
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      },
       {
         "kind": "gain_assets",
         "assetIds": [
           "dirty_money"
         ]
-      },
-      {
-        "kind": "heat_delta",
-        "amount": 5
       }
     ],
     "requiredTraitIds": [
@@ -251,6 +347,10 @@
     "description": "A wall of screens, a better chair, and the capacity to run one more scheme at a time.",
     "durationTurns": 1,
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 2
+      },
       {
         "kind": "max_concurrent_missions_delta",
         "delta": 1
@@ -270,6 +370,10 @@
     "durationTurns": 1,
     "onSuccessEffects": [
       {
+        "kind": "infamy_delta",
+        "amount": 2
+      },
+      {
         "kind": "max_roster_size_delta",
         "delta": 2
       }
@@ -287,6 +391,10 @@
     "description": "Lathes, lasers, and a gadget bench. Every op leaves with one more toy.",
     "durationTurns": 1,
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 2
+      },
       {
         "kind": "max_support_assets_delta",
         "delta": 1
@@ -310,7 +418,17 @@
     "name": "Panopticon Uplink",
     "description": "A stolen satellite constellation gets a new employer. The world grows legible.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 6
+      },
       {
         "kind": "intel_level_delta_global",
         "delta": 1
@@ -338,6 +456,10 @@
     "durationTurns": 2,
     "onSuccessEffects": [
       {
+        "kind": "infamy_delta",
+        "amount": 2
+      },
+      {
         "kind": "remove_trait_from_all_minions",
         "traitId": "injured"
       },
@@ -358,7 +480,17 @@
     "name": "Counterfeit Mint",
     "description": "Intaglio presses liberated from three national treasuries, reunited at last.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 5
+      },
       {
         "kind": "gain_assets",
         "assetIds": [
@@ -385,6 +517,10 @@
     "durationTurns": 2,
     "onSuccessEffects": [
       {
+        "kind": "infamy_delta",
+        "amount": 3
+      },
+      {
         "kind": "max_participants_per_mission_delta",
         "delta": 1
       },
@@ -409,10 +545,16 @@
     "name": "Propaganda Broadcast Array",
     "description": "Your legend, in surround sound, on every frequency the world still trusts — and below the transmitters, the Foundry comes online.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "add_success_chance_modifier",
@@ -437,6 +579,10 @@
     "description": "Blast doors thick enough to survive your own inventions. Stocked accordingly.",
     "durationTurns": 2,
     "onSuccessEffects": [
+      {
+        "kind": "infamy_delta",
+        "amount": 3
+      },
       {
         "kind": "max_support_assets_delta",
         "delta": 1
@@ -464,7 +610,7 @@
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "max_command_points_per_turn_delta",
@@ -486,13 +632,13 @@
     "onFailureEffects": [
       {
         "kind": "heat_delta",
-        "amount": 5
+        "amount": 10
       }
     ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "heat_delta",
@@ -529,10 +675,16 @@
     "name": "Own the Defense Committee",
     "description": "Five signatures release the core to a contractor that exists only on your letterhead.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 8
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "gain_assets",
@@ -569,10 +721,20 @@
     "name": "Black Market Buyout",
     "description": "Somewhere between customs seizures, a fusion core is for sale. Outbid everyone.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 6
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 10
+        "amount": 15
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 4
       },
       {
         "kind": "gain_assets",
@@ -608,13 +770,13 @@
     "onFailureEffects": [
       {
         "kind": "heat_delta",
-        "amount": 5
+        "amount": 10
       }
     ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "heat_delta",
@@ -655,10 +817,16 @@
     "name": "Capture the Ministry",
     "description": "The launch licenses, the airspace waivers, the denials — all signed by people you own.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 8
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "heat_delta",
@@ -693,10 +861,20 @@
     "name": "Hostile Takeover: AeroDyne",
     "description": "Collateralize the tender with bullion nobody can trace and a board nobody dares refuse.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 5
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 10
+        "amount": 15
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 3
       },
       {
         "kind": "grant_command_points_next_turn",
@@ -734,7 +912,7 @@
     "onFailureEffects": [
       {
         "kind": "heat_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "add_all_participant_traits",
@@ -746,7 +924,7 @@
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 15
+        "amount": 20
       },
       {
         "kind": "heat_delta",
@@ -783,7 +961,7 @@
     "onFailureEffects": [
       {
         "kind": "heat_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "add_all_participant_traits",
@@ -795,7 +973,11 @@
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 20
+        "amount": 25
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 5
       }
     ],
     "requiredAssetIds": [
@@ -828,7 +1010,7 @@
     "onFailureEffects": [
       {
         "kind": "heat_delta",
-        "amount": 10
+        "amount": 15
       },
       {
         "kind": "add_all_participant_traits",
@@ -840,7 +1022,11 @@
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
-        "amount": 15
+        "amount": 20
+      },
+      {
+        "kind": "heat_delta",
+        "amount": 8
       },
       {
         "kind": "gain_assets",

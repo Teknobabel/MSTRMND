@@ -190,28 +190,18 @@ function missionOutcomeGroups(
   const groups: (MissionOutcomeGroup | null)[] = [];
   const effectTone: TurnReportTone = ev.success ? "good" : "bad";
 
+  /* Totals after the clamp, so this reads as the change the player's bars actually made —
+   * the per-effect lines below say where each piece came from. */
   const standing: TurnReportLine[] = [];
-  if (ev.infamyDelta !== 0 || ev.baselineInfamyDelta !== 0) {
-    const detail =
-      ev.infamyDelta === ev.baselineInfamyDelta
-        ? ""
-        : ` (outcome ${signed(ev.baselineInfamyDelta)}, effects ${signed(
-            ev.infamyDelta - ev.baselineInfamyDelta,
-          )})`;
+  if (ev.infamyDelta !== 0) {
     standing.push({
-      text: `Infamy ${signed(ev.infamyDelta)}${detail}`,
+      text: `Infamy ${signed(ev.infamyDelta)}`,
       tone: ev.infamyDelta >= 0 ? "good" : "bad",
     });
   }
-  if (ev.heatDelta !== 0 || ev.baselineHeatDelta !== 0) {
-    const detail =
-      ev.heatDelta === ev.baselineHeatDelta
-        ? ""
-        : ` (outcome ${signed(ev.baselineHeatDelta)}, effects ${signed(
-            ev.heatDelta - ev.baselineHeatDelta,
-          )})`;
+  if (ev.heatDelta !== 0) {
     standing.push({
-      text: `Heat ${signed(ev.heatDelta)}${detail}`,
+      text: `Heat ${signed(ev.heatDelta)}`,
       tone: ev.heatDelta > 0 ? "bad" : "good",
     });
   }

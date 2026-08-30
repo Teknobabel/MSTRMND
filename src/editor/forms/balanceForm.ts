@@ -66,43 +66,6 @@ const GROUPS: BalanceGroup[] = [
     ],
   },
   {
-    legend: "Infamy, heat & risk",
-    fields: [
-      {
-        key: "infamySuccessDelta",
-        label: "Infamy on success",
-        tooltip:
-          "Infamy change when a mission SUCCEEDS. Infamy is the score the player is building — keep it positive so successful operations grow the organization's legend.",
-        min: -100,
-        max: 100,
-      },
-      {
-        key: "infamyFailureDelta",
-        label: "Infamy on failure",
-        tooltip:
-          "Infamy change when a mission FAILS. Usually 0; make it negative if botched jobs should cost the organization its reputation.",
-        min: -100,
-        max: 100,
-      },
-      {
-        key: "heatSuccessDelta",
-        label: "Heat on success",
-        tooltip:
-          "Heat change when a mission SUCCEEDS. Usually 0 so clean operations stay quiet; make it positive if even successful jobs should attract attention, or negative to let wins cool things off.",
-        min: -100,
-        max: 100,
-      },
-      {
-        key: "heatFailureDelta",
-        label: "Heat on failure",
-        tooltip:
-          "Heat gained when a mission FAILS. Heat drives the wanted level, so higher values escalate it faster and spawn opposing agents sooner. The wanted level never goes back down.",
-        min: -100,
-        max: 100,
-      },
-    ],
-  },
-  {
     legend: "Turn economy",
     fields: [
       {

@@ -2993,7 +2993,10 @@ function initGameController(
       if (enableAssignDrag) {
         const targetVisibility = knowledge === "identified" ? "revealed" : "hidden";
         const chip = document.createElement("span");
-        chip.className = "location-asset-drag-chip";
+        chip.className =
+          knowledge === "identified"
+            ? "location-asset-drag-chip location-asset-drag-chip--revealed"
+            : "location-asset-drag-chip location-asset-drag-chip--hidden";
         chip.draggable = true;
         chip.appendChild(createAssetIconEl());
         chip.appendChild(document.createTextNode(displayValue));
@@ -3009,7 +3012,10 @@ function initGameController(
         knownAssetChips.push(chip);
       } else {
         const wrap = document.createElement("span");
-        wrap.className = "location-asset-static";
+        wrap.className =
+          knowledge === "identified"
+            ? "location-asset-static location-asset-static--revealed"
+            : "location-asset-static location-asset-static--hidden";
         wrap.appendChild(createAssetIconEl());
         wrap.appendChild(document.createTextNode(displayValue));
         knownAssetChips.push(wrap);
@@ -3023,8 +3029,8 @@ function initGameController(
       if (countUnknown) {
         const chip = document.createElement("span");
         chip.className = enableAssignDrag
-          ? "location-asset-drag-chip"
-          : "location-asset-static";
+          ? "location-asset-drag-chip location-asset-drag-chip--unknown"
+          : "location-asset-static location-asset-static--unknown";
         chip.draggable = false;
         chip.appendChild(createUnknownIntelIconEl());
         chip.appendChild(document.createTextNode("No intel available"));
@@ -4940,15 +4946,13 @@ function initGameController(
         case "mission_completed": {
           const inf = signedDelta(ev.infamyDelta);
           const whereLabel = formatMissionTargetSummary(ev.target);
-          const baseline = signedDelta(ev.baselineInfamyDelta);
           const heat = signedDelta(ev.heatDelta);
-          const baselineHeat = signedDelta(ev.baselineHeatDelta);
           const templateFx =
             ev.templateEffectDescriptions.length > 0
               ? ev.templateEffectDescriptions.join("; ")
               : "none";
           const outcomeLabel = ev.success ? "Success" : "Failure";
-          let line = `${ev.missionName} @ ${whereLabel}: ${outcomeLabel} (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}, total heat change ${heat}. Outcome: baseline infamy ${baseline}, baseline heat ${baselineHeat}. Mission effects: ${templateFx}.`;
+          let line = `${ev.missionName} @ ${whereLabel}: ${outcomeLabel} (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}, total heat change ${heat}. Mission effects: ${templateFx}.`;
           if (ev.relationshipChanges !== undefined && ev.relationshipChanges.length > 0) {
             const relParts = ev.relationshipChanges.map((c) =>
               formatRelationshipChange(content, state.player.minions, c),

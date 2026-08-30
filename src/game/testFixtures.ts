@@ -92,6 +92,10 @@ export function rawFixtureSlices(): FixtureSlices {
         startCommandPoints: 1,
         requiredTraitIds: ["t-req"],
         durationTurns: 1,
+        /* Standing lives on the template, not in balance — this stands in for the shipped
+         * content's "+5 infamy on a win, +5 heat on a botch" middle of the road. */
+        onSuccessEffects: [{ kind: "infamy_delta", amount: 5 }],
+        onFailureEffects: [{ kind: "heat_delta", amount: 5 }],
       },
       {
         id: "ms-asset",

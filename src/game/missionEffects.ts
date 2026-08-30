@@ -808,9 +808,9 @@ function applyPlayerStatDeltas(player: PlayerState, effect: MissionEffect): Play
 }
 
 /**
- * Applies completion effects after baseline infamy/heat has been added to `state.player`
- * (uncapped). Mutates them further for `infamy_delta` / `heat_delta` entries, then clamps both
- * once at the end. Returns updated player, placements, security states, and activity rows (e.g. `asset_gained`).
+ * Applies completion effects. `infamy_delta` / `heat_delta` entries are the **only** source of
+ * a resolve's infamy and heat — there is no flat success/failure baseline behind them — so this
+ * moves both stats uncapped and clamps them once at the end. Returns updated player, placements, security states, and activity rows (e.g. `asset_gained`).
  * `rng` is used for {@link MissionEffect} kinds that pick randomly (e.g. `add_random_participant_traits`).
  * Non-random participant trait effects (e.g. `add_all_participant_traits`) ignore `rng`.
  */

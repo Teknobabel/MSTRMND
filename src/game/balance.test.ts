@@ -21,8 +21,8 @@ describe("balance slice parsing", () => {
   });
 
   it("keeps explicit values and defaults the rest", () => {
-    const catalog = catalogWithBalance({ infamyFailureDelta: 25 });
-    expect(catalog.balance.infamyFailureDelta).toBe(25);
+    const catalog = catalogWithBalance({ agentInvestigatorFailureHeat: 25 });
+    expect(catalog.balance.agentInvestigatorFailureHeat).toBe(25);
     expect(catalog.balance.statusPositiveBonus).toBe(DEFAULT_BALANCE.statusPositiveBonus);
     expect(catalog.balance.dynamicTraitModifiers).toEqual(
       DEFAULT_BALANCE.dynamicTraitModifiers,
@@ -84,12 +84,8 @@ describe("balance knobs steer the success formula", () => {
 });
 
 describe("balance knobs steer executePlan and run setup", () => {
-  it("applies modified infamy/heat deltas and XP pacing", () => {
-    const catalog = catalogWithBalance({
-      infamyFailureDelta: 25,
-      heatFailureDelta: 30,
-      minionXpToLevel: 1,
-    });
+  it("applies XP pacing; infamy/heat come from the template, not balance", () => {
+    const catalog = catalogWithBalance({ minionXpToLevel: 1 });
     let state = createInitialGameState(catalog, seededRng(1));
     const am: ActiveMission = {
       id: "am-1",
@@ -120,8 +116,10 @@ describe("balance knobs steer executePlan and run setup", () => {
     if (!result.ok) {
       return;
     }
-    expect(result.value.player.infamy).toBe(25);
-    expect(result.value.player.heat).toBe(30);
+    /* `ms-basic` authors its own standing: nothing on a failure but +5 heat. There is no
+     * balance knob left to override it — every mission carries its own numbers. */
+    expect(result.value.player.infamy).toBe(0);
+    expect(result.value.player.heat).toBe(5);
     /* minionXpToLevel 1 ⇒ a single mission levels the participant up. */
     const mi1 = result.value.player.minions.find((m) => m.instanceId === "mi-1");
     expect(mi1?.currentLevel).toBe(2);
