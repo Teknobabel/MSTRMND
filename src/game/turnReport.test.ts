@@ -122,6 +122,27 @@ describe("buildTurnReport — mission results", () => {
     expect(standing?.lines[0]!.tone).toBe("bad");
   });
 
+  it("heads a compromised card with both effect lists and both standing swings", () => {
+    const seeded = baseState(2);
+    const before: GameState = {
+      ...seeded,
+      player: { ...seeded.player, minions: [makeMinionInstance("mi-1", "m-buddy", [])] },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+    };
+    /* 0% success, roll 5 — inside the 10-point compromised band above it. */
+    const report = buildTurnReport(before, resolve(before, 0.05), catalog);
+    expect(report.missions[0]!.outcome).toBe("compromised");
+    const standing = report.missions[0]!.outcomeGroups.find((g) => g.title === "Standing");
+    expect(standing?.lines.map((l) => l.text)).toEqual(["Infamy +5", "Heat +5"]);
+    const effects = report.missions[0]!.outcomeGroups.find(
+      (g) => g.title === "Success & failure effects",
+    );
+    expect(effects?.lines).toHaveLength(2);
+    /* Neither good nor bad: half these lines are the payoff and half are the fallout. */
+    expect(effects?.lines.every((l) => l.tone === "neutral")).toBe(true);
+    expect(lineTexts(report.summary, "missions")).toContain("Case the Bank: Compromised");
+  });
+
   it("keeps each mission's stolen assets on its own card", () => {
     const slices = rawFixtureSlices();
     slices.missions = [

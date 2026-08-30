@@ -27,6 +27,7 @@ import {
   isOpposingAgentVisibleToPlayer,
 } from "./intel";
 import { isOccupiedAssetSlot } from "./types";
+import type { MissionResult } from "./mission";
 import {
   formatRelationshipChange,
   formatStandingChange,
@@ -62,7 +63,34 @@ export type MissionOutcomeGroup = {
   lines: TurnReportLine[];
 };
 
-export type MissionOutcome = "success" | "failure" | "aborted";
+/** Every way a finished mission card can be headed. `aborted` never rolled. */
+export type MissionOutcome = MissionResult | "aborted";
+
+/** Player-facing name of an outcome — the verdict banner, log rows, and history badges. */
+export function missionOutcomeLabel(outcome: MissionOutcome): string {
+  switch (outcome) {
+    case "success":
+      return "Success";
+    case "compromised":
+      return "Compromised";
+    case "failure":
+      return "Failure";
+    case "aborted":
+      return "Aborted";
+  }
+}
+
+/** Title over the template-effect lines, naming which list(s) actually fired. */
+export function missionEffectsGroupTitle(result: MissionResult): string {
+  switch (result) {
+    case "success":
+      return "Success effects";
+    case "compromised":
+      return "Success & failure effects";
+    case "failure":
+      return "Failure effects";
+  }
+}
 
 export type MissionResultReport = {
   activeMissionId: string;
@@ -188,7 +216,10 @@ function missionOutcomeGroups(
   ownEvents: ActivityEvent[],
 ): MissionOutcomeGroup[] {
   const groups: (MissionOutcomeGroup | null)[] = [];
-  const effectTone: TurnReportTone = ev.success ? "good" : "bad";
+  /* A compromise is neither — the lines below it are the success *and* failure lists run
+   * together, so colouring them either way would lie about half of them. */
+  const effectTone: TurnReportTone =
+    ev.result === "success" ? "good" : ev.result === "failure" ? "bad" : "neutral";
 
   /* Totals after the clamp, so this reads as the change the player's bars actually made —
    * the per-effect lines below say where each piece came from. */
@@ -209,7 +240,7 @@ function missionOutcomeGroups(
 
   groups.push(
     group(
-      ev.success ? "Success effects" : "Failure effects",
+      missionEffectsGroupTitle(ev.result),
       ev.templateEffectDescriptions.map((text) => ({ text, tone: effectTone })),
     ),
   );
@@ -349,7 +380,7 @@ function buildMissionReports(
     reports.push({
       ...base,
       missionName: ev.missionName,
-      outcome: ev.success ? "success" : "failure",
+      outcome: ev.result,
       roll: ev.roll,
       successChancePercent: ev.successChancePercent,
       outcomeGroups: missionOutcomeGroups(catalog, after, ev, ownEvents),
@@ -369,20 +400,25 @@ function missionsSection(
 ): TurnSummarySection | null {
   const lines: TurnReportLine[] = [];
   const wins = missions.filter((m) => m.outcome === "success").length;
+  const compromised = missions.filter((m) => m.outcome === "compromised").length;
   const losses = missions.filter((m) => m.outcome === "failure").length;
   if (missions.length === 0) {
     lines.push({ text: "No missions finished this turn.", tone: "neutral" });
   } else {
+    const tally = [
+      `${wins} succeeded`,
+      ...(compromised > 0 ? [`${compromised} compromised`] : []),
+      `${losses} failed`,
+    ].join(", ");
     lines.push({
-      text: `${missions.length} mission${missions.length === 1 ? "" : "s"} resolved — ${wins} succeeded, ${losses} failed.`,
-      tone: losses > wins ? "bad" : "good",
+      text: `${missions.length} mission${missions.length === 1 ? "" : "s"} resolved — ${tally}.`,
+      tone: losses > wins + compromised ? "bad" : "good",
     });
     for (const m of missions) {
       lines.push({
-        text: `${m.missionName}: ${
-          m.outcome === "success" ? "Success" : m.outcome === "failure" ? "Failure" : "Aborted"
-        }`,
-        tone: m.outcome === "success" ? "good" : "bad",
+        text: `${m.missionName}: ${missionOutcomeLabel(m.outcome)}`,
+        tone:
+          m.outcome === "success" ? "good" : m.outcome === "compromised" ? "neutral" : "bad",
       });
     }
   }
@@ -451,6 +487,7 @@ function omegaSection(
   catalog: ContentCatalog,
   before: GameState,
   after: GameState,
+  missions: readonly MissionResultReport[],
 ): TurnSummarySection | null {
   const lines: TurnReportLine[] = [];
   const plan =
@@ -465,9 +502,14 @@ function omegaSection(
       const missionId = plan !== undefined ? omegaSlotMissionId(plan, stage, slot) : undefined;
       const name =
         missionId !== undefined ? missionOrEventName(catalog, missionId) : `slot ${slot + 1}`;
+      /* A slot credited by a compromise still says complete — it just says how. */
+      const credited = missions.find(
+        (m) => m.omegaStageIndex === stage && m.omegaSlotIndex === slot,
+      );
+      const how = credited?.outcome === "compromised" ? " (compromised)" : "";
       lines.push({
-        text: `Phase ${stage + 1} · slot ${slot + 1} complete — ${name}.`,
-        tone: "good",
+        text: `Phase ${stage + 1} · slot ${slot + 1} complete${how} — ${name}.`,
+        tone: credited?.outcome === "compromised" ? "neutral" : "good",
       });
     }
   }
@@ -934,7 +976,7 @@ export function buildTurnReport(
   const summary = [
     missionsSection(catalog, after, missions),
     standingSection(catalog, before, after),
-    omegaSection(catalog, before, after),
+    omegaSection(catalog, before, after, missions),
     rosterSection(catalog, before, after, events),
     assetsSection(catalog, before, after),
     sitesSection(catalog, before, after),
@@ -986,6 +1028,7 @@ function allActivityEvents(state: GameState): ActivityEvent[] {
 function careerSection(catalog: ContentCatalog, state: GameState): TurnSummarySection | null {
   const events = allActivityEvents(state);
   let won = 0;
+  let compromised = 0;
   let lost = 0;
   let hired = 0;
   let levelUps = 0;
@@ -994,8 +1037,10 @@ function careerSection(catalog: ContentCatalog, state: GameState): TurnSummarySe
   const eventIds = new Set(catalog.events.map((e) => e.id));
   for (const ev of events) {
     if (ev.kind === "mission_completed") {
-      if (ev.success) {
+      if (ev.result === "success") {
         won += 1;
+      } else if (ev.result === "compromised") {
+        compromised += 1;
       } else {
         lost += 1;
       }
@@ -1010,11 +1055,15 @@ function careerSection(catalog: ContentCatalog, state: GameState): TurnSummarySe
       eventsIgnored += 1;
     }
   }
-  const run = won + lost;
+  const run = won + compromised + lost;
+  /* Compromises are counted as wins here — they cleared the objective, whatever they cost. */
+  const cleared = won + compromised;
+  const tally =
+    compromised > 0 ? `${won} won, ${compromised} compromised, ${lost} lost` : `${won} won, ${lost} lost`;
   const lines: TurnReportLine[] = [
     {
-      text: `${run} mission${run === 1 ? "" : "s"} resolved — ${won} won, ${lost} lost.`,
-      tone: won > lost ? "good" : run === 0 ? "neutral" : "bad",
+      text: `${run} mission${run === 1 ? "" : "s"} resolved — ${tally}.`,
+      tone: cleared > lost ? "good" : run === 0 ? "neutral" : "bad",
     },
     {
       text: `${hired} recruit${hired === 1 ? "" : "s"} brought in, ${levelUps} promotion${

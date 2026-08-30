@@ -283,7 +283,7 @@ describe("opposing agent challenge traits", () => {
     const next = result.value;
     const done = completedEvents(next);
     expect(done[0]!.successChancePercent).toBe(80);
-    expect(done[0]!.success).toBe(false);
+    expect(done[0]!.result).toBe("failure");
     expect(done[0]!.challengeTraitIds).toEqual(["t-level", "t-req"]);
     expect(done[0]!.unmatchedChallengeTraitIds).toEqual(["t-level"]);
     /* Failing next to agents no longer risks the Injured trait. */
@@ -325,7 +325,7 @@ describe("agent abilities", () => {
       return;
     }
     const next = result.value;
-    expect(completedEvents(next)[0]!.success).toBe(false);
+    expect(completedEvents(next)[0]!.result).toBe("failure");
     for (const iid of ["mi-1", "mi-2"]) {
       expect(next.player.minions.find((m) => m.instanceId === iid)?.traitIds).toContain("injured");
     }
@@ -500,7 +500,7 @@ describe("opposing agent movement", () => {
       return;
     }
     const next = result.value;
-    expect(completedEvents(next)[0]!.success).toBe(false);
+    expect(completedEvents(next)[0]!.result).toBe("failure");
     expect(agentLocationId(next, "opp-1")).toBe("loc-a");
     expect(movedEvents(next)).toEqual([
       {
@@ -628,7 +628,7 @@ describe("executePlan", () => {
       if (!result.ok) {
         return;
       }
-      expect(completedEvents(result.value)[0]?.success, label).toBe(label === "success");
+      expect(completedEvents(result.value)[0]?.result, label).toBe(label);
       expect(result.value.player.infamy, label).toBe(0);
       expect(result.value.player.heat, label).toBe(0);
     }
@@ -652,7 +652,7 @@ describe("executePlan", () => {
     const next = result.value;
     const done = completedEvents(next);
     expect(done).toHaveLength(1);
-    expect(done[0]!.success).toBe(true);
+    expect(done[0]!.result).toBe("success");
     expect(done[0]!.successChancePercent).toBe(100);
     expect(next.player.infamy).toBe(5);
     expect(next.player.heat).toBe(0); /* success is clean: no heat */
@@ -682,7 +682,7 @@ describe("executePlan", () => {
       return;
     }
     const next = result.value;
-    expect(completedEvents(next)[0]!.success).toBe(false);
+    expect(completedEvents(next)[0]!.result).toBe("failure");
     expect(next.player.heat).toBe(5);
     expect(next.player.infamy).toBe(0); /* failure grants no infamy */
     /* Tier 1 starts at minHeat 5, maxAgents 2 → two hidden spawns, one per template. */
@@ -836,7 +836,7 @@ describe("executePlan", () => {
     if (!failed.ok) {
       return;
     }
-    expect(completedEvents(failed.value)[0]!.success).toBe(false);
+    expect(completedEvents(failed.value)[0]!.result).toBe("failure");
 
     expect(failed.value.player.pendingBonusCommandPoints).toBe(
       expired.value.player.pendingBonusCommandPoints,
@@ -1404,6 +1404,27 @@ describe("omega phase completion", () => {
       return;
     }
     expect(result.value.omegaStageProgress[0]).toEqual([true, true, true]);
+    expect(result.value.activeOmegaStageIndex).toBe(1);
+  });
+
+  it("credits a compromised omega mission — a near miss still clears the slot", () => {
+    const cat = catalogWithRequired(1);
+    const state = stateWithOmegaMissions(cat, 1);
+    const compromised: GameState = {
+      ...state,
+      player: {
+        ...state.player,
+        /* No `t-req` → 0% success; rng 0.05 rolls 5, inside the 10-point band above it. */
+        minions: [makeMinionInstance("mi-0", "m-buddy", [])],
+      },
+    };
+    const result = executePlan(compromised, cat, () => 0.05);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(completedEvents(result.value)[0]!.result).toBe("compromised");
+    expect(result.value.omegaStageProgress[0]).toEqual([true, false, false]);
     expect(result.value.activeOmegaStageIndex).toBe(1);
   });
 
@@ -2505,5 +2526,75 @@ describe("hire pool dynamic trait preview", () => {
       { kind: "wanted", locationId: "loc-a" },
     ]);
     expect(fired.dynamicTraits).toEqual([]);
+  });
+});
+
+describe("compromised missions", () => {
+  /** 0% success (no matching traits) with a roll of 5 — inside the 10-point band above it. */
+  function stateForCompromise(seed: number): GameState {
+    const state = baseState(seed);
+    return {
+      ...state,
+      player: {
+        ...state.player,
+        minions: [makeMinionInstance("mi-1", "m-buddy", [])],
+      },
+      activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+    };
+  }
+
+  it("applies both effect lists: the mission's payoff and its fallout", () => {
+    const result = executePlan(stateForCompromise(2), catalog, () => 0.05, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const next = result.value;
+    const done = completedEvents(next);
+    expect(done).toHaveLength(1);
+    expect(done[0]!.result).toBe("compromised");
+    expect(done[0]!.successChancePercent).toBe(0);
+    expect(done[0]!.roll).toBe(5);
+    /* `ms-basic` pays +5 infamy on a win and +5 heat on a botch. A compromise pays both. */
+    expect(next.player.infamy).toBe(5);
+    expect(next.player.heat).toBe(5);
+    expect(done[0]!.infamyDelta).toBe(5);
+    expect(done[0]!.heatDelta).toBe(5);
+    expect(done[0]!.templateEffectDescriptions).toHaveLength(2);
+  });
+
+  it("still draws the failure-only agent abilities", () => {
+    /* A Brawler at the site injures the crew on a botch — a compromise is botched enough. */
+    const withBrawler = withAgentAt(
+      stateForCompromise(2),
+      "loc-a",
+      "a-spy",
+      "opp-1",
+      "revealed",
+      ["brawler"],
+    );
+    const result = executePlan(withBrawler, catalog, () => 0.05, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(completedEvents(result.value)[0]!.result).toBe("compromised");
+    expect(
+      result.value.player.minions.find((m) => m.instanceId === "mi-1")?.traitIds,
+    ).toContain("injured");
+  });
+
+  it("disappears when content zeroes the band", () => {
+    const raw = rawFixtureSlices();
+    raw.balance = { compromisedBandPercent: 0 };
+    const noBand = parseCatalog(raw);
+    const result = executePlan(stateForCompromise(2), noBand, () => 0.05, sequentialIds("ag"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(completedEvents(result.value)[0]!.result).toBe("failure");
+    expect(result.value.player.infamy).toBe(0);
+    expect(result.value.player.heat).toBe(5);
   });
 });

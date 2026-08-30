@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { MissionTemplate, Trait } from "./types";
-import { computeSuccessChanceBreakdown, successChancePercent } from "./mission";
+import {
+  computeSuccessChanceBreakdown,
+  missionOutcomeChances,
+  missionResultForRoll,
+  missionResultHasFallout,
+  missionResultIsCompletion,
+  successChancePercent,
+} from "./mission";
 import { makeMinionInstance } from "./testFixtures";
 
 function template(overrides: Partial<MissionTemplate>): MissionTemplate {
@@ -120,5 +127,80 @@ describe("successChancePercent", () => {
     expect(b.challengeTraitPenaltyTotal).toBe(20);
     expect(b.preClampPercent).toBe(10);
     expect(b.finalPercent).toBe(10);
+  });
+});
+
+describe("mission outcomes", () => {
+  describe("missionResultForRoll", () => {
+    it("reads the roll as success below the chance and compromised in the band above it", () => {
+      /* 60% chance, 10-point band → 0-59 success, 60-69 compromised, 70-99 failure. */
+      expect(missionResultForRoll(0, 60, 10)).toBe("success");
+      expect(missionResultForRoll(59, 60, 10)).toBe("success");
+      expect(missionResultForRoll(60, 60, 10)).toBe("compromised");
+      expect(missionResultForRoll(69, 60, 10)).toBe("compromised");
+      expect(missionResultForRoll(70, 60, 10)).toBe("failure");
+      expect(missionResultForRoll(99, 60, 10)).toBe("failure");
+    });
+
+    it("keeps the band at the extremes: a hopeless plan can still come back compromised", () => {
+      expect(missionResultForRoll(0, 0, 10)).toBe("compromised");
+      expect(missionResultForRoll(9, 0, 10)).toBe("compromised");
+      expect(missionResultForRoll(10, 0, 10)).toBe("failure");
+      /* At 100% nothing is left to miss. */
+      expect(missionResultForRoll(99, 100, 10)).toBe("success");
+    });
+
+    it("collapses to a plain success / failure split at a band of 0", () => {
+      expect(missionResultForRoll(60, 60, 0)).toBe("failure");
+      expect(missionResultForRoll(59, 60, 0)).toBe("success");
+    });
+  });
+
+  describe("missionOutcomeChances", () => {
+    it("splits a chance into three odds that sum to 100", () => {
+      expect(missionOutcomeChances(60, 10)).toEqual({
+        successPercent: 60,
+        compromisedPercent: 10,
+        failurePercent: 30,
+      });
+      expect(missionOutcomeChances(0, 10)).toEqual({
+        successPercent: 0,
+        compromisedPercent: 10,
+        failurePercent: 90,
+      });
+    });
+
+    it("clips the band at the 100% ceiling rather than going negative", () => {
+      expect(missionOutcomeChances(95, 10)).toEqual({
+        successPercent: 95,
+        compromisedPercent: 5,
+        failurePercent: 0,
+      });
+      expect(missionOutcomeChances(100, 10)).toEqual({
+        successPercent: 100,
+        compromisedPercent: 0,
+        failurePercent: 0,
+      });
+    });
+
+    it("matches missionResultForRoll over every roll", () => {
+      for (const chance of [0, 1, 37, 60, 95, 100]) {
+        const odds = missionOutcomeChances(chance, 10);
+        const tally = { success: 0, compromised: 0, failure: 0 };
+        for (let roll = 0; roll < 100; roll += 1) {
+          tally[missionResultForRoll(roll, chance, 10)] += 1;
+        }
+        expect(tally.success, `chance ${chance}`).toBe(odds.successPercent);
+        expect(tally.compromised, `chance ${chance}`).toBe(odds.compromisedPercent);
+        expect(tally.failure, `chance ${chance}`).toBe(odds.failurePercent);
+      }
+    });
+  });
+
+  it("counts a compromise as both a completion and a source of fallout", () => {
+    expect(missionResultIsCompletion("compromised")).toBe(true);
+    expect(missionResultHasFallout("compromised")).toBe(true);
+    expect(missionResultIsCompletion("failure")).toBe(false);
+    expect(missionResultHasFallout("success")).toBe(false);
   });
 });

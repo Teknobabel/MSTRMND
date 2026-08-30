@@ -3,6 +3,7 @@
   "agentInvestigatorFailureHeat": 5,
   "assetsPerLocationMax": 3,
   "assetsPerLocationMin": 2,
+  "compromisedBandPercent": 10,
   "dynamicTraitModifiers": {
     "ally": 10,
     "friend": 5,

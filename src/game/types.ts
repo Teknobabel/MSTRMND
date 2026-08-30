@@ -788,6 +788,13 @@ export type BalanceConfig = {
    * target site that no participant matches (stored positive).
    */
   agentChallengeTraitPenalty: number;
+  /**
+   * Width, in percentage points, of the **Compromised** band that sits directly above the
+   * success chance. A roll that misses success by less than this lands Compromised: the
+   * mission applies its success *and* failure effects, and counts as a completion for Omega
+   * phases. `0` turns the whole outcome off, leaving only success and failure.
+   */
+  compromisedBandPercent: number;
   dynamicTraitModifiers: DynamicTraitModifiers;
   minionAffinity: MinionAffinityConfig;
   locationAffinity: LocationAffinityConfig;
@@ -851,6 +858,7 @@ export const DEFAULT_BALANCE: BalanceConfig = {
   statusPositiveBonus: 10,
   statusNegativePenalty: 20,
   agentChallengeTraitPenalty: 20,
+  compromisedBandPercent: 10,
   dynamicTraitModifiers: {
     friend: 5,
     ally: 10,

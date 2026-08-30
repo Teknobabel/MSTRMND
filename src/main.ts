@@ -44,6 +44,7 @@ import {
   mergedRequiredTraitIdsSorted,
   missionAllowsTargetLocation,
   unionParticipantTraitIds,
+  missionOutcomeChances,
   missionTargetTypeTargetsLocation,
   supportAbilitiesForAssetIds,
   type MissionTargetLocationFilters,
@@ -64,6 +65,8 @@ import {
   buildRunEndReport,
   buildTurnReport,
   describeAgentAbilityUse,
+  missionEffectsGroupTitle,
+  missionOutcomeLabel,
   type RunEndReport,
   type MissionResultReport,
   type TurnReport,
@@ -1857,7 +1860,9 @@ function initGameController(
     dynamicEntries: readonly DynamicTraitSuccessBreakdownEntry[],
     roster: readonly MinionInstance[],
   ): string[] {
-    const lines: string[] = [];
+    /* Odds first — that is the question the number on the button is answering. The derivation
+     * below it explains where the success chance came from. */
+    const lines: string[] = [...missionOutcomeOddsTooltipLines(breakdown.finalPercent), ""];
     const denom = breakdown.requiredTraitCount + breakdown.requiredAssetSlotCount;
     if (denom === 0) {
       lines.push("Base 100% (no required traits or assets).");
@@ -1925,6 +1930,31 @@ function initGameController(
       lines.push(`Clamped to [0, 100]: shown success chance is ${breakdown.finalPercent}%.`);
     } else {
       lines.push(`Shown success chance: ${breakdown.finalPercent}%.`);
+    }
+    return lines;
+  }
+
+  /**
+   * The three-way odds behind one success chance — what the player is really buying when they
+   * move the number. The compromised band sits directly above the success chance
+   * (`balance.compromisedBandPercent` points wide, clipped by the 100% ceiling), and a mission
+   * that lands in it takes the success effects *and* the failure effects.
+   */
+  function missionOutcomeOddsTooltipLines(chancePercent: number): string[] {
+    const odds = missionOutcomeChances(chancePercent, content.balance.compromisedBandPercent);
+    const lines = [
+      "Outcome odds",
+      `  Success: ${odds.successPercent}%`,
+      `  Compromised: ${odds.compromisedPercent}%`,
+      `  Failure: ${odds.failurePercent}%`,
+    ];
+    if (odds.compromisedPercent > 0) {
+      lines.push(
+        "Compromised = a near miss (within " +
+          `${content.balance.compromisedBandPercent} points of success): the mission applies ` +
+          "both its success and its failure effects, and still counts as a completed Omega " +
+          "Plan mission.",
+      );
     }
     return lines;
   }
@@ -4388,7 +4418,7 @@ function initGameController(
     missionTemplateId: string;
     targetLabel: string;
     outcomeLabel: string;
-    outcomeKind: "complete" | "failed" | "locked";
+    outcomeKind: "complete" | "compromised" | "failed" | "locked";
     detailLines: string[];
   };
 
@@ -4418,8 +4448,13 @@ function initGameController(
         rows.push({
           missionTemplateId: ev.missionTemplateId,
           targetLabel: formatMissionTargetSummary(ev.target),
-          outcomeLabel: ev.success ? "Success" : "Failure",
-          outcomeKind: ev.success ? "complete" : "failed",
+          outcomeLabel: missionOutcomeLabel(ev.result),
+          outcomeKind:
+            ev.result === "success"
+              ? "complete"
+              : ev.result === "compromised"
+                ? "compromised"
+                : "failed",
           detailLines,
         });
       } else if (ev.kind === "mission_cancelled") {
@@ -5073,7 +5108,7 @@ function initGameController(
   function activityEventTone(ev: ActivityEvent): "neutral" | "good" | "bad" {
     switch (ev.kind) {
       case "mission_completed":
-        return ev.success ? "good" : "bad";
+        return ev.result === "success" ? "good" : ev.result === "compromised" ? "neutral" : "bad";
       case "minion_hired":
       case "minion_rehired":
       case "minion_leveled_up":
@@ -5147,7 +5182,7 @@ function initGameController(
             ev.templateEffectDescriptions.length > 0
               ? ev.templateEffectDescriptions.join("; ")
               : "none";
-          const outcomeLabel = ev.success ? "Success" : "Failure";
+          const outcomeLabel = missionOutcomeLabel(ev.result);
           let line = `${ev.missionName} @ ${whereLabel}: ${outcomeLabel} (roll ${ev.roll} vs ${ev.successChancePercent}%). Total infamy change ${inf}, total heat change ${heat}. Mission effects: ${templateFx}.`;
           if (ev.relationshipChanges !== undefined && ev.relationshipChanges.length > 0) {
             const relParts = ev.relationshipChanges.map((c) =>
@@ -5549,7 +5584,12 @@ function initGameController(
     switch (ev.kind) {
       case "mission_completed":
         return {
-          title: ev.success ? "Mission success" : "Mission failed",
+          title:
+            ev.result === "success"
+              ? "Mission success"
+              : ev.result === "compromised"
+                ? "Mission compromised"
+                : "Mission failed",
           detail: ev.missionName,
         };
       case "mission_started":
@@ -5715,8 +5755,7 @@ function initGameController(
     turnReportKicker.textContent = `Mission Result ${turnReportStepIndex + 1} of ${total}`;
     turnReportTitle.textContent = m.missionName;
     turnReportVerdict.className = `turn-report-verdict turn-report-verdict--${m.outcome}`;
-    turnReportVerdict.textContent =
-      m.outcome === "success" ? "Success" : m.outcome === "failure" ? "Failure" : "Aborted";
+    turnReportVerdict.textContent = missionOutcomeLabel(m.outcome);
 
     const hero = document.createElement("div");
     hero.className = "turn-report-hero";
@@ -5772,7 +5811,7 @@ function initGameController(
 
     if (m.outcomeGroups.length === 0) {
       turnReportBody.appendChild(
-        turnReportBlock(m.outcome === "success" ? "Success effects" : "Failure effects", [
+        turnReportBlock(m.outcome === "aborted" ? "Aborted" : missionEffectsGroupTitle(m.outcome), [
           { text: "Nothing else changed.", tone: "neutral" },
         ]),
       );
@@ -5785,13 +5824,18 @@ function initGameController(
 
   function renderTurnSummaryStep(report: TurnReport): void {
     const wins = report.missions.filter((m) => m.outcome === "success").length;
-    const losses = report.missions.length - wins;
+    const compromised = report.missions.filter((m) => m.outcome === "compromised").length;
+    const losses = report.missions.length - wins - compromised;
 
     turnReportKicker.textContent = "End of turn";
     turnReportTitle.textContent = `Turn ${report.turnNumber} Summary`;
     turnReportVerdict.className = "turn-report-verdict turn-report-verdict--tally";
     turnReportVerdict.textContent =
-      report.missions.length === 0 ? "No missions resolved" : `${wins} won · ${losses} lost`;
+      report.missions.length === 0
+        ? "No missions resolved"
+        : compromised > 0
+          ? `${wins} won · ${compromised} compromised · ${losses} lost`
+          : `${wins} won · ${losses} lost`;
 
     for (const sec of report.summary) {
       turnReportBody.appendChild(turnReportBlock(sec.title, sec.lines));

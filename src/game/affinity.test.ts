@@ -90,16 +90,24 @@ describe("nextRelationship hysteresis", () => {
 
 describe("affinityDeltaForResolve", () => {
   it("maps each mission source and outcome to its tuned delta", () => {
-    expect(affinityDeltaForResolve("lair", false, true, cfg)).toBe(1);
-    expect(affinityDeltaForResolve("lair", false, false, cfg)).toBe(-1);
-    expect(affinityDeltaForResolve("event", false, true, cfg)).toBe(2);
-    expect(affinityDeltaForResolve("event", false, false, cfg)).toBe(-2);
-    expect(affinityDeltaForResolve("omega", false, true, cfg)).toBe(2);
-    expect(affinityDeltaForResolve("omega", false, false, cfg)).toBe(-2);
+    expect(affinityDeltaForResolve("lair", false, "success", cfg)).toBe(1);
+    expect(affinityDeltaForResolve("lair", false, "failure", cfg)).toBe(-1);
+    expect(affinityDeltaForResolve("event", false, "success", cfg)).toBe(2);
+    expect(affinityDeltaForResolve("event", false, "failure", cfg)).toBe(-2);
+    expect(affinityDeltaForResolve("omega", false, "success", cfg)).toBe(2);
+    expect(affinityDeltaForResolve("omega", false, "failure", cfg)).toBe(-2);
+  });
+
+  it("gives a compromise both deltas, the way it takes both effect lists", () => {
+    expect(affinityDeltaForResolve("lair", false, "compromised", cfg)).toBe(1 + -1);
+    expect(affinityDeltaForResolve("event", false, "compromised", cfg)).toBe(2 + -2);
+    expect(affinityDeltaForResolve("omega", false, "compromised", cfg)).toBe(2 + -2);
+    /* Raid failure is tuned to 0, so a compromised raid keeps the whole success bond. */
+    expect(affinityDeltaForResolve("event", true, "compromised", cfg)).toBe(3 + 0);
   });
 
   it("lets the lair raid outrank the event slot it arrives through", () => {
-    expect(affinityDeltaForResolve("event", true, true, cfg)).toBe(3);
+    expect(affinityDeltaForResolve("event", true, "success", cfg)).toBe(3);
   });
 });
 

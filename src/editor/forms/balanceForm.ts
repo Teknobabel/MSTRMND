@@ -63,6 +63,14 @@ const GROUPS: BalanceGroup[] = [
         min: 0,
         max: 100,
       },
+      {
+        key: "compromisedBandPercent",
+        label: "Compromised band %",
+        tooltip:
+          "How near a miss still counts as COMPROMISED. A roll that lands within this many points above the success chance applies the mission's success AND failure effects, and still counts as a completion for Omega phases. Set to 0 to remove the outcome entirely.",
+        min: 0,
+        max: 100,
+      },
     ],
   },
   {
@@ -304,13 +312,16 @@ function formulaStrip(row: Row): HTMLElement {
   const pos = scalar(row, "statusPositiveBonus");
   const neg = scalar(row, "statusNegativePenalty");
   const challenge = scalar(row, "agentChallengeTraitPenalty");
+  const band = scalar(row, "compromisedBandPercent");
   const strip = el("div", "ed-preview-result");
   strip.textContent =
     `success % = base (matched requirements ÷ total)\n` +
     `          + ${pos}% × positive status traits  − ${neg}% × negative status traits\n` +
     `          + relationship bonds + event modifiers\n` +
     `          − ${challenge}% × unmatched agent challenge traits at the site\n` +
-    `          → clamped to 0–100`;
+    `          → clamped to 0–100
+` +
+    `roll < success % → Success   ·   next ${band} points → Compromised   ·   rest → Failure`;
   return strip;
 }
 

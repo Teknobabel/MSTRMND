@@ -85,7 +85,11 @@ import {
   missionAllowsTargetLocationLevel,
   missionAllowsTargetLocationSecurity,
   missionAllowsTargetLocationType,
+  missionResultForRoll,
+  missionResultHasFallout,
+  missionResultIsCompletion,
   supportAbilitiesForAssetIds,
+  type MissionResult,
   type MissionSuccessOptions,
 } from "./mission";
 import {
@@ -215,7 +219,12 @@ export type ActivityEventMissionCompleted = {
   missionTemplateId: string;
   missionName: string;
   target: MissionTarget;
-  success: boolean;
+  /**
+   * How the mission landed. `compromised` is the near-miss band just above the success
+   * chance (`balance.compromisedBandPercent` points wide): the mission applied **both** its
+   * success and its failure effects, and counts as a completion for Omega progress.
+   */
+  result: MissionResult;
   /** Roll in [0, 100) compared to success chance */
   roll: number;
   successChancePercent: number;
@@ -226,7 +235,11 @@ export type ActivityEventMissionCompleted = {
   infamyDelta: number;
   /** Total heat change, same accounting (includes an Investigator's bonus failure heat). */
   heatDelta: number;
-  /** Template effect lines in resolution order (reveal/steal first, then the rest). */
+  /**
+   * Template effect lines in resolution order (reveal/steal first, then the rest). On a
+   * `compromised` result this is the success list followed by the failure list — everything
+   * that fired, in the order it fired.
+   */
   templateEffectDescriptions: string[];
   /**
    * Distinct challenge trait ids the site's opposing agents brought to this mission (empty when
@@ -365,7 +378,7 @@ export type MinionRehireQueueEntry = {
   availableFromTurn: number;
 };
 
-/** Per-slot success flags for one Omega phase row (three mission slots). */
+/** Per-slot completion flags for one Omega phase row (three mission slots). */
 export type OmegaSlotFlags = [boolean, boolean, boolean];
 
 export type GameState = {
@@ -430,8 +443,9 @@ export type GameState = {
   /** Current Omega plan phase row (0–2) used for which missions may be assigned from the plan. */
   activeOmegaStageIndex: number;
   /**
-   * Per-slot success flags for every Omega phase (`[stage][slot]`). Kept for the whole run so
-   * a phase cleared with fewer than three successes still shows which slots were actually done.
+   * Per-slot completion flags for every Omega phase (`[stage][slot]`). A slot is set by a
+   * success **or** a compromise. Kept for the whole run so a phase cleared with fewer than
+   * three completions still shows which slots were actually done.
    */
   omegaStageProgress: [OmegaSlotFlags, OmegaSlotFlags, OmegaSlotFlags];
   /**
@@ -640,7 +654,8 @@ export function mostRecentFailedMissionLocationId(
   const scan = (events: readonly ActivityEvent[]): string | null => {
     for (let i = events.length - 1; i >= 0; i -= 1) {
       const ev = events[i]!;
-      if (ev.kind !== "mission_completed" || ev.success) {
+      /* A compromised job left the same mess a failure would — it is a lead like any other. */
+      if (ev.kind !== "mission_completed" || !missionResultHasFallout(ev.result)) {
         continue;
       }
       const lid = getMissionTargetLocationId(ev.target);
@@ -2078,8 +2093,9 @@ export function increaseMaxConcurrentMissions(state: GameState, delta: number): 
 
 /**
  * Main Phase → Resolve Phase work → Summary.
- * Each active mission decrements `turnsRemaining`; at 0, success is rolled vs
- * {@link computeSuccessChanceBreakdown}.
+ * Each active mission decrements `turnsRemaining`; at 0 a roll is taken against
+ * {@link computeSuccessChanceBreakdown} and read as success / compromised / failure by
+ * {@link missionResultForRoll}.
  * Pass `newInstanceId` alongside a seeded `rng` for fully deterministic resolves (it feeds
  * opposing-agent spawns); defaults to `crypto.randomUUID`.
  */
@@ -2270,9 +2286,16 @@ export function executePlan(
     );
     const pct = breakdown.finalPercent;
     const roll = Math.floor(rng() * 100);
-    const success = roll < pct;
+    /* Three-way: clean success, the near-miss `compromised` band just above it (both effect
+     * lists fire, and it still counts as getting the job done), or a plain failure. */
+    const result = missionResultForRoll(roll, pct, catalog.balance.compromisedBandPercent);
+    const success = result === "success";
+    const completed = missionResultIsCompletion(result);
+    const hasFallout = missionResultHasFallout(result);
     if (lairRaid !== undefined && template.id === lairRaid.id) {
-      lairRaidOutcome = success ? "success" : "failure";
+      /* Surviving the raid is a completion, not a clean win: a compromised raid stands the top
+       * tier down *and* eats the raid's failure effects. Only a flat failure ends the run. */
+      lairRaidOutcome = completed ? "success" : "failure";
     }
     const infamyBefore = player.infamy;
     const heatBefore = player.heat;
@@ -2294,7 +2317,7 @@ export function executePlan(
      * once per mission however many agents at the site carry them — they are properties of
      * the site, not per-head bonuses. Hidden agents fire exactly like revealed ones. */
     const investigatorAgent =
-      success || missionLocId === null
+      !hasFallout || missionLocId === null
         ? undefined
         : agentWithAbilityAtLocation(
             opposingAgentInstances,
@@ -2314,9 +2337,15 @@ export function executePlan(
       });
     }
 
-    const effectList = success
-      ? (template.onSuccessEffects ?? [])
-      : (template.onFailureEffects ?? []);
+    /* A compromise pays both bills, success first — the mission achieved its goal and then
+     * the roof came in. `applyMissionEffects` re-orders reveals and steals to the front of
+     * the combined list exactly as it would for either half on its own. */
+    const effectList =
+      result === "compromised"
+        ? [...(template.onSuccessEffects ?? []), ...(template.onFailureEffects ?? [])]
+        : success
+          ? (template.onSuccessEffects ?? [])
+          : (template.onFailureEffects ?? []);
     const effectState: GameState = {
       ...state,
       player,
@@ -2342,7 +2371,7 @@ export function executePlan(
      * support asset stops the ability firing at all — no bruises, and no misleading log row
      * saying the Brawler landed one. Injuries a *template effect* granted are undone below. */
     const brawlerAgent =
-      success || missionLocId === null || preventInjuries
+      !hasFallout || missionLocId === null || preventInjuries
         ? undefined
         : agentWithAbilityAtLocation(
             opposingAgentInstances,
@@ -2414,7 +2443,7 @@ export function executePlan(
       minionLocationAffinities,
       am.participantInstanceIds,
       missionLocId,
-      locationAffinityDeltaForResolve(success, catalog.balance.locationAffinity),
+      locationAffinityDeltaForResolve(result, catalog.balance.locationAffinity),
       catalog.balance.locationAffinity,
     );
     minionLocationAffinities = standingResult.next;
@@ -2426,7 +2455,7 @@ export function executePlan(
     const affinityDelta = affinityDeltaForResolve(
       am.missionSource,
       lairRaid !== undefined && template.id === lairRaid.id,
-      success,
+      result,
       catalog.balance.minionAffinity,
     );
     const affinityResult = applyMissionAffinity(
@@ -2463,7 +2492,7 @@ export function executePlan(
       missionTemplateId: template.id,
       missionName: template.name,
       target: am.target,
-      success,
+      result,
       roll,
       successChancePercent: pct,
       infamyDelta: infamyDeltaTotal,
@@ -2481,7 +2510,9 @@ export function executePlan(
     /* Tagged so the end-of-turn mission modal can show exactly this mission's fallout. */
     resolveEvents.push(...applied.events.map((ev) => withActiveMissionId(ev, am.id)));
 
-    if (success) {
+    /* Unlocks and upgrade installs ride the *completion*, not the clean win: a compromised
+     * mission ran its `onSuccessEffects`, so whatever they unlocked is unlocked. */
+    if (completed) {
       for (const eff of orderedMissionEffects(template.onSuccessEffects ?? [])) {
         if (eff.kind !== "unlock_lair_mission") {
           continue;
@@ -2567,7 +2598,7 @@ export function executePlan(
 
     /* Credit the mission's own phase: a phase can clear before its slower slots resolve. */
     if (
-      success &&
+      completed &&
       am.missionSource === "omega" &&
       am.omegaStageIndex !== null &&
       am.omegaStageIndex >= 0 &&

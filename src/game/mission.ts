@@ -482,3 +482,77 @@ export function successChancePercent(
 ): number {
   return computeSuccessChanceBreakdown(template, participants, options).finalPercent;
 }
+
+/* ---------------------------------------------------------------------------------------
+ * Outcomes
+ *
+ * A mission that actually ran lands on one of three results. The roll is an integer in
+ * [0, 100) compared against the success chance, and the band directly above that chance —
+ * `balance.compromisedBandPercent` points wide — is **Compromised**: the job got done, but
+ * it got done loudly. A compromised mission applies its success *and* its failure effects,
+ * and counts as a completion wherever a success would (Omega phases, lair unlocks).
+ * ------------------------------------------------------------------------------------- */
+
+/** How a mission that ran to its resolve landed. `aborted` is not one of these — it never ran. */
+export type MissionResult = "success" | "compromised" | "failure";
+
+/**
+ * Which result a roll lands on. `roll` is the integer in [0, 100) drawn at resolve;
+ * `chancePercent` is the breakdown's `finalPercent`. A band of `0` collapses this back to a
+ * plain success / failure split.
+ */
+export function missionResultForRoll(
+  roll: number,
+  chancePercent: number,
+  compromisedBandPercent: number = DEFAULT_BALANCE.compromisedBandPercent,
+): MissionResult {
+  if (roll < chancePercent) {
+    return "success";
+  }
+  if (roll < chancePercent + Math.max(0, compromisedBandPercent)) {
+    return "compromised";
+  }
+  return "failure";
+}
+
+/**
+ * Whether this result counts as getting the job done — what Omega phase progress, lair
+ * mission unlocks, and upgrade installs ask about.
+ */
+export function missionResultIsCompletion(result: MissionResult): boolean {
+  return result === "success" || result === "compromised";
+}
+
+/**
+ * Whether this result drags the mission's failure fallout along with it — the template's
+ * `onFailureEffects` and the passive agent abilities that only fire on a botched job.
+ */
+export function missionResultHasFallout(result: MissionResult): boolean {
+  return result === "failure" || result === "compromised";
+}
+
+/** The three outcome odds behind one success chance; always sums to 100. */
+export type MissionOutcomeChances = {
+  successPercent: number;
+  compromisedPercent: number;
+  failurePercent: number;
+};
+
+/**
+ * Splits a success chance into the odds of each result, matching {@link missionResultForRoll}
+ * exactly: the compromised band is clipped by the 100% ceiling, so a 95% chance with a
+ * 10-point band is 95 / 5 / 0, not 95 / 10 / -5.
+ */
+export function missionOutcomeChances(
+  chancePercent: number,
+  compromisedBandPercent: number = DEFAULT_BALANCE.compromisedBandPercent,
+): MissionOutcomeChances {
+  const successPercent = Math.min(100, Math.max(0, chancePercent));
+  const bandTop = Math.min(100, successPercent + Math.max(0, compromisedBandPercent));
+  const compromisedPercent = bandTop - successPercent;
+  return {
+    successPercent,
+    compromisedPercent,
+    failurePercent: 100 - bandTop,
+  };
+}

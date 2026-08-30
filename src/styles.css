@@ -1746,6 +1746,14 @@ body {
   text-shadow: 0 0 12px rgba(69, 223, 123, 0.35);
 }
 
+/* Compromised: the job got done, loudly. Amber sits between the win and the loss. */
+.turn-report-verdict--compromised {
+  color: var(--warn);
+  border-color: var(--warn-dim);
+  background: rgba(122, 84, 16, 0.2);
+  text-shadow: 0 0 12px rgba(255, 176, 32, 0.35);
+}
+
 .turn-report-verdict--failure,
 .turn-report-verdict--aborted {
   color: var(--red-bright);
@@ -2248,6 +2256,12 @@ body {
 .status-badge--locked {
   color: var(--locked, #6d5e60);
   background: rgba(40, 32, 34, 0.4);
+}
+
+.status-badge--compromised {
+  color: var(--warn);
+  background: rgba(122, 84, 16, 0.2);
+  text-shadow: 0 0 6px rgba(255, 176, 32, 0.4);
 }
 
 .status-badge--failed {

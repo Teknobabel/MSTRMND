@@ -38,6 +38,7 @@ import type {
   StartingDynamicTrait,
 } from "./types";
 import { DEFAULT_BALANCE } from "./types";
+import type { MissionResult } from "./mission";
 
 /** Track order; index arithmetic elsewhere relies on this being contiguous and ordered. */
 const RELATIONSHIP_RANK: Record<MinionRelationship, number> = {
@@ -185,24 +186,36 @@ export function nextRelationship(
 
 /**
  * Score change every participant pair takes when a mission finishes. `isLairRaid` wins over
- * `source` — the raid arrives through the event slot but is its own thing.
+ * `source` — the raid arrives through the event slot but is its own thing. A `compromised`
+ * result takes **both** deltas, the same way it takes both effect lists: the crew pulled it
+ * off and then went through the wringer together, and with symmetric tuning that nets to 0.
  */
 export function affinityDeltaForResolve(
   source: MissionSource,
   isLairRaid: boolean,
-  success: boolean,
+  result: MissionResult,
   cfg: MinionAffinityConfig = DEFAULT_BALANCE.minionAffinity,
 ): number {
+  const pick = (onSuccess: number, onFailure: number): number => {
+    switch (result) {
+      case "success":
+        return onSuccess;
+      case "failure":
+        return onFailure;
+      case "compromised":
+        return onSuccess + onFailure;
+    }
+  };
   if (isLairRaid) {
-    return success ? cfg.lairRaidSuccess : cfg.lairRaidFailure;
+    return pick(cfg.lairRaidSuccess, cfg.lairRaidFailure);
   }
   switch (source) {
     case "event":
-      return success ? cfg.eventSuccess : cfg.eventFailure;
+      return pick(cfg.eventSuccess, cfg.eventFailure);
     case "omega":
-      return success ? cfg.omegaSuccess : cfg.omegaFailure;
+      return pick(cfg.omegaSuccess, cfg.omegaFailure);
     case "lair":
-      return success ? cfg.missionSuccess : cfg.missionFailure;
+      return pick(cfg.missionSuccess, cfg.missionFailure);
   }
 }
 
@@ -454,12 +467,22 @@ export function nextStanding(
   return "neutral";
 }
 
-/** Score change every participant takes at the mission's own location. */
+/**
+ * Score change every participant takes at the mission's own location. `compromised` takes
+ * both deltas, matching {@link affinityDeltaForResolve}.
+ */
 export function locationAffinityDeltaForResolve(
-  success: boolean,
+  result: MissionResult,
   cfg: LocationAffinityConfig = DEFAULT_BALANCE.locationAffinity,
 ): number {
-  return success ? cfg.missionSuccess : cfg.missionFailure;
+  switch (result) {
+    case "success":
+      return cfg.missionSuccess;
+    case "failure":
+      return cfg.missionFailure;
+    case "compromised":
+      return cfg.missionSuccess + cfg.missionFailure;
+  }
 }
 
 function withLocationScore(

@@ -504,6 +504,7 @@ export const balanceConfigSchema = z.object({
   statusPositiveBonus: balanceInt(0, 100, DEFAULT_BALANCE.statusPositiveBonus),
   statusNegativePenalty: balanceInt(0, 100, DEFAULT_BALANCE.statusNegativePenalty),
   agentChallengeTraitPenalty: balanceInt(0, 100, DEFAULT_BALANCE.agentChallengeTraitPenalty),
+  compromisedBandPercent: balanceInt(0, 100, DEFAULT_BALANCE.compromisedBandPercent),
   dynamicTraitModifiers: z
     .object({
       friend: balanceInt(-100, 100, DEFAULT_BALANCE.dynamicTraitModifiers.friend),
