@@ -11,6 +11,7 @@ import type {
   LocationLevel,
   LocationTemplate,
   LocationType,
+  MapMarker,
   MapTemplate,
   MinionTemplate,
   MissionEffect,
@@ -423,11 +424,19 @@ export const locationTemplateSchema: z.ZodType<LocationTemplate> = z.object({
   locationLevel: locationLevelSchema,
 });
 
+const mapMarkerSchema: z.ZodType<MapMarker> = z.object({
+  locationId: z.string().min(1),
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+});
+
 export const mapTemplateSchema: z.ZodType<MapTemplate> = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
   locationIds: z.array(z.string().min(1)),
+  mapArt: z.string().min(1).optional(),
+  markers: z.array(mapMarkerSchema).optional(),
 });
 
 const omegaPlanStageSchema = z.object({
@@ -1485,6 +1494,26 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
             entityId: map.id,
             path: `locationIds[${i}]`,
             message: `Unknown location id "${lid}"`,
+          });
+        }
+      });
+      const seenMarker = new Set<string>();
+      (map.markers ?? []).forEach((marker, i) => {
+        if (seenMarker.has(marker.locationId)) {
+          issues.push({
+            slice: "maps",
+            entityId: map.id,
+            path: `markers[${i}]`,
+            message: `Duplicate marker for location id "${marker.locationId}"`,
+          });
+        }
+        seenMarker.add(marker.locationId);
+        if (!seenLoc.has(marker.locationId)) {
+          issues.push({
+            slice: "maps",
+            entityId: map.id,
+            path: `markers[${i}]`,
+            message: `Marker location id "${marker.locationId}" is not on this map`,
           });
         }
       });

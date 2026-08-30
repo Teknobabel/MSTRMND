@@ -138,21 +138,6 @@
                   </svg>
                   <span>Lair</span>
                 </button>
-                <button type="button" class="game-panel-menu__button" data-game-menu="assets" aria-pressed="false">
-                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z" />
-                    <path d="M2.5 9h19" />
-                  </svg>
-                  <span>Assets</span>
-                </button>
-                <button type="button" class="game-panel-menu__button" data-game-menu="events" aria-pressed="false">
-                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M3 12h18" />
-                    <path d="M12 3a13.5 13.5 0 0 1 0 18 13.5 13.5 0 0 1 0-18Z" />
-                  </svg>
-                  <span>Events</span>
-                </button>
                 <button type="button" class="game-panel-menu__button game-panel-menu__button--system" id="btn-game-panel-system">
                   <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <circle cx="12" cy="12" r="3" />
@@ -250,56 +235,44 @@
 
             <main class="omega-main game-ui-right-block">
               <div class="game-ui-columns-row">
-                <div class="game-ui-stack-column">
-                  <aside class="game-panel game-panel--omega" data-menu-panel="omega" aria-labelledby="omega-plan-panel-title">
-                    <h2 id="omega-plan-panel-title" class="game-panel-title">Omega Plan</h2>
-                    <div id="omega-plan-panel" class="omega-plan-panel"></div>
-                  </aside>
-                  <aside class="game-panel game-panel--locations" data-menu-panel="locations" aria-labelledby="locations-panel-title">
-                    <h2 id="locations-panel-title" class="game-panel-title">Locations</h2>
-                    <div id="locations-panel" class="locations-panel"></div>
-                  </aside>
-                </div>
-                <div class="game-ui-stack-column">
-                  <aside class="game-panel game-panel--minions" data-menu-panel="minions" aria-labelledby="minions-panel-title">
-                    <h2 id="minions-panel-title" class="game-panel-title">Minions</h2>
-                    <div id="minions-panel" class="minions-panel"></div>
-                  </aside>
-                  <aside
-                    class="game-panel game-panel--lair"
-                    data-menu-panel="lair"
-                    aria-labelledby="lair-panel-title"
-                  >
-                    <h2 id="lair-panel-title" class="game-panel-title">Lair</h2>
-                    <div id="lair-panel" class="lair-panel"></div>
-                  </aside>
-                </div>
-                <div class="game-ui-stack-column">
-                  <aside
-                    class="game-panel game-panel--missions"
-                    data-menu-panel="missions"
-                    aria-labelledby="missions-panel-title"
-                  >
-                    <h2 id="missions-panel-title" class="game-panel-title">Active Missions</h2>
-                    <div id="missions-panel-root" class="missions-panel-root"></div>
-                  </aside>
-                  <aside
-                    class="game-panel game-panel--events"
-                    data-menu-panel="events"
-                    aria-labelledby="events-panel-title"
-                  >
-                    <h2 id="events-panel-title" class="game-panel-title">Events</h2>
-                    <div id="events-panel" class="events-panel"></div>
-                  </aside>
-                  <aside
-                    class="game-panel game-panel--assets"
-                    data-menu-panel="assets"
-                    aria-labelledby="assets-panel-title"
-                  >
-                    <h2 id="assets-panel-title" class="game-panel-title">Assets</h2>
-                    <div id="assets-panel" class="assets-panel"></div>
-                  </aside>
-                </div>
+                <aside
+                  class="game-panel game-panel--map"
+                  data-menu-panel="dashboard"
+                  aria-label="Global map"
+                >
+                  <div id="map-panel" class="map-panel"></div>
+                </aside>
+                <aside class="game-panel game-panel--locations" data-menu-panel="locations" aria-labelledby="locations-panel-title">
+                  <h2 id="locations-panel-title" class="game-panel-title">Locations</h2>
+                  <div id="locations-panel" class="locations-panel"></div>
+                </aside>
+                <aside class="game-panel game-panel--omega" data-menu-panel="omega" aria-labelledby="omega-plan-panel-title">
+                  <h2 id="omega-plan-panel-title" class="game-panel-title">Omega Plan</h2>
+                  <div id="omega-plan-panel" class="omega-plan-panel"></div>
+                </aside>
+                <aside class="game-panel game-panel--minions" data-menu-panel="minions" aria-labelledby="minions-panel-title">
+                  <h2 id="minions-panel-title" class="game-panel-title">Minions</h2>
+                  <div id="minions-panel" class="minions-panel"></div>
+                </aside>
+                <aside
+                  class="game-panel game-panel--lair"
+                  data-menu-panel="lair"
+                  aria-labelledby="lair-panel-title"
+                >
+                  <h2 id="lair-panel-title" class="game-panel-title">Lair</h2>
+                  <div id="lair-panel" class="lair-panel"></div>
+                </aside>
+                <!-- Missions has no dashboard tile: the Lair panel carries an Active Missions
+                     tab. This panel is only the fullscreen Missions menu. -->
+                <aside
+                  class="game-panel game-panel--missions"
+                  data-menu-panel="missions"
+                  data-dashboard-hidden="true"
+                  aria-labelledby="missions-panel-title"
+                >
+                  <h2 id="missions-panel-title" class="game-panel-title">Active Missions</h2>
+                  <div id="missions-panel-root" class="missions-panel-root"></div>
+                </aside>
               </div>
             </main>
           </div>

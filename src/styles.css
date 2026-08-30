@@ -805,30 +805,49 @@ body {
   min-height: 0;
 }
 
+/*
+ * Dashboard: three columns over two rows. The map straddles the first two columns of the top
+ * row; every other tile owns exactly one cell.
+ */
 .game-ui-columns-row {
   flex: 1 1 0;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.game-ui-columns-row > .game-ui-stack-column {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  overflow: hidden;
+.game-ui-columns-row > .game-panel--map {
+  grid-area: 1 / 1 / 2 / 3;
 }
 
-.game-ui-columns-row--single > .game-ui-stack-column:not([hidden]) {
-  flex: 1 1 100%;
+.game-ui-columns-row > .game-panel--locations {
+  grid-area: 1 / 3 / 2 / 4;
+}
+
+.game-ui-columns-row > .game-panel--omega {
+  grid-area: 2 / 1 / 3 / 2;
+}
+
+.game-ui-columns-row > .game-panel--minions {
+  grid-area: 2 / 2 / 3 / 3;
+}
+
+.game-ui-columns-row > .game-panel--lair {
+  grid-area: 2 / 3 / 3 / 4;
+}
+
+/* Single-menu (fullscreen) view: whichever panel is showing takes the whole area. */
+.game-ui-columns-row--single {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.game-ui-columns-row--single > .game-panel:not([hidden]) {
+  grid-area: 1 / 1 / 2 / 2;
 }
 
 /* Hide scrollbars across all panels in Dashboard menu view */
@@ -845,14 +864,8 @@ body {
   height: 0;
 }
 
-.game-ui-columns-row > .game-ui-stack-column[hidden],
 .game-panel[hidden] {
   display: none !important;
-}
-
-.game-ui-stack-column > .game-panel {
-  flex: 1 1 0;
-  min-height: 0;
 }
 
 /* ---------------- Panels ---------------- */
@@ -905,9 +918,15 @@ body {
 }
 
 .game-panel--missions,
-.game-panel--events,
 .game-panel--lair {
   --panel-bg: rgba(12, 4, 7, 0.9);
+}
+
+.game-panel--map {
+  --panel-bg: #000;
+  overflow: hidden;
+  padding: 0;
+  gap: 0;
 }
 
 /* Corner brackets */
@@ -2811,7 +2830,7 @@ body {
   gap: 0.45rem;
 }
 
-.game-panel.game-panel--assets .assets-panel {
+.game-panel.game-panel--lair .assets-panel {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -2819,81 +2838,12 @@ body {
   gap: 0.45rem;
 }
 
-.assets-panel-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.55rem;
-  align-content: start;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.game-panel.game-panel--assets,
 .game-panel.game-panel--lair,
 .game-panel.game-panel--minions,
 .game-panel.game-panel--missions,
-.game-panel.game-panel--events,
+.game-panel.game-panel--map,
 .game-panel.game-panel--plan-column {
   min-height: 0;
-}
-
-.asset-card--grid-tile {
-  aspect-ratio: 1;
-  min-width: 0;
-  overflow: hidden;
-  padding: 0.4rem;
-}
-
-.asset-card--grid-tile.card-with-art {
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.asset-card--grid-tile.card-with-art > .card-art {
-  width: min(42%, 4.25rem);
-  height: auto;
-  aspect-ratio: 1;
-  flex-shrink: 0;
-}
-
-.asset-card--grid-tile .card-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  overflow: hidden;
-}
-
-.asset-card--grid-tile .asset-card-title {
-  margin: 0 0 0.15rem;
-  font-size: 0.62rem;
-  line-height: 1.25;
-  text-align: center;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.asset-card--grid-tile .asset-card-stats {
-  margin-top: auto;
-  font-size: 0.66rem;
-  gap: 0.08rem 0.35rem;
-  line-height: 1.25;
-}
-
-.asset-card--grid-tile .asset-card-stats dt {
-  font-size: 0.58rem;
-}
-
-.asset-card--grid-tile .asset-card-description {
-  display: none;
 }
 
 .minions-panel,
@@ -3044,13 +2994,147 @@ body {
   color: var(--text-2);
 }
 
-.game-panel.game-panel--events .events-panel {
+
+/* ============================================================
+   Global map
+   ============================================================ */
+
+.map-panel {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+  overflow: hidden;
 }
+
+/* Stretch the art to the panel so markers as % of the plot stay glued to the painted land. */
+.map-plot {
+  position: absolute;
+  inset: 0;
+}
+
+.map-plot__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.map-marker {
+  position: absolute;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: -0.575rem 0 0 -0.575rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-0);
+  cursor: pointer;
+  z-index: 1;
+}
+
+.map-marker__dot {
+  position: absolute;
+  inset: 0.3rem;
+  border-radius: 50%;
+  background: var(--accent, #e8112d);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 8px rgba(232, 17, 45, 0.9);
+}
+
+.map-marker__ring {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(232, 17, 45, 0.55);
+  border-radius: 50%;
+}
+
+.map-marker:hover,
+.map-marker:focus-visible,
+.map-marker--preview {
+  z-index: 3;
+  outline: none;
+}
+
+.map-marker:hover .map-marker__ring,
+.map-marker:focus-visible .map-marker__ring,
+.map-marker--preview .map-marker__ring {
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 10px rgba(232, 17, 45, 0.75);
+}
+
+/* Site type is the one thing worth reading at a glance without hovering. */
+.map-marker--military .map-marker__dot {
+  background: #ff5a3c;
+}
+
+.map-marker--political .map-marker__dot {
+  background: #ffd166;
+}
+
+.map-marker--economic .map-marker__dot {
+  background: #4fd1c5;
+}
+
+/* Dark sites read as hollow: the player has no intel there yet. */
+.map-marker--dark .map-marker__dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+.map-marker--targeted .map-marker__ring {
+  border-color: #fff;
+  border-width: 2px;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.7);
+}
+
+.map-marker--agents::after {
+  content: "";
+  position: absolute;
+  right: -0.1rem;
+  top: -0.1rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+}
+
+/* Twelve names at tile size overlap badly, so the name is a hover affordance and the dot's
+ * colour carries the always-on information. */
+.map-marker__label {
+  position: absolute;
+  left: 50%;
+  top: 1.05rem;
+  transform: translateX(-50%);
+  padding: 0.1rem 0.3rem;
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid var(--line-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+.map-marker:hover .map-marker__label,
+.map-marker:focus-visible .map-marker__label,
+.map-marker--targeted .map-marker__label,
+.map-marker--preview .map-marker__label {
+  opacity: 1;
+}
+
+.map-panel-empty {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
 
 /* ============================================================
    Minions

@@ -72,7 +72,9 @@ import {
 import { loadContent } from "./game/loadContent";
 import {
   getLocationById,
+  getMapById,
   locationTemplatesForOmegaPlan,
+  maxSecurityLevelForLocation,
   securityLevelForLocation,
 } from "./game/locationCatalog";
 import { challengeTraitIdsForAgents, getAgentTemplateById } from "./game/agent";
@@ -150,8 +152,6 @@ const GAME_MENU_VALUES = [
   "minions",
   "locations",
   "lair",
-  "assets",
-  "events",
 ] as const;
 
 type GameMenu = (typeof GAME_MENU_VALUES)[number];
@@ -159,6 +159,19 @@ type GameMenu = (typeof GAME_MENU_VALUES)[number];
 function isGameMenu(value: string | undefined): value is GameMenu {
   return value !== undefined && (GAME_MENU_VALUES as readonly string[]).includes(value);
 }
+
+type LairPanelTab = "missions" | "active" | "assets";
+
+/**
+ * Lair sections, shown as tabs on the dashboard and as columns in the fullscreen Lair menu.
+ * Lair upgrades deliberately have no tab: they are offered under Missions → Available, which is
+ * also where the omega, lair and event offers live, so the Lair panel stays about the base.
+ */
+const LAIR_PANEL_TABS: readonly { id: LairPanelTab; label: string }[] = [
+  { id: "missions", label: "Missions" },
+  { id: "active", label: "Active Missions" },
+  { id: "assets", label: "Assets" },
+];
 
 /* Inline SVG icons for the OMEGA OS status bar (stroked via CSS). */
 const ICON_BOLT =
@@ -1038,11 +1051,10 @@ function initGameController(
   const globalTickerEl = req<HTMLElement>("global-events-ticker");
   const omegaPlanPanelEl = req<HTMLElement>("omega-plan-panel");
   const locationsPanelEl = req<HTMLElement>("locations-panel");
-  const assetsPanelEl = req<HTMLElement>("assets-panel");
   const missionsPanelRootEl = req<HTMLElement>("missions-panel-root");
   const missionsPanelTitleEl = req<HTMLElement>("missions-panel-title");
-  const eventsPanelEl = req<HTMLElement>("events-panel");
   const lairPanelEl = req<HTMLElement>("lair-panel");
+  const mapPanelEl = req<HTMLElement>("map-panel");
   const planColumnTabPlan = req<HTMLButtonElement>("plan-column-tab-plan");
   const planColumnTabActivity = req<HTMLButtonElement>("plan-column-tab-activity");
   const planColumnPanelPlan = req<HTMLElement>("plan-column-panel-plan");
@@ -1091,7 +1103,7 @@ function initGameController(
     | null = null;
 
   let locationsCategoryTab: LocationType = "economic";
-  let lairPanelTab: "missions" | "upgrades" = "missions";
+  let lairPanelTab: LairPanelTab = "missions";
   let minionsPanelTab: "roster" | "hire" = "roster";
   let omegaPlanPanelTab: number | null = null;
   let currentMenu: GameMenu = "dashboard";
@@ -2032,7 +2044,7 @@ function initGameController(
     const cap = assignSupportAssetIds.length;
     if (!assignMissionTemplateId || cap === 0) {
       assignSupportAssetsFieldset.hidden = true;
-      renderAssetsPanel();
+      renderLairPanel();
       return;
     }
     assignSupportAssetsFieldset.hidden = false;
@@ -2139,7 +2151,8 @@ function initGameController(
     }
 
     assignSupportAssetsList.appendChild(wrap);
-    renderAssetsPanel();
+    /* Staging a support asset changes what is still available, which the Assets tab shows. */
+    renderLairPanel();
   }
 
   function renderAssignPickSlots(): void {
@@ -2853,6 +2866,7 @@ function initGameController(
   ): HTMLElement {
     const article = document.createElement("article");
     article.className = "location-card";
+    article.dataset.locationId = loc.id;
     if (enableAssignDrag) {
       article.draggable = true;
       article.classList.add("assign-draggable-location");
@@ -3653,8 +3667,9 @@ function initGameController(
     omegaPlanPanelEl.appendChild(activeSection);
   }
 
-  function renderAssetsPanel(): void {
-    assetsPanelEl.innerHTML = "";
+  /** Owned assets, newest inventory state, as draggable cards. */
+  function fillAssetsInto(container: HTMLElement): void {
+    container.innerHTML = "";
     const assetById = new Map(content.assets.map((a) => [a.id, a]));
     const rows = Object.entries(state.player.assets)
       .filter(([, qty]) => qty > 0)
@@ -3669,17 +3684,8 @@ function initGameController(
       const empty = document.createElement("p");
       empty.className = "assets-panel-empty";
       empty.textContent = "None owned yet.";
-      assetsPanelEl.appendChild(empty);
+      container.appendChild(empty);
       return;
-    }
-
-    const gridMode = currentMenu === "assets";
-    let mount: HTMLElement = assetsPanelEl;
-    if (gridMode) {
-      const grid = document.createElement("div");
-      grid.className = "assets-panel-grid";
-      assetsPanelEl.appendChild(grid);
-      mount = grid;
     }
 
     for (const { assetId, quantity, template } of rows) {
@@ -3688,9 +3694,6 @@ function initGameController(
 
       const article = document.createElement("article");
       article.className = "asset-card";
-      if (gridMode) {
-        article.classList.add("asset-card--grid-tile");
-      }
       if (template !== undefined && isSupportAsset(template)) {
         article.classList.add("asset-card--support");
       }
@@ -3736,7 +3739,7 @@ function initGameController(
         body.appendChild(desc);
       }
 
-      mount.appendChild(article);
+      container.appendChild(article);
     }
   }
 
@@ -4032,71 +4035,6 @@ function initGameController(
       appendActiveMissionCard(listWrap, am);
     }
     panel.appendChild(listWrap);
-  }
-
-  function renderEventsPanelInto(panel: HTMLElement): void {
-    panel.innerHTML = "";
-    const mainOnly = state.phase === "main";
-
-    const offerHeading = document.createElement("h3");
-    offerHeading.className = "events-tab-section-title";
-    offerHeading.textContent = "Current offer";
-    panel.appendChild(offerHeading);
-
-    const curId = state.currentEventTemplateId;
-    const activeEventMission = state.activeMissions.find((am) => am.missionSource === "event");
-    if (curId === null || content.events.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "assets-panel-empty";
-      if (content.events.length === 0) {
-        empty.textContent = "No events in this catalog.";
-      } else if (activeEventMission) {
-        const n =
-          content.events.find((e) => e.id === activeEventMission.missionTemplateId)?.name ??
-          activeEventMission.missionTemplateId;
-        empty.textContent = `"${n}" is under way — its effects land when the mission resolves.`;
-      } else if (state.eventCooldownTurnsRemaining > 0) {
-        const t = state.eventCooldownTurnsRemaining;
-        empty.textContent = `No event on the table. Next opportunity in ${t} ${t === 1 ? "turn" : "turns"}.`;
-      } else {
-        empty.textContent = "No event on the table. A new opportunity is due next turn.";
-      }
-      panel.appendChild(empty);
-    } else {
-      const et = content.events.find((e) => e.id === curId);
-      const article = buildMissionCatalogArticle(curId);
-      /* One event mission at a time — once started, the offer is no longer draggable. */
-      if (mainOnly && et && !activeEventMission) {
-        article.draggable = true;
-        article.classList.add("assign-draggable-mission");
-        article.addEventListener("dragstart", (e) => {
-          e.stopPropagation();
-          e.dataTransfer?.setData("text/plain", missionDragJson("event", curId));
-          e.dataTransfer!.effectAllowed = "copy";
-        });
-      } else {
-        article.draggable = false;
-      }
-      panel.appendChild(article);
-      const note = document.createElement("p");
-      note.className = "assets-panel-empty";
-      note.style.marginTop = "0.25rem";
-      const left = state.currentEventTurnsRemaining;
-      if (et?.special === "lair_raid") {
-        /* The one offer that cannot be shrugged off: ignoring or losing it ends the run. */
-        note.textContent = activeEventMission
-          ? "The raid is under way. Lose it and the run ends."
-          : `Answer this or the run ends — ${left} ${left === 1 ? "turn" : "turns"} left.`;
-      } else if (activeEventMission) {
-        note.textContent = "Started this turn — Execute Plan takes the offer off the table.";
-      } else if (left <= 1) {
-        note.textContent =
-          "Last turn to act: drag the offer to Plan mission, or it expires when you Execute Plan.";
-      } else {
-        note.textContent = `Drag the offer to Plan mission to start it. ${left} turns left before it expires.`;
-      }
-      panel.appendChild(note);
-    }
   }
 
   /** One runnable mission offer plus how it may be dragged into the plan slot. */
@@ -4547,10 +4485,6 @@ function initGameController(
     missionsPanelRootEl.appendChild(columns);
   }
 
-  function renderEventsPanel(): void {
-    renderEventsPanelInto(eventsPanelEl);
-  }
-
   function renderLocationsPanel(): void {
     locationsPanelEl.innerHTML = "";
     const securityByLocationId = new Map(
@@ -4662,6 +4596,144 @@ function initGameController(
     locationsPanelEl.appendChild(listEl);
   }
 
+  /**
+   * Click-to-target from the map: the same rule the target slot applies to a dropped location
+   * card, without the drag. Returns false (and changes nothing) when the planned mission would
+   * not accept this site.
+   */
+  function trySetMapTarget(locationId: string): boolean {
+    if (state.phase !== "main") {
+      return false;
+    }
+    if (selectedMissionTemplate()?.targetType === "none") {
+      return false;
+    }
+    if (!targetPayloadMatchesPlannedMission({ kind: "mastermind-location", locationId })) {
+      return false;
+    }
+    if (!runLocations().some((l) => l.id === locationId)) {
+      return false;
+    }
+    assignTarget = { kind: "location", locationId };
+    renderAssignPickSlots();
+    renderAssignMinionSlots();
+    onAssignSlotsChanged();
+    return true;
+  }
+
+  /**
+   * The run's map with its sites plotted on it. Markers carry the same drag payload as location
+   * cards, so the map is a second way to pick a mission target rather than a picture of one.
+   */
+  function renderMapPanel(): void {
+    mapPanelEl.innerHTML = "";
+
+    const plan =
+      state.activeOmegaPlanId !== null
+        ? getOmegaPlanById(content, state.activeOmegaPlanId)
+        : undefined;
+    const map = plan !== undefined ? getMapById(content, plan.mapId) : undefined;
+    const mapSection = mapPanelEl.closest(".game-panel--map");
+    if (mapSection instanceof HTMLElement) {
+      mapSection.setAttribute("aria-label", map?.name ?? "Global map");
+    }
+
+    if (map?.mapArt === undefined) {
+      const empty = document.createElement("p");
+      empty.className = "map-panel-empty";
+      empty.textContent = "No map art for this run.";
+      mapPanelEl.appendChild(empty);
+      return;
+    }
+
+    const plot = document.createElement("div");
+    plot.className = "map-plot";
+
+    const art = document.createElement("img");
+    art.className = "map-plot__art";
+    art.src = map.mapArt;
+    art.alt = `${map.name}. ${map.description}`;
+    art.decoding = "async";
+    plot.appendChild(art);
+
+    const playable = new Set(runLocations().map((l) => l.id));
+    const mainOnly = state.phase === "main";
+    const targetedLocationId =
+      assignTarget?.kind === "location" || assignTarget?.kind === "asset"
+        ? assignTarget.locationId
+        : null;
+
+    for (const marker of map.markers ?? []) {
+      const loc = getLocationById(content, marker.locationId);
+      if (loc === undefined || !playable.has(loc.id)) {
+        continue;
+      }
+
+      const intel = intelLevelAtLocation(state, loc.id);
+      const security = securityLevelForLocation(state.locationSecurityStates, loc.id);
+      const agents = playerVisibleOpposingAgentsAtLocation(state, loc.id);
+
+      const pin = document.createElement("button");
+      pin.type = "button";
+      pin.className = `map-marker map-marker--${loc.locationType}`;
+      pin.dataset.locationId = loc.id;
+      pin.style.left = `${marker.x}%`;
+      pin.style.top = `${marker.y}%`;
+      if (intel === 0) {
+        pin.classList.add("map-marker--dark");
+      }
+      if (agents.length > 0) {
+        pin.classList.add("map-marker--agents");
+      }
+      if (loc.id === targetedLocationId) {
+        pin.classList.add("map-marker--targeted");
+      }
+
+      const tipLines = [
+        loc.name,
+        `${formatLocationTypeLabel(loc.locationType)} · Level ${loc.locationLevel}`,
+        `Security ${security}/${maxSecurityLevelForLocation(content, loc.id)} · Intel ${intel}`,
+      ];
+      if (agents.length > 0) {
+        const names = agents.map(
+          (a) => getAgentTemplateById(content, a.templateId)?.name ?? a.templateId,
+        );
+        tipLines.push(`Agents: ${names.join(", ")}`);
+      }
+      pin.title = tipLines.join("\n");
+      pin.setAttribute("aria-label", tipLines.join(". "));
+
+      pin.draggable = mainOnly;
+      pin.addEventListener("dragstart", (e) => {
+        if (!pin.draggable) {
+          e.preventDefault();
+          return;
+        }
+        e.stopPropagation();
+        e.dataTransfer?.setData("text/plain", locationDragJson(loc.id));
+        e.dataTransfer!.effectAllowed = "copy";
+      });
+      pin.addEventListener("click", () => {
+        trySetMapTarget(loc.id);
+      });
+
+      const ring = document.createElement("span");
+      ring.className = "map-marker__ring";
+      pin.appendChild(ring);
+      const dot = document.createElement("span");
+      dot.className = "map-marker__dot";
+      pin.appendChild(dot);
+      const label = document.createElement("span");
+      label.className = "map-marker__label";
+      label.textContent = loc.name;
+      pin.appendChild(label);
+
+      plot.appendChild(pin);
+    }
+
+    mapPanelEl.appendChild(plot);
+  }
+
   function renderLairPanel(): void {
     lairPanelEl.innerHTML = "";
     if (state.activeLairId === null) {
@@ -4725,66 +4797,36 @@ function initGameController(
       }
     }
 
-    /** Only the next open upgrade level — earlier ones are settled, later ones stay unseen. */
-    function fillLairUpgradesInto(container: HTMLElement): void {
-      const offer = lairUpgradeOffer();
-      if (offer.entries.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "assets-panel-empty";
-        empty.textContent = offer.emptyText;
-        container.appendChild(empty);
-        return;
-      }
-      const levelLine = document.createElement("p");
-      levelLine.className = "lair-upgrade-level-title";
-      /* The column/tab is already titled "Upgrades"; keep just the level part here. */
-      levelLine.textContent = offer.label.replace("Lair Upgrades — ", "");
-      container.appendChild(levelLine);
-      if (offer.note !== null) {
-        const note = document.createElement("p");
-        note.className = "assets-panel-empty";
-        note.textContent = offer.note;
-        container.appendChild(note);
-      }
-      for (const entry of offer.entries) {
-        const card = omegaPlanMissionCard(entry.missionTemplateId, entry.dragMeta);
-        if (entry.status) {
-          appendMissionCardBadge(card, entry.status);
-        }
-        container.appendChild(card);
+    function fillLairTabInto(tab: LairPanelTab, container: HTMLElement): void {
+      if (tab === "missions") {
+        fillLairMissionsInto(container);
+      } else if (tab === "active") {
+        renderActiveMissionsInto(container);
+      } else {
+        fillAssetsInto(container);
       }
     }
 
     if (currentMenu === "lair") {
       const columnsWrap = document.createElement("div");
       columnsWrap.className = "lair-panel-columns";
+      for (const def of LAIR_PANEL_TABS) {
+        const column = document.createElement("section");
+        column.className = "lair-panel-column";
+        column.setAttribute("aria-label", def.label);
 
-      const missionsCol = document.createElement("section");
-      missionsCol.className = "lair-panel-column";
-      missionsCol.setAttribute("aria-label", "Lair missions");
-      const missionsHeading = document.createElement("h3");
-      missionsHeading.className = "game-controls-heading lair-panel-column-title";
-      missionsHeading.textContent = "Missions";
-      const missionsList = document.createElement("div");
-      missionsList.className = "lair-panel-missions";
-      fillLairMissionsInto(missionsList);
-      missionsCol.appendChild(missionsHeading);
-      missionsCol.appendChild(missionsList);
+        const heading = document.createElement("h3");
+        heading.className = "game-controls-heading lair-panel-column-title";
+        heading.textContent = def.label;
 
-      const upgradesCol = document.createElement("section");
-      upgradesCol.className = "lair-panel-column";
-      upgradesCol.setAttribute("aria-label", "Lair upgrades");
-      const upgradesHeading = document.createElement("h3");
-      upgradesHeading.className = "game-controls-heading lair-panel-column-title";
-      upgradesHeading.textContent = "Upgrades";
-      const upgradesList = document.createElement("div");
-      upgradesList.className = "lair-panel-missions";
-      fillLairUpgradesInto(upgradesList);
-      upgradesCol.appendChild(upgradesHeading);
-      upgradesCol.appendChild(upgradesList);
+        const list = document.createElement("div");
+        list.className = "lair-panel-missions";
+        fillLairTabInto(def.id, list);
 
-      columnsWrap.appendChild(missionsCol);
-      columnsWrap.appendChild(upgradesCol);
+        column.appendChild(heading);
+        column.appendChild(list);
+        columnsWrap.appendChild(column);
+      }
       lairPanelEl.appendChild(columnsWrap);
       return;
     }
@@ -4794,11 +4836,7 @@ function initGameController(
     tablist.setAttribute("role", "tablist");
     tablist.setAttribute("aria-label", "Lair sections");
 
-    const tabDefs: { id: "missions" | "upgrades"; label: string }[] = [
-      { id: "missions", label: "Missions" },
-      { id: "upgrades", label: "Upgrades" },
-    ];
-    for (const def of tabDefs) {
+    for (const def of LAIR_PANEL_TABS) {
       const tab = document.createElement("button");
       tab.type = "button";
       tab.className = "lair-panel-tab";
@@ -4824,12 +4862,7 @@ function initGameController(
     list.className = "lair-panel-missions";
     list.setAttribute("role", "tabpanel");
     list.setAttribute("aria-labelledby", `lair-panel-tab-${lairPanelTab}`);
-
-    if (lairPanelTab === "missions") {
-      fillLairMissionsInto(list);
-    } else {
-      fillLairUpgradesInto(list);
-    }
+    fillLairTabInto(lairPanelTab, list);
     lairPanelEl.appendChild(list);
   }
 
@@ -5064,17 +5097,12 @@ function initGameController(
   function applyGameMenuVisibility(): void {
     const showDashboard = currentMenu === "dashboard";
 
+    /* On the dashboard every tile shows except the ones whose content lives inside another tile
+     * (Missions, which the Lair panel carries as a tab). Otherwise exactly one panel is up. */
     for (const panel of menuPanels) {
-      panel.hidden = !showDashboard && panel.dataset.menuPanel !== currentMenu;
-    }
-
-    for (const column of Array.from(rightColumnsRowEl.children)) {
-      if (!(column instanceof HTMLElement)) {
-        continue;
-      }
-      const hasVisiblePanel = Array.from(column.querySelectorAll<HTMLElement>("[data-menu-panel]"))
-        .some((panel) => !panel.hidden);
-      column.hidden = !hasVisiblePanel;
+      panel.hidden = showDashboard
+        ? panel.dataset.dashboardHidden === "true"
+        : panel.dataset.menuPanel !== currentMenu;
     }
 
     rightColumnsRowEl.classList.toggle("game-ui-columns-row--single", !showDashboard);
@@ -5094,12 +5122,56 @@ function initGameController(
     currentMenu = menu;
     applyGameMenuVisibility();
     renderLocationsPanel();
-    renderAssetsPanel();
     renderMissionsPanel();
     renderLairPanel();
     renderOmegaPlanPanel();
     renderMinionsPanel();
+    renderMapPanel();
   }
+
+  /**
+   * Dashboard-only: hovering a Locations card lights the matching map pin and shows its name.
+   * Pointer events bubble from children, so relatedTarget is used to ignore moves inside a card.
+   */
+  function locationCardFromEvent(target: EventTarget | null): HTMLElement | null {
+    return target instanceof Element ? target.closest<HTMLElement>(".location-card") : null;
+  }
+
+  function setMapMarkerPreview(locationId: string | null): void {
+    for (const pin of mapPanelEl.querySelectorAll(".map-marker--preview")) {
+      pin.classList.remove("map-marker--preview");
+    }
+    if (locationId === null || currentMenu !== "dashboard") {
+      return;
+    }
+    const pin = mapPanelEl.querySelector(
+      `.map-marker[data-location-id="${CSS.escape(locationId)}"]`,
+    );
+    pin?.classList.add("map-marker--preview");
+  }
+
+  locationsPanelEl.addEventListener("pointerover", (e) => {
+    const card = locationCardFromEvent(e.target);
+    if (card === null) {
+      return;
+    }
+    const from = e.relatedTarget instanceof Node ? e.relatedTarget : null;
+    if (from !== null && card.contains(from)) {
+      return;
+    }
+    setMapMarkerPreview(card.dataset.locationId ?? null);
+  });
+  locationsPanelEl.addEventListener("pointerout", (e) => {
+    const card = locationCardFromEvent(e.target);
+    if (card === null) {
+      return;
+    }
+    const to = e.relatedTarget instanceof Node ? e.relatedTarget : null;
+    if (to !== null && card.contains(to)) {
+      return;
+    }
+    setMapMarkerPreview(null);
+  });
 
   for (const button of menuButtons) {
     const menu = button.dataset.gameMenu;
@@ -5698,10 +5770,9 @@ function initGameController(
     renderAssignMinionSlots();
     renderOmegaPlanPanel();
     renderLocationsPanel();
-    renderAssetsPanel();
     renderMissionsPanel();
-    renderEventsPanel();
     renderLairPanel();
+    renderMapPanel();
     renderActivityPanel();
     applyGameMenuVisibility();
   }

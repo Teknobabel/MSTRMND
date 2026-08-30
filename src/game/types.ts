@@ -527,11 +527,25 @@ export type LocationIntelState = {
   intelLevel: IntelLevel;
 };
 
+/**
+ * Where one site sits on its map's art. `x`/`y` are percentages of the art box (0–100,
+ * left/top origin) rather than pixels, so the plot survives any panel size.
+ */
+export type MapMarker = {
+  locationId: string;
+  x: number;
+  y: number;
+};
+
 export type MapTemplate = {
   id: string;
   name: string;
   description: string;
   locationIds: string[];
+  /** Background art for the map view (site root path under `public/`). */
+  mapArt?: string;
+  /** Plotted sites; any location without a marker still plays, it just is not on the art. */
+  markers?: MapMarker[];
 };
 
 /**
