@@ -3596,11 +3596,17 @@ body {
 
 .location-asset-drag-chip--hidden,
 .location-asset-static--hidden,
-.location-asset-drag-chip--unknown,
-.location-asset-static--unknown,
 .location-asset-drag-chip--empty,
 .location-asset-static--empty {
   border-style: dashed;
+}
+
+.location-asset-drag-chip--unknown,
+.location-asset-static--unknown {
+  border-style: dotted;
+  border-color: var(--text-3);
+  background: transparent;
+  color: var(--text-3);
 }
 
 .location-asset-drag-chip:hover {
@@ -3617,6 +3623,15 @@ body {
   border-color: var(--line-2);
   color: var(--text-1);
   cursor: default;
+}
+
+.location-asset-drag-chip--unknown[draggable="false"]:hover,
+.location-asset-drag-chip--unknown[draggable="false"]:active,
+.location-asset-static--unknown:hover,
+.location-asset-static--unknown:active {
+  border-color: var(--text-3);
+  color: var(--text-3);
+  background: transparent;
 }
 
 .location-asset-drag-chip:active {

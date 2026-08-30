@@ -160,15 +160,26 @@ function isGameMenu(value: string | undefined): value is GameMenu {
   return value !== undefined && (GAME_MENU_VALUES as readonly string[]).includes(value);
 }
 
-type LairPanelTab = "missions" | "active" | "assets";
+type DashboardLairTab = "missions" | "active" | "assets";
+type LairPanelSection = DashboardLairTab | "upgrades";
 
 /**
- * Lair sections, shown as tabs on the dashboard and as columns in the fullscreen Lair menu.
- * Lair upgrades deliberately have no tab: they are offered under Missions → Available, which is
- * also where the omega, lair and event offers live, so the Lair panel stays about the base.
+ * Lair sections shown as tabs on the dashboard lair tile.
+ * Upgrades are hidden on the dashboard to keep the lair tile focused,
+ * but appear in the main fullscreen Lair menu.
  */
-const LAIR_PANEL_TABS: readonly { id: LairPanelTab; label: string }[] = [
+const DASHBOARD_LAIR_TABS: readonly { id: DashboardLairTab; label: string }[] = [
   { id: "missions", label: "Missions" },
+  { id: "active", label: "Active Missions" },
+  { id: "assets", label: "Assets" },
+];
+
+/**
+ * Lair sections shown as columns in the main fullscreen Lair menu.
+ */
+const LAIR_MENU_COLUMNS: readonly { id: LairPanelSection; label: string }[] = [
+  { id: "missions", label: "Missions" },
+  { id: "upgrades", label: "Upgrades" },
   { id: "active", label: "Active Missions" },
   { id: "assets", label: "Assets" },
 ];
@@ -1109,7 +1120,7 @@ function initGameController(
     | null = null;
 
   let locationsCategoryTab: LocationType = "economic";
-  let lairPanelTab: LairPanelTab = "missions";
+  let lairPanelTab: DashboardLairTab = "missions";
   let minionsPanelTab: "roster" | "hire" = "roster";
   let omegaPlanPanelTab: number | null = null;
   let currentMenu: GameMenu = "dashboard";
@@ -4826,10 +4837,42 @@ function initGameController(
       }
     }
 
-    function fillLairTabInto(tab: LairPanelTab, container: HTMLElement): void {
-      if (tab === "missions") {
+    /** Only the next open upgrade level — earlier ones are settled, later ones stay unseen. */
+    function fillLairUpgradesInto(container: HTMLElement): void {
+      const offer = lairUpgradeOffer();
+      if (offer.entries.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "assets-panel-empty";
+        empty.textContent = offer.emptyText;
+        container.appendChild(empty);
+        return;
+      }
+      const levelLine = document.createElement("p");
+      levelLine.className = "lair-upgrade-level-title";
+      /* The column is already titled "Upgrades"; keep just the level part here. */
+      levelLine.textContent = offer.label.replace("Lair Upgrades — ", "");
+      container.appendChild(levelLine);
+      if (offer.note !== null) {
+        const note = document.createElement("p");
+        note.className = "assets-panel-empty";
+        note.textContent = offer.note;
+        container.appendChild(note);
+      }
+      for (const entry of offer.entries) {
+        const card = omegaPlanMissionCard(entry.missionTemplateId, entry.dragMeta);
+        if (entry.status) {
+          appendMissionCardBadge(card, entry.status);
+        }
+        container.appendChild(card);
+      }
+    }
+
+    function fillLairSectionInto(section: LairPanelSection, container: HTMLElement): void {
+      if (section === "missions") {
         fillLairMissionsInto(container);
-      } else if (tab === "active") {
+      } else if (section === "upgrades") {
+        fillLairUpgradesInto(container);
+      } else if (section === "active") {
         renderActiveMissionsInto(container);
       } else {
         fillAssetsInto(container);
@@ -4839,7 +4882,7 @@ function initGameController(
     if (currentMenu === "lair") {
       const columnsWrap = document.createElement("div");
       columnsWrap.className = "lair-panel-columns";
-      for (const def of LAIR_PANEL_TABS) {
+      for (const def of LAIR_MENU_COLUMNS) {
         const column = document.createElement("section");
         column.className = "lair-panel-column";
         column.setAttribute("aria-label", def.label);
@@ -4850,7 +4893,7 @@ function initGameController(
 
         const list = document.createElement("div");
         list.className = "lair-panel-missions";
-        fillLairTabInto(def.id, list);
+        fillLairSectionInto(def.id, list);
 
         column.appendChild(heading);
         column.appendChild(list);
@@ -4865,7 +4908,7 @@ function initGameController(
     tablist.setAttribute("role", "tablist");
     tablist.setAttribute("aria-label", "Lair sections");
 
-    for (const def of LAIR_PANEL_TABS) {
+    for (const def of DASHBOARD_LAIR_TABS) {
       const tab = document.createElement("button");
       tab.type = "button";
       tab.className = "lair-panel-tab";
@@ -4891,7 +4934,7 @@ function initGameController(
     list.className = "lair-panel-missions";
     list.setAttribute("role", "tabpanel");
     list.setAttribute("aria-labelledby", `lair-panel-tab-${lairPanelTab}`);
-    fillLairTabInto(lairPanelTab, list);
+    fillLairSectionInto(lairPanelTab, list);
     lairPanelEl.appendChild(list);
   }
 
