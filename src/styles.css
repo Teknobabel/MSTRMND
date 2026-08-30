@@ -3590,6 +3590,17 @@ body {
   color: var(--text-0);
 }
 
+.location-asset-drag-chip[draggable="false"] {
+  cursor: default;
+}
+
+.location-asset-drag-chip[draggable="false"]:hover,
+.location-asset-drag-chip[draggable="false"]:active {
+  border-color: var(--line-2);
+  color: var(--text-1);
+  cursor: default;
+}
+
 .location-asset-drag-chip:active {
   cursor: grabbing;
 }

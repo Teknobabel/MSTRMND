@@ -192,6 +192,8 @@ const TRAIT_ICON_SVG_PATHS =
   '<path d="M12 2H2v10l9.29 9.29a2.4 2.4 0 0 0 3.42 0l6.58-6.58a2.4 2.4 0 0 0 0-3.42L12 2Z"/><circle cx="7" cy="7" r="1.5"/>';
 const ASSET_ICON_SVG_PATHS =
   '<path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z"/><path d="M2.5 9h19"/>';
+const UNKNOWN_ICON_SVG_PATHS =
+  '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>';
 const SECURITY_ICON_SVG_PATHS =
   '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>';
 
@@ -233,6 +235,10 @@ function createSecurityIconEl(): SVGElement {
 
 function createAssetIconEl(): SVGElement {
   return createSvgPillIcon(ASSET_ICON_SVG_PATHS);
+}
+
+function createUnknownIntelIconEl(): SVGElement {
+  return createSvgPillIcon(UNKNOWN_ICON_SVG_PATHS);
 }
 
 function statBlockHtml(
@@ -2372,7 +2378,7 @@ function initGameController(
       assetWrap.appendChild(document.createTextNode(assetRowValue));
       appendMinionStatRows(dl, [
         {
-          label: "Asset",
+          label: "Assets",
           value: assetRowValue,
           valueEl: assetWrap,
           dtClass: "location-card-stats__assets-dt",
@@ -3010,10 +3016,27 @@ function initGameController(
       }
     }
 
+    if (knownAssetChips.length === 0) {
+      const countUnknown = assetSlots.some(
+        (slot) => assetSlotKnowledge(slot, intelLevel) === "unknown",
+      );
+      if (countUnknown) {
+        const chip = document.createElement("span");
+        chip.className = enableAssignDrag
+          ? "location-asset-drag-chip"
+          : "location-asset-static";
+        chip.draggable = false;
+        chip.appendChild(createUnknownIntelIconEl());
+        chip.appendChild(document.createTextNode("No intel available"));
+        chip.title = "Raise intel at this site to learn how many assets are stored here.";
+        knownAssetChips.push(chip);
+      }
+    }
+
     if (knownAssetChips.length > 0) {
       const dt = document.createElement("dt");
       dt.className = "location-card-stats__assets-dt";
-      dt.textContent = "Asset";
+      dt.textContent = "Assets";
       const dd = document.createElement("dd");
       dd.className = "location-card-stats__assets-dd";
       const container = document.createElement("span");
