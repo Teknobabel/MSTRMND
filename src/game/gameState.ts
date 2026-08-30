@@ -844,9 +844,10 @@ export function pickHireOfferTemplateIds(
   count: number,
   rng: Rng,
   player: PlayerState,
+  exclude: ReadonlySet<string> = EMPTY_TEMPLATE_ID_SET,
 ): string[] {
   const owned = ownedMinionTemplateIds(player);
-  const candidates = catalog.minions.filter((m) => !owned.has(m.id));
+  const candidates = catalog.minions.filter((m) => !owned.has(m.id) && !exclude.has(m.id));
   if (candidates.length === 0 || count <= 0) {
     return [];
   }
@@ -862,6 +863,36 @@ export function pickHireOfferTemplateIds(
   const ids = eligible.map((m) => m.id);
   shuffleInPlace(ids, rng);
   return ids.slice(0, Math.min(count, ids.length));
+}
+
+const EMPTY_TEMPLATE_ID_SET: ReadonlySet<string> = new Set();
+
+/**
+ * End-of-turn hire refill: minions still sitting in the For Hire section stay put — only the
+ * spots vacated by a hire this turn (or trimmed by a `maxHireOffers` change) get redrawn. Uses
+ * the same gating and fallback as {@link pickHireOfferTemplateIds}, just narrowed to fill the
+ * empty slots rather than replacing the whole pool.
+ */
+export function refillHireOfferTemplateIds(
+  catalog: ContentCatalog,
+  currentIds: readonly string[],
+  count: number,
+  rng: Rng,
+  player: PlayerState,
+): string[] {
+  const owned = ownedMinionTemplateIds(player);
+  const validCurrentIds = currentIds.filter(
+    (id) => !owned.has(id) && catalog.minions.some((m) => m.id === id),
+  );
+  const kept = validCurrentIds.slice(0, Math.max(0, count));
+  const fresh = pickHireOfferTemplateIds(
+    catalog,
+    Math.max(0, count - kept.length),
+    rng,
+    player,
+    new Set(kept),
+  );
+  return [...kept, ...fresh];
 }
 
 function ownedMinionTemplateIds(player: PlayerState): Set<string> {
@@ -2582,9 +2613,11 @@ export function executePlan(
     minions: state.player.minions.map((m) => instanceById.get(m.instanceId) ?? m),
   };
 
-  /* Uses post-resolve infamy, so a mission that crosses a threshold widens this same draw. */
-  const availableMinionTemplateIds = pickHireOfferTemplateIds(
+  /* Only vacated slots get redrawn — minions still on offer stay put across the turn boundary.
+   * Uses post-resolve infamy, so a mission that crosses a threshold widens the fresh draws. */
+  const availableMinionTemplateIds = refillHireOfferTemplateIds(
     catalog,
+    state.availableMinionTemplateIds,
     player.maxHireOffers,
     rng,
     player,

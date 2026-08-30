@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickHireOfferTemplateIds } from "./gameState";
+import { pickHireOfferTemplateIds, refillHireOfferTemplateIds } from "./gameState";
 import type { PlayerState } from "./gameState";
 import { maxHireableStartingLevel, nextHireLevelInfamyThreshold } from "./minion";
 import { parseCatalog, parseContentCatalog } from "./contentSchema";
@@ -108,6 +108,44 @@ describe("pickHireOfferTemplateIds", () => {
   it("returns nothing when the whole catalog is already on the roster", () => {
     const roster = catalog.minions.map((m, i) => makeMinionInstance(`mi-${i}`, m.id, []));
     expect(pickHireOfferTemplateIds(catalog, 10, seededRng(7), playerAt(85, roster))).toEqual([]);
+  });
+});
+
+describe("refillHireOfferTemplateIds", () => {
+  const catalog = tieredCatalog();
+
+  it("keeps every current offer when no slots are vacant", () => {
+    const current = ["m-l1", "m-l2"];
+    const ids = refillHireOfferTemplateIds(catalog, current, 2, seededRng(7), playerAt(35));
+    expect(ids.sort()).toEqual(current.sort());
+  });
+
+  it("only redraws the vacated slot, leaving the rest untouched", () => {
+    const current = ["m-l1"];
+    const ids = refillHireOfferTemplateIds(catalog, current, 3, seededRng(7), playerAt(85));
+    expect(ids).toContain("m-l1");
+    expect(ids).toHaveLength(3);
+    /* The two fresh draws must not duplicate the kept offer or each other. */
+    expect(new Set(ids).size).toBe(3);
+  });
+
+  it("drops a kept offer that got hired since it was drawn", () => {
+    const roster = [makeMinionInstance("mi-1", "m-l1", [])];
+    const ids = refillHireOfferTemplateIds(
+      catalog,
+      ["m-l1", "m-l2"],
+      2,
+      seededRng(7),
+      playerAt(35, roster),
+    );
+    expect(ids).not.toContain("m-l1");
+    expect(ids).toContain("m-l2");
+    expect(ids).toHaveLength(2);
+  });
+
+  it("trims kept offers down when the cap shrinks below the current count", () => {
+    const ids = refillHireOfferTemplateIds(catalog, ["m-l1", "m-l2"], 1, seededRng(7), playerAt(35));
+    expect(ids).toEqual(["m-l1"]);
   });
 });
 
