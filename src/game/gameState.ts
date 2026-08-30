@@ -113,7 +113,7 @@ import {
   lairUpgradeLevels,
   resolveRunLairId,
 } from "./lair";
-import { nextMonotonicWantedTierIndex } from "./wantedLevel";
+import { nextMonotonicWantedTierIndex, wantedTierAtIndex } from "./wantedLevel";
 
 /**
  * `main` → **Execute Plan** resolves missions → `agent` → the **Agent Phase** runs the
@@ -2641,6 +2641,18 @@ export function executePlan(
     rng,
     player,
   );
+
+  /* ---------------------------------------------------------------------------------------
+   * Passive heat from wanted level tier. Gained each turn depending on current wanted tier.
+   * ------------------------------------------------------------------------------------- */
+  const passiveHeatGain =
+    wantedTierAtIndex(catalog, state.wantedLevelTierIndex)?.heatGainPerTurn ?? 0;
+  if (passiveHeatGain > 0) {
+    player = {
+      ...player,
+      heat: clampHeat(player.heat + passiveHeatGain),
+    };
+  }
 
   /* ---------------------------------------------------------------------------------------
    * Lair Raid — the loss condition. It rides the top wanted tier: reaching that tier owes the

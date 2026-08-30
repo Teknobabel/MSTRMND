@@ -280,8 +280,21 @@ export function renderWantedLevelForm(container: HTMLElement, ctx: FormCtx): voi
     ),
   );
   container.appendChild(
+    formRow(
+      "heatGainPerTurn",
+      numberInput(
+        num(ctx.row, "heatGainPerTurn"),
+        (v) =>
+          ctx.update((row) => {
+            row.heatGainPerTurn = v;
+          }),
+        { min: 0 },
+      ),
+    ),
+  );
+  container.appendChild(
     hint(
-      "Tiers are ordered: minHeat must be strictly ascending (first tier 0) and maxAgents non-decreasing.",
+      "Tiers are ordered: minHeat must be strictly ascending (first tier 0), maxAgents non-decreasing, and heatGainPerTurn non-decreasing.",
     ),
   );
   container.appendChild(el("div"));

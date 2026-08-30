@@ -490,6 +490,7 @@ export const wantedLevelTierSchema: z.ZodType<WantedLevelTier> = z.object({
   minHeat: z.number().int().min(0).max(100),
   name: z.string().min(1),
   maxAgents: z.number().int().min(0),
+  heatGainPerTurn: z.number().int().min(0).default(0),
 });
 
 function balanceInt(min: number, max: number, def: number): z.ZodDefault<z.ZodNumber> {
@@ -1792,6 +1793,14 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
           entityId: null,
           path: `[${i}].maxAgents`,
           message: `maxAgents must be non-decreasing (${arr[i]!.maxAgents} < ${arr[i - 1]!.maxAgents})`,
+        });
+      }
+      if ((arr[i]!.heatGainPerTurn ?? 0) < (arr[i - 1]!.heatGainPerTurn ?? 0)) {
+        issues.push({
+          slice: "wantedLevels",
+          entityId: null,
+          path: `[${i}].heatGainPerTurn`,
+          message: `heatGainPerTurn must be non-decreasing (${arr[i]!.heatGainPerTurn ?? 0} < ${arr[i - 1]!.heatGainPerTurn ?? 0})`,
         });
       }
     }

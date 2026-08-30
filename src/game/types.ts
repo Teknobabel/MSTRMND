@@ -646,6 +646,8 @@ export type WantedLevelTier = {
   name: string;
   /** Max opposing agents allowed in play when this tier applies (spawn logic uses this later). */
   maxAgents: number;
+  /** Passive heat gained each turn while at this wanted level tier (integer ≥ 0, default 0). */
+  heatGainPerTurn?: number;
 };
 
 /**

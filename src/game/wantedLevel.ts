@@ -46,3 +46,11 @@ export function maxOpposingAgentsForWantedIndex(
   const tier = wantedTierAtIndex(catalog, index);
   return tier?.maxAgents ?? 0;
 }
+
+export function heatGainForWantedIndex(
+  catalog: ContentCatalog,
+  index: number,
+): number {
+  const tier = wantedTierAtIndex(catalog, index);
+  return tier?.heatGainPerTurn ?? 0;
+}

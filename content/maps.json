@@ -19,18 +19,66 @@
     ],
     "mapArt": "/assets/map/world-map.png",
     "markers": [
-      { "locationId": "skywatch_station", "x": 11.2, "y": 17.8 },
-      { "locationId": "harbor_armory", "x": 16.0, "y": 29.2 },
-      { "locationId": "the_citadel", "x": 19.6, "y": 33.4 },
-      { "locationId": "world_assembly", "x": 27.0, "y": 30.2 },
-      { "locationId": "aerodyne_campus", "x": 26.2, "y": 40.4 },
-      { "locationId": "city_hall_annex", "x": 32.4, "y": 67.2 },
-      { "locationId": "broadcast_house", "x": 45.4, "y": 25.8 },
-      { "locationId": "meridian_bank", "x": 47.8, "y": 29.8 },
-      { "locationId": "grand_embassy", "x": 53.4, "y": 26.6 },
-      { "locationId": "fort_bastion", "x": 51.4, "y": 41.0 },
-      { "locationId": "gilded_lotus", "x": 78.4, "y": 42.8 },
-      { "locationId": "dockside_freeport", "x": 76.0, "y": 53.2 }
+      {
+        "locationId": "skywatch_station",
+        "x": 11.2,
+        "y": 17.8
+      },
+      {
+        "locationId": "harbor_armory",
+        "x": 16,
+        "y": 29.2
+      },
+      {
+        "locationId": "the_citadel",
+        "x": 19.6,
+        "y": 33.4
+      },
+      {
+        "locationId": "world_assembly",
+        "x": 27,
+        "y": 30.2
+      },
+      {
+        "locationId": "aerodyne_campus",
+        "x": 26.2,
+        "y": 40.4
+      },
+      {
+        "locationId": "city_hall_annex",
+        "x": 32.4,
+        "y": 67.2
+      },
+      {
+        "locationId": "broadcast_house",
+        "x": 45.4,
+        "y": 25.8
+      },
+      {
+        "locationId": "meridian_bank",
+        "x": 47.8,
+        "y": 29.8
+      },
+      {
+        "locationId": "grand_embassy",
+        "x": 53.4,
+        "y": 26.6
+      },
+      {
+        "locationId": "fort_bastion",
+        "x": 51.4,
+        "y": 41
+      },
+      {
+        "locationId": "gilded_lotus",
+        "x": 78.4,
+        "y": 42.8
+      },
+      {
+        "locationId": "dockside_freeport",
+        "x": 76,
+        "y": 53.2
+      }
     ]
   }
 ]

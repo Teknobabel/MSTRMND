@@ -91,10 +91,22 @@ describe("parseContentCatalog", () => {
 
   it("enforces wanted level ordering rules", () => {
     const raw = rawFixtureSlices();
-    raw.wantedLevels[1]! = { minHeat: 0, name: "Broken", maxAgents: 2 };
+    raw.wantedLevels[1]! = { minHeat: 0, name: "Broken", maxAgents: 2, heatGainPerTurn: 1 };
     const { issues } = parseContentCatalog(raw);
     expect(
       issues.some((i) => i.slice === "wantedLevels" && i.path === "[1].minHeat"),
+    ).toBe(true);
+  });
+
+  it("enforces wanted level heatGainPerTurn non-decreasing rule", () => {
+    const raw = rawFixtureSlices();
+    raw.wantedLevels = [
+      { minHeat: 0, name: "Shadow", maxAgents: 0, heatGainPerTurn: 2 },
+      { minHeat: 5, name: "Noticed", maxAgents: 2, heatGainPerTurn: 1 },
+    ];
+    const { issues } = parseContentCatalog(raw);
+    expect(
+      issues.some((i) => i.slice === "wantedLevels" && i.path === "[1].heatGainPerTurn"),
     ).toBe(true);
   });
 

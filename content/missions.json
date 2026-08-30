@@ -31,7 +31,6 @@
     "id": "lie_low",
     "name": "Lie Low",
     "description": "Burn the safehouses, feed the press a decoy, let the trail go cold.",
-    "coreMission": true,
     "durationTurns": 1,
     "onFailureEffects": [
       {
@@ -76,8 +75,7 @@
       }
     ],
     "requiredTraitIds": [
-      "enforcer",
-      "brutal"
+      "enforcer"
     ],
     "startCommandPoints": 2,
     "targetType": "asset_revealed"
@@ -103,9 +101,7 @@
       }
     ],
     "requiredTraitIds": [
-      "thief",
-      "stealthy",
-      "meticulous"
+      "thief"
     ],
     "startCommandPoints": 3,
     "targetType": "asset_hidden"

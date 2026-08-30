@@ -694,6 +694,57 @@ describe("executePlan", () => {
     expect(new Set(next.opposingAgentInstances.map((a) => a.templateId)).size).toBe(2);
   });
 
+  it("gains passive heat each turn depending on wanted level tier", () => {
+    const customCatalog: ContentCatalog = {
+      ...catalog,
+      wantedLevels: [
+        { minHeat: 0, name: "Unnoticed", maxAgents: 0, heatGainPerTurn: 0 },
+        { minHeat: 15, name: "Whispers", maxAgents: 1, heatGainPerTurn: 1 },
+        { minHeat: 30, name: "Person of Interest", maxAgents: 2, heatGainPerTurn: 1 },
+        { minHeat: 50, name: "Public Enemy", maxAgents: 3, heatGainPerTurn: 2 },
+        { minHeat: 70, name: "Global Manhunt", maxAgents: 4, heatGainPerTurn: 2 },
+        { minHeat: 100, name: "Doomsday Alert", maxAgents: 5, heatGainPerTurn: 3 },
+      ],
+    };
+
+    // At tier 0: +0 heat
+    let state = baseState(1);
+    state = { ...state, wantedLevelTierIndex: 0, player: { ...state.player, heat: 0 } };
+    let res = executePlan(state, customCatalog, () => 0);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.player.heat).toBe(0);
+
+    // At tier 1: +1 heat
+    state = { ...state, wantedLevelTierIndex: 1, player: { ...state.player, heat: 15 } };
+    res = executePlan(state, customCatalog, () => 0);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.player.heat).toBe(16);
+
+    // At tier 3: +2 heat
+    state = { ...state, wantedLevelTierIndex: 3, player: { ...state.player, heat: 50 } };
+    res = executePlan(state, customCatalog, () => 0);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.player.heat).toBe(52);
+
+    // At tier 5: +3 heat
+    state = { ...state, wantedLevelTierIndex: 5, player: { ...state.player, heat: 90 } };
+    res = executePlan(state, customCatalog, () => 0);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.player.heat).toBe(93);
+
+    // Passive heat escalation: heat at 29 in tier 1 gaining +1 heat pushes to 30 (tier 2)
+    state = { ...state, wantedLevelTierIndex: 1, player: { ...state.player, heat: 29 } };
+    res = executePlan(state, customCatalog, () => 0);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.player.heat).toBe(30);
+    expect(res.value.wantedLevelTierIndex).toBe(2);
+  });
+
   it("resolves simultaneously: later missions use the start-of-turn security snapshot", () => {
     let state = baseState(3);
     state = {

@@ -5,8 +5,7 @@
     "description": "A hollowed-out volcano fortress: lava-tube hangars, a caldera helipad, and excellent acoustics for monologuing.",
     "availableMissionIds": [
       "smash_and_grab",
-      "ghost_heist",
-      "fence_the_loot"
+      "ghost_heist"
     ],
     "startingAssets": {
       "dirty_money": 1,
