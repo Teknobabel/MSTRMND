@@ -160,18 +160,30 @@ function isGameMenu(value: string | undefined): value is GameMenu {
   return value !== undefined && (GAME_MENU_VALUES as readonly string[]).includes(value);
 }
 
-type DashboardLairTab = "missions" | "active" | "assets";
-type LairPanelSection = DashboardLairTab | "upgrades";
+/**
+ * Tabs on the dashboard Resources tile: everything a mission gets stocked from —
+ * the hired roster, who else is buyable, and the assets on the shelf.
+ */
+type ResourcesPanelTab = "roster" | "hire" | "assets";
+
+const DASHBOARD_RESOURCES_TABS: readonly { id: ResourcesPanelTab; label: string }[] = [
+  { id: "roster", label: "Minions" },
+  { id: "hire", label: "For Hire" },
+  { id: "assets", label: "Assets" },
+];
+
+type DashboardLairTab = "missions" | "active" | "upgrades";
+type LairPanelSection = DashboardLairTab | "assets";
 
 /**
  * Lair sections shown as tabs on the dashboard lair tile.
- * Upgrades are hidden on the dashboard to keep the lair tile focused,
- * but appear in the main fullscreen Lair menu.
+ * Owned assets are not among them — they belong to the dashboard Resources tile,
+ * alongside the minions they get committed with.
  */
 const DASHBOARD_LAIR_TABS: readonly { id: DashboardLairTab; label: string }[] = [
   { id: "missions", label: "Missions" },
   { id: "active", label: "Active Missions" },
-  { id: "assets", label: "Assets" },
+  { id: "upgrades", label: "Upgrades" },
 ];
 
 /**
@@ -1074,6 +1086,7 @@ function initGameController(
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const missionsPanelRootEl = req<HTMLElement>("missions-panel-root");
   const missionsPanelTitleEl = req<HTMLElement>("missions-panel-title");
+  const minionsPanelTitleEl = req<HTMLElement>("minions-panel-title");
   const lairPanelEl = req<HTMLElement>("lair-panel");
   const mapPanelEl = req<HTMLElement>("map-panel");
   const rightColumnsRowElLookup = document.querySelector<HTMLElement>(".game-ui-columns-row");
@@ -1121,7 +1134,7 @@ function initGameController(
 
   let locationsCategoryTab: LocationType = "economic";
   let lairPanelTab: DashboardLairTab = "missions";
-  let minionsPanelTab: "roster" | "hire" = "roster";
+  let resourcesPanelTab: ResourcesPanelTab = "roster";
   let omegaPlanPanelTab: number | null = null;
   let currentMenu: GameMenu = "dashboard";
 
@@ -3327,6 +3340,9 @@ function initGameController(
 
   function renderMinionsPanel(): void {
     minionsPanelEl.innerHTML = "";
+    /* The dashboard tile gathers assets alongside the roster, so it is titled for all of them;
+     * the fullscreen menu behind the nav button is still just the minions. */
+    minionsPanelTitleEl.textContent = currentMenu === "minions" ? "Minions" : "Resources";
     const p = state.player;
     const eligibleRehires = state.minionRehireQueue.filter(
       (e) => state.turnNumber >= e.availableFromTurn,
@@ -3350,6 +3366,26 @@ function initGameController(
       list.id = "minions-roster-list";
       list.className = "minions-panel-list";
       fillMinionsRosterInto(list);
+      section.appendChild(list);
+      return section;
+    }
+
+    function buildAssetsSection(): HTMLElement {
+      const section = document.createElement("section");
+      section.className = "minions-panel-section";
+      section.setAttribute("aria-label", "Owned assets");
+
+      const ownedKinds = Object.values(state.player.assets).filter((qty) => qty > 0).length;
+      const heading = document.createElement("h3");
+      heading.id = "minions-assets-heading";
+      heading.className = "game-controls-heading";
+      heading.textContent = `Owned assets (${ownedKinds})`;
+      section.appendChild(heading);
+
+      const list = document.createElement("div");
+      list.id = "minions-assets-list";
+      list.className = "minions-panel-list";
+      fillAssetsInto(list);
       section.appendChild(list);
       return section;
     }
@@ -3414,28 +3450,24 @@ function initGameController(
     const tablist = document.createElement("div");
     tablist.className = "minions-panel-tabs";
     tablist.setAttribute("role", "tablist");
-    tablist.setAttribute("aria-label", "Minions sections");
+    tablist.setAttribute("aria-label", "Resources sections");
 
-    const tabDefs: { id: "roster" | "hire"; label: string }[] = [
-      { id: "roster", label: "Roster" },
-      { id: "hire", label: "For Hire" },
-    ];
-    for (const def of tabDefs) {
+    for (const def of DASHBOARD_RESOURCES_TABS) {
       const tab = document.createElement("button");
       tab.type = "button";
       tab.className = "minions-panel-tab";
-      if (def.id === minionsPanelTab) {
+      if (def.id === resourcesPanelTab) {
         tab.classList.add("minions-panel-tab--active");
       }
       tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", def.id === minionsPanelTab ? "true" : "false");
+      tab.setAttribute("aria-selected", def.id === resourcesPanelTab ? "true" : "false");
       tab.id = `minions-panel-tab-${def.id}`;
       tab.textContent = def.label;
       tab.addEventListener("click", () => {
-        if (minionsPanelTab === def.id) {
+        if (resourcesPanelTab === def.id) {
           return;
         }
-        minionsPanelTab = def.id;
+        resourcesPanelTab = def.id;
         renderMinionsPanel();
       });
       tablist.appendChild(tab);
@@ -3443,9 +3475,13 @@ function initGameController(
     minionsPanelEl.appendChild(tablist);
 
     const activePage =
-      minionsPanelTab === "roster" ? buildRosterSection(false) : buildHireSection(false);
+      resourcesPanelTab === "roster"
+        ? buildRosterSection(false)
+        : resourcesPanelTab === "hire"
+          ? buildHireSection(false)
+          : buildAssetsSection();
     activePage.setAttribute("role", "tabpanel");
-    activePage.setAttribute("aria-labelledby", `minions-panel-tab-${minionsPanelTab}`);
+    activePage.setAttribute("aria-labelledby", `minions-panel-tab-${resourcesPanelTab}`);
     minionsPanelEl.appendChild(activePage);
   }
 
@@ -4176,9 +4212,7 @@ function initGameController(
         ? `${missionDisplayName(running.missionTemplateId)} is underway — the other choices stay closed until it resolves.`
         : infamyLocked
           ? `Needs ${needInfamy} infamy to begin (you have ${state.player.infamy}).`
-          : level.missionIds.length > 1
-            ? "Pick one. Completing it installs that upgrade, locks the others out for this run, and opens the next level."
-            : "Completing it installs this upgrade and opens the next level.";
+          : null;
     return { label, note, emptyText: "No pending upgrades.", entries };
   }
 
@@ -4947,7 +4981,7 @@ function initGameController(
       }
       const levelLine = document.createElement("p");
       levelLine.className = "lair-upgrade-level-title";
-      /* The column is already titled "Upgrades"; keep just the level part here. */
+      /* The column or tab already says "Upgrades"; keep just the level part here. */
       levelLine.textContent = offer.label.replace("Lair Upgrades — ", "");
       container.appendChild(levelLine);
       if (offer.note !== null) {
