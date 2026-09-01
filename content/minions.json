@@ -133,12 +133,6 @@
       "manipulator",
       "lucky"
     ],
-    "startingDynamicTraits": [
-      {
-        "kind": "hero",
-        "locationId": "city_hall_annex"
-      }
-    ],
     "startingTraitIds": [
       "infiltrator"
     ]
