@@ -123,6 +123,36 @@
     ]
   },
   {
+    "id": "lanyard",
+    "name": "Lanyard",
+    "description": "Walks in through the front door with a laminated badge. The lamination is real; nothing else on it is.",
+    "hireCommandPoints": 2,
+    "levelUpTraitOrder": [
+      "magnetic",
+      "stealthy",
+      "manipulator",
+      "lucky"
+    ],
+    "startingTraitIds": [
+      "infiltrator"
+    ]
+  },
+  {
+    "id": "vents",
+    "name": "Vents",
+    "description": "Knows every building by its ductwork and has strong opinions about airflow codes. Doors are for guests.",
+    "hireCommandPoints": 2,
+    "levelUpTraitOrder": [
+      "swift",
+      "meticulous",
+      "saboteur",
+      "inspired"
+    ],
+    "startingTraitIds": [
+      "infiltrator"
+    ]
+  },
+  {
     "id": "penny",
     "name": "Penny Dreadful",
     "description": "Keeps double books for triple agents. Her audits end careers, occasionally on purpose.",
