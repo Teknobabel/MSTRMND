@@ -153,6 +153,36 @@
     ]
   },
   {
+    "id": "shim",
+    "name": "Shim",
+    "description": "Carries eleven kinds of tape and a soldering iron she calls a scalpel. Every prototype works exactly once, which is usually enough.",
+    "hireCommandPoints": 2,
+    "levelUpTraitOrder": [
+      "meticulous",
+      "brilliant",
+      "hacker",
+      "lucky"
+    ],
+    "startingTraitIds": [
+      "engineer"
+    ]
+  },
+  {
+    "id": "magpie",
+    "name": "Magpie",
+    "description": "Cannot walk past anything that glitters. Her flat is a museum with no plaques and no insurance.",
+    "hireCommandPoints": 2,
+    "levelUpTraitOrder": [
+      "swift",
+      "connected",
+      "manipulator",
+      "inspired"
+    ],
+    "startingTraitIds": [
+      "thief"
+    ]
+  },
+  {
     "id": "penny",
     "name": "Penny Dreadful",
     "description": "Keeps double books for triple agents. Her audits end careers, occasionally on purpose.",
