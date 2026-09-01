@@ -154,16 +154,6 @@
       "saboteur",
       "inspired"
     ],
-    "startingDynamicTraits": [
-      {
-        "kind": "rival",
-        "targetMinionTemplateId": "lanyard"
-      },
-      {
-        "kind": "wanted",
-        "locationId": "aerodyne_campus"
-      }
-    ],
     "startingTraitIds": [
       "infiltrator"
     ]
