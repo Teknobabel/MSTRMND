@@ -2,17 +2,20 @@
   {
     "id": "the_global_stage",
     "name": "The Global Stage",
-    "description": "Twelve pressure points on a world that doesn't know it's already losing.",
+    "description": "Fifteen pressure points on a world that doesn't know it's already losing.",
     "locationIds": [
       "harbor_armory",
+      "southern_airfield",
       "fort_bastion",
       "skywatch_station",
       "the_citadel",
       "city_hall_annex",
+      "records_bureau",
       "grand_embassy",
       "broadcast_house",
       "world_assembly",
       "dockside_freeport",
+      "sunstone_exchange",
       "gilded_lotus",
       "aerodyne_campus",
       "meridian_bank"
@@ -70,6 +73,16 @@
         "y": 41
       },
       {
+        "locationId": "sunstone_exchange",
+        "x": 55.2,
+        "y": 77
+      },
+      {
+        "locationId": "records_bureau",
+        "x": 66.4,
+        "y": 50.5
+      },
+      {
         "locationId": "gilded_lotus",
         "x": 78.4,
         "y": 42.8
@@ -78,6 +91,11 @@
         "locationId": "dockside_freeport",
         "x": 76,
         "y": 53.2
+      },
+      {
+        "locationId": "southern_airfield",
+        "x": 83,
+        "y": 76
       }
     ]
   }

@@ -29,8 +29,11 @@ const MARKERS = [
   { locationId: "meridian_bank", place: "Alps", x: 47.8, y: 29.8 },
   { locationId: "grand_embassy", place: "Eastern Europe", x: 53.4, y: 26.6 },
   { locationId: "fort_bastion", place: "North Africa", x: 51.4, y: 41.0 },
+  { locationId: "sunstone_exchange", place: "Southern Africa", x: 55.2, y: 77.0 },
+  { locationId: "records_bureau", place: "Indian subcontinent", x: 66.4, y: 50.5 },
   { locationId: "gilded_lotus", place: "South China coast", x: 78.4, y: 42.8 },
   { locationId: "dockside_freeport", place: "Malacca Strait", x: 76.0, y: 53.2 },
+  { locationId: "southern_airfield", place: "Australian outback", x: 83.0, y: 76.0 },
 ];
 
 const dataUrl = `data:image/png;base64,${readFileSync(IMG).toString("base64")}`;
