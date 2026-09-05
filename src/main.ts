@@ -321,13 +321,19 @@ const canvas = canvasLookup;
 
 const ctx = setupCanvas(canvas);
 
-/** Cached hex-grid layer for the OMEGA OS map background; rebuilt on resize. */
+/**
+ * Cached hex-grid layer for the OMEGA OS map background; rebuilt on resize.
+ * The backing canvas is reused rather than reallocated: a resize burst
+ * (rotation, URL bar, an in-progress zoom) would otherwise strand a
+ * full-screen canvas per frame, which is how a phone tab runs out of memory.
+ */
 let bgHexGrid: HTMLCanvasElement | null = null;
 let bgHexGridW = 0;
 let bgHexGridH = 0;
 
 function buildHexGridLayer(width: number, height: number): HTMLCanvasElement {
-  const layer = document.createElement("canvas");
+  const layer = bgHexGrid ?? document.createElement("canvas");
+  // Assigning either dimension also clears the canvas, so this is a full rebuild.
   layer.width = width;
   layer.height = height;
   const g = layer.getContext("2d");

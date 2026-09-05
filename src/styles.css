@@ -72,7 +72,13 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  touch-action: manipulation;
+  /* pan-x pan-y = scrolling inside panels still works, but pinch-zoom and
+     double-tap zoom are excluded. Zooming the fixed 1920x1080 stage forces a
+     re-raster at zoom x DPR that can get the tab killed on a phone; see
+     initZoomGuards() in src/ui/stageScale.ts for the iOS-side guard. */
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   background: var(--bg-0);
   color: var(--text-0);
   font-family: var(--font-body);
