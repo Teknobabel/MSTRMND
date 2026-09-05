@@ -7,9 +7,16 @@
     "locationType": "military"
   },
   {
+    "id": "southern_airfield",
+    "name": "Southern Cross Airfield",
+    "description": "A gravel strip in the outback where transport crews refuel, sleep off the heat, and log almost nothing.",
+    "locationLevel": 1,
+    "locationType": "military"
+  },
+  {
     "id": "fort_bastion",
     "name": "Fort Bastion Motor Pool",
-    "description": "Armored columns fuel here before every parade — and every crackdown.",
+    "description": "Armored columns fuel here before every parade \u2014 and every crackdown.",
     "locationLevel": 2,
     "locationType": "military"
   },
@@ -22,7 +29,7 @@
   },
   {
     "id": "the_citadel",
-    "name": "The Citadel — Strategic Command",
+    "name": "The Citadel \u2014 Strategic Command",
     "description": "The alliance's hardened war room. Interceptors launch on its word alone.",
     "locationLevel": 3,
     "locationType": "military"
@@ -31,6 +38,13 @@
     "id": "city_hall_annex",
     "name": "City Hall Annex",
     "description": "Permits, zoning, and the first rung of every ladder worth corrupting.",
+    "locationLevel": 1,
+    "locationType": "political"
+  },
+  {
+    "id": "records_bureau",
+    "name": "Provincial Records Bureau",
+    "description": "Land deeds, census rolls, and a new identity for anyone whose paperwork is thick enough.",
     "locationLevel": 1,
     "locationType": "political"
   },
@@ -59,6 +73,13 @@
     "id": "dockside_freeport",
     "name": "Dockside Freeport",
     "description": "Bonded warehouses where cargo changes owners faster than paperwork.",
+    "locationLevel": 1,
+    "locationType": "economic"
+  },
+  {
+    "id": "sunstone_exchange",
+    "name": "Sunstone Gem Exchange",
+    "description": "Rough stones cross this floor uncut, untaxed, and untraceable by closing bell.",
     "locationLevel": 1,
     "locationType": "economic"
   },
