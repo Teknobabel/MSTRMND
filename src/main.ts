@@ -947,10 +947,18 @@ function formatMissionTargetTypeLabel(tt: MissionTargetType): string {
 
 /**
  * Human-readable summary of a mission's site filters, e.g. "Military or Economic · Level 3".
- * Returns null when the mission takes any site (no filters authored).
+ * Returns null when the mission takes any site (no filters authored). `locationName` turns a
+ * pinned `targetLocationIds` entry into the site's catalog name; ids fall through unresolved.
  */
-function formatTargetLocationFilters(filters: MissionTargetLocationFilters): string | null {
+function formatTargetLocationFilters(
+  filters: MissionTargetLocationFilters,
+  locationName?: (locationId: string) => string,
+): string | null {
   const parts: string[] = [];
+  const siteIds = filters.targetLocationIds;
+  if (siteIds !== undefined && siteIds.length > 0) {
+    parts.push(siteIds.map((id) => locationName?.(id) ?? id).join(" or "));
+  }
   const types = filters.targetLocationTypes;
   if (types !== undefined && types.length > 0) {
     parts.push(types.map((t) => LOCATION_CATEGORY_LABEL[t]).join(" or "));
@@ -996,6 +1004,10 @@ function formatAssignMissionError(err: GameError): string {
       return `Unknown location: ${err.locationId}.`;
     case "location_not_on_active_map":
       return "Target location is not on the active map.";
+    case "target_location_id_not_allowed":
+      return err.allowed.length === 1
+        ? "This mission can only be aimed at one specific site."
+        : "This mission can only be aimed at specific sites.";
     case "target_location_type_not_allowed":
       return `This mission only targets ${err.allowed.map((t) => LOCATION_CATEGORY_LABEL[t]).join(" or ")} locations.`;
     case "target_location_level_not_allowed":
@@ -1524,7 +1536,7 @@ function initGameController(
       none: "Target",
     };
     const siteFilters = missionTargetTypeTargetsLocation(m.targetType)
-      ? formatTargetLocationFilters(m)
+      ? formatTargetLocationFilters(m, targetLocationDisplayName)
       : null;
     assignTargetLabelEl.textContent =
       siteFilters === null ? labels[m.targetType] : `${labels[m.targetType]} — ${siteFilters}`;
@@ -1647,6 +1659,11 @@ function initGameController(
       return { kind: "minion", instanceId: payload.instanceId };
     }
     return null;
+  }
+
+  /** Catalog name for a site pinned by `targetLocationIds`; unknown ids show as the raw id. */
+  function targetLocationDisplayName(locationId: string): string {
+    return getLocationById(content, locationId)?.name ?? locationId;
   }
 
   /**
@@ -2666,7 +2683,7 @@ function initGameController(
        * site filters here rather than letting the click fail. */
       if (!targetPassesMissionLocationFilters(missionTemplate, assignTarget)) {
         btnAssign.disabled = true;
-        btnAssign.title = `Target site does not meet: ${formatTargetLocationFilters(missionTemplate) ?? "this mission's requirements"}`;
+        btnAssign.title = `Target site does not meet: ${formatTargetLocationFilters(missionTemplate, targetLocationDisplayName) ?? "this mission's requirements"}`;
         return;
       }
     }
@@ -2876,7 +2893,7 @@ function initGameController(
 
     if (mission) {
       const siteFilters = missionTargetTypeTargetsLocation(mission.targetType)
-        ? formatTargetLocationFilters(mission)
+        ? formatTargetLocationFilters(mission, targetLocationDisplayName)
         : null;
       const targetTypeLabel = formatMissionTargetTypeLabel(mission.targetType);
       const targetValue =

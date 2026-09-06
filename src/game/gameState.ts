@@ -81,6 +81,7 @@ import {
   computeSuccessChanceBreakdown,
   hasSupportAbility,
   isSupportAsset,
+  missionAllowsTargetLocationId,
   missionAllowsTargetLocationIntel,
   missionAllowsTargetLocationLevel,
   missionAllowsTargetLocationSecurity,
@@ -548,6 +549,11 @@ export type GameError =
   | { code: "lair_upgrade_infamy_locked"; missionId: string; need: number; have: number }
   | { code: "lair_mission_already_in_pool"; missionId: string }
   | { code: "wrong_target_kind"; expected: MissionTargetType; actual: string }
+  | {
+      code: "target_location_id_not_allowed";
+      locationId: string;
+      allowed: string[];
+    }
   | {
       code: "target_location_type_not_allowed";
       locationId: string;
@@ -1720,8 +1726,19 @@ export function assignMission(
         error: { code: "location_not_on_active_map", locationId: lid },
       };
     }
-    /* Designer-authored site filters: a mission may be written for military sites only, or
-     * for level 3 sites only, independent of which target *kind* it takes. */
+    /* Designer-authored site filters: a mission may be written for military sites only, for
+     * level 3 sites only, or pinned to one named site, independent of which target *kind* it
+     * takes. */
+    if (!missionAllowsTargetLocationId(missionTemplate, lid)) {
+      return {
+        ok: false,
+        error: {
+          code: "target_location_id_not_allowed",
+          locationId: lid,
+          allowed: [...(missionTemplate.targetLocationIds ?? [])],
+        },
+      };
+    }
     if (!missionAllowsTargetLocationType(missionTemplate, location.locationType)) {
       return {
         ok: false,

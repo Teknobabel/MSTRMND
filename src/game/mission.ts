@@ -16,11 +16,12 @@ import type {
 import { DEFAULT_BALANCE } from "./types";
 
 /**
- * The site filters a designer may put on a mission. Both are optional and independent: an
+ * The site filters a designer may put on a mission. Each is optional and independent: an
  * absent (or empty) list means that dimension is unrestricted.
  */
 export type MissionTargetLocationFilters = Pick<
   MissionTemplate,
+  | "targetLocationIds"
   | "targetLocationTypes"
   | "targetLocationLevels"
   | "targetLocationIntelLevels"
@@ -45,6 +46,15 @@ export function missionTargetTypeTargetsLocation(targetType: MissionTargetType):
   return (
     targetType === "location" || targetType === "asset_hidden" || targetType === "asset_revealed"
   );
+}
+
+/** Whether `targetLocationIds` admits `locationId` (absent / empty ⇒ every site). */
+export function missionAllowsTargetLocationId(
+  filters: MissionTargetLocationFilters,
+  locationId: string,
+): boolean {
+  const allowed = filters.targetLocationIds;
+  return allowed === undefined || allowed.length === 0 || allowed.includes(locationId);
 }
 
 /** Whether `targetLocationTypes` admits `locationType` (absent / empty ⇒ every type). */
@@ -95,6 +105,7 @@ export function missionAllowsTargetLocation(
   site: MissionTargetSite,
 ): boolean {
   return (
+    missionAllowsTargetLocationId(filters, site.location.id) &&
     missionAllowsTargetLocationType(filters, site.location.locationType) &&
     missionAllowsTargetLocationLevel(filters, site.location.locationLevel) &&
     missionAllowsTargetLocationIntel(filters, site.intelLevel) &&

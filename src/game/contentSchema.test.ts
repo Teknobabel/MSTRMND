@@ -229,6 +229,7 @@ describe("mission target site filters", () => {
 
   it("accepts filters on a location-resolving targetType and normalizes them onto the template", () => {
     const { catalog, issues } = withFilters(0, {
+      targetLocationIds: ["loc-a", "loc-b"],
       targetLocationTypes: ["military", "economic"],
       targetLocationLevels: [3],
       targetLocationIntelLevels: [2, 3],
@@ -236,6 +237,7 @@ describe("mission target site filters", () => {
     });
     expect(issues).toEqual([]);
     const mission = catalog?.missions.find((m) => m.id === "ms-basic");
+    expect(mission?.targetLocationIds).toEqual(["loc-a", "loc-b"]);
     expect(mission?.targetLocationTypes).toEqual(["military", "economic"]);
     expect(mission?.targetLocationLevels).toEqual([3]);
     expect(mission?.targetLocationIntelLevels).toEqual([2, 3]);
@@ -244,6 +246,7 @@ describe("mission target site filters", () => {
 
   it("drops empty filter lists so an unrestricted mission carries no key", () => {
     const { catalog, issues } = withFilters(0, {
+      targetLocationIds: [],
       targetLocationTypes: [],
       targetLocationLevels: [],
       targetLocationIntelLevels: [],
@@ -251,6 +254,7 @@ describe("mission target site filters", () => {
     });
     expect(issues).toEqual([]);
     const mission = catalog?.missions.find((m) => m.id === "ms-basic");
+    expect(mission?.targetLocationIds).toBeUndefined();
     expect(mission?.targetLocationTypes).toBeUndefined();
     expect(mission?.targetLocationLevels).toBeUndefined();
     expect(mission?.targetLocationIntelLevels).toBeUndefined();
@@ -277,6 +281,29 @@ describe("mission target site filters", () => {
         entityId: "ms-asset",
         path: "targetLocationTypes",
         message: 'targetLocationTypes needs a location-resolving targetType (got "none")',
+      },
+    ]);
+  });
+
+  it("flags a targetLocationIds entry that names no known location", () => {
+    const { issues } = withFilters(0, { targetLocationIds: ["loc-a", "loc-nowhere"] });
+    expect(issues).toEqual([
+      {
+        slice: "missions",
+        entityId: "ms-basic",
+        path: "targetLocationIds[1]",
+        message: 'Unknown location id "loc-nowhere"',
+      },
+    ]);
+  });
+
+  it("flags targetLocationIds on a targetType that resolves to no location", () => {
+    expect(withFilters(1, { targetLocationIds: ["loc-a"] }).issues).toEqual([
+      {
+        slice: "missions",
+        entityId: "ms-asset",
+        path: "targetLocationIds",
+        message: 'targetLocationIds needs a location-resolving targetType (got "none")',
       },
     ]);
   });

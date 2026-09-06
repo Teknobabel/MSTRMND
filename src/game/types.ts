@@ -375,6 +375,14 @@ export type MissionTemplate = {
    */
   targetLocationTypes?: LocationType[];
   /**
+   * Restricts which sites this mission may be aimed at, by the target location's own `id` —
+   * the pin-to-a-named-site filter, for missions written about one specific place rather than
+   * a category of place. Absent or empty ⇒ any site. Same `targetType` rule as
+   * {@link MissionTemplate.targetLocationTypes}, and ANDed with the other filters like they
+   * are: a single id plus a contradicting type filter admits nothing.
+   */
+  targetLocationIds?: string[];
+  /**
    * Restricts which sites this mission may be aimed at, by the target location's
    * `locationLevel`. Absent or empty ⇒ any level. Same `targetType` rule as
    * {@link MissionTemplate.targetLocationTypes}.

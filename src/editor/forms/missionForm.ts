@@ -219,6 +219,22 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
     ),
   );
   const targetType = (str(ctx.row, "targetType") || "none") as MissionTargetType;
+  const siteIds = ctx.ids("locations");
+  const siteNames = ctx.names("locations");
+  container.appendChild(
+    fieldset(
+      "targetLocationIds (pin to named sites)",
+      listEditor(
+        strArray(ctx.row, "targetLocationIds"),
+        (next) =>
+          ctx.update((row) => {
+            setOrDelete(row, "targetLocationIds", next, true);
+          }),
+        (item, replace) => selectInput(idOptions(siteIds, siteNames), item, replace),
+        () => siteIds[0] ?? null,
+      ),
+    ),
+  );
   container.appendChild(
     formRow(
       "targetLocationTypes",
@@ -274,7 +290,7 @@ export function renderMissionForm(container: HTMLElement, ctx: FormCtx): void {
   container.appendChild(
     hint(
       missionTargetTypeTargetsLocation(targetType)
-        ? "Restricts which sites this mission may be aimed at; all four rows must pass. Nothing ticked in a row means that row is unrestricted. Intel and security are per-run state, checked when the mission is started — a site can drift in and out of range during a run."
+        ? "Restricts which sites this mission may be aimed at; all five rows must pass. An empty row is unrestricted. Listing sites in targetLocationIds pins the mission to exactly those places — leave it empty to let the other rows pick the site by category. Intel and security are per-run state, checked when the mission is started — a site can drift in and out of range during a run."
         : `Ignored while targetType is "${targetType}" — site filters only apply to location, asset_hidden, and asset_revealed targets.`,
     ),
   );

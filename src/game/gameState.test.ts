@@ -1174,6 +1174,21 @@ describe("assignMission / cancelMission", () => {
     );
   }
 
+  it("rejects a target location outside `targetLocationIds`", () => {
+    const cat = filteredCatalog({ targetLocationIds: ["loc-b"] });
+    expect(assignAt(cat, "loc-b").ok).toBe(true);
+
+    const rejected = assignAt(cat, "loc-a");
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) {
+      expect(rejected.error).toEqual({
+        code: "target_location_id_not_allowed",
+        locationId: "loc-a",
+        allowed: ["loc-b"],
+      });
+    }
+  });
+
   it("rejects a target location whose type is outside `targetLocationTypes`", () => {
     const cat = filteredCatalog({ targetLocationTypes: ["military"] });
     expect(assignAt(cat, "loc-b").ok).toBe(true);
@@ -1214,6 +1229,14 @@ describe("assignMission / cancelMission", () => {
     });
     expect(assignAt(both, "loc-a").ok).toBe(false);
     expect(assignAt(both, "loc-b").ok).toBe(false);
+
+    /* A pin plus a contradicting category filter admits nothing either. */
+    const pinnedAndTyped = filteredCatalog({
+      targetLocationIds: ["loc-a"],
+      targetLocationTypes: ["military"],
+    });
+    expect(assignAt(pinnedAndTyped, "loc-a").ok).toBe(false);
+    expect(assignAt(pinnedAndTyped, "loc-b").ok).toBe(false);
 
     /* A list naming several values admits any of them. */
     const either = filteredCatalog({ targetLocationTypes: ["military", "economic"] });
