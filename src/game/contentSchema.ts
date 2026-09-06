@@ -362,6 +362,7 @@ export const missionTemplateSchema = z
     cardArt: z.string().min(1).optional(),
     targetType: missionTargetTypeSchema,
     /** Optional site filters; only meaningful for a location-resolving `targetType`. */
+    targetLocationIds: z.array(z.string().min(1)).optional(),
     targetLocationTypes: z.array(locationTypeSchema).optional(),
     targetLocationLevels: z.array(locationLevelSchema).optional(),
     targetLocationIntelLevels: z.array(zeroToThreeLevelSchema).optional(),
@@ -396,6 +397,7 @@ export const eventTemplateSchema = z.object({
   cardArt: z.string().min(1).optional(),
   targetType: missionTargetTypeSchema,
   /** Optional site filters; only meaningful for a location-resolving `targetType`. */
+  targetLocationIds: z.array(z.string().min(1)).optional(),
   targetLocationTypes: z.array(locationTypeSchema).optional(),
   targetLocationLevels: z.array(locationLevelSchema).optional(),
   targetLocationIntelLevels: z.array(zeroToThreeLevelSchema).optional(),
@@ -674,12 +676,16 @@ function normalizeAgentTemplates(
 function applyTargetLocationFilters(
   base: MissionTemplate,
   row: {
+    targetLocationIds?: string[];
     targetLocationTypes?: LocationType[];
     targetLocationLevels?: LocationLevel[];
     targetLocationIntelLevels?: IntelLevel[];
     targetLocationSecurityLevels?: SecurityLevel[];
   },
 ): void {
+  if (row.targetLocationIds !== undefined && row.targetLocationIds.length > 0) {
+    base.targetLocationIds = [...row.targetLocationIds];
+  }
   if (row.targetLocationTypes !== undefined && row.targetLocationTypes.length > 0) {
     base.targetLocationTypes = [...row.targetLocationTypes];
   }
@@ -1135,25 +1141,30 @@ export function effectKindTargetTypeRequirement(
 
 /** Effect placement rules + effect-level refs. Shared by missions and events. */
 /**
- * Site filters (`targetLocationTypes` / `targetLocationLevels`) only bite on a target that
- * resolves to a location, so a filter on a `minion` / `none` mission is dead authoring.
- * Duplicates are flagged too — harmless at runtime, but always a mistake in the file.
+ * Site filters (`targetLocationIds` / `targetLocationTypes` / `targetLocationLevels`) only bite
+ * on a target that resolves to a location, so a filter on a `minion` / `none` mission is dead
+ * authoring. Duplicates are flagged too — harmless at runtime, but always a mistake in the
+ * file — as are `targetLocationIds` entries naming a site the locations slice does not hold.
  */
 function checkTargetLocationFilters(
   slice: ContentSliceKey,
   entityId: string,
   template: {
     targetType: MissionTargetType;
+    targetLocationIds?: string[];
     targetLocationTypes?: LocationType[];
     targetLocationLevels?: LocationLevel[];
     targetLocationIntelLevels?: IntelLevel[];
     targetLocationSecurityLevels?: SecurityLevel[];
   },
+  /** Known location ids, or `null` when the locations slice failed to parse. */
+  locationIds: ReadonlySet<string> | null,
   issues: ContentIssue[],
 ): void {
   const targetsLocation = missionTargetTypeTargetsLocation(template.targetType);
-  type FilterValue = LocationType | LocationLevel | IntelLevel | SecurityLevel;
+  type FilterValue = string | LocationType | LocationLevel | IntelLevel | SecurityLevel;
   const fields: Array<{ path: string; values: FilterValue[] | undefined }> = [
+    { path: "targetLocationIds", values: template.targetLocationIds },
     { path: "targetLocationTypes", values: template.targetLocationTypes },
     { path: "targetLocationLevels", values: template.targetLocationLevels },
     { path: "targetLocationIntelLevels", values: template.targetLocationIntelLevels },
@@ -1182,6 +1193,14 @@ function checkTargetLocationFilters(
         });
       }
       seen.add(v);
+      if (path === "targetLocationIds" && locationIds !== null && !locationIds.has(v as string)) {
+        issues.push({
+          slice,
+          entityId,
+          path: `${path}[${i}]`,
+          message: `Unknown location id "${v}"`,
+        });
+      }
     });
   }
 }
@@ -1468,7 +1487,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
         );
       }
       checkUnlockForbidden("missions", m.id, m.onFailureEffects, "onFailureEffects", issues);
-      checkTargetLocationFilters("missions", m.id, m, issues);
+      checkTargetLocationFilters("missions", m.id, m, locationIds, issues);
     }
   }
 
@@ -1703,7 +1722,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
         );
       }
       checkUnlockForbidden("events", ev.id, ev.onFailureEffects, "onFailureEffects", issues);
-      checkTargetLocationFilters("events", ev.id, ev, issues);
+      checkTargetLocationFilters("events", ev.id, ev, locationIds, issues);
     }
     /* One raid at most: the top wanted tier spawns a single event by id, so a second one
      * would be authored content that can never reach the table. */

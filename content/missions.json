@@ -657,12 +657,8 @@
       "swift"
     ],
     "startCommandPoints": 3,
-    "targetLocationLevels": [
-      1,
-      2
-    ],
-    "targetLocationTypes": [
-      "military"
+    "targetLocationIds": [
+      "southern_airfield"
     ],
     "targetType": "location"
   },
@@ -703,12 +699,8 @@
       "infiltrator"
     ],
     "startCommandPoints": 3,
-    "targetLocationLevels": [
-      1,
-      2
-    ],
-    "targetLocationTypes": [
-      "political"
+    "targetLocationIds": [
+      "city_hall_annex"
     ],
     "targetType": "location"
   },
@@ -749,12 +741,8 @@
       "manipulator"
     ],
     "startCommandPoints": 3,
-    "targetLocationLevels": [
-      1,
-      2
-    ],
-    "targetLocationTypes": [
-      "economic"
+    "targetLocationIds": [
+      "dockside_freeport"
     ],
     "targetType": "location"
   },
