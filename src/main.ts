@@ -2896,8 +2896,13 @@ function initGameController(
         ? formatTargetLocationFilters(mission, targetLocationDisplayName)
         : null;
       const targetTypeLabel = formatMissionTargetTypeLabel(mission.targetType);
+      // Site filters already read as a place, so the leading "Location" is redundant.
       const targetValue =
-        siteFilters !== null ? `${targetTypeLabel} - ${siteFilters}` : targetTypeLabel;
+        siteFilters === null
+          ? targetTypeLabel
+          : mission.targetType === "location"
+            ? siteFilters
+            : `${targetTypeLabel} - ${siteFilters}`;
 
       const statsRow = createMissionCardStatsRow({
         target: targetValue,
