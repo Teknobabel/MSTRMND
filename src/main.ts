@@ -135,6 +135,20 @@ const SECURITY_LEVEL_TOOLTIP_LINES: readonly string[] = [
   "Moves only when a mission or event authors a security effect — nothing raises it by default.",
 ];
 
+/** Hover text for the Infamy icon (status bar stat block, mission effect lines). */
+const INFAMY_TOOLTIP_LINES: readonly string[] = [
+  "Your organization's notoriety (0 to 100).",
+  "Higher infamy unlocks lair upgrade levels and higher-level minions in the hire pool.",
+  "Some events only show up once infamy clears their threshold.",
+];
+
+/** Hover text for the Heat icon (status bar stat block, mission effect lines). */
+const HEAT_TOOLTIP_LINES: readonly string[] = [
+  "Law-enforcement attention on your organization (0 to 100).",
+  "Heat sets the Threat Level tier, which raises the opposing-agent cap and the heat gained each turn.",
+  "The tier never drops once reached, even when heat falls again.",
+];
+
 /** Tabs left-to-right; locations filtered and sorted by name within each. */
 const LOCATION_CATEGORY_TAB_ORDER: readonly LocationType[] = [
   "economic",
@@ -199,15 +213,21 @@ const LAIR_MENU_COLUMNS: readonly { id: LairPanelSection; label: string }[] = [
   { id: "assets", label: "Assets" },
 ];
 
+/* Stat glyph paths, shared by the status bar and the mission effect lines. */
+const INFAMY_ICON_SVG_PATHS =
+  '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>';
+const HEAT_ICON_SVG_PATHS =
+  '<path d="M12 2.5s5.5 4.4 5.5 9.4a5.5 5.5 0 0 1-11 0c0-2 1-3.6 2-4.8.3 1.4 1.1 2.3 2 2.3 1.3 0 1.8-1.3 1.8-3 0-1.4-.3-2.7-.3-3.9Z"/>';
+const INTEL_ICON_SVG_PATHS =
+  '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>';
+
 /* Inline SVG icons for the OMEGA OS status bar (stroked via CSS). */
 const ICON_BOLT =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4.5 13.5H10L9 22l8.5-11.5H12L13 2Z"/></svg>';
-const ICON_EYE =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const ICON_STAR = `<svg viewBox="0 0 24 24" aria-hidden="true">${INFAMY_ICON_SVG_PATHS}</svg>`;
 const ICON_PERSON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4.5 21v-1.5a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6V21"/></svg>';
-const ICON_FLAME =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5s5.5 4.4 5.5 9.4a5.5 5.5 0 0 1-11 0c0-2 1-3.6 2-4.8.3 1.4 1.1 2.3 2 2.3 1.3 0 1.8-1.3 1.8-3 0-1.4-.3-2.7-.3-3.9Z"/></svg>';
+const ICON_FLAME = `<svg viewBox="0 0 24 24" aria-hidden="true">${HEAT_ICON_SVG_PATHS}</svg>`;
 const ICON_CROSSHAIR =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>';
 const ICON_SKULL_FILLED =
@@ -241,12 +261,15 @@ const LOCATION_STAT_ICON_SECURITY =
 const LOCATION_STAT_ICON_INTEL =
   '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
 
-function createSvgPillIcon(pathsHtml: string): SVGElement {
+function createSvgPillIcon(
+  pathsHtml: string,
+  className = "minions-trait-pill__icon",
+): SVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");
-  svg.setAttribute("class", "minions-trait-pill__icon");
+  svg.setAttribute("class", className);
   svg.innerHTML = pathsHtml;
   return svg;
 }
@@ -745,6 +768,70 @@ function formatStaticAssetTooltip(asset: Asset | undefined, assetId: string): st
   return lines.join("\n");
 }
 
+/** Stats a mission effect line names by word, shown as their icon instead. */
+type MissionEffectStat = "infamy" | "heat" | "intel" | "security";
+
+/**
+ * Icon, hover text, and the wording {@link describeMissionEffect} opens the line with, per
+ * stat. `label` is what the icon replaces, so it has to match that opening exactly — a line
+ * that starts some other way keeps its text untouched.
+ */
+const MISSION_EFFECT_STAT_META: Record<
+  MissionEffectStat,
+  { label: string; iconPaths: string; tooltipLines: readonly string[] }
+> = {
+  infamy: {
+    label: "Infamy",
+    iconPaths: INFAMY_ICON_SVG_PATHS,
+    tooltipLines: INFAMY_TOOLTIP_LINES,
+  },
+  heat: {
+    label: "Heat",
+    iconPaths: HEAT_ICON_SVG_PATHS,
+    tooltipLines: HEAT_TOOLTIP_LINES,
+  },
+  intel: {
+    label: "Intel level",
+    iconPaths: INTEL_ICON_SVG_PATHS,
+    tooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
+  },
+  security: {
+    label: "Security level",
+    iconPaths: SECURITY_ICON_SVG_PATHS,
+    tooltipLines: SECURITY_LEVEL_TOOLTIP_LINES,
+  },
+};
+
+/** The stat each effect kind reports; kinds absent here name no stat and stay plain text. */
+const MISSION_EFFECT_STAT_BY_KIND: Partial<Record<MissionEffect["kind"], MissionEffectStat>> = {
+  infamy_delta: "infamy",
+  heat_delta: "heat",
+  intel_level_delta: "intel",
+  intel_level_delta_global: "intel",
+  intel_level_delta_by_location_type: "intel",
+  intel_level_delta_by_location_level: "intel",
+  security_level_delta: "security",
+  security_level_delta_global: "security",
+  security_level_delta_by_location_type: "security",
+  security_level_delta_by_location_level: "security",
+};
+
+/**
+ * Inline icon standing in for a stat's name in an effect line: the word itself moves into the
+ * tooltip and the accessible label, leaving the line to read as icon + delta.
+ */
+function createMissionEffectStatIconEl(stat: MissionEffectStat): HTMLElement {
+  const meta = MISSION_EFFECT_STAT_META[stat];
+  const span = document.createElement("span");
+  span.className = `mission-card-effects__stat mission-card-effects__stat--${stat}`;
+  span.tabIndex = 0;
+  span.setAttribute("role", "img");
+  span.setAttribute("aria-label", meta.label);
+  span.title = `${meta.label}\n${meta.tooltipLines.join("\n")}`;
+  span.appendChild(createSvgPillIcon(meta.iconPaths, "mission-card-effects__stat-icon"));
+  return span;
+}
+
 function createInlineAssetSpan(
   catalog: ReturnType<typeof loadContent>,
   assetId: string,
@@ -1213,11 +1300,18 @@ function initGameController(
       return [item];
     }
 
+    const stat = MISSION_EFFECT_STAT_BY_KIND[effect.kind];
+    const statPrefix = stat === undefined ? null : `${MISSION_EFFECT_STAT_META[stat].label} `;
     const lines = describeMissionEffect(effect, catalog);
     return lines.map((line) => {
       const item = document.createElement("li");
       item.className = `mission-card-effects__item ${toneClass}`;
-      item.textContent = line;
+      if (stat !== undefined && statPrefix !== null && line.startsWith(statPrefix)) {
+        item.appendChild(createMissionEffectStatIconEl(stat));
+        item.append(line.slice(statPrefix.length));
+      } else {
+        item.textContent = line;
+      }
       return item;
     });
   }
@@ -5552,7 +5646,7 @@ function initGameController(
         "Command",
         `${p.commandPoints} <small>/ ${p.maxCommandPoints}</small>`,
       ) +
-      statBlockHtml(ICON_EYE, "Infamy", String(p.infamy)) +
+      statBlockHtml(ICON_STAR, "Infamy", String(p.infamy)) +
       statBlockHtml(ICON_FLAME, "Heat", String(p.heat), "stat-block--heat") +
       statBlockHtml(
         ICON_PERSON,

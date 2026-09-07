@@ -2653,6 +2653,46 @@ body {
   color: var(--red-deep);
 }
 
+/* Infamy, Heat, Intel level and Security level read as their icon inside an effect line;
+   the word they replace lives in the hover tooltip. Colours follow the status bar (infamy,
+   heat) and the location card badges (intel, security) so the glyphs stay recognisable. */
+.mission-card-effects__stat {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: -0.12em;
+  margin-right: 0.2rem;
+  cursor: help;
+  outline: none;
+  transition: filter 0.15s;
+}
+
+.mission-card-effects__stat-icon {
+  width: 0.82rem;
+  height: 0.82rem;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mission-card-effects__stat--infamy,
+.mission-card-effects__stat--security {
+  color: var(--red-bright);
+}
+
+.mission-card-effects__stat--heat,
+.mission-card-effects__stat--intel {
+  color: var(--warn);
+}
+
+.mission-card-effects__stat:hover,
+.mission-card-effects__stat:focus-visible {
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
 .mission-card-effects__asset {
   cursor: help;
   color: var(--text-0);
