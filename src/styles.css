@@ -2724,20 +2724,15 @@ body {
   word-break: break-word;
 }
 
-.mission-card-effects__asset {
-  cursor: help;
-  color: var(--text-0);
-  font-weight: 600;
-  text-decoration: underline dotted var(--line-2);
-  text-underline-offset: 2px;
-  outline: none;
-  transition: color 0.15s, text-decoration-color 0.15s;
-}
-
-.mission-card-effects__asset:hover,
-.mission-card-effects__asset:focus-visible {
-  color: #fff;
-  text-decoration-color: var(--red-bright);
+/* Assets named by an effect wear the same icon + name pill they wear on mission requirements
+   and minion cards, so an asset reads as an asset wherever it turns up. Lines that are nothing
+   but pills lay them out as a wrapping row, keeping the tone marker on the first row. */
+.mission-card-effects__item--assets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.35rem;
+  row-gap: 0.2rem;
 }
 
 /* Active mission cards */
