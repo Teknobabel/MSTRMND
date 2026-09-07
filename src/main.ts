@@ -132,7 +132,7 @@ const INTEL_LEVEL_TOOLTIP_LINES: readonly string[] = [
 const SECURITY_LEVEL_TOOLTIP_LINES: readonly string[] = [
   "Defensive alert level at this site (0 up to the location level).",
   "Each point reveals 1 security trait, adding it to the required traits for missions here.",
-  "Increases by +1 when a mission targeting this site completes.",
+  "Moves only when a mission or event authors a security effect — nothing raises it by default.",
 ];
 
 /** Tabs left-to-right; locations filtered and sorted by name within each. */

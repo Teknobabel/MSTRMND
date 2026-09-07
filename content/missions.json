@@ -59,6 +59,10 @@
       {
         "kind": "heat_delta",
         "amount": 8
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -72,6 +76,10 @@
       },
       {
         "kind": "steal_target_asset"
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "requiredTraitIds": [
@@ -89,6 +97,10 @@
       {
         "kind": "heat_delta",
         "amount": 5
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -115,6 +127,10 @@
       {
         "kind": "heat_delta",
         "amount": 6
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -124,7 +140,7 @@
       },
       {
         "kind": "security_level_delta",
-        "delta": -2
+        "delta": -1
       }
     ],
     "requiredTraitIds": [
@@ -671,6 +687,10 @@
       {
         "kind": "heat_delta",
         "amount": 10
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -688,6 +708,10 @@
           "fusion_core",
           "prototype_railgun"
         ]
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "requiredAssetIds": [
@@ -713,6 +737,10 @@
       {
         "kind": "heat_delta",
         "amount": 8
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -755,6 +783,10 @@
       {
         "kind": "heat_delta",
         "amount": 6
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -797,6 +829,10 @@
       {
         "kind": "heat_delta",
         "amount": 10
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -813,6 +849,10 @@
         "assetIds": [
           "emp_scrambler"
         ]
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "requiredAssetIds": [
@@ -847,6 +887,10 @@
       {
         "kind": "heat_delta",
         "amount": 8
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -891,6 +935,10 @@
       {
         "kind": "heat_delta",
         "amount": 5
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -945,6 +993,10 @@
         "traitIds": [
           "shaken"
         ]
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -955,6 +1007,10 @@
       {
         "kind": "heat_delta",
         "amount": 15
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "requiredAssetIds": [
@@ -994,6 +1050,10 @@
         "traitIds": [
           "shaken"
         ]
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -1004,6 +1064,10 @@
       {
         "kind": "heat_delta",
         "amount": 5
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "requiredAssetIds": [
@@ -1043,6 +1107,10 @@
         "traitIds": [
           "shaken"
         ]
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "onSuccessEffects": [
@@ -1061,6 +1129,10 @@
           "dirty_money",
           "dirty_money"
         ]
+      },
+      {
+        "kind": "security_level_delta",
+        "delta": 1
       }
     ],
     "requiredAssetIds": [
