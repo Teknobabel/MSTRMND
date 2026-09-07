@@ -817,19 +817,23 @@ const MISSION_EFFECT_STAT_BY_KIND: Partial<Record<MissionEffect["kind"], Mission
 };
 
 /**
- * Inline icon standing in for a stat's name in an effect line: the word itself moves into the
- * tooltip and the accessible label, leaving the line to read as icon + delta.
+ * One stat effect as a stat badge, built like the location-card and mission-cost badges: the
+ * stat's icon stands in for its name, which moves into the hover tooltip and the accessible
+ * label, leaving the badge to read as icon + delta.
  */
-function createMissionEffectStatIconEl(stat: MissionEffectStat): HTMLElement {
+function createMissionEffectStatBadgeEl(stat: MissionEffectStat, value: string): HTMLElement {
   const meta = MISSION_EFFECT_STAT_META[stat];
-  const span = document.createElement("span");
-  span.className = `mission-card-effects__stat mission-card-effects__stat--${stat}`;
-  span.tabIndex = 0;
-  span.setAttribute("role", "img");
-  span.setAttribute("aria-label", meta.label);
-  span.title = `${meta.label}\n${meta.tooltipLines.join("\n")}`;
-  span.appendChild(createSvgPillIcon(meta.iconPaths, "mission-card-effects__stat-icon"));
-  return span;
+  const badge = document.createElement("span");
+  badge.className = `mission-card-effects__stat-chip mission-card-effects__stat-chip--${stat}`;
+  badge.tabIndex = 0;
+  badge.setAttribute("aria-label", `${meta.label} ${value}`);
+  badge.title = `${meta.label} ${value}\n${meta.tooltipLines.join("\n")}`;
+  badge.appendChild(createSvgPillIcon(meta.iconPaths, "mission-card-effects__stat-icon"));
+  const valueEl = document.createElement("span");
+  valueEl.className = "mission-card-effects__stat-value";
+  valueEl.textContent = value;
+  badge.appendChild(valueEl);
+  return badge;
 }
 
 function createInlineAssetSpan(
@@ -1310,7 +1314,7 @@ function initGameController(
   }
 
   /**
-   * One stat effect as an icon + delta chip, or null when the effect names no stat — or when
+   * One stat effect as an icon + delta badge, or null when the effect names no stat — or when
    * its line no longer opens with that stat's label, in which case it stays an ordinary line.
    */
   function missionEffectStatChipEl(
@@ -1327,16 +1331,12 @@ function initGameController(
     if (line === undefined || !line.startsWith(prefix)) {
       return null;
     }
-    const chip = document.createElement("span");
-    chip.className = "mission-card-effects__stat-chip";
-    chip.appendChild(createMissionEffectStatIconEl(stat));
-    chip.append(line.slice(prefix.length));
-    return chip;
+    return createMissionEffectStatBadgeEl(stat, line.slice(prefix.length));
   }
 
   /**
-   * List items for one outcome list. Every stat effect collapses into a single line of icon
-   * chips, sitting where the first of them fell in {@link orderedMissionEffects} order; the
+   * List items for one outcome list. Every stat effect collapses into a single line of stat
+   * badges, sitting where the first of them fell in {@link orderedMissionEffects} order; the
    * rest keep one line each.
    */
   function missionEffectListItemEls(
