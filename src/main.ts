@@ -836,19 +836,6 @@ function createMissionEffectStatBadgeEl(stat: MissionEffectStat, value: string):
   return badge;
 }
 
-function createInlineAssetSpan(
-  catalog: ReturnType<typeof loadContent>,
-  assetId: string,
-): HTMLElement {
-  const asset = catalog.assets.find((a) => a.id === assetId);
-  const span = document.createElement("span");
-  span.className = "mission-card-effects__asset";
-  span.tabIndex = 0;
-  span.title = formatStaticAssetTooltip(asset, assetId);
-  span.textContent = asset?.name ?? assetId;
-  return span;
-}
-
 function createAssetPillEl(
   catalog: ReturnType<typeof loadContent>,
   assetId: string,
@@ -1263,10 +1250,12 @@ function initGameController(
       tone === "good" ? "mission-card-effects__item--good" : "mission-card-effects__item--bad";
 
     if (effect.kind === "gain_assets") {
+      // The asset speaks for itself: no "Gain asset:" lead-in, just the same pill assets wear
+      // everywhere else, with the line's tone marker saying it is gained.
       return effect.assetIds.map((id: string) => {
         const item = document.createElement("li");
-        item.className = `mission-card-effects__item ${toneClass}`;
-        item.append("Gain asset: ", createInlineAssetSpan(catalog, id));
+        item.className = `mission-card-effects__item ${toneClass} mission-card-effects__item--assets`;
+        item.appendChild(createAssetPillEl(catalog, id));
         return item;
       });
     }
@@ -1280,25 +1269,25 @@ function initGameController(
         item.append("Removed up to ");
         effect.removeAssetIds.forEach((id: string, idx: number) => {
           if (idx > 0) item.append(", ");
-          item.appendChild(createInlineAssetSpan(catalog, id));
+          item.appendChild(createAssetPillEl(catalog, id));
         });
         item.append(" from inventory, then gained ");
         effect.gainAssetIds.forEach((id: string, idx: number) => {
           if (idx > 0) item.append(", ");
-          item.appendChild(createInlineAssetSpan(catalog, id));
+          item.appendChild(createAssetPillEl(catalog, id));
         });
       } else if (hasRemove) {
         item.append("Removed up to ");
         effect.removeAssetIds.forEach((id: string, idx: number) => {
           if (idx > 0) item.append(", ");
-          item.appendChild(createInlineAssetSpan(catalog, id));
+          item.appendChild(createAssetPillEl(catalog, id));
         });
         item.append(" from inventory");
       } else if (hasGain) {
         item.append("Gained ");
         effect.gainAssetIds.forEach((id: string, idx: number) => {
           if (idx > 0) item.append(", ");
-          item.appendChild(createInlineAssetSpan(catalog, id));
+          item.appendChild(createAssetPillEl(catalog, id));
         });
       }
       return [item];
