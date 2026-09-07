@@ -421,43 +421,51 @@ body {
     radial-gradient(ellipse 120% 100% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.5) 100%);
 }
 
-/* ---------------- Top bar ---------------- */
+/* ---------------- Bottom bar (brand + nav tabs) ---------------- */
 
-.omega-topbar {
+.omega-bottombar {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 2.4rem;
-  padding: 0 1rem;
+  align-items: stretch;
+  gap: 1rem;
+  min-height: 3rem;
+  padding: 0.45rem 1rem 0.3rem;
   border: 1px solid var(--line-1);
-  border-bottom-color: var(--line-2);
+  border-top-color: var(--line-2);
   background:
-    linear-gradient(180deg, rgba(36, 12, 15, 0.85), rgba(12, 4, 6, 0.92));
+    linear-gradient(0deg, rgba(36, 12, 15, 0.85), rgba(12, 4, 6, 0.92));
+  /* Raised center section frames the nav tabs; the shoulders drop 10px at either end. */
   clip-path: polygon(
-    0 0,
-    100% 0,
-    100% calc(100% - 10px),
-    calc(70% + 60px) calc(100% - 10px),
-    calc(70% + 50px) 100%,
-    calc(30% - 50px) 100%,
-    calc(30% - 60px) calc(100% - 10px),
-    0 calc(100% - 10px)
+    0 6px,
+    calc(18% - 6px) 6px,
+    18% 0,
+    82% 0,
+    calc(82% + 6px) 6px,
+    100% 6px,
+    100% 100%,
+    0 100%
   );
 }
 
-.omega-topbar::before {
+.omega-bottombar::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  top: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--red) 35%, var(--red) 65%, transparent);
   opacity: 0.7;
 }
 
-.omega-topbar__corner {
+.omega-bottombar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 0 0 auto;
+}
+
+.omega-bottombar__corner {
   font-family: var(--font-display);
   font-size: 0.66rem;
   font-weight: 500;
@@ -468,23 +476,15 @@ body {
   white-space: nowrap;
 }
 
-.omega-topbar__corner--right {
-  animation: tagline-flicker 9s linear infinite;
-}
-
-.omega-topbar__emblem {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  transform: translateX(-50%);
+.omega-bottombar__emblem {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 4.5rem;
-  height: 100%;
+  flex-shrink: 0;
+  width: 2rem;
 }
 
-.omega-topbar__emblem-mark {
+.omega-bottombar__emblem-mark {
   font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 900;
@@ -1026,36 +1026,24 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0.65rem;
-  margin: 0 0 0.25rem;
-  padding: 0.5rem;
-  flex-shrink: 0;
-  border: 1px solid var(--line-1);
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.15rem 1.1rem 0.15rem 0.45rem;
+  flex: 0 0 auto;
+  max-width: 23rem;
   border-left: 2px solid var(--red-deep);
-  background:
-    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
-    linear-gradient(135deg, rgba(60, 14, 19, 0.55), rgba(18, 6, 8, 0.75));
-}
-
-.game-player-profile::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 30%;
-  bottom: -1px;
-  height: 1px;
-  pointer-events: none;
-  background: linear-gradient(90deg, rgba(232, 17, 45, 0.6), transparent);
+  border-right: 1px solid var(--line-1);
+  background: linear-gradient(90deg, rgba(60, 14, 19, 0.5), transparent);
 }
 
 .game-player-profile__pic {
   flex-shrink: 0;
-  width: 52px;
-  height: 52px;
+  width: 34px;
+  height: 34px;
   object-fit: cover;
   border: 1px solid var(--line-2);
   background: rgba(10, 4, 5, 0.8);
-  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 0 100%);
   filter: drop-shadow(0 0 8px rgba(232, 17, 45, 0.25));
 }
 
@@ -1071,7 +1059,7 @@ body {
 .game-player-profile__name {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 0.86rem;
+  font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   line-height: 1.2;
@@ -1084,7 +1072,7 @@ body {
 
 .organization-name {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.14em;
   line-height: 1.3;
@@ -1095,25 +1083,30 @@ body {
   white-space: nowrap;
 }
 
-/* Nav menu */
+/* Nav tabs (bottom bar) */
 .game-panel-menu {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
   gap: 0.25rem;
-  margin: 0 0 0.5rem;
-  flex-shrink: 0;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .game-panel-menu__button {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0.6rem;
+  justify-content: center;
+  gap: 0.5rem;
   min-height: 36px;
-  width: 100%;
-  padding: 0.35rem 0.6rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0.35rem 0.85rem;
   border: 1px solid transparent;
-  border-left: 2px solid var(--line-1);
+  border-top: 2px solid var(--line-1);
   background: rgba(26, 8, 11, 0.35);
   color: var(--text-2);
   font-family: var(--font-display);
@@ -1121,9 +1114,10 @@ body {
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  text-align: left;
+  text-align: center;
+  white-space: nowrap;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s, padding-left 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 
 .nav-icon {
@@ -1150,15 +1144,14 @@ body {
 .game-panel-menu__button:hover {
   color: var(--text-0);
   background: rgba(46, 13, 17, 0.55);
-  border-left-color: var(--line-2);
+  border-top-color: var(--line-2);
 }
 
 .game-panel-menu__button--active,
 .game-panel-menu__button[aria-pressed="true"] {
   color: var(--red-bright);
-  background: linear-gradient(90deg, rgba(232, 17, 45, 0.18), rgba(232, 17, 45, 0.03));
-  border-left-color: var(--red-bright);
-  padding-left: 0.8rem;
+  background: linear-gradient(180deg, rgba(232, 17, 45, 0.18), rgba(232, 17, 45, 0.03));
+  border-top-color: var(--red-bright);
   text-shadow: 0 0 8px var(--red-glow-soft);
 }
 
@@ -1168,9 +1161,8 @@ body {
 }
 
 .game-panel-menu__button--system {
-  margin-top: 0.35rem;
-  border-top: 1px solid var(--line-0);
-  padding-top: 0.5rem;
+  margin-left: 0.5rem;
+  border-left: 1px solid var(--line-0);
 }
 
 /* Plan column stack */
@@ -1423,12 +1415,12 @@ body {
   flex-direction: row;
   align-items: stretch;
   gap: 0.5rem;
-  min-height: 3.1rem;
+  min-height: 2.5rem;
   border: 1px solid var(--line-1);
   background:
     linear-gradient(180deg, rgba(30, 9, 12, 0.6), transparent 55%),
     var(--panel-bg);
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .omega-ticker-bar::before {
@@ -1436,7 +1428,7 @@ body {
   position: absolute;
   left: 10%;
   right: 10%;
-  top: -1px;
+  bottom: -1px;
   height: 1px;
   pointer-events: none;
   background: linear-gradient(
@@ -1557,14 +1549,16 @@ body {
 }
 
 .btn-execute {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   align-self: stretch;
-  min-width: 11rem;
-  margin: 0.3rem 0.4rem;
-  font-size: 1.05rem;
+  min-width: 10rem;
+  min-height: 0;
+  padding: 0.35rem 1.1rem;
+  margin: 0;
+  font-size: 0.9rem;
   font-weight: 900;
-  letter-spacing: 0.3em;
-  text-indent: 0.15em;
+  letter-spacing: 0.26em;
+  text-indent: 0.13em;
   animation: execute-pulse 2.6s ease-in-out infinite;
 }
 
