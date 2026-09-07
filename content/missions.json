@@ -342,6 +342,12 @@
     "name": "Operations Nerve Center",
     "description": "A wall of screens, a better chair, and the capacity to run one more scheme at a time.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
@@ -364,6 +370,12 @@
     "name": "Excavated Barracks",
     "description": "Blast out the east lava tube. Bunks for a bigger, louder family.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
@@ -386,6 +398,12 @@
     "name": "Fabrication Workshop",
     "description": "Lathes, lasers, and a gadget bench. Every op leaves with one more toy.",
     "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
@@ -450,6 +468,12 @@
     "name": "Cliffside Infirmary",
     "description": "Surgical suites with an ocean view. Henchcare is the best care.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
@@ -511,6 +535,12 @@
     "name": "Holographic War Room",
     "description": "The whole planet in glowing miniature, room for one more schemer at the table — and below it all, the Foundry comes online.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
@@ -574,6 +604,12 @@
     "name": "Doomsday Vault",
     "description": "Blast doors thick enough to survive your own inventions. Stocked accordingly.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
@@ -603,6 +639,12 @@
     "name": "The Obsidian Throne",
     "description": "Every empire needs a chair. Yours seats a legend and commands a view of the caldera.",
     "durationTurns": 2,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
     "onSuccessEffects": [
       {
         "kind": "infamy_delta",
