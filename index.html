@@ -69,6 +69,21 @@
           </div>
 
           <div class="omega-statusbar" aria-label="Player status and turn">
+            <header class="game-player-profile" aria-label="Player and organization">
+              <img
+                id="player-profile-pic"
+                class="game-player-profile__pic"
+                src=""
+                alt=""
+                width="48"
+                height="48"
+                decoding="async"
+              />
+              <div class="game-player-profile__text">
+                <p id="player-name" class="game-player-profile__name"></p>
+                <p id="organization-name" class="organization-name game-player-profile__org"></p>
+              </div>
+            </header>
             <div id="game-stats" class="game-stats" aria-live="polite"></div>
             <div class="omega-statusbar__right">
               <div id="threat-level" class="threat-meter" aria-label="Threat level"></div>
@@ -91,21 +106,6 @@
 
           <div class="omega-body">
             <aside class="omega-sidebar game-panel game-panel--plan-column" aria-label="Mission planning">
-              <header class="game-player-profile" aria-label="Player and organization">
-                <img
-                  id="player-profile-pic"
-                  class="game-player-profile__pic"
-                  src=""
-                  alt=""
-                  width="48"
-                  height="48"
-                  decoding="async"
-                />
-                <div class="game-player-profile__text">
-                  <p id="player-name" class="game-player-profile__name"></p>
-                  <p id="organization-name" class="organization-name game-player-profile__org"></p>
-                </div>
-              </header>
               <div class="plan-column-stack">
                 <h2 id="plan-panel-title" class="game-panel-title">Mission Planning</h2>
                 <div

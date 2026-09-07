@@ -1026,36 +1026,24 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0.65rem;
-  margin: 0 0 0.5rem;
-  padding: 0.5rem;
-  flex-shrink: 0;
-  border: 1px solid var(--line-1);
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.15rem 1.1rem 0.15rem 0.45rem;
+  flex: 0 0 auto;
+  max-width: 23rem;
   border-left: 2px solid var(--red-deep);
-  background:
-    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
-    linear-gradient(135deg, rgba(60, 14, 19, 0.55), rgba(18, 6, 8, 0.75));
-}
-
-.game-player-profile::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 30%;
-  bottom: -1px;
-  height: 1px;
-  pointer-events: none;
-  background: linear-gradient(90deg, rgba(232, 17, 45, 0.6), transparent);
+  border-right: 1px solid var(--line-1);
+  background: linear-gradient(90deg, rgba(60, 14, 19, 0.5), transparent);
 }
 
 .game-player-profile__pic {
   flex-shrink: 0;
-  width: 52px;
-  height: 52px;
+  width: 34px;
+  height: 34px;
   object-fit: cover;
   border: 1px solid var(--line-2);
   background: rgba(10, 4, 5, 0.8);
-  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 0 100%);
   filter: drop-shadow(0 0 8px rgba(232, 17, 45, 0.25));
 }
 
@@ -1071,7 +1059,7 @@ body {
 .game-player-profile__name {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 0.86rem;
+  font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   line-height: 1.2;
@@ -1084,7 +1072,7 @@ body {
 
 .organization-name {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.14em;
   line-height: 1.3;
