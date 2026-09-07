@@ -2656,6 +2656,24 @@ body {
 /* Infamy, Heat, Intel level and Security level read as their icon inside an effect line;
    the word they replace lives in the hover tooltip. Colours follow the status bar (infamy,
    heat) and the location card badges (intel, security) so the glyphs stay recognisable. */
+/* Every stat effect shares one line: chips flow across it and wrap as a row, each keeping
+   its icon glued to the delta it belongs to. */
+.mission-card-effects__item--stats {
+  display: flex;
+  flex-wrap: wrap;
+  /* Baseline, so the item's absolutely-positioned tone marker takes its static position from
+     the first row rather than being centred across a wrapped one. */
+  align-items: baseline;
+  column-gap: 0.55rem;
+  row-gap: 0.1rem;
+}
+
+.mission-card-effects__stat-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .mission-card-effects__stat {
   display: inline-flex;
   align-items: center;

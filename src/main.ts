@@ -1300,20 +1300,70 @@ function initGameController(
       return [item];
     }
 
-    const stat = MISSION_EFFECT_STAT_BY_KIND[effect.kind];
-    const statPrefix = stat === undefined ? null : `${MISSION_EFFECT_STAT_META[stat].label} `;
     const lines = describeMissionEffect(effect, catalog);
     return lines.map((line) => {
       const item = document.createElement("li");
       item.className = `mission-card-effects__item ${toneClass}`;
-      if (stat !== undefined && statPrefix !== null && line.startsWith(statPrefix)) {
-        item.appendChild(createMissionEffectStatIconEl(stat));
-        item.append(line.slice(statPrefix.length));
-      } else {
-        item.textContent = line;
-      }
+      item.textContent = line;
       return item;
     });
+  }
+
+  /**
+   * One stat effect as an icon + delta chip, or null when the effect names no stat — or when
+   * its line no longer opens with that stat's label, in which case it stays an ordinary line.
+   */
+  function missionEffectStatChipEl(
+    effect: MissionEffect,
+    catalog: ReturnType<typeof loadContent>,
+  ): HTMLElement | null {
+    const stat = MISSION_EFFECT_STAT_BY_KIND[effect.kind];
+    if (stat === undefined) {
+      return null;
+    }
+    const prefix = `${MISSION_EFFECT_STAT_META[stat].label} `;
+    const lines = describeMissionEffect(effect, catalog);
+    const line = lines.length === 1 ? lines[0] : undefined;
+    if (line === undefined || !line.startsWith(prefix)) {
+      return null;
+    }
+    const chip = document.createElement("span");
+    chip.className = "mission-card-effects__stat-chip";
+    chip.appendChild(createMissionEffectStatIconEl(stat));
+    chip.append(line.slice(prefix.length));
+    return chip;
+  }
+
+  /**
+   * List items for one outcome list. Every stat effect collapses into a single line of icon
+   * chips, sitting where the first of them fell in {@link orderedMissionEffects} order; the
+   * rest keep one line each.
+   */
+  function missionEffectListItemEls(
+    effects: readonly MissionEffect[],
+    catalog: ReturnType<typeof loadContent>,
+    tone: "good" | "bad",
+  ): HTMLElement[] {
+    const toneClass =
+      tone === "good" ? "mission-card-effects__item--good" : "mission-card-effects__item--bad";
+    const items: HTMLElement[] = [];
+    let statItem: HTMLElement | null = null;
+
+    for (const effect of effects) {
+      const chip = missionEffectStatChipEl(effect, catalog);
+      if (chip === null) {
+        items.push(...renderMissionEffectItemEls(effect, catalog, tone));
+        continue;
+      }
+      if (statItem === null) {
+        statItem = document.createElement("li");
+        statItem.className = `mission-card-effects__item ${toneClass} mission-card-effects__item--stats`;
+        items.push(statItem);
+      }
+      statItem.appendChild(chip);
+    }
+
+    return items;
   }
 
   function createMissionCardEffectsEl(
@@ -1343,10 +1393,8 @@ function initGameController(
 
       const list = document.createElement("ul");
       list.className = "mission-card-effects__list";
-      for (const eff of successEffects) {
-        for (const item of renderMissionEffectItemEls(eff, catalog, "good")) {
-          list.appendChild(item);
-        }
+      for (const item of missionEffectListItemEls(successEffects, catalog, "good")) {
+        list.appendChild(item);
       }
       group.appendChild(list);
       container.appendChild(group);
@@ -1363,10 +1411,8 @@ function initGameController(
 
       const list = document.createElement("ul");
       list.className = "mission-card-effects__list";
-      for (const eff of failureEffects) {
-        for (const item of renderMissionEffectItemEls(eff, catalog, "bad")) {
-          list.appendChild(item);
-        }
+      for (const item of missionEffectListItemEls(failureEffects, catalog, "bad")) {
+        list.appendChild(item);
       }
       group.appendChild(list);
       container.appendChild(group);
