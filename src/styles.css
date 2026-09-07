@@ -392,7 +392,7 @@ body {
   z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0.5rem;
   padding: 0.4rem 0.6rem 0.5rem;
 }
@@ -429,19 +429,19 @@ body {
   align-items: stretch;
   gap: 1rem;
   min-height: 3rem;
-  padding: 0.3rem 1rem;
+  padding: 0.45rem 1rem 0.3rem;
   border: 1px solid var(--line-1);
   border-top-color: var(--line-2);
   background:
     linear-gradient(0deg, rgba(36, 12, 15, 0.85), rgba(12, 4, 6, 0.92));
   /* Raised center section frames the nav tabs; the shoulders drop 10px at either end. */
   clip-path: polygon(
-    0 10px,
-    calc(18% - 10px) 10px,
+    0 6px,
+    calc(18% - 6px) 6px,
     18% 0,
     82% 0,
-    calc(82% + 10px) 10px,
-    100% 10px,
+    calc(82% + 6px) 6px,
+    100% 6px,
     100% 100%,
     0 100%
   );
@@ -458,8 +458,7 @@ body {
   opacity: 0.7;
 }
 
-.omega-bottombar__brand,
-.omega-bottombar__corner--right {
+.omega-bottombar__brand {
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -475,10 +474,6 @@ body {
   text-transform: uppercase;
   text-shadow: 0 0 8px var(--red-glow-soft);
   white-space: nowrap;
-}
-
-.omega-bottombar__corner--right {
-  animation: tagline-flicker 9s linear infinite;
 }
 
 .omega-bottombar__emblem {
@@ -1432,12 +1427,12 @@ body {
   flex-direction: row;
   align-items: stretch;
   gap: 0.5rem;
-  min-height: 3.1rem;
+  min-height: 2.5rem;
   border: 1px solid var(--line-1);
   background:
     linear-gradient(180deg, rgba(30, 9, 12, 0.6), transparent 55%),
     var(--panel-bg);
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .omega-ticker-bar::before {
@@ -1445,7 +1440,7 @@ body {
   position: absolute;
   left: 10%;
   right: 10%;
-  top: -1px;
+  bottom: -1px;
   height: 1px;
   pointer-events: none;
   background: linear-gradient(
@@ -1566,14 +1561,16 @@ body {
 }
 
 .btn-execute {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   align-self: stretch;
-  min-width: 11rem;
-  margin: 0.3rem 0.4rem;
-  font-size: 1.05rem;
+  min-width: 10rem;
+  min-height: 0;
+  padding: 0.35rem 1.1rem;
+  margin: 0;
+  font-size: 0.9rem;
   font-weight: 900;
-  letter-spacing: 0.3em;
-  text-indent: 0.15em;
+  letter-spacing: 0.26em;
+  text-indent: 0.13em;
   animation: execute-pulse 2.6s ease-in-out infinite;
 }
 

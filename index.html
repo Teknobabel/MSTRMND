@@ -58,6 +58,16 @@
       <section id="screen-game" class="screen screen-game" hidden aria-hidden="true">
         <canvas id="game-canvas" class="game-canvas" aria-label="Game canvas"></canvas>
         <div class="omega-shell">
+          <div class="omega-ticker-bar game-hud" aria-label="Global events">
+            <div class="omega-ticker__label">
+              <span class="omega-ticker__signal" aria-hidden="true"></span>
+              Global Events
+            </div>
+            <div class="omega-ticker" aria-live="off">
+              <div id="global-events-ticker" class="omega-ticker__track"></div>
+            </div>
+          </div>
+
           <div class="omega-statusbar" aria-label="Player status and turn">
             <div id="game-stats" class="game-stats" aria-live="polite"></div>
             <div class="omega-statusbar__right">
@@ -191,19 +201,6 @@
             </main>
           </div>
 
-          <footer class="omega-ticker-bar game-hud" aria-label="Global events and plan actions">
-            <div class="omega-ticker__label">
-              <span class="omega-ticker__signal" aria-hidden="true"></span>
-              Global Events
-            </div>
-            <div class="omega-ticker" aria-live="off">
-              <div id="global-events-ticker" class="omega-ticker__track"></div>
-            </div>
-            <button type="button" class="btn btn-primary btn-execute" id="btn-execute-plan">
-              Execute <span class="btn-execute__chev" aria-hidden="true">&#9656;</span>
-            </button>
-          </footer>
-
           <footer class="omega-bottombar" aria-label="Omega OS navigation">
             <div class="omega-bottombar__brand">
               <span class="omega-bottombar__emblem" aria-hidden="true">
@@ -262,7 +259,9 @@
               </button>
             </nav>
 
-            <span class="omega-bottombar__corner omega-bottombar__corner--right">ALL WILL KNEEL.</span>
+            <button type="button" class="btn btn-primary btn-execute" id="btn-execute-plan">
+              Execute <span class="btn-execute__chev" aria-hidden="true">&#9656;</span>
+            </button>
           </footer>
         </div>
 
