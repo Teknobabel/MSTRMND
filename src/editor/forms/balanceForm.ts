@@ -200,7 +200,7 @@ const GROUPS: BalanceGroup[] = [
     ],
   },
   {
-    legend: "World generation & security",
+    legend: "World generation",
     fields: [
       {
         key: "assetsPerLocationMin",
@@ -232,14 +232,6 @@ const GROUPS: BalanceGroup[] = [
           "How many further map locations start at intel 2, where asset contents are identified and count as revealed for mission targeting. Drawn from the locations not already picked above, so no site starts higher than 2.",
         min: 0,
         max: 99,
-      },
-      {
-        key: "securityGainPerResolvedMission",
-        label: "Security gain per mission",
-        tooltip:
-          "Security added to a location each time a mission resolves there (capped by the location's level). Rising security reveals security traits that add extra requirements to later missions at that site. 0 disables heat buildup entirely.",
-        min: 0,
-        max: 3,
       },
     ],
   },

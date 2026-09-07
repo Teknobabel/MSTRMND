@@ -137,7 +137,12 @@ describe("buildTurnReport — mission results", () => {
     const effects = report.missions[0]!.outcomeGroups.find(
       (g) => g.title === "Success & failure effects",
     );
-    expect(effects?.lines).toHaveLength(2);
+    expect(effects?.lines.map((l) => l.text)).toEqual([
+      "Infamy +5",
+      "Security level at target location +1",
+      "Heat +5",
+      "Security level at target location +1",
+    ]);
     /* Neither good nor bad: half these lines are the payoff and half are the fallout. */
     expect(effects?.lines.every((l) => l.tone === "neutral")).toBe(true);
     expect(lineTexts(report.summary, "missions")).toContain("Case the Bank: Compromised");

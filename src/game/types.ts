@@ -570,8 +570,8 @@ export type MapTemplate = {
  * - `success_chance_bonus` — flat `+percent` on the mission's success chance (stacks across
  *   slots, like every other flat modifier).
  * - `prevent_security_increase` — the mission cannot leave security at its target site higher
- *   than it found it: the automatic post-resolve bump is skipped, and any net rise this
- *   mission's own effects caused there is given back. A reduction still stands.
+ *   than it found it: any net rise this mission's own `security_level_delta*` effects caused
+ *   there is given back. A reduction still stands.
  * - `prevent_heat_increase` — the mission cannot end with the player's heat higher than it
  *   started (the template's own `heat_delta` effects and an Investigator's bonus heat alike).
  *   Reductions still land.
@@ -852,15 +852,13 @@ export type BalanceConfig = {
    * always on offer. A template whose `startingLevel` exceeds `1 + length` can never be drawn.
    */
   hireLevelInfamyThresholds: number[];
-  /* World generation & security */
+  /* World generation */
   assetsPerLocationMin: number;
   assetsPerLocationMax: number;
   /** Playable sites that start at intel 1 (asset slots listed, contents unknown). */
   initialIntelSitesAtOne: number;
   /** Further playable sites that start at intel 2 (asset contents identified); distinct from the above. */
   initialIntelSitesAtTwo: number;
-  /** Security added at the target location when a mission resolves there. */
-  securityGainPerResolvedMission: number;
 };
 
 /** Pre-balance-slice values; the single source for schema defaults and code fallbacks. */
@@ -919,7 +917,6 @@ export const DEFAULT_BALANCE: BalanceConfig = {
   assetsPerLocationMax: 3,
   initialIntelSitesAtOne: 2,
   initialIntelSitesAtTwo: 1,
-  securityGainPerResolvedMission: 1,
 };
 
 export type ContentCatalog = {

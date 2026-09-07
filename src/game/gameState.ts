@@ -737,26 +737,6 @@ export function clampHeat(value: number): number {
 }
 
 /**
- * After a mission finishes at `locationId`, raise that location's security by
- * `catalog.balance.securityGainPerResolvedMission` (cap = location level).
- */
-function raiseSecurityAfterMissionAtLocation(
-  states: LocationSecurityState[],
-  catalog: ContentCatalog,
-  locationId: string,
-): LocationSecurityState[] {
-  const cap = maxSecurityLevelForLocation(catalog, locationId);
-  const gain = catalog.balance.securityGainPerResolvedMission;
-  return states.map((s) => {
-    if (s.locationId !== locationId) {
-      return s;
-    }
-    const next = Math.max(0, Math.min(cap, s.securityLevel + gain));
-    return { ...s, securityLevel: next as 0 | 1 | 2 | 3 };
-  });
-}
-
-/**
  * Set a location's security level (e.g. future events that lower heat). Clamped to
  * `[0, locationLevel]`. Re-hides security traits above the new level automatically via
  * {@link revealedSecurityTraitIds}.
@@ -2553,26 +2533,18 @@ export function executePlan(
 
     const secLoc = getMissionTargetLocationId(am.target);
     if (secLoc !== null) {
-      if (preventSecurityIncrease) {
-        /* The site's guard never got tighter than it already was: no automatic bump, and any
-         * net rise the template's own effects caused here is given back. A *reduction* still
+      if (preventSecurityIncrease && securityBefore !== null) {
+        /* The site's guard never got tighter than it already was: any net rise this mission's
+         * own `security_level_delta*` effects caused here is given back. A *reduction* still
          * stands — the asset caps the mission's effect on security, it does not freeze it.
          * The agents at the site are still flushed into the open below: this hides the traces,
          * not the crew that was standing there watching. */
-        if (securityBefore !== null) {
-          const after = securityLevelForLocation(locationSecurityStates, secLoc);
-          if (after > securityBefore) {
-            locationSecurityStates = locationSecurityStates.map((st) =>
-              st.locationId === secLoc ? { ...st, securityLevel: securityBefore } : st,
-            );
-          }
+        const after = securityLevelForLocation(locationSecurityStates, secLoc);
+        if (after > securityBefore) {
+          locationSecurityStates = locationSecurityStates.map((st) =>
+            st.locationId === secLoc ? { ...st, securityLevel: securityBefore } : st,
+          );
         }
-      } else {
-        locationSecurityStates = raiseSecurityAfterMissionAtLocation(
-          locationSecurityStates,
-          catalog,
-          secLoc,
-        );
       }
       const agentsAtSite = countOpposingAgentsAtLocationFromData(
         opposingAgentInstances,

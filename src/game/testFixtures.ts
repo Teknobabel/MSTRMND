@@ -93,9 +93,18 @@ export function rawFixtureSlices(): FixtureSlices {
         requiredTraitIds: ["t-req"],
         durationTurns: 1,
         /* Standing lives on the template, not in balance — this stands in for the shipped
-         * content's "+5 infamy on a win, +5 heat on a botch" middle of the road. */
-        onSuccessEffects: [{ kind: "infamy_delta", amount: 5 }],
-        onFailureEffects: [{ kind: "heat_delta", amount: 5 }],
+         * content's "+5 infamy on a win, +5 heat on a botch" middle of the road. The
+         * `security_level_delta` on both lists likewise stands in for an authored site bump:
+         * resolving a mission no longer hardens its target on its own, so a fixture that
+         * wants that behavior has to ask for it exactly as shipped content does. */
+        onSuccessEffects: [
+          { kind: "infamy_delta", amount: 5 },
+          { kind: "security_level_delta", delta: 1 },
+        ],
+        onFailureEffects: [
+          { kind: "heat_delta", amount: 5 },
+          { kind: "security_level_delta", delta: 1 },
+        ],
       },
       {
         id: "ms-asset",

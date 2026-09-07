@@ -634,7 +634,7 @@ describe("executePlan", () => {
     }
   });
 
-  it("resolves a fully-matched mission: success, XP, +1 security, +infamy, no heat", () => {
+  it("resolves a fully-matched mission: success, XP, authored security, +infamy, no heat", () => {
     let state = baseState(1);
     state = {
       ...state,
@@ -661,8 +661,47 @@ describe("executePlan", () => {
     const mi1 = next.player.minions.find((m) => m.instanceId === "mi-1");
     expect(mi1?.currentExperience).toBe(1);
     const locA = next.locationSecurityStates.find((s) => s.locationId === "loc-a");
+    /* From `ms-basic`'s own `security_level_delta` on success — not from resolving. */
     expect(locA?.securityLevel).toBe(1);
     expect(next.phase).toBe("summary");
+  });
+
+  it("leaves the target site's security alone when the template authors no security effect", () => {
+    /* Security is no longer a default consequence of resolving: a template that does not ask
+     * for it never hardens its site, on a win or on a botch. */
+    const raw = rawFixtureSlices();
+    const basic = raw.missions[0] as Record<string, unknown>;
+    basic.onSuccessEffects = [{ kind: "infamy_delta", amount: 5 }];
+    basic.onFailureEffects = [{ kind: "heat_delta", amount: 5 }];
+    const quiet = parseCatalog(raw);
+
+    for (const [rng, label] of [
+      [() => 0, "success"],
+      [() => 0.99, "failure"],
+    ] as const) {
+      let state = createInitialGameState(quiet, seededRng(1));
+      state = {
+        ...state,
+        locationRequiredTraits: { "loc-a": [], "loc-b": [] },
+        locationSecurityTraits: { "loc-a": [], "loc-b": [] },
+        player: {
+          ...state.player,
+          /* `t-req` on the success roll, stripped on the failure roll to force 0%. */
+          minions: [makeMinionInstance("mi-1", "m-hero", label === "success" ? ["t-req"] : [])],
+        },
+        activeMissions: [activeMission({ participantInstanceIds: ["mi-1"] })],
+      };
+      const result = executePlan(state, quiet, rng, sequentialIds("ag"));
+      expect(result.ok, label).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+      expect(completedEvents(result.value)[0]?.result, label).toBe(label);
+      expect(
+        result.value.locationSecurityStates.find((s) => s.locationId === "loc-a")?.securityLevel,
+        label,
+      ).toBe(0);
+    }
   });
 
   it("on failure adds heat and a tier increase spawns hidden opposing agents", () => {
@@ -2634,7 +2673,14 @@ describe("compromised missions", () => {
     expect(next.player.heat).toBe(5);
     expect(done[0]!.infamyDelta).toBe(5);
     expect(done[0]!.heatDelta).toBe(5);
-    expect(done[0]!.templateEffectDescriptions).toHaveLength(2);
+    /* Both lists' effects are described, success first — `ms-basic` hardens the site either
+     * way, so the authored bump shows up once per list. */
+    expect(done[0]!.templateEffectDescriptions).toEqual([
+      "Infamy +5",
+      "Security level at target location +1",
+      "Heat +5",
+      "Security level at target location +1",
+    ]);
   });
 
   it("still draws the failure-only agent abilities", () => {

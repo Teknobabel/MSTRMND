@@ -571,11 +571,6 @@ export const balanceConfigSchema = z.object({
   assetsPerLocationMax: balanceInt(0, 10, DEFAULT_BALANCE.assetsPerLocationMax),
   initialIntelSitesAtOne: balanceInt(0, 99, DEFAULT_BALANCE.initialIntelSitesAtOne),
   initialIntelSitesAtTwo: balanceInt(0, 99, DEFAULT_BALANCE.initialIntelSitesAtTwo),
-  securityGainPerResolvedMission: balanceInt(
-    0,
-    3,
-    DEFAULT_BALANCE.securityGainPerResolvedMission,
-  ),
 });
 
 /** One mutually exclusive upgrade tier on a lair. */
