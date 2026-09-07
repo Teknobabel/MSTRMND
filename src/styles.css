@@ -2654,9 +2654,10 @@ body {
 }
 
 /* Infamy, Heat, Intel level and Security level read as their icon inside an effect line;
-   the word they replace lives in the hover tooltip. Colours follow the status bar (infamy,
-   heat) and the location card badges (intel, security) so the glyphs stay recognisable. */
-/* Every stat effect shares one line: chips flow across it and wrap as a row, each keeping
+   the word they replace lives in the hover tooltip. Each one is a stat badge built like the
+   location-card and mission-cost badges, and colours follow the status bar (infamy, heat) and
+   the location card badges (intel, security) so the glyphs stay recognisable. */
+/* Every stat effect shares one line: badges flow across it and wrap as a row, each keeping
    its icon glued to the delta it belongs to. */
 .mission-card-effects__item--stats {
   display: flex;
@@ -2664,51 +2665,63 @@ body {
   /* Baseline, so the item's absolutely-positioned tone marker takes its static position from
      the first row rather than being centred across a wrapped one. */
   align-items: baseline;
-  column-gap: 0.55rem;
-  row-gap: 0.1rem;
+  column-gap: 0.35rem;
+  row-gap: 0.2rem;
 }
 
 .mission-card-effects__stat-chip {
   display: inline-flex;
   align-items: center;
+  gap: 0.22rem;
+  max-width: 100%;
   min-width: 0;
+  padding: 0.08rem 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  background: rgba(30, 10, 13, 0.75);
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+  cursor: help;
+  user-select: none;
+  outline: none;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
 }
 
-.mission-card-effects__stat {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  vertical-align: -0.12em;
-  margin-right: 0.2rem;
-  cursor: help;
-  outline: none;
-  transition: filter 0.15s;
+.mission-card-effects__stat-chip:hover,
+.mission-card-effects__stat-chip:focus-visible {
+  border-color: var(--line-2);
+  background: rgba(44, 13, 17, 0.95);
 }
 
 .mission-card-effects__stat-icon {
-  width: 0.82rem;
-  height: 0.82rem;
+  width: 0.72rem;
+  height: 0.72rem;
   flex-shrink: 0;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.9;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.mission-card-effects__stat--infamy,
-.mission-card-effects__stat--security {
+.mission-card-effects__stat-chip--infamy .mission-card-effects__stat-icon,
+.mission-card-effects__stat-chip--security .mission-card-effects__stat-icon {
   color: var(--red-bright);
 }
 
-.mission-card-effects__stat--heat,
-.mission-card-effects__stat--intel {
+.mission-card-effects__stat-chip--heat .mission-card-effects__stat-icon,
+.mission-card-effects__stat-chip--intel .mission-card-effects__stat-icon {
   color: var(--warn);
 }
 
-.mission-card-effects__stat:hover,
-.mission-card-effects__stat:focus-visible {
-  filter: drop-shadow(0 0 4px currentColor);
+.mission-card-effects__stat-value {
+  min-width: 0;
+  font-weight: 700;
+  color: var(--text-0);
+  word-break: break-word;
 }
 
 .mission-card-effects__asset {
