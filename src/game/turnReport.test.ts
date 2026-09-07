@@ -139,9 +139,9 @@ describe("buildTurnReport — mission results", () => {
     );
     expect(effects?.lines.map((l) => l.text)).toEqual([
       "Infamy +5",
-      "Security level at target location +1",
+      "Security level +1",
       "Heat +5",
-      "Security level at target location +1",
+      "Security level +1",
     ]);
     /* Neither good nor bad: half these lines are the payoff and half are the fallout. */
     expect(effects?.lines.every((l) => l.tone === "neutral")).toBe(true);

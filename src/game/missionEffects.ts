@@ -74,9 +74,9 @@ export function describeMissionEffect(effect: MissionEffect, catalog?: ContentCa
       return [`Gained ${gained}`];
     }
     case "security_level_delta":
-      return [`Security level at target location ${signedInt(effect.delta)}`];
+      return [`Security level ${signedInt(effect.delta)}`];
     case "intel_level_delta":
-      return [`Intel level at target location ${signedInt(effect.delta)}`];
+      return [`Intel level ${signedInt(effect.delta)}`];
     case "intel_level_delta_global":
       return [`Intel level globally ${signedInt(effect.delta)} (all playable locations)`];
     case "intel_level_delta_by_location_type":
