@@ -2677,9 +2677,9 @@ describe("compromised missions", () => {
      * way, so the authored bump shows up once per list. */
     expect(done[0]!.templateEffectDescriptions).toEqual([
       "Infamy +5",
-      "Security level at target location +1",
+      "Security level +1",
       "Heat +5",
-      "Security level at target location +1",
+      "Security level +1",
     ]);
   });
 
