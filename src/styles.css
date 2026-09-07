@@ -392,7 +392,7 @@ body {
   z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 0.5rem;
   padding: 0.4rem 0.6rem 0.5rem;
 }
@@ -421,43 +421,52 @@ body {
     radial-gradient(ellipse 120% 100% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.5) 100%);
 }
 
-/* ---------------- Top bar ---------------- */
+/* ---------------- Bottom bar (brand + nav tabs) ---------------- */
 
-.omega-topbar {
+.omega-bottombar {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 2.4rem;
-  padding: 0 1rem;
+  align-items: stretch;
+  gap: 1rem;
+  min-height: 3rem;
+  padding: 0.3rem 1rem;
   border: 1px solid var(--line-1);
-  border-bottom-color: var(--line-2);
+  border-top-color: var(--line-2);
   background:
-    linear-gradient(180deg, rgba(36, 12, 15, 0.85), rgba(12, 4, 6, 0.92));
+    linear-gradient(0deg, rgba(36, 12, 15, 0.85), rgba(12, 4, 6, 0.92));
+  /* Raised center section frames the nav tabs; the shoulders drop 10px at either end. */
   clip-path: polygon(
-    0 0,
-    100% 0,
-    100% calc(100% - 10px),
-    calc(70% + 60px) calc(100% - 10px),
-    calc(70% + 50px) 100%,
-    calc(30% - 50px) 100%,
-    calc(30% - 60px) calc(100% - 10px),
-    0 calc(100% - 10px)
+    0 10px,
+    calc(18% - 10px) 10px,
+    18% 0,
+    82% 0,
+    calc(82% + 10px) 10px,
+    100% 10px,
+    100% 100%,
+    0 100%
   );
 }
 
-.omega-topbar::before {
+.omega-bottombar::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  top: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--red) 35%, var(--red) 65%, transparent);
   opacity: 0.7;
 }
 
-.omega-topbar__corner {
+.omega-bottombar__brand,
+.omega-bottombar__corner--right {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 0 0 auto;
+}
+
+.omega-bottombar__corner {
   font-family: var(--font-display);
   font-size: 0.66rem;
   font-weight: 500;
@@ -468,23 +477,19 @@ body {
   white-space: nowrap;
 }
 
-.omega-topbar__corner--right {
+.omega-bottombar__corner--right {
   animation: tagline-flicker 9s linear infinite;
 }
 
-.omega-topbar__emblem {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  transform: translateX(-50%);
+.omega-bottombar__emblem {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 4.5rem;
-  height: 100%;
+  flex-shrink: 0;
+  width: 2rem;
 }
 
-.omega-topbar__emblem-mark {
+.omega-bottombar__emblem-mark {
   font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 900;
@@ -1027,7 +1032,7 @@ body {
   flex-direction: row;
   align-items: center;
   gap: 0.65rem;
-  margin: 0 0 0.25rem;
+  margin: 0 0 0.5rem;
   padding: 0.5rem;
   flex-shrink: 0;
   border: 1px solid var(--line-1);
@@ -1095,25 +1100,30 @@ body {
   white-space: nowrap;
 }
 
-/* Nav menu */
+/* Nav tabs (bottom bar) */
 .game-panel-menu {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
   gap: 0.25rem;
-  margin: 0 0 0.5rem;
-  flex-shrink: 0;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .game-panel-menu__button {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0.6rem;
+  justify-content: center;
+  gap: 0.5rem;
   min-height: 36px;
-  width: 100%;
-  padding: 0.35rem 0.6rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0.35rem 0.85rem;
   border: 1px solid transparent;
-  border-left: 2px solid var(--line-1);
+  border-top: 2px solid var(--line-1);
   background: rgba(26, 8, 11, 0.35);
   color: var(--text-2);
   font-family: var(--font-display);
@@ -1121,9 +1131,10 @@ body {
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  text-align: left;
+  text-align: center;
+  white-space: nowrap;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s, padding-left 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 
 .nav-icon {
@@ -1150,15 +1161,14 @@ body {
 .game-panel-menu__button:hover {
   color: var(--text-0);
   background: rgba(46, 13, 17, 0.55);
-  border-left-color: var(--line-2);
+  border-top-color: var(--line-2);
 }
 
 .game-panel-menu__button--active,
 .game-panel-menu__button[aria-pressed="true"] {
   color: var(--red-bright);
-  background: linear-gradient(90deg, rgba(232, 17, 45, 0.18), rgba(232, 17, 45, 0.03));
-  border-left-color: var(--red-bright);
-  padding-left: 0.8rem;
+  background: linear-gradient(180deg, rgba(232, 17, 45, 0.18), rgba(232, 17, 45, 0.03));
+  border-top-color: var(--red-bright);
   text-shadow: 0 0 8px var(--red-glow-soft);
 }
 
@@ -1168,9 +1178,8 @@ body {
 }
 
 .game-panel-menu__button--system {
-  margin-top: 0.35rem;
-  border-top: 1px solid var(--line-0);
-  padding-top: 0.5rem;
+  margin-left: 0.5rem;
+  border-left: 1px solid var(--line-0);
 }
 
 /* Plan column stack */

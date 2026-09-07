@@ -58,14 +58,6 @@
       <section id="screen-game" class="screen screen-game" hidden aria-hidden="true">
         <canvas id="game-canvas" class="game-canvas" aria-label="Game canvas"></canvas>
         <div class="omega-shell">
-          <header class="omega-topbar" aria-label="Omega OS header">
-            <span class="omega-topbar__corner omega-topbar__corner--left">OMEGA OS v0.0.1</span>
-            <div class="omega-topbar__emblem" aria-hidden="true">
-              <span class="omega-topbar__emblem-mark">&Omega;</span>
-            </div>
-            <span class="omega-topbar__corner omega-topbar__corner--right">ALL WILL KNEEL.</span>
-          </header>
-
           <div class="omega-statusbar" aria-label="Player status and turn">
             <div id="game-stats" class="game-stats" aria-live="polite"></div>
             <div class="omega-statusbar__right">
@@ -104,55 +96,6 @@
                   <p id="organization-name" class="organization-name game-player-profile__org"></p>
                 </div>
               </header>
-              <nav class="game-panel-menu" aria-label="Game panel navigation">
-                <button type="button" class="game-panel-menu__button" data-game-menu="dashboard" aria-pressed="true">
-                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M3 10.5 12 3l9 7.5" />
-                    <path d="M5.5 9.5V21h13V9.5" />
-                  </svg>
-                  <span>Dashboard</span>
-                </button>
-                <button type="button" class="game-panel-menu__button" data-game-menu="omega" aria-pressed="false">
-                  <span class="nav-icon nav-icon--text" aria-hidden="true">&Omega;</span>
-                  <span>Omega Plan</span>
-                </button>
-                <button type="button" class="game-panel-menu__button" data-game-menu="missions" aria-pressed="false">
-                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <circle cx="12" cy="12" r="7.5" />
-                    <circle cx="12" cy="12" r="2.5" />
-                    <path d="M12 1.5v3.5m0 14v3.5M1.5 12H5m14 0h3.5" />
-                  </svg>
-                  <span>Missions</span>
-                </button>
-                <button type="button" class="game-panel-menu__button" data-game-menu="minions" aria-pressed="false">
-                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <circle cx="12" cy="7.5" r="4" />
-                    <path d="M4.5 21v-1.5a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6V21" />
-                  </svg>
-                  <span>Minions</span>
-                </button>
-                <button type="button" class="game-panel-menu__button" data-game-menu="locations" aria-pressed="false">
-                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M12 21s-7-5.7-7-11a7 7 0 0 1 14 0c0 5.3-7 11-7 11Z" />
-                    <circle cx="12" cy="10" r="2.5" />
-                  </svg>
-                  <span>Locations</span>
-                </button>
-                <button type="button" class="game-panel-menu__button" data-game-menu="lair" aria-pressed="false">
-                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M4 21V9l8-6 8 6v12" />
-                    <path d="M10 21v-6h4v6" />
-                  </svg>
-                  <span>Lair</span>
-                </button>
-                <button type="button" class="game-panel-menu__button game-panel-menu__button--system" id="btn-game-panel-system">
-                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M12 2.5v3m0 13v3M2.5 12h3m13 0h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19" />
-                  </svg>
-                  <span>System</span>
-                </button>
-              </nav>
               <div class="plan-column-stack">
                 <h2 id="plan-panel-title" class="game-panel-title">Mission Planning</h2>
                 <div
@@ -259,6 +202,67 @@
             <button type="button" class="btn btn-primary btn-execute" id="btn-execute-plan">
               Execute <span class="btn-execute__chev" aria-hidden="true">&#9656;</span>
             </button>
+          </footer>
+
+          <footer class="omega-bottombar" aria-label="Omega OS navigation">
+            <div class="omega-bottombar__brand">
+              <span class="omega-bottombar__emblem" aria-hidden="true">
+                <span class="omega-bottombar__emblem-mark">&Omega;</span>
+              </span>
+              <span class="omega-bottombar__corner">OMEGA OS v0.0.1</span>
+            </div>
+
+            <nav class="game-panel-menu" aria-label="Game panel navigation">
+              <button type="button" class="game-panel-menu__button" data-game-menu="dashboard" aria-pressed="true">
+                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M3 10.5 12 3l9 7.5" />
+                  <path d="M5.5 9.5V21h13V9.5" />
+                </svg>
+                <span>Dashboard</span>
+              </button>
+              <button type="button" class="game-panel-menu__button" data-game-menu="omega" aria-pressed="false">
+                <span class="nav-icon nav-icon--text" aria-hidden="true">&Omega;</span>
+                <span>Omega Plan</span>
+              </button>
+              <button type="button" class="game-panel-menu__button" data-game-menu="missions" aria-pressed="false">
+                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="7.5" />
+                  <circle cx="12" cy="12" r="2.5" />
+                  <path d="M12 1.5v3.5m0 14v3.5M1.5 12H5m14 0h3.5" />
+                </svg>
+                <span>Missions</span>
+              </button>
+              <button type="button" class="game-panel-menu__button" data-game-menu="minions" aria-pressed="false">
+                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="7.5" r="4" />
+                  <path d="M4.5 21v-1.5a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6V21" />
+                </svg>
+                <span>Minions</span>
+              </button>
+              <button type="button" class="game-panel-menu__button" data-game-menu="locations" aria-pressed="false">
+                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M12 21s-7-5.7-7-11a7 7 0 0 1 14 0c0 5.3-7 11-7 11Z" />
+                  <circle cx="12" cy="10" r="2.5" />
+                </svg>
+                <span>Locations</span>
+              </button>
+              <button type="button" class="game-panel-menu__button" data-game-menu="lair" aria-pressed="false">
+                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M4 21V9l8-6 8 6v12" />
+                  <path d="M10 21v-6h4v6" />
+                </svg>
+                <span>Lair</span>
+              </button>
+              <button type="button" class="game-panel-menu__button game-panel-menu__button--system" id="btn-game-panel-system">
+                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 2.5v3m0 13v3M2.5 12h3m13 0h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19" />
+                </svg>
+                <span>System</span>
+              </button>
+            </nav>
+
+            <span class="omega-bottombar__corner omega-bottombar__corner--right">ALL WILL KNEEL.</span>
           </footer>
         </div>
 
