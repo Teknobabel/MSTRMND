@@ -2896,8 +2896,16 @@ function initGameController(
         ? formatTargetLocationFilters(mission, targetLocationDisplayName)
         : null;
       const targetTypeLabel = formatMissionTargetTypeLabel(mission.targetType);
+      // A mission pinned to specific sites already names them, so the generic "Location"
+      // prefix adds nothing — show the site filters on their own.
+      const dropTargetTypeLabel =
+        mission.targetType === "location" && (mission.targetLocationIds?.length ?? 0) > 0;
       const targetValue =
-        siteFilters !== null ? `${targetTypeLabel} - ${siteFilters}` : targetTypeLabel;
+        siteFilters === null
+          ? targetTypeLabel
+          : dropTargetTypeLabel
+            ? siteFilters
+            : `${targetTypeLabel} - ${siteFilters}`;
 
       const statsRow = createMissionCardStatsRow({
         target: targetValue,
