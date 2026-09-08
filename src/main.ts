@@ -3156,7 +3156,15 @@ function initGameController(
       assignChanceEl.title = "Stage a mission, target and minions to see the odds.";
       return;
     }
-    assignChanceValueEl.textContent = `${pct}%`;
+    /* The digits carry the reading, so they get the size; the sign rides along small enough
+     * that a three-digit 100% still clears the ring. */
+    const digits = document.createElement("span");
+    digits.className = "plan-chance__value-num";
+    digits.textContent = String(pct);
+    const sign = document.createElement("span");
+    sign.className = "plan-chance__value-pct";
+    sign.textContent = "%";
+    assignChanceValueEl.replaceChildren(digits, sign);
     assignChanceNoteEl.textContent = successChanceNote(pct);
     assignChanceEl.title = formatMissionSuccessChanceTooltipLines(
       staged.breakdown,
