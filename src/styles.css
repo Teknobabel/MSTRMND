@@ -3395,8 +3395,26 @@ body {
   object-fit: fill;
 }
 
-.map-marker {
+/* The GPU art layer, when WebGL2 is available. Same box as the image it stands in for: the
+ * backing store is sized separately in device pixels, this only says where it sits. */
+.map-plot__gl {
   position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Placed by the projector, not by CSS percentages: `syncMapProjection` writes --map-px/--map-py
+ * in the plot's own layout pixels and the transform below is the only thing that reads them.
+ * The negative margin still does the centring, so the dot sits on the site rather than beside it. */
+.map-marker {
+  --map-px: 0px;
+  --map-py: 0px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(var(--map-px), var(--map-py));
   width: 1.15rem;
   height: 1.15rem;
   margin: -0.575rem 0 0 -0.575rem;
@@ -3508,15 +3526,22 @@ body {
  * The stack itself is inert so it never steals a click from a marker underneath it; only the
  * callout boxes take the pointer, and hovering one names the operation. */
 .map-callout-stack {
+  --map-px: 0px;
+  --map-py: 0px;
   --callout-x: -50%;
   --callout-y: calc(-100% - 0.75rem);
   --callout-anchor: 50%;
   position: absolute;
+  left: 0;
+  top: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.2rem;
-  transform: translate(var(--callout-x), var(--callout-y));
+  /* Site first, then the stack's own offset off the pin: the second translate is a percentage
+   * of the stack's own box, so the order is what keeps the leader line landing on the dot. */
+  transform: translate(var(--map-px), var(--map-py))
+    translate(var(--callout-x), var(--callout-y));
   pointer-events: none;
   z-index: 2;
 }
@@ -3595,6 +3620,13 @@ body {
   font-size: 0.6rem;
   line-height: 20px;
   color: var(--text-2);
+}
+
+/* A pin the projector reports as not visible. Spelled out rather than left to the UA's
+ * `[hidden]` rule, which the stack's own `display: flex` would otherwise win against. */
+.map-marker[hidden],
+.map-callout-stack[hidden] {
+  display: none;
 }
 
 .map-panel-empty {

@@ -28,6 +28,7 @@ import type {
   DynamicTrait,
   LocationAssetSlot,
   LocationType,
+  MapMarker,
   MinionInstance,
   MissionEffect,
   MissionSource,
@@ -109,6 +110,21 @@ import {
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation, type NavigationApi } from "./navigation";
 import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
+import {
+  createFlatProjector,
+  createMatrixProjector,
+  flatMapMatrix,
+  type MapProjector,
+  type PlotSize,
+} from "./ui/map/projection";
+import { createMapPlaneRenderer, type MapPlaneRenderer } from "./ui/map/planeRenderer";
+import {
+  easeMapLean,
+  mapCameraFrame,
+  type MapCameraFocus,
+  type MapCameraFrame,
+} from "./ui/map/camera";
+import { mapSiteSignals, type MapSiteSignal } from "./ui/map/siteSignals";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
@@ -436,8 +452,16 @@ function drawGameFrame(timeMs: number): void {
 
 let rafId: number | null = null;
 
+/**
+ * Set by the game controller so the map animates off the one loop the shell already runs.
+ * A second `requestAnimationFrame` would double the wake-ups on a phone for no reason, and
+ * would keep running after `stopGameLoop` had put the rest of the shell to sleep.
+ */
+let mapFrameHook: ((timeMs: number) => void) | null = null;
+
 function tick(timeMs: number): void {
   drawGameFrame(timeMs);
+  mapFrameHook?.(timeMs);
   rafId = requestAnimationFrame(tick);
 }
 
@@ -1745,6 +1769,11 @@ function initGameController(
 
   function onAssignSlotsChanged(): void {
     syncAssignButtonState();
+    /* The map reads the staged plan too — the targeted pin, the glow under it, and the lean of
+     * the camera all come from `assignTarget`. Before this, staging a target left the map
+     * showing the previous one until something else forced a render, which is why the
+     * `map-marker--targeted` styling never appeared on a plain pin click. */
+    renderMapPanel();
   }
 
   type MissionDragPayload =
@@ -5359,11 +5388,313 @@ function initGameController(
   }
 
   /**
+   * Everything that has to stay glued to a site, paired with the marker it was plotted from.
+   * The projector owns the placement now (see `ui/map/projection`), so nothing here is
+   * positioned by CSS percentages; `renderMapPanel` rebuilds this list and `syncMapProjection`
+   * replays it whenever the plot changes size — and, once the art underneath is animated,
+   * once per frame.
+   */
+  interface ProjectedMapEl {
+    readonly el: HTMLElement;
+    readonly marker: MapMarker;
+  }
+  let mapProjectedEls: ProjectedMapEl[] = [];
+  let mapPlotEl: HTMLElement | null = null;
+  /* Survives a re-render on purpose: this is the panel's size, not the plot element's
+   * identity, and reusing it spares the first sync the rounded `offsetWidth` fallback. */
+  let mapPlotSize: PlotSize | null = null;
+
+  /**
+   * The GPU map. Created once per art URL and deliberately **not** rebuilt by `renderMapPanel`
+   * — that function runs on every state change and starts by emptying the panel, so building a
+   * context there would burn through the browser's cap on live WebGL contexts within a few
+   * turns. Only its canvas is re-parented into each new plot.
+   */
+  let mapRenderer: MapPlaneRenderer | null = null;
+  let mapRendererArt: string | null = null;
+  /** Set once this run has given up on WebGL, so a fallback is never retried into a loop. */
+  let mapRendererDisabled = false;
+  /**
+   * The camera the plane is drawn with and the pins are placed by, in that order of authority.
+   * Rebuilt every frame while the map is animating; the pins read `mapCamera.land` through
+   * `createMatrixProjector`, which is what keeps them on their sites through the drift.
+   */
+  let mapCamera: MapCameraFrame = { land: flatMapMatrix(), grid: flatMapMatrix() };
+  let mapProjector: MapProjector = createFlatProjector();
+  /** When the map view opened, so the drift starts from rest rather than mid-swing. */
+  let mapEpochMs: number | null = null;
+  let mapTimeSeconds = 0;
+  let mapLastFrameMs: number | null = null;
+
+  /** What each lit site is saying, rebuilt from game state on every render. */
+  let mapSignals: readonly MapSiteSignal[] = [];
+
+  /**
+   * Where the camera is leaning, and where it is being asked to lean.
+   *
+   * Kept apart so the lean can be eased rather than snapped: staging a target should draw the
+   * eye, and a map that jumps to a new angle the instant a card is dropped reads as a glitch.
+   * The eased pair also handles the target *changing* mid-lean, which a single value could not.
+   */
+  let mapFocusGoal: { u: number; v: number } | null = null;
+  let mapFocus: MapCameraFocus = { u: 0.5, v: 0.5, amount: 0 };
+
+  /**
+   * The same idea for the pointer: where it is over the map, and how far the map has leaned
+   * toward it so far. `null` goal means the pointer is not over the map and the lean is
+   * relaxing back out.
+   */
+  let mapPointerGoal: { u: number; v: number } | null = null;
+  let mapPointer: MapCameraFocus = { u: 0.5, v: 0.5, amount: 0 };
+  /**
+   * The plot's on-screen rect, cached.
+   *
+   * A pointer move cannot read it directly: the frame loop writes a transform onto every pin,
+   * so a `getBoundingClientRect` in the move handler would force a synchronous layout on each
+   * one. Refreshed instead when the pointer enters, when the plot resizes, and when the window
+   * does — the last because the stage scale is a transform, which changes the on-screen rect
+   * without changing the layout box the observer watches.
+   */
+  let mapPlotRect: DOMRect | null = null;
+
+  /** The uniform scale `ui/stageScale` puts on the shell, as a number. */
+  function stageScaleFactor(): number {
+    const raw = Number(
+      getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"),
+    );
+    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+  }
+
+  /**
+   * Give up on the GPU map for the rest of the session and redraw the panel with the plain
+   * image layer. Reached when there is no WebGL2, when the art will not load, or when the
+   * context is lost — a backgrounded phone tab is the common one, and the map coming back as a
+   * black rectangle would be worse than it coming back flat.
+   */
+  function fallBackToImageMap(): void {
+    if (mapRendererDisabled) {
+      return;
+    }
+    mapRendererDisabled = true;
+    mapRenderer?.dispose();
+    mapRenderer = null;
+    mapRendererArt = null;
+    mapProjector = createFlatProjector();
+    renderMapPanel();
+  }
+
+  /**
+   * Someone who has asked their system for less motion still gets the tilt — a still, angled
+   * map is a layout, not an animation — but the drift and the sweep are held at rest.
+   */
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  /**
+   * Rebuild the camera for `mapTimeSeconds`. Split out from the frame hook because a re-render
+   * or a resize also has to reproject the pins, and doing that against a stale camera would
+   * snap every marker back to wherever the map was a frame ago.
+   */
+  /**
+   * The plot's box, or `null` when there is nothing to draw into.
+   *
+   * `offsetWidth` serves only as a bootstrap for the first sync of a run: it rounds to whole
+   * pixels (1071 for a plot that is really 1070.53 wide), which is enough to walk a pin at the
+   * right-hand edge half a pixel off the land it was authored on. The observer's box sizes are
+   * fractional and, unlike a client rect, are read in the same pre-scale layout space the
+   * transforms are written in — so `scale(var(--ui-scale))` and the portrait `rotate(90deg)`
+   * cannot skew them. A zero box means another dashboard menu has the space; the observer runs
+   * everything again when the panel comes back.
+   */
+  /** Cache the plot's on-screen rect for the pointer maths; see `mapPlotRect`. */
+  function refreshMapPlotRect(): void {
+    mapPlotRect = mapPlotEl?.getBoundingClientRect() ?? null;
+  }
+
+  function currentPlotSize(): PlotSize | null {
+    if (mapPlotEl === null) {
+      return null;
+    }
+    const size = mapPlotSize ?? {
+      width: mapPlotEl.offsetWidth,
+      height: mapPlotEl.offsetHeight,
+    };
+    return size.width > 0 && size.height > 0 ? size : null;
+  }
+
+  function updateMapCamera(): void {
+    const plot = currentPlotSize();
+    if (mapRenderer === null || plot === null) {
+      return;
+    }
+    mapCamera = mapCameraFrame({
+      aspect: plot.width / plot.height,
+      timeSeconds: mapTimeSeconds,
+      tilt: 1,
+      drift: reducedMotion.matches ? 0 : 1,
+      focus: mapFocus,
+      pointer: mapPointer,
+    });
+  }
+
+  /**
+   * One frame of the map. Cheap by construction: the camera is sixteen numbers, the draw is two
+   * quads, and the marker pass writes two custom properties per pin without reading layout. The
+   * early return is what keeps it free while another dashboard menu owns the panel — the
+   * observer reports a hidden panel as a zero box, and there is nothing to animate.
+   */
+  function drawMapFrame(timeMs: number): void {
+    if (mapRenderer === null || currentPlotSize() === null) {
+      return;
+    }
+    if (reducedMotion.matches) {
+      /* Still needs the one draw that a resize or a re-render asks for, but no clock. */
+      return;
+    }
+    mapEpochMs ??= timeMs;
+    const deltaSeconds =
+      mapLastFrameMs === null ? 0 : Math.min((timeMs - mapLastFrameMs) / 1000, 0.1);
+    mapLastFrameMs = timeMs;
+    mapTimeSeconds = (timeMs - mapEpochMs) / 1000;
+    mapFocus = easeMapLean(mapFocus, mapFocusGoal, deltaSeconds, MAP_FOCUS_EASE_SECONDS);
+    mapPointer = easeMapLean(
+      mapPointer,
+      mapPointerGoal,
+      deltaSeconds,
+      MAP_POINTER_EASE_SECONDS,
+    );
+    updateMapCamera();
+    syncMapProjection();
+  }
+
+  /** Seconds for the lean to close most of the distance to a newly staged target. */
+  const MAP_FOCUS_EASE_SECONDS = 0.22;
+  /** The pointer lean is quicker: it is answering a hand, and lag reads as the map being
+   *  stuck rather than as the map being calm. */
+  const MAP_POINTER_EASE_SECONDS = 0.13;
+
+  /**
+   * Push the projector's answer for every registered element into the custom properties the
+   * stylesheet composes into a transform. Deliberately cheap enough to run per frame: one
+   * projection and two property writes per pin, and no layout read inside the loop.
+   */
+  function syncMapProjection(): void {
+    const plot = currentPlotSize();
+    if (plot === null || mapProjectedEls.length === 0) {
+      return;
+    }
+    if (mapRenderer !== null) {
+      /* The stage scale is a transform, so a plot that is 1070 layout px wide covers
+       * 1070 * uiScale real pixels; without that factor the map goes soft on a monitor large
+       * enough to scale the shell up. Clamped inside the renderer. */
+      mapRenderer.resize(plot, window.devicePixelRatio * stageScaleFactor());
+      mapRenderer.draw({
+        ...mapCamera,
+        timeSeconds: mapTimeSeconds,
+        aspect: plot.width / plot.height,
+        signals: mapSignals,
+      });
+    }
+    for (const { el, marker } of mapProjectedEls) {
+      const projected = mapProjector.project(marker, plot);
+      el.style.setProperty("--map-px", `${projected.x.toFixed(2)}px`);
+      el.style.setProperty("--map-py", `${projected.y.toFixed(2)}px`);
+      el.hidden = !projected.visible;
+    }
+  }
+
+  /* The plot resizes when the dashboard swaps between the map tile and the fullscreen
+   * single-panel view, and when it is revealed again after another menu had the space.
+   * Observing also fires once immediately, which is what upgrades the bootstrap size above to
+   * the real fractional one. */
+  /* The drawing buffer is not preserved (keeping it would cost a full-size copy every frame on
+   * exactly the phones this shell is tight for), so the compositor's copy is the only thing
+   * holding the last frame. A tab that gets backgrounded and restored can come back with that
+   * copy gone and nothing to repaint from — a black map. Redrawing on the way back in costs one
+   * frame and removes the whole class of it. The animation loop in a later step subsumes this. */
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      syncMapProjection();
+    }
+  });
+
+  /* The shell's own loop drives the map; see `mapFrameHook`. */
+  mapFrameHook = drawMapFrame;
+
+  /**
+   * Pointer parallax: the map leans a little toward where the hand is.
+   *
+   * Only for a fine pointer. On touch there is no hover to answer, and a portrait phone rotates
+   * the whole stage 90 degrees, which would put a client rect's axes at odds with the map's —
+   * gating here means that case never has to be reasoned about. Bound to the panel rather than
+   * the plot because `renderMapPanel` replaces the plot on every state change and would drop a
+   * listener attached to it; events from the pins inside bubble up here anyway.
+   */
+  const finePointer = window.matchMedia("(pointer: fine)");
+
+  function updateMapPointerGoal(event: PointerEvent): void {
+    if (!finePointer.matches || reducedMotion.matches || mapPlotRect === null) {
+      return;
+    }
+    const { left, top, width, height } = mapPlotRect;
+    if (width === 0 || height === 0) {
+      return;
+    }
+    /* A ratio of the on-screen rect, so the stage scale cancels out and this needs no knowledge
+     * of `--ui-scale`. Clamped because a pin near the edge can overhang the plot slightly. */
+    const u = Math.min(Math.max((event.clientX - left) / width, 0), 1);
+    const v = Math.min(Math.max((event.clientY - top) / height, 0), 1);
+    mapPointerGoal = { u, v };
+  }
+
+  mapPanelEl.addEventListener("pointerenter", (event: PointerEvent) => {
+    refreshMapPlotRect();
+    updateMapPointerGoal(event);
+  });
+  mapPanelEl.addEventListener("pointermove", updateMapPointerGoal);
+  mapPanelEl.addEventListener("pointerleave", () => {
+    mapPointerGoal = null;
+  });
+  /* A pointer that is picked up rather than moved out — a drag ending, the window losing focus,
+   * a pen leaving range — never sends `pointerleave`, and the map would stay leaning. */
+  mapPanelEl.addEventListener("pointercancel", () => {
+    mapPointerGoal = null;
+  });
+  window.addEventListener("blur", () => {
+    mapPointerGoal = null;
+  });
+  /* The stage scale is a transform, so the plot's on-screen rect moves on a window resize
+   * without its layout box changing — which means the ResizeObserver never hears about it. */
+  window.addEventListener("resize", refreshMapPlotRect);
+
+  reducedMotion.addEventListener("change", () => {
+    /* Turning the preference on mid-session must settle the map where it stands rather than
+     * leave it frozen mid-drift on the next frame that never comes. */
+    updateMapCamera();
+    syncMapProjection();
+  });
+
+  const mapPlotResizeObserver = new ResizeObserver((entries) => {
+    /* Horizontal writing mode throughout, so inline/block are width/height. */
+    const box = entries[entries.length - 1]?.contentBoxSize?.[0];
+    if (box !== undefined) {
+      mapPlotSize = { width: box.inlineSize, height: box.blockSize };
+    }
+    /* The camera is built around the panel's aspect, so a resize invalidates it before the
+     * pins can be reprojected. */
+    updateMapCamera();
+    refreshMapPlotRect();
+    syncMapProjection();
+  });
+
+  /**
    * The run's map with its sites plotted on it. Markers carry the same drag payload as location
    * cards, so the map is a second way to pick a mission target rather than a picture of one.
    */
   function renderMapPanel(): void {
     mapPanelEl.innerHTML = "";
+    mapPlotResizeObserver.disconnect();
+    mapProjectedEls = [];
+    mapPlotEl = null;
 
     const plan =
       state.activeOmegaPlanId !== null
@@ -5386,12 +5717,43 @@ function initGameController(
     const plot = document.createElement("div");
     plot.className = "map-plot";
 
-    const art = document.createElement("img");
-    art.className = "map-plot__art";
-    art.src = map.mapArt;
-    art.alt = `${map.name}. ${map.description}`;
-    art.decoding = "async";
-    plot.appendChild(art);
+    const artDescription = `${map.name}. ${map.description}`;
+    if (!mapRendererDisabled && mapRendererArt !== map.mapArt) {
+      mapRenderer?.dispose();
+      mapRendererArt = map.mapArt;
+      mapRenderer = createMapPlaneRenderer(
+        map.mapArt,
+        () => {
+          syncMapProjection();
+        },
+        fallBackToImageMap,
+      );
+      /* No WebGL2 on this device: settle on the image layer now rather than checking again on
+       * every render for the rest of the run. */
+      if (mapRenderer === null) {
+        mapRendererDisabled = true;
+        mapRendererArt = null;
+      }
+      /* The pins ride the land plane, not the grid floating above it. */
+      mapProjector =
+        mapRenderer !== null
+          ? createMatrixProjector(() => mapCamera.land)
+          : createFlatProjector();
+    }
+
+    if (mapRenderer !== null) {
+      /* The art is the panel's only content, so the canvas carries its description. */
+      mapRenderer.canvas.setAttribute("role", "img");
+      mapRenderer.canvas.setAttribute("aria-label", artDescription);
+      plot.appendChild(mapRenderer.canvas);
+    } else {
+      const art = document.createElement("img");
+      art.className = "map-plot__art";
+      art.src = map.mapArt;
+      art.alt = artDescription;
+      art.decoding = "async";
+      plot.appendChild(art);
+    }
 
     const playable = new Set(runLocations().map((l) => l.id));
     const mainOnly = state.phase === "main";
@@ -5415,7 +5777,31 @@ function initGameController(
       }
     }
 
-    for (const marker of map.markers ?? []) {
+    /* What the map is allowed to say about play, recomputed from the same facts the pins are
+     * styled from so the glow under a marker can never contradict the marker itself. */
+    const markers = map.markers ?? [];
+    mapSignals = mapSiteSignals({
+      markers,
+      playableLocationIds: playable,
+      securityLevelByLocation: new Map(
+        state.locationSecurityStates.map((row) => [row.locationId, row.securityLevel]),
+      ),
+      maxSecurityByLocation: new Map(
+        markers.map((m) => [m.locationId, maxSecurityLevelForLocation(content, m.locationId)]),
+      ),
+      operationLocationIds: new Set(missionsByLocation.keys()),
+      targetedLocationId,
+    });
+
+    /* The camera leans at whatever is staged, and settles back when nothing is. */
+    const focusMarker =
+      targetedLocationId === null
+        ? undefined
+        : markers.find((m) => m.locationId === targetedLocationId);
+    mapFocusGoal =
+      focusMarker === undefined ? null : { u: focusMarker.x / 100, v: focusMarker.y / 100 };
+
+    for (const marker of markers) {
       const loc = getLocationById(content, marker.locationId);
       if (loc === undefined || !playable.has(loc.id)) {
         continue;
@@ -5429,8 +5815,7 @@ function initGameController(
       pin.type = "button";
       pin.className = `map-marker map-marker--${loc.locationType}`;
       pin.dataset.locationId = loc.id;
-      pin.style.left = `${marker.x}%`;
-      pin.style.top = `${marker.y}%`;
+      mapProjectedEls.push({ el: pin, marker });
       if (intel === 0) {
         pin.classList.add("map-marker--dark");
       }
@@ -5486,8 +5871,7 @@ function initGameController(
       if (running.length > 0) {
         const stack = document.createElement("div");
         stack.className = "map-callout-stack";
-        stack.style.left = `${marker.x}%`;
-        stack.style.top = `${marker.y}%`;
+        mapProjectedEls.push({ el: stack, marker });
         /* Sit above the pin unless that would run off the top of the plot, and pull the stack
          * back inside the frame when the pin hugs a side. */
         if (marker.y < 22) {
@@ -5506,6 +5890,13 @@ function initGameController(
     }
 
     mapPanelEl.appendChild(plot);
+    mapPlotEl = plot;
+    /* Build the camera and place the pins before this frame paints, then let the observer keep
+     * them honest; observing alone would flash the map flat with every marker stacked at the
+     * plot's top-left corner for a frame. */
+    updateMapCamera();
+    syncMapProjection();
+    mapPlotResizeObserver.observe(plot);
   }
 
   function renderLairPanel(): void {
