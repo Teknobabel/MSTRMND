@@ -137,21 +137,49 @@
                         <span class="game-field-label">Minions</span>
                         <div id="assign-minions-list"></div>
                       </div>
+                      <div id="assign-support-assets-fieldset" class="game-field" hidden>
+                        <span class="game-field-label" id="assign-support-assets-label">Support</span>
+                        <div id="assign-support-assets-list"></div>
+                      </div>
                       <div id="assign-asset-slots-fieldset" class="game-field" hidden>
                         <span class="game-field-label">Required Assets</span>
                         <div id="assign-asset-slots-list"></div>
-                      </div>
-                      <div id="assign-support-assets-fieldset" class="game-field" hidden>
-                        <span class="game-field-label" id="assign-support-assets-label">Support Assets</span>
-                        <div id="assign-support-assets-list"></div>
                       </div>
                     </div>
                   </div>
                 </div>
                 <div class="plan-column-footer">
+                  <section
+                    id="assign-requirements"
+                    class="plan-reqs"
+                    aria-labelledby="assign-requirements-label"
+                  >
+                    <div class="plan-reqs__head">
+                      <span id="assign-requirements-label" class="plan-reqs__label">Requirements</span>
+                      <span id="assign-requirements-tally" class="plan-reqs__tally"></span>
+                    </div>
+                    <div id="assign-requirements-list" class="plan-reqs__list"></div>
+                  </section>
+                  <div
+                    id="assign-chance"
+                    class="plan-chance"
+                    role="group"
+                    aria-label="Mission success chance"
+                  >
+                    <div class="plan-chance__dial">
+                      <svg class="plan-chance__ring" viewBox="0 0 44 44" aria-hidden="true">
+                        <circle class="plan-chance__ring-track" cx="22" cy="22" r="19" />
+                        <circle class="plan-chance__ring-fill" cx="22" cy="22" r="19" />
+                      </svg>
+                      <span id="assign-chance-value" class="plan-chance__value">--</span>
+                    </div>
+                    <div class="plan-chance__text">
+                      <span class="plan-chance__label">Success Chance</span>
+                      <span id="assign-chance-note" class="plan-chance__note">No plan staged</span>
+                    </div>
+                  </div>
                   <button type="button" class="btn btn-submit-mission" id="btn-assign-mission">
                     <span>Submit</span>
-                    <span id="assign-submit-chance" class="btn-submit-mission__chance" hidden></span>
                   </button>
                 </div>
               </div>

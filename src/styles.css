@@ -1184,6 +1184,9 @@ body {
 
 .plan-column-footer {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
   margin: 0.2rem -0.75rem -0.7rem;
   padding: 0.45rem 0.75rem 0.7rem;
   background: linear-gradient(180deg, rgba(19, 6, 9, 0.92), rgba(16, 5, 8, 0.98));
@@ -1379,32 +1382,236 @@ body {
   margin-top: 0;
 }
 
-/* Success chance of the staged plan; only rendered once the plan is complete enough to have one. */
-.btn-submit-mission__chance {
-  padding: 0.06rem 0.34rem;
+/* A startable plan: the fill and border come from .btn-primary, which main.ts adds alongside
+   this class, and the weight and pulse are borrowed from .btn-execute so the two calls to
+   action on screen read as the same kind of thing. */
+.btn-submit-mission--ready {
+  font-weight: 900;
+  letter-spacing: 0.26em;
+  text-indent: 0.13em;
+  animation: execute-pulse 2.6s ease-in-out infinite;
+}
+
+/* ---------------- Plan requirements checklist ---------------- */
+
+/* Every pill here is a term in the success arithmetic. Filled + solid border (the shared
+   .minions-trait-pill--req-have) means the staged minions and assets cover it; hollow + dotted
+   means they do not. Scrolls on its own so a requirement-heavy mission cannot push the gauge
+   or Submit off the bottom of the column. */
+.plan-reqs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 8.5rem;
+  padding: 0.35rem 0.5rem 0.4rem;
   border: 1px solid var(--line-1);
-  border-radius: 2px;
-  background: rgba(0, 0, 0, 0.28);
-  color: var(--text-1);
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    rgba(20, 7, 10, 0.55);
+  overflow-y: auto;
+}
+
+.plan-reqs__head {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.plan-reqs__label {
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.plan-reqs__tally {
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+}
+
+.plan-reqs__tally--all {
+  color: #8df0b2;
+}
+
+.plan-reqs__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.plan-reqs__group {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.plan-reqs__group-label {
+  flex: 0 0 3.1rem;
+  padding-top: 0.14rem;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
   cursor: help;
 }
 
-.btn-submit-mission__chance--good {
-  color: #8df0b2;
-  border-color: var(--good-dim);
-  background: rgba(22, 84, 46, 0.3);
+.plan-reqs__list--unlabelled .plan-reqs__group-label {
+  display: none;
 }
 
-.btn-submit-mission__chance--warn {
-  color: var(--warn);
+.plan-reqs__pills {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+/* An unmet challenge trait is not a missing bonus, it is an active subtraction — so it reads as
+   a warning rather than as one more unchecked box. */
+.plan-reqs .minions-trait-pill.plan-reqs__pill--penalty {
+  border-style: solid;
   border-color: var(--warn-dim);
   background: rgba(122, 84, 16, 0.28);
+  color: var(--warn);
 }
 
-.btn-submit-mission:disabled .btn-submit-mission__chance {
-  opacity: 0.75;
+/* Neutralised by a support asset: still listed, because knowing what the asset bought is the
+   point, but struck through so it reads as out of the sum. */
+.plan-reqs .minions-trait-pill.plan-reqs__pill--ignored {
+  border-style: dashed;
+  border-color: var(--line-1);
+  background: transparent;
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+/* ---------------- Plan success-chance gauge ---------------- */
+
+/* Success chance of the staged plan, pinned above Submit. Always on screen: it reads grey and
+   empty until the plan is complete enough to have a number, so the player learns where to look
+   before there is anything to look at. `--chance` (0-100) drives both the ring and the tint. */
+.plan-chance {
+  --chance: 0;
+  --chance-accent: var(--text-3);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--line-1);
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    rgba(28, 8, 11, 0.55);
+  cursor: help;
+}
+
+.plan-chance__dial {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.plan-chance__ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+
+.plan-chance__ring-track,
+.plan-chance__ring-fill {
+  fill: none;
+  stroke-width: 3;
+}
+
+.plan-chance__ring-track {
+  stroke: #2c1114;
+}
+
+/* r=19 -> circumference 119.38. The gap is drawn as dashoffset so the arc grows clockwise
+   from 12 o'clock (the -90deg rotation above). */
+.plan-chance__ring-fill {
+  stroke: var(--chance-accent);
+  stroke-linecap: butt;
+  stroke-dasharray: 119.38px;
+  stroke-dashoffset: calc(119.38px * (1 - var(--chance) / 100));
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.6));
+  transition: stroke-dashoffset 0.35s ease, stroke 0.25s linear;
+}
+
+.plan-chance__value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--chance-accent);
+  transition: color 0.25s linear;
+}
+
+.plan-chance__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.plan-chance__label {
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.plan-chance__note {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Live states. Empty (no number yet) and a true 0% both stay grey — there is nothing to sell. */
+.plan-chance--live .plan-chance__note {
+  color: var(--text-1);
+}
+
+.plan-chance--warn {
+  --chance-accent: var(--warn);
+}
+
+.plan-chance--mid {
+  --chance-accent: var(--red-bright);
+}
+
+.plan-chance--good {
+  --chance-accent: #8df0b2;
+}
+
+.plan-chance--good .plan-chance__ring-fill,
+.plan-chance--mid .plan-chance__ring-fill {
+  filter: drop-shadow(0 0 5px var(--chance-accent));
 }
 
 /* ---------------- Ticker bar ---------------- */
@@ -2465,11 +2672,6 @@ body {
 .card-with-art > .card-body {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.assign-pick-embedded-card.card-with-art > .card-art {
-  width: 44px;
-  height: 44px;
 }
 
 .minions-card.card-with-art {
@@ -3647,6 +3849,17 @@ body {
 
 /* Mission-card requirement pills: filled + solid border = the player currently
    has the trait/asset; hollow + dotted border + dim text = they don't. */
+/* Trait / requirement pills claim a full line of the wrapping stats row, so they read as their
+   own group under the stat badges instead of trailing them. */
+.card-trait-row {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.05rem;
+}
+
 .mission-req-pills {
   display: flex;
   flex-wrap: wrap;
@@ -3704,13 +3917,16 @@ body {
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 
-.assign-pick-slot:has(.assign-pick-embedded-card),
-.assign-pick-slot:has(.assign-target-minion-chip) {
-  align-items: stretch;
-  min-height: unset;
-  padding: 0.45rem 0.5rem;
-  border: none;
-  background: transparent;
+.assign-pick-slot:has(.assign-pick-chip) {
+  border-style: solid;
+  border-color: var(--line-1);
+  background: var(--card-bg);
+}
+
+.assign-pick-slot:has(.assign-pick-chip):hover,
+.assign-pick-slot:has(.assign-pick-chip:focus-visible) {
+  border-color: var(--line-2);
+  background: var(--card-bg-hover);
 }
 
 .assign-pick-slot.assign-minion-slot--dragover {
@@ -3730,11 +3946,58 @@ body {
   min-width: 0;
 }
 
-.assign-pick-embedded-card {
-  margin: 0;
-  width: 100%;
-  max-width: 100%;
+/* Collapsed staged mission / target: thumbnail and name only. The card itself is floated in
+   .assign-pick-preview on hover (see buildAssignPickChip in src/main.ts). */
+.assign-pick-chip {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
   box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0 1.85rem 0 0;
+  color: var(--text-0);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: grab;
+}
+
+.assign-pick-chip:focus-visible {
+  outline: none;
+}
+
+.assign-pick-chip[draggable="false"] {
+  cursor: default;
+}
+
+.assign-pick-chip-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+/* The hover preview lives on document.body so no panel can clip it, which puts it outside the
+   scaled stage — showAssignPickPreview() re-applies --ui-scale as a transform from this corner. */
+.assign-pick-preview {
+  position: fixed;
+  z-index: 90;
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+.assign-pick-preview-card {
+  margin: 0;
+  width: 300px;
+  max-width: 300px;
+  box-sizing: border-box;
+  border: 1px solid var(--line-2);
+  background: var(--panel-bg-solid);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75), 0 0 18px var(--red-glow-soft);
 }
 
 .assign-pick-slot-clear,
@@ -3874,9 +4137,6 @@ body {
 }
 
 .assign-minion-slot:has(.assign-minion-chip) {
-  align-items: stretch;
-  min-height: unset;
-  padding: 0.45rem 0.55rem;
   border-style: solid;
   border-color: var(--line-1);
   background: var(--card-bg);
@@ -3908,10 +4168,6 @@ body {
   border-left: 2px solid var(--cyan);
 }
 
-.assign-support-asset-slot .assign-minion-chip-trait {
-  color: var(--cyan);
-}
-
 .asset-card--support {
   border-left: 2px solid var(--cyan);
 }
@@ -3920,21 +4176,14 @@ body {
   position: relative;
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.35rem;
   width: 100%;
-  min-height: 2rem;
-  padding: 0.15rem 1.75rem 0.25rem 0;
+  min-width: 0;
+  padding: 0 1.75rem 0 0;
   font-size: 0.84rem;
   font-weight: 600;
   color: var(--text-0);
-}
-
-.assign-minion-chip.assign-target-minion-chip {
-  padding: 0.45rem 1.85rem 0.45rem 0.45rem;
-  border: 1px solid var(--line-1);
-  background: var(--card-bg);
-  box-sizing: border-box;
 }
 
 .assign-minion-chip-main {
@@ -3962,64 +4211,22 @@ body {
   white-space: nowrap;
 }
 
-.assign-minion-chip-traits {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.2rem 0.35rem;
-  margin-top: 0.3rem;
-  font-size: 0.7rem;
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-.assign-minion-chip-trait {
-  padding: 0.08rem 0.35rem;
-  background: rgba(64, 26, 30, 0.45);
-  border: 1px solid var(--line-1);
-  color: var(--text-1);
-}
-
-.assign-minion-chip-trait--match {
-  color: #8df0b2;
-  border-color: #1d6b3d;
-  background: rgba(22, 84, 46, 0.3);
-  font-weight: 700;
-}
-
-.assign-minion-chip-trait--status-positive {
-  color: #8df0b2;
-  border-color: #1d6b3d;
-  background: rgba(22, 84, 46, 0.3);
-  font-weight: 600;
-}
-
-.assign-minion-chip-trait--status-negative {
-  color: #ff9aa6;
-  border-color: #8c1320;
-  background: rgba(127, 22, 33, 0.35);
-  font-weight: 600;
-}
-
-.assign-minion-chip-trait--match.assign-minion-chip-trait--status-positive {
-  color: #b8f7cf;
-  border-color: #2a8a51;
-  background: rgba(28, 104, 58, 0.4);
-}
-
-.assign-minion-chip-trait--match.assign-minion-chip-trait--status-negative {
-  color: #ffc4cc;
-  border-color: #b91c2e;
-  background: rgba(150, 25, 38, 0.4);
+.assign-pick-slot-clear,
+.assign-minion-chip-remove {
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
 
 .assign-minion-chip-remove {
   top: 0.2rem;
   right: 0.25rem;
-  opacity: 0;
-  transition: opacity 0.12s ease;
 }
 
+/* Keyboard users get the button back on focus, since they never hover. */
+.assign-pick-slot:hover .assign-pick-slot-clear,
+.assign-pick-slot:focus-within .assign-pick-slot-clear,
 .assign-minion-slot:hover .assign-minion-chip-remove,
+.assign-minion-slot:focus-within .assign-minion-chip-remove,
 .assign-minion-chip:hover .assign-minion-chip-remove {
   opacity: 1;
 }

@@ -11,6 +11,7 @@ import {
   getMissionTargetLocationId,
   hireMinion,
   missionSuccessOptionsForTarget,
+  revealedSecurityTraitIds,
   missionTargetMatchesTemplate,
   previewHireDynamicTraits,
   previewRehireDynamicTraits,
@@ -34,12 +35,14 @@ import type {
   MissionTargetType,
   MissionTemplate,
   Trait,
+  TraitType,
 } from "./game/types";
 import { isOccupiedAssetSlot } from "./game/types";
 import {
   canAssignParticipants,
   computeSuccessChanceBreakdown,
   describeSupportAssetAbility,
+  hasSupportAbility,
   isSupportAsset,
   mergedRequiredTraitIdsSorted,
   missionAllowsTargetLocation,
@@ -105,7 +108,7 @@ import {
 } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation, type NavigationApi } from "./navigation";
-import { initStageScale } from "./ui/stageScale";
+import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
@@ -460,19 +463,6 @@ function req<T extends HTMLElement>(id: string): T {
   return el as T;
 }
 
-function traitStatusModifierClass(trait: Trait | undefined): string {
-  if (trait === undefined) {
-    return "";
-  }
-  if (trait.type === "status_negative") {
-    return "assign-minion-chip-trait--status-negative";
-  }
-  if (trait.type === "status_positive") {
-    return "assign-minion-chip-trait--status-positive";
-  }
-  return "";
-}
-
 function formatStaticTraitTooltip(trait: Trait | undefined, traitId: string): string {
   if (!trait) {
     return traitId;
@@ -548,6 +538,64 @@ function createTraitPillEl(
   return span;
 }
 
+/**
+ * Display order for catalog traits: what a minion is comes before what they happen to be good
+ * at, and a temporary status comes after both. Dynamic traits are appended by callers after any
+ * of these lists, so they always land last.
+ */
+const TRAIT_TYPE_DISPLAY_ORDER: Record<TraitType, number> = {
+  primary: 0,
+  secondary: 1,
+  status_positive: 2,
+  status_negative: 3,
+};
+
+/**
+ * Sorts trait ids into {@link TRAIT_TYPE_DISPLAY_ORDER}. The sort is stable, so within a type the
+ * caller's own order survives — alphabetical for merged requirement lists, authored order for a
+ * minion's own traits — and a card's pills never shuffle between renders.
+ */
+function sortedTraitIdsForDisplay(
+  catalog: ReturnType<typeof loadContent>,
+  traitIds: readonly string[],
+): string[] {
+  const rank = (id: string): number => {
+    const trait = catalog.traits.find((t) => t.id === id);
+    /* An id with no catalog entry is a content bug; park it at the end rather than guessing. */
+    return trait === undefined ? 99 : TRAIT_TYPE_DISPLAY_ORDER[trait.type];
+  };
+  return traitIds
+    .map((id, index) => ({ id, index, rank: rank(id) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((entry) => entry.id);
+}
+
+/**
+ * Where a card's trait / requirement pills go: their own full-width line under the stat badges,
+ * rather than trailing them on the same row. Grouping them this way is what makes a card's
+ * traits scannable at a glance.
+ *
+ * `container` is a `.minions-card-stats-row`, which wraps, so a `flex: 1 0 100%` child starts a
+ * new line. Callers that already built a standalone pill wrapper get that back untouched instead
+ * of a second nested one.
+ */
+function cardTraitRow(container: HTMLElement): HTMLElement {
+  if (
+    container.classList.contains("mission-req-pills") ||
+    container.classList.contains("card-trait-row")
+  ) {
+    return container;
+  }
+  const existing = container.querySelector<HTMLElement>(":scope > .card-trait-row");
+  if (existing !== null) {
+    return existing;
+  }
+  const row = document.createElement("div");
+  row.className = "card-trait-row";
+  container.appendChild(row);
+  return row;
+}
+
 function appendMinionTraits(
   container: HTMLElement,
   catalog: ReturnType<typeof loadContent>,
@@ -559,10 +607,10 @@ function appendMinionTraits(
   if (traitIds.length === 0 && rosterTraits.length === 0) {
     return;
   }
+  const row = cardTraitRow(container);
 
-  for (let i = 0; i < traitIds.length; i += 1) {
-    const tid = traitIds[i]!;
-    container.appendChild(createTraitPillEl(catalog, tid));
+  for (const tid of sortedTraitIdsForDisplay(catalog, traitIds)) {
+    row.appendChild(createTraitPillEl(catalog, tid));
   }
   for (let j = 0; j < rosterTraits.length; j += 1) {
     const dtrait = rosterTraits[j]!;
@@ -575,7 +623,7 @@ function appendMinionTraits(
     text.className = "minions-trait-pill__label";
     text.textContent = dynamicTraitDisplayLabel(catalog, roster, dtrait);
     span.appendChild(text);
-    container.appendChild(span);
+    row.appendChild(span);
   }
 }
 
@@ -693,26 +741,6 @@ function createLocationCardStatsRow(stats: {
   return row;
 }
 
-function styleAssignChipTraitSpan(
-  span: HTMLElement,
-  catalog: ReturnType<typeof loadContent>,
-  traitId: string,
-  requiredTraitSet: Set<string>,
-): void {
-  span.className = "assign-minion-chip-trait";
-  if (requiredTraitSet.has(traitId)) {
-    span.classList.add("assign-minion-chip-trait--match");
-  }
-  const trait = catalog.traits.find((t) => t.id === traitId);
-  const mod = traitStatusModifierClass(trait);
-  if (mod !== "") {
-    span.classList.add(mod);
-  }
-  span.textContent = trait?.name ?? traitId;
-  span.tabIndex = 0;
-  span.title = formatStaticTraitTooltip(trait, traitId);
-}
-
 function traitDisplayNames(
   catalog: ReturnType<typeof loadContent>,
   traitIds: string[],
@@ -720,7 +748,7 @@ function traitDisplayNames(
   if (traitIds.length === 0) {
     return "—";
   }
-  return traitIds
+  return sortedTraitIdsForDisplay(catalog, traitIds)
     .map((id) => catalog.traits.find((t) => t.id === id)?.name ?? id)
     .join(", ");
 }
@@ -870,15 +898,19 @@ function appendRequiredMissionRequirementPills(
   assetIds: string[],
   ownedAssets: Readonly<Record<string, number>>,
 ): void {
-  for (const tid of traitIds) {
-    container.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds));
+  if (traitIds.length === 0 && assetIds.length === 0) {
+    return;
+  }
+  const row = cardTraitRow(container);
+  for (const tid of sortedTraitIdsForDisplay(catalog, traitIds)) {
+    row.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds));
   }
 
   const remaining = new Map<string, number>();
   for (const aid of assetIds) {
     const left = remaining.get(aid) ?? ownedAssets[aid] ?? 0;
     remaining.set(aid, left - 1);
-    container.appendChild(createAssetPillEl(catalog, aid, left > 0));
+    row.appendChild(createAssetPillEl(catalog, aid, left > 0));
   }
 }
 
@@ -964,11 +996,15 @@ function appendLocationRequirementPills(
   revealedSecurityTraitIds: readonly string[],
   rosterTraitIds: ReadonlySet<string>,
 ): void {
-  for (const tid of siteTraitIds) {
-    container.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds, "trait"));
+  if (siteTraitIds.length === 0 && revealedSecurityTraitIds.length === 0) {
+    return;
   }
-  for (const tid of revealedSecurityTraitIds) {
-    container.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds, "security"));
+  const row = cardTraitRow(container);
+  for (const tid of sortedTraitIdsForDisplay(catalog, siteTraitIds)) {
+    row.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds, "trait"));
+  }
+  for (const tid of sortedTraitIdsForDisplay(catalog, revealedSecurityTraitIds)) {
+    row.appendChild(createTraitPillEl(catalog, tid, rosterTraitIds, "security"));
   }
 }
 
@@ -1153,7 +1189,6 @@ function initGameController(
   const assignMissionSlotEl = req<HTMLElement>("assign-mission-slot");
   const assignTargetSlotEl = req<HTMLElement>("assign-target-slot");
   const assignTargetFieldEl = req<HTMLElement>("assign-target-field");
-  const assignTargetLabelEl = req<HTMLElement>("assign-target-label");
   const minionsList = req<HTMLElement>("assign-minions-list");
   const assignAssetSlotsFieldset = req<HTMLElement>("assign-asset-slots-fieldset");
   const assignAssetSlotsList = req<HTMLElement>("assign-asset-slots-list");
@@ -1161,7 +1196,12 @@ function initGameController(
   const assignSupportAssetsLabel = req<HTMLElement>("assign-support-assets-label");
   const assignSupportAssetsList = req<HTMLElement>("assign-support-assets-list");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
-  const assignSubmitChanceEl = req<HTMLElement>("assign-submit-chance");
+  const assignRequirementsEl = req<HTMLElement>("assign-requirements");
+  const assignRequirementsListEl = req<HTMLElement>("assign-requirements-list");
+  const assignRequirementsTallyEl = req<HTMLElement>("assign-requirements-tally");
+  const assignChanceEl = req<HTMLElement>("assign-chance");
+  const assignChanceValueEl = req<HTMLElement>("assign-chance-value");
+  const assignChanceNoteEl = req<HTMLElement>("assign-chance-note");
   const btnExec = req<HTMLButtonElement>("btn-execute-plan");
   const turnReportOverlay = req<HTMLElement>("overlay-turn-report");
   const turnReportKicker = req<HTMLElement>("turn-report-kicker");
@@ -1473,7 +1513,6 @@ function initGameController(
     assignOmegaSlotIndex = null;
     rebuildAssignAssetSlots();
     updateAssignTargetFieldVisibility();
-    updateAssignTargetLabelText();
   }
 
   function clearAssignMissionTarget(): void {
@@ -1609,6 +1648,31 @@ function initGameController(
     return assignSupportAssetIds.filter((id): id is string => id !== null);
   }
 
+  /**
+   * The site a mission stages itself at, when it only accepts one and so has no choice to offer.
+   *
+   * Only `location` targets qualify. For an asset or minion mission `targetLocationIds` narrows
+   * which site the target may be found at, which is not the same as naming the target itself —
+   * the player still has to pick the slot or the minion.
+   */
+  function autoTargetForMission(mission: MissionTemplate): MissionTarget | null {
+    if (mission.targetType !== "location") {
+      return null;
+    }
+    const ids = mission.targetLocationIds ?? [];
+    if (ids.length !== 1) {
+      return null;
+    }
+    const locationId = ids[0]!;
+    /* The active omega plan decides which sites are in play, and a mission can name one this run
+     * does not include; staging a target that is not on the map would strand the plan. */
+    if (!runLocations().some((loc) => loc.id === locationId)) {
+      return null;
+    }
+    const target: MissionTarget = { kind: "location", locationId };
+    return targetPassesMissionLocationFilters(mission, target) ? target : null;
+  }
+
   function reconcileTargetWithMission(): void {
     const m = selectedMissionTemplate();
     if (!m) {
@@ -1618,15 +1682,16 @@ function initGameController(
       assignTarget = null;
       return;
     }
-    if (!assignTarget) {
-      return;
+    if (assignTarget !== null) {
+      if (
+        !missionTargetMatchesTemplate(m.targetType, assignTarget) ||
+        !targetPassesMissionLocationFilters(m, assignTarget)
+      ) {
+        assignTarget = null;
+      }
     }
-    if (!missionTargetMatchesTemplate(m.targetType, assignTarget)) {
-      assignTarget = null;
-      return;
-    }
-    if (!targetPassesMissionLocationFilters(m, assignTarget)) {
-      assignTarget = null;
+    if (assignTarget === null) {
+      assignTarget = autoTargetForMission(m);
     }
   }
 
@@ -1651,24 +1716,31 @@ function initGameController(
     assignTargetFieldEl.toggleAttribute("hidden", hide);
   }
 
-  function updateAssignTargetLabelText(): void {
+  /**
+   * Prompt for an empty target slot. Everything the mission asks of its target is said here —
+   * the sites it accepts, or failing that the kind of thing it wants — so the field label above
+   * can stay the plain "Target" it is in the markup.
+   */
+  function assignTargetPlaceholderText(): string {
+    const generic = "Drag location, asset slot, or minion";
     const m = selectedMissionTemplate();
     if (!m || m.targetType === "none") {
-      assignTargetLabelEl.textContent = "Target";
-      return;
+      return generic;
     }
-    const labels: Record<MissionTargetType, string> = {
-      location: "Target Location",
-      asset_hidden: "Target Hidden Asset",
-      asset_revealed: "Target Revealed Asset",
-      minion: "Target Minion",
-      none: "Target",
-    };
     const siteFilters = missionTargetTypeTargetsLocation(m.targetType)
       ? formatTargetLocationFilters(m, targetLocationDisplayName)
       : null;
-    assignTargetLabelEl.textContent =
-      siteFilters === null ? labels[m.targetType] : `${labels[m.targetType]} — ${siteFilters}`;
+    if (siteFilters !== null) {
+      return `Drag ${siteFilters}`;
+    }
+    const byType: Record<MissionTargetType, string> = {
+      location: "Drag a location",
+      asset_hidden: "Drag a hidden asset slot",
+      asset_revealed: "Drag a revealed asset slot",
+      minion: "Drag a minion",
+      none: generic,
+    };
+    return byType[m.targetType];
   }
 
   function onAssignSlotsChanged(): void {
@@ -1946,8 +2018,7 @@ function initGameController(
         reconcileTargetWithMission();
         rebuildAssignAssetSlots();
         updateAssignTargetFieldVisibility();
-        updateAssignTargetLabelText();
-        renderAssignPickSlots();
+            renderAssignPickSlots();
         renderAssignMinionSlots();
         onAssignSlotsChanged();
         return;
@@ -2246,21 +2317,22 @@ function initGameController(
   }
 
   /**
-   * The optional support-asset slots. Unlike required slots these are not tied to the planned
-   * mission — any owned asset with a `supportAbility` fits any slot — so the row is shown
-   * whenever a mission is staged and the player has at least one slot.
+   * The optional support-asset slots, one per `player.maxSupportAssets`. Unlike required slots
+   * these are not tied to the planned mission — any owned asset with a `supportAbility` fits any
+   * slot — so the row stands on its own and does not wait for a mission to be staged. The only
+   * thing that hides it is a cap of zero, where there would be no slots to draw.
    */
   function renderAssignSupportAssets(): void {
     assignSupportAssetsList.innerHTML = "";
     syncAssignSupportSlotArray();
     const cap = assignSupportAssetIds.length;
-    if (!assignMissionTemplateId || cap === 0) {
+    if (cap === 0) {
       assignSupportAssetsFieldset.hidden = true;
       renderLairPanel();
       return;
     }
     assignSupportAssetsFieldset.hidden = false;
-    assignSupportAssetsLabel.textContent = "Support Assets";
+    assignSupportAssetsLabel.textContent = "Support";
     const mainOnly = state.phase === "main";
     const wrap = document.createElement("div");
     wrap.className = "assign-minion-slots assign-asset-slots assign-support-asset-slots";
@@ -2329,13 +2401,13 @@ function initGameController(
         chipLabel.className = "assign-minion-chip-label";
         chipLabel.textContent = tpl?.name ?? placed;
         chipMain.appendChild(chipLabel);
-        if (tpl?.supportAbility !== undefined) {
-          const effect = document.createElement("span");
-          effect.className = "assign-minion-chip-trait";
-          effect.textContent = describeSupportAssetAbility(tpl.supportAbility);
-          chipMain.appendChild(effect);
-        }
         chip.appendChild(chipMain);
+        /* The effect used to wrap onto a second line, which made a filled support slot taller
+         * than the empty one it replaced. It moves to the hover text instead, like every other
+         * collapsed chip in this column. */
+        if (tpl?.supportAbility !== undefined) {
+          chip.title = describeSupportAssetAbility(tpl.supportAbility);
+        }
 
         const removeBtn = document.createElement("button");
         removeBtn.type = "button";
@@ -2365,11 +2437,107 @@ function initGameController(
     renderLairPanel();
   }
 
+  /**
+   * Floating full-card preview for a collapsed pick slot.
+   *
+   * A staged mission or target only shows a thumbnail and a name in the plan column, which keeps
+   * the column short enough that Target, Minions and the success gauge all stay on screen. The
+   * card the player actually dropped is parked off-slot and floated beside the chip on hover.
+   *
+   * The layer lives on `document.body`, not inside the slot: every panel between here and the
+   * stage clips its overflow, and a card that is six times the height of its chip would be cut
+   * off. The cost is that it sits outside the scaled stage and has to re-apply `--ui-scale`
+   * itself.
+   */
+  let assignPickPreviewEl: HTMLElement | null = null;
+
+  function assignPickPreviewLayer(): HTMLElement {
+    if (assignPickPreviewEl === null) {
+      const el = document.createElement("div");
+      el.className = "assign-pick-preview";
+      el.hidden = true;
+      document.body.appendChild(el);
+      assignPickPreviewEl = el;
+      /* The preview is anchored to a rect measured once, so anything that can move the chip out
+       * from under it drops it rather than leaving it floating in the wrong place. */
+      document.addEventListener("pointerdown", hideAssignPickPreview, { passive: true });
+      window.addEventListener("scroll", hideAssignPickPreview, { capture: true, passive: true });
+    }
+    return assignPickPreviewEl;
+  }
+
+  function hideAssignPickPreview(): void {
+    if (assignPickPreviewEl === null) {
+      return;
+    }
+    assignPickPreviewEl.hidden = true;
+    assignPickPreviewEl.replaceChildren();
+  }
+
+  function showAssignPickPreview(anchor: HTMLElement, card: HTMLElement): void {
+    const layer = assignPickPreviewLayer();
+    layer.replaceChildren(card);
+    layer.hidden = false;
+    const shell = document.querySelector(".omega-shell");
+    const scale = shell === null ? 1 : shell.getBoundingClientRect().width / STAGE_WIDTH;
+    layer.style.transform = `scale(${scale})`;
+    /* Measured after the transform, so these are on-screen pixels either way. */
+    const rect = anchor.getBoundingClientRect();
+    const box = layer.getBoundingClientRect();
+    const margin = 8;
+    let left = rect.right + margin;
+    if (left + box.width > window.innerWidth - margin) {
+      /* No room to the right of the plan column: flip to the other side of the chip. */
+      left = Math.max(margin, rect.left - margin - box.width);
+    }
+    const top = Math.max(margin, Math.min(rect.top, window.innerHeight - box.height - margin));
+    layer.style.left = `${Math.round(left)}px`;
+    layer.style.top = `${Math.round(top)}px`;
+  }
+
+  /** Makes `chip` float `card` beside itself on hover or keyboard focus. */
+  function attachAssignPickPreview(chip: HTMLElement, card: HTMLElement): void {
+    chip.addEventListener("mouseenter", () => {
+      showAssignPickPreview(chip, card);
+    });
+    chip.addEventListener("mouseleave", hideAssignPickPreview);
+    chip.addEventListener("focus", () => {
+      showAssignPickPreview(chip, card);
+    });
+    chip.addEventListener("blur", hideAssignPickPreview);
+    chip.addEventListener("dragstart", hideAssignPickPreview);
+  }
+
+  /**
+   * The collapsed form of a staged mission or target. It takes over the drag affordance the
+   * embedded card used to carry, and reveals `card` on hover or keyboard focus.
+   */
+  function buildAssignPickChip(
+    artSrc: string,
+    label: string,
+    card: HTMLElement,
+    canDrag: boolean,
+    onDragStart: (e: DragEvent) => void,
+  ): HTMLElement {
+    const chip = document.createElement("div");
+    chip.className = "assign-pick-chip";
+    chip.tabIndex = 0;
+    chip.draggable = canDrag;
+    chip.addEventListener("dragstart", onDragStart);
+    chip.appendChild(createCardArtImg(artSrc, "card-art--chip"));
+    const name = document.createElement("span");
+    name.className = "assign-pick-chip-label";
+    name.textContent = label;
+    chip.appendChild(name);
+    attachAssignPickPreview(chip, card);
+    return chip;
+  }
+
   function renderAssignPickSlots(): void {
+    hideAssignPickPreview();
     assignMissionSlotEl.innerHTML = "";
     assignTargetSlotEl.innerHTML = "";
     updateAssignTargetFieldVisibility();
-    updateAssignTargetLabelText();
     const mainOnly = state.phase === "main";
     const mTpl = selectedMissionTemplate();
     const hideTargetField = mTpl?.targetType === "none";
@@ -2379,7 +2547,7 @@ function initGameController(
     if (assignMissionTemplateId === null) {
       const ph = document.createElement("span");
       ph.className = "assign-minion-slot-placeholder";
-      ph.textContent = "Drag a mission from Omega Plan, Lair, or Events tab";
+      ph.textContent = "Drag a mission";
       missionSlot.appendChild(ph);
     } else {
       const wrap = document.createElement("div");
@@ -2397,29 +2565,35 @@ function initGameController(
           : undefined;
 
       const article = buildMissionCatalogArticle(assignMissionTemplateId, mergedForAssign);
-      article.classList.add("assign-pick-embedded-card");
-      article.draggable = mainOnly;
-      article.addEventListener("dragstart", (e) => {
-        if (!mainOnly) {
-          e.preventDefault();
-          return;
-        }
-        dndDragSource = { kind: "mission-slot" };
-        const json =
-          assignMissionSource === "lair" && assignMissionTemplateId
-            ? missionDragJson("lair", assignMissionTemplateId)
-            : assignMissionSource === "event" && assignMissionTemplateId
-              ? missionDragJson("event", assignMissionTemplateId)
-              : missionDragJson(
-                  "omega",
-                  assignMissionTemplateId!,
-                  assignOmegaStageIndex ?? 0,
-                  assignOmegaSlotIndex ?? 0,
-                );
-        e.dataTransfer?.setData("text/plain", json);
-        e.dataTransfer!.effectAllowed = "move";
-      });
-      wrap.appendChild(article);
+      article.classList.add("assign-pick-preview-card");
+      wrap.appendChild(
+        buildAssignPickChip(
+          resolveMissionCardArt(missionTpl),
+          missionTpl?.name ?? assignMissionTemplateId,
+          article,
+          mainOnly,
+          (e) => {
+            if (!mainOnly) {
+              e.preventDefault();
+              return;
+            }
+            dndDragSource = { kind: "mission-slot" };
+            const json =
+              assignMissionSource === "lair" && assignMissionTemplateId
+                ? missionDragJson("lair", assignMissionTemplateId)
+                : assignMissionSource === "event" && assignMissionTemplateId
+                  ? missionDragJson("event", assignMissionTemplateId)
+                  : missionDragJson(
+                      "omega",
+                      assignMissionTemplateId!,
+                      assignOmegaStageIndex ?? 0,
+                      assignOmegaSlotIndex ?? 0,
+                    );
+            e.dataTransfer?.setData("text/plain", json);
+            e.dataTransfer!.effectAllowed = "move";
+          },
+        ),
+      );
 
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
@@ -2496,7 +2670,7 @@ function initGameController(
     if (targetPick === null) {
       const ph = document.createElement("span");
       ph.className = "assign-minion-slot-placeholder";
-      ph.textContent = "Drag location, asset slot, or minion";
+      ph.textContent = assignTargetPlaceholderText();
       targetSlot.appendChild(ph);
     } else if (targetPick.kind === "location") {
       const loc = content.locations.find((l) => l.id === targetPick.locationId);
@@ -2527,10 +2701,16 @@ function initGameController(
           state.locationRequiredTraits[loc.id] ?? [],
           state.locationSecurityTraits[loc.id] ?? [],
         );
-        article.classList.add("assign-pick-embedded-card");
-        article.draggable = mainOnly;
-        article.addEventListener("dragstart", setDragDataForTarget);
-        wrap.appendChild(article);
+        article.classList.add("assign-pick-preview-card");
+        wrap.appendChild(
+          buildAssignPickChip(
+            resolveLocationCardArt(loc),
+            loc.name,
+            article,
+            mainOnly,
+            setDragDataForTarget,
+          ),
+        );
         appendClearTarget(wrap);
         targetSlot.appendChild(wrap);
       }
@@ -2541,9 +2721,7 @@ function initGameController(
       const wrap = document.createElement("div");
       wrap.className = "assign-pick-slot-card-wrap";
       const article = document.createElement("article");
-      article.className = "assign-pick-embedded-card location-card assign-target-asset-card";
-      article.draggable = mainOnly;
-      article.addEventListener("dragstart", setDragDataForTarget);
+      article.className = "assign-pick-preview-card location-card assign-target-asset-card";
       const body = appendCardArtShell(article, resolveLocationCardArt(loc));
       const title = document.createElement("h4");
       title.className = "location-card-title";
@@ -2606,7 +2784,15 @@ function initGameController(
       if (reqPillsEl !== null) {
         body.appendChild(reqPillsEl);
       }
-      wrap.appendChild(article);
+      wrap.appendChild(
+        buildAssignPickChip(
+          resolveLocationCardArt(loc),
+          `${loc?.name ?? targetPick.locationId} - Slot ${targetPick.slotIndex + 1}`,
+          article,
+          mainOnly,
+          setDragDataForTarget,
+        ),
+      );
       appendClearTarget(wrap);
       targetSlot.appendChild(wrap);
     } else if (targetPick.kind === "minion") {
@@ -2616,40 +2802,15 @@ function initGameController(
         : undefined;
       const wrap = document.createElement("div");
       wrap.className = "assign-pick-slot-card-wrap";
-      const chip = document.createElement("div");
-      chip.className = "assign-minion-chip assign-target-minion-chip";
-      chip.draggable = mainOnly;
-      chip.addEventListener("dragstart", setDragDataForTarget);
-      chip.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "card-art--chip"));
-      const chipMain = document.createElement("div");
-      chipMain.className = "assign-minion-chip-main";
-      const chipLabel = document.createElement("span");
-      chipLabel.className = "assign-minion-chip-label";
-      chipLabel.textContent = tpl?.name ?? targetPick.instanceId;
-      chipMain.appendChild(chipLabel);
-      if (
-        inst &&
-        (inst.traitIds.length > 0 || inst.dynamicTraits.length > 0)
-      ) {
-        const traitsEl = document.createElement("div");
-        traitsEl.className = "assign-minion-chip-traits";
-        for (const tid of inst.traitIds) {
-          const span = document.createElement("span");
-          styleAssignChipTraitSpan(span, content, tid, new Set<string>());
-          traitsEl.appendChild(span);
-        }
-        for (const dtrait of inst.dynamicTraits) {
-          const span = document.createElement("span");
-          span.className = "assign-minion-chip-trait";
-          span.textContent = dynamicTraitDisplayLabel(content, state.player.minions, dtrait);
-          span.tabIndex = 0;
-          span.title = formatDynamicTraitTooltip(content, state.player.minions, dtrait);
-          traitsEl.appendChild(span);
-        }
-        chipMain.appendChild(traitsEl);
-      }
-      chip.appendChild(chipMain);
-      wrap.appendChild(chip);
+      wrap.appendChild(
+        buildAssignPickChip(
+          resolveMinionCardArt(tpl),
+          tpl?.name ?? targetPick.instanceId,
+          buildMinionPreviewArticle(inst, targetPick.instanceId),
+          mainOnly,
+          setDragDataForTarget,
+        ),
+      );
       appendClearTarget(wrap);
       targetSlot.appendChild(wrap);
     }
@@ -2754,32 +2915,270 @@ function initGameController(
     };
   }
 
-  function syncAssignSubmitChance(): void {
-    const staged = state.phase === "main" ? stagedSuccessChance() : null;
-    if (staged === null) {
-      assignSubmitChanceEl.hidden = true;
-      assignSubmitChanceEl.textContent = "";
-      assignSubmitChanceEl.title = "";
-      assignSubmitChanceEl.classList.remove(
-        "btn-submit-mission__chance--good",
-        "btn-submit-mission__chance--warn",
+  /**
+   * Everything the staged plan is being scored against, gathered from the four places the
+   * success formula pulls from: the mission template, the target site, that site's revealed
+   * security, and the challenge traits of agents standing on it.
+   *
+   * `counts` marks the requirements that feed the base ratio (matched / total). Challenge traits
+   * are left out of it because they are a flat penalty rather than a term in the ratio, and the
+   * tally over the gauge would otherwise disagree with the arithmetic it is explaining.
+   */
+  type PlanRequirement = {
+    id: string;
+    kind: "trait" | "security" | "asset";
+    met: boolean;
+    counts: boolean;
+    /** Leaving this unmet costs success outright, rather than merely failing to add any. */
+    penalty: boolean;
+    /** Neutralised by a committed support asset, so it is scored as if it were not there. */
+    ignored: boolean;
+  };
+
+  type PlanRequirementGroup = {
+    label: string;
+    hint: string;
+    items: PlanRequirement[];
+  };
+
+  function stagedRequirementGroups(): PlanRequirementGroup[] | null {
+    const mission =
+      assignMissionTemplateId === null
+        ? undefined
+        : findMissionOrEventTemplate(assignMissionTemplateId);
+    if (mission === undefined) {
+      return null;
+    }
+    const instanceById = new Map(state.player.minions.map((m) => [m.instanceId, m] as const));
+    const participants = getAssignParticipantIds()
+      .map((id) => instanceById.get(id))
+      .filter((x): x is MinionInstance => x !== undefined);
+    const held = unionParticipantTraitIds(participants);
+
+    const supportAbilities = supportAbilitiesForAssetIds(stagedSupportAssetIds(), content.assets);
+    const ignoreSecurity = hasSupportAbility(supportAbilities, "ignore_security_traits");
+    const ignoreChallenge = hasSupportAbility(supportAbilities, "ignore_agent_challenge_traits");
+
+    /* Site-derived groups only apply once the target is one the mission would actually accept,
+     * which is the same gate stagedSuccessChance() uses before it will quote a number. */
+    const targetOk =
+      mission.targetType === "none"
+        ? false
+        : assignTarget !== null &&
+          missionTargetMatchesTemplate(mission.targetType, assignTarget) &&
+          targetPassesMissionLocationFilters(mission, assignTarget);
+    const lid = targetOk && assignTarget !== null ? getMissionTargetLocationId(assignTarget) : null;
+
+    const traitItem = (
+      id: string,
+      kind: "trait" | "security",
+      ignored: boolean,
+    ): PlanRequirement => ({
+      id,
+      kind,
+      met: ignored || held.has(id),
+      counts: !ignored,
+      penalty: false,
+      ignored,
+    });
+
+    const groups: PlanRequirementGroup[] = [];
+
+    if (mission.requiredTraitIds.length > 0) {
+      groups.push({
+        label: "",
+        hint: "Traits the mission itself asks for. Any one participant holding it covers it.",
+        items: sortedTraitIdsForDisplay(content, mission.requiredTraitIds).map((id) =>
+          traitItem(id, "trait", false),
+        ),
+      });
+    }
+
+    if (lid !== null) {
+      const siteIds = state.locationRequiredTraits[lid] ?? [];
+      if (siteIds.length > 0) {
+        groups.push({
+          label: "Site",
+          hint: "Traits this location demands of anyone working it.",
+          items: sortedTraitIdsForDisplay(content, siteIds).map((id) => traitItem(id, "trait", false)),
+        });
+      }
+      const securityIds = revealedSecurityTraitIds(state, lid);
+      if (securityIds.length > 0) {
+        groups.push({
+          label: "Security",
+          hint: ignoreSecurity
+            ? "Security traits uncovered here, neutralised by a committed support asset."
+            : "Security traits uncovered here. Each counts as a requirement like any other.",
+          items: sortedTraitIdsForDisplay(content, securityIds).map((id) =>
+            traitItem(id, "security", ignoreSecurity),
+          ),
+        });
+      }
+      const challengeIds = challengeTraitIdsForAgents(
+        playerVisibleOpposingAgentsAtLocation(state, lid),
       );
+      if (challengeIds.length > 0) {
+        groups.push({
+          label: "Agents",
+          hint: ignoreChallenge
+            ? "Challenge traits of the agents here, shrugged off by a committed support asset."
+            : "Challenge traits of the agents here. Each one no participant matches costs -"
+              + String(content.balance.agentChallengeTraitPenalty)
+              + "% success.",
+          items: sortedTraitIdsForDisplay(content, challengeIds).map((id) => ({
+            id,
+            kind: "trait" as const,
+            met: ignoreChallenge || held.has(id),
+            counts: false,
+            penalty: true,
+            ignored: ignoreChallenge,
+          })),
+        });
+      }
+    }
+
+    if (mission.requiredAssetIds.length > 0) {
+      syncAssignAssetSlotArrayWithMission();
+      groups.push({
+        label: "",
+        hint: "One slot per required asset. A slot counts only once it holds that exact asset.",
+        items: mission.requiredAssetIds.map((id, i) => ({
+          id,
+          kind: "asset" as const,
+          met: assignAssetSlotAssetIds[i] === id,
+          counts: true,
+          penalty: false,
+          ignored: false,
+        })),
+      });
+    }
+
+    return groups;
+  }
+
+  /**
+   * The requirements checklist above the gauge. It exists to make the number legible: every pill
+   * here is a term in the success arithmetic, lit once the staged minions and assets cover it.
+   */
+  function renderAssignRequirements(): void {
+    assignRequirementsListEl.replaceChildren();
+    const groups = state.phase === "main" ? stagedRequirementGroups() : null;
+    /* Nothing to explain means nothing to show: an empty checklist is just a box between the
+     * plan and the gauge it is supposed to be annotating. */
+    if (groups === null || groups.length === 0) {
+      assignRequirementsEl.hidden = true;
+      assignRequirementsTallyEl.textContent = "";
+      assignRequirementsTallyEl.classList.remove("plan-reqs__tally--all");
       return;
     }
-    const pct = staged.breakdown.finalPercent;
-    assignSubmitChanceEl.hidden = false;
-    assignSubmitChanceEl.textContent = `${pct}%`;
-    assignSubmitChanceEl.title = formatMissionSuccessChanceTooltipLines(
+    assignRequirementsEl.hidden = false;
+
+    /* The label column is only worth reserving when something is actually named in it —
+     * otherwise a mission with no site groups reads as indented for no reason. */
+    assignRequirementsListEl.classList.toggle(
+      "plan-reqs__list--unlabelled",
+      !groups.some((g) => g.label !== ""),
+    );
+
+    const scored = groups.flatMap((g) => g.items).filter((i) => i.counts);
+    const met = scored.filter((i) => i.met).length;
+    assignRequirementsTallyEl.textContent =
+      scored.length === 0 ? "" : String(met) + "/" + String(scored.length) + " met";
+    assignRequirementsTallyEl.classList.toggle(
+      "plan-reqs__tally--all",
+      scored.length > 0 && met === scored.length,
+    );
+
+    for (const group of groups) {
+      const row = document.createElement("div");
+      row.className = "plan-reqs__group";
+
+      const label = document.createElement("span");
+      label.className = "plan-reqs__group-label";
+      if (group.label !== "") {
+        label.textContent = group.label;
+        label.title = group.hint;
+      }
+      row.appendChild(label);
+
+      const pills = document.createElement("div");
+      pills.className = "plan-reqs__pills";
+      for (const item of group.items) {
+        /* createTraitPillEl takes the set of trait ids the roster holds; passing the item's own
+         * id is how a single pill is told it is covered. */
+        const pill =
+          item.kind === "asset"
+            ? createAssetPillEl(content, item.id, item.met)
+            : createTraitPillEl(
+                content,
+                item.id,
+                item.met ? new Set([item.id]) : new Set<string>(),
+                item.kind === "security" ? "security" : "trait",
+              );
+        if (item.ignored) {
+          pill.classList.add("plan-reqs__pill--ignored");
+        } else if (item.penalty && !item.met) {
+          pill.classList.add("plan-reqs__pill--penalty");
+        }
+        pills.appendChild(pill);
+      }
+      row.appendChild(pills);
+      assignRequirementsListEl.appendChild(row);
+    }
+  }
+
+  /** One-word read on the odds, so the gauge says something even at a glance. */
+  function successChanceNote(pct: number): string {
+    if (pct <= 0) return "Hopeless";
+    if (pct < 40) return "Long shot";
+    if (pct < 70) return "Even money";
+    if (pct < 90) return "Favoured";
+    return "All but certain";
+  }
+
+  /**
+   * The success-chance gauge above Submit. Unlike the old in-button badge it never hides: with no
+   * staged plan it holds a grey, empty ring so the player knows where the number will appear. A
+   * real 0% reads the same grey — there is nothing to sell either way.
+   */
+  function syncAssignChanceGauge(): void {
+    const staged = state.phase === "main" ? stagedSuccessChance() : null;
+    const pct = staged === null ? 0 : staged.breakdown.finalPercent;
+    assignChanceEl.style.setProperty("--chance", String(pct));
+    assignChanceEl.classList.toggle("plan-chance--live", staged !== null);
+    assignChanceEl.classList.toggle("plan-chance--warn", pct > 0 && pct < 40);
+    assignChanceEl.classList.toggle("plan-chance--mid", pct >= 40 && pct < 70);
+    assignChanceEl.classList.toggle("plan-chance--good", pct >= 70);
+    if (staged === null) {
+      assignChanceValueEl.textContent = "--";
+      assignChanceNoteEl.textContent = "No plan staged";
+      assignChanceEl.title = "Stage a mission, target and minions to see the odds.";
+      return;
+    }
+    assignChanceValueEl.textContent = `${pct}%`;
+    assignChanceNoteEl.textContent = successChanceNote(pct);
+    assignChanceEl.title = formatMissionSuccessChanceTooltipLines(
       staged.breakdown,
       staged.dynamicEntries,
       state.player.minions,
     ).join("\n");
-    assignSubmitChanceEl.classList.toggle("btn-submit-mission__chance--good", pct >= 70);
-    assignSubmitChanceEl.classList.toggle("btn-submit-mission__chance--warn", pct < 40);
   }
 
   function syncAssignButtonState(): void {
-    syncAssignSubmitChance();
+    renderAssignRequirements();
+    syncAssignChanceGauge();
+    applyAssignButtonEnabled();
+    /* A startable plan is the one click that matters on this panel, so Submit borrows Execute's
+     * treatment — same primary fill, same pulse — and drops back to a plain button the moment
+     * anything about the plan stops it from starting. */
+    const ready = !btnAssign.disabled;
+    btnAssign.classList.toggle("btn-primary", ready);
+    btnAssign.classList.toggle("btn-submit-mission--ready", ready);
+  }
+
+  /** The gate itself: sets `disabled` and the reason, one early return per blocking condition. */
+  function applyAssignButtonEnabled(): void {
     const mainOnly = state.phase === "main";
     if (!mainOnly) {
       btnAssign.disabled = true;
@@ -2849,6 +3248,35 @@ function initGameController(
       : `Need ${cost} CP (${state.player.commandPoints} available)`;
   }
 
+  /**
+   * The roster card for a staged minion, minus the fire button — the preview a collapsed
+   * participant chip floats on hover. Traits live here now rather than on the chip itself, which
+   * is what keeps the Minions field to one line per slot.
+   */
+  function buildMinionPreviewArticle(inst: MinionInstance | undefined, instanceId: string): HTMLElement {
+    const tpl = inst ? content.minions.find((t) => t.id === inst.templateId) : undefined;
+    const card = document.createElement("article");
+    card.className = "minions-card assign-pick-preview-card";
+    const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
+    const title = document.createElement("h4");
+    title.className = "minions-card-title";
+    title.textContent = tpl?.name ?? instanceId;
+    body.appendChild(title);
+    const statsRow = createMinionsCardStatsRow({
+      cpCost: tpl?.hireCommandPoints ?? "-",
+      level: inst?.currentLevel ?? 0,
+      xp: inst?.currentExperience ?? 0,
+    });
+    if (inst !== undefined) {
+      appendMinionTraits(statsRow, content, inst.traitIds, {
+        roster: state.player.minions,
+        traits: inst.dynamicTraits,
+      });
+    }
+    body.appendChild(statsRow);
+    return card;
+  }
+
   function renderAssignMinionSlots(): void {
     minionsList.innerHTML = "";
     const wrap = document.createElement("div");
@@ -2913,19 +3341,11 @@ function initGameController(
         const tpl = inst
           ? content.minions.find((t) => t.id === inst.templateId)
           : undefined;
-        const mission = assignMissionTemplateId
-          ? findMissionOrEventTemplate(assignMissionTemplateId)
-          : undefined;
-        const assignOpts =
-          assignTarget !== null ? missionSuccessOptionsForTarget(state, assignTarget) : {};
-        const requiredTraitSet = new Set(
-          mission !== undefined ? mergedRequiredTraitIdsSorted(mission, assignOpts) : [],
-        );
-
         const chip = document.createElement("div");
         chip.className = "assign-minion-chip";
         chip.draggable = mainOnly && !busy.has(instanceId);
         chip.dataset.instanceId = instanceId;
+        chip.tabIndex = 0;
 
         chip.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "card-art--chip"));
 
@@ -2937,29 +3357,8 @@ function initGameController(
         chipLabel.textContent = tpl?.name ?? instanceId;
         chipMain.appendChild(chipLabel);
 
-        if (
-          inst &&
-          (inst.traitIds.length > 0 || inst.dynamicTraits.length > 0)
-        ) {
-          const traitsEl = document.createElement("div");
-          traitsEl.className = "assign-minion-chip-traits";
-          for (const tid of inst.traitIds) {
-            const span = document.createElement("span");
-            styleAssignChipTraitSpan(span, content, tid, requiredTraitSet);
-            traitsEl.appendChild(span);
-          }
-          for (const dtrait of inst.dynamicTraits) {
-            const span = document.createElement("span");
-            span.className = "assign-minion-chip-trait";
-            span.textContent = dynamicTraitDisplayLabel(content, state.player.minions, dtrait);
-            span.tabIndex = 0;
-            span.title = formatDynamicTraitTooltip(content, state.player.minions, dtrait);
-            traitsEl.appendChild(span);
-          }
-          chipMain.appendChild(traitsEl);
-        }
-
         chip.appendChild(chipMain);
+        attachAssignPickPreview(chip, buildMinionPreviewArticle(inst, instanceId));
 
         chip.addEventListener("dragstart", (e) => {
           if (!chip.draggable) {
