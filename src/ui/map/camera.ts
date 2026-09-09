@@ -40,11 +40,20 @@ const DRIFT_YAW_PERIOD_SECONDS = 41;
 const DRIFT_TILT_PERIOD_SECONDS = 29;
 
 /**
- * How far the grid layer floats above the land, in slab half-heights. The entire sense of
- * volume comes from this number: it is the only thing that gives the two layers a parallax to
- * disagree about as the camera drifts.
+ * How far each floating layer sits above the land, in slab half-heights.
+ *
+ * The entire sense of volume comes from these two numbers: they are the only thing giving the
+ * layers a parallax to disagree about as the camera drifts. Two heights rather than one because
+ * a single floating layer gives the eye one disagreement to read and a constant offset is easy
+ * to dismiss as a second flat picture; three planes at different heights sliding past each
+ * other at different rates is the thing that actually reads as depth.
+ *
+ * The atmosphere sits far enough above the lattice to be obviously a separate stratum. It is
+ * also, being nearer the camera, drawn larger than the land — so its own edges fall outside the
+ * panel and the only part on screen is its middle, which is exactly what a haze wants.
  */
 const GRID_LAYER_HEIGHT = 0.055;
+const ATMOSPHERE_LAYER_HEIGHT = 0.13;
 
 /**
  * How far the camera turns toward a staged target, at full focus. ~2.6 and ~1.7 degrees.
@@ -137,11 +146,29 @@ export interface MapCameraOptions {
   readonly pointer?: MapCameraFocus;
 }
 
+/**
+ * How far the nearest and furthest corners of the land sit from the camera, in view units.
+ *
+ * The depth haze is the one thing that makes the tilt read as a table rather than as a quad,
+ * and it needs to know what range of distances the map actually spans. Reporting the measured
+ * corners rather than a hardcoded pair means the haze covers exactly the visible depth however
+ * the tilt is later tuned — and collapses to nothing on a flat map, where `near === far`, with
+ * no special case anywhere.
+ */
+export interface MapDepthRange {
+  readonly near: number;
+  readonly far: number;
+}
+
 export interface MapCameraFrame {
   /** The land plane — and the matrix the markers must be projected through. */
   readonly land: Mat4;
   /** The grid plane floating above it. */
   readonly grid: Mat4;
+  /** The haze plane floating above that. */
+  readonly atmosphere: Mat4;
+  /** The depth the land spans, for the haze. */
+  readonly depth: MapDepthRange;
 }
 
 /**
@@ -188,12 +215,18 @@ function unfittedCamera(
 }
 
 /**
- * The scale that brings the whole land slab inside the frame. Only the four corners are tested
- * because the slab is a flat convex quad: nothing between them can project further out than
- * the furthest of them.
+ * The scale that brings the whole land slab inside the frame, and the depth it spans.
+ *
+ * Only the four corners are tested because the slab is a flat convex quad: nothing between them
+ * can project further out, or lie further from the camera, than the furthest of them. Both
+ * answers come out of the one loop because both are questions about the same four points, and
+ * because `clipScale` leaves w alone — so the depths measured here are still the depths after
+ * the fit is applied.
  */
-function fitScale(landCamera: Mat4): number {
+function landExtent(landCamera: Mat4): { readonly scale: number; readonly depth: MapDepthRange } {
   let extent = 0;
+  let near = Infinity;
+  let far = 0;
   for (const [u, v] of [
     [0, 0],
     [1, 0],
@@ -203,12 +236,15 @@ function fitScale(landCamera: Mat4): number {
     const [x, y, , w] = transformVec4(landCamera, u, v, 0, 1);
     if (!(w > 0)) {
       /* A corner behind the camera means the tilt has been pushed somewhere this fit cannot
-       * describe. Leave the framing alone rather than invent a scale from a divide by zero. */
-      return 1;
+       * describe. Leave the framing alone rather than invent a scale from a divide by zero,
+       * and report a depth range the haze reads as flat. */
+      return { scale: 1, depth: { near: 1, far: 1 } };
     }
     extent = Math.max(extent, Math.abs(x / w), Math.abs(y / w));
+    near = Math.min(near, w);
+    far = Math.max(far, w);
   }
-  return extent > 0 ? 1 / extent : 1;
+  return { scale: extent > 0 ? 1 / extent : 1, depth: { near, far } };
 }
 
 /**
@@ -238,9 +274,17 @@ export function mapCameraFrame(options: MapCameraOptions): MapCameraFrame {
   const pitch = tilt * TILT_RADIANS + driftPitch + focusPitch + pointerPitch;
 
   const land = unfittedCamera(aspect, pitch, yaw, 0);
-  const scale = clipScale(fitScale(land));
+  const { scale: fit, depth } = landExtent(land);
+  const scale = clipScale(fit);
+  /* Both floating layers are scaled by the land's tilt, so `tilt: 0` collapses the whole stack
+   * onto one plane and the flat case stays the zero case for all three. */
   return {
     land: multiply(scale, land),
     grid: multiply(scale, unfittedCamera(aspect, pitch, yaw, tilt * GRID_LAYER_HEIGHT)),
+    atmosphere: multiply(
+      scale,
+      unfittedCamera(aspect, pitch, yaw, tilt * ATMOSPHERE_LAYER_HEIGHT),
+    ),
+    depth,
   };
 }

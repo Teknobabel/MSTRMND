@@ -29,13 +29,22 @@ describe("mapCameraFrame with no tilt or drift", () => {
     }
   });
 
-  it("collapses the grid layer onto the land, so a flat map has no parallax to give away", () => {
+  it("collapses every floating layer onto the land, so a flat map has no parallax to give away", () => {
     for (const marker of AUTHORED_MARKERS.slice(0, 4)) {
       const land = ndc(frame.land, marker.x / 100, marker.y / 100);
-      const grid = ndc(frame.grid, marker.x / 100, marker.y / 100);
-      expect(grid.x).toBeCloseTo(land.x, 6);
-      expect(grid.y).toBeCloseTo(land.y, 6);
+      for (const above of [frame.grid, frame.atmosphere]) {
+        const floating = ndc(above, marker.x / 100, marker.y / 100);
+        expect(floating.x).toBeCloseTo(land.x, 6);
+        expect(floating.y).toBeCloseTo(land.y, 6);
+      }
     }
+  });
+
+  it("reports no depth to span, so the haze switches itself off on a flat map", () => {
+    // The land shader has no branch for this: it divides by the span and relies on near == far
+    // producing zero haze everywhere. If the two ever drift apart here, a map with the tilt
+    // dialled out quietly acquires a gradient nobody asked for.
+    expect(frame.depth.far).toBeCloseTo(frame.depth.near, 10);
   });
 
   it("puts the corners of the map exactly on the edges of the frame", () => {
@@ -96,6 +105,44 @@ describe("mapCameraFrame under tilt and drift", () => {
       expect(s).toBeGreaterThan(1e-3);
     }
     expect(Math.max(...samples) - Math.min(...samples)).toBeGreaterThan(1e-4);
+  });
+
+  it("gives the atmosphere a wider parallax than the grid, so the stack reads as three depths", () => {
+    // Two layers at the same apparent height would be one layer drawn twice. What makes the
+    // stack read as volume is that each floating plane disagrees with the land by a different
+    // amount, and the higher one disagrees more.
+    for (const timeSeconds of [0, 11, 22, 33]) {
+      const frame = mapCameraFrame({ aspect: ASPECT, timeSeconds, tilt: 1, drift: 1 });
+      const at = (m: Mat4) => ndc(m, 0.15, 0.2);
+      const land = at(frame.land);
+      const offset = (m: Mat4): number => {
+        const p = at(m);
+        return Math.hypot(p.x - land.x, p.y - land.y);
+      };
+      expect(offset(frame.atmosphere)).toBeGreaterThan(offset(frame.grid));
+    }
+  });
+
+  it("reports a depth range that brackets every site on the map", () => {
+    // The haze normalises against this range, so a site outside it would be clamped flat — the
+    // near half of the map fully clear or the far half fully hazed, either way a band that
+    // stops moving with the drift.
+    for (const timeSeconds of [0, 13, 26, 39]) {
+      const { land, depth } = mapCameraFrame({ aspect: ASPECT, timeSeconds, tilt: 1, drift: 1 });
+      expect(depth.far).toBeGreaterThan(depth.near);
+      for (const marker of AUTHORED_MARKERS) {
+        const w = ndc(land, marker.x / 100, marker.y / 100).w;
+        expect(w).toBeGreaterThanOrEqual(depth.near);
+        expect(w).toBeLessThanOrEqual(depth.far);
+      }
+    }
+  });
+
+  it("puts the top of the map further from the camera than the bottom", () => {
+    // The haze is only correct if depth actually increases toward the pitched-away edge; a sign
+    // slip here would fog the near edge and leave the horizon glaring.
+    const { land } = mapCameraFrame({ aspect: ASPECT, timeSeconds: 0, tilt: 1, drift: 0 });
+    expect(ndc(land, 0.5, 0).w).toBeGreaterThan(ndc(land, 0.5, 1).w);
   });
 
   it("actually moves the camera over time, so the drift is not a no-op", () => {

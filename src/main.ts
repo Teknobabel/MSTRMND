@@ -124,6 +124,8 @@ import {
   type MapCameraFocus,
   type MapCameraFrame,
 } from "./ui/map/camera";
+import { ambientTracks } from "./ui/map/ambientTraffic";
+import { formatMapCoordinates } from "./ui/map/coordinates";
 import { mapSiteSignals, type MapSiteSignal } from "./ui/map/siteSignals";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import { initGlobalTooltips } from "./ui/tooltip";
@@ -5522,7 +5524,14 @@ function initGameController(
    * Rebuilt every frame while the map is animating; the pins read `mapCamera.land` through
    * `createMatrixProjector`, which is what keeps them on their sites through the drift.
    */
-  let mapCamera: MapCameraFrame = { land: flatMapMatrix(), grid: flatMapMatrix() };
+  /* The resting frame, used only until the first `updateMapCamera`: every plane flat and no
+   * depth for the haze to work with, which is the same nothing a `tilt: 0` camera reports. */
+  let mapCamera: MapCameraFrame = {
+    land: flatMapMatrix(),
+    grid: flatMapMatrix(),
+    atmosphere: flatMapMatrix(),
+    depth: { near: 1, far: 1 },
+  };
   let mapProjector: MapProjector = createFlatProjector();
   /** When the map view opened, so the drift starts from rest rather than mid-swing. */
   let mapEpochMs: number | null = null;
@@ -5531,6 +5540,26 @@ function initGameController(
 
   /** What each lit site is saying, rebuilt from game state on every render. */
   let mapSignals: readonly MapSiteSignal[] = [];
+  /**
+   * The reticle that snaps to whatever the pointer is over, and the marker it is currently on.
+   *
+   * Held apart from `mapProjectedEls` because everything in that list is pinned to one marker
+   * for the life of the plot, and this is the one element whose subject changes without the
+   * panel being rebuilt. It is projected alongside them rather than by them.
+   */
+  let mapReticleEl: HTMLElement | null = null;
+  let mapReticleReadoutEl: HTMLElement | null = null;
+  /* A bare point, like `mapProjectedEls` and for the same reason: the lair can be hovered
+   * too, and it is plotted from its own template rather than from a site marker. */
+  let mapReticleMarker: MarkerPoint | null = null;
+  /** The console clock, written only when its displayed second changes. */
+  let mapClockEl: HTMLElement | null = null;
+  let mapClockShown = "";
+
+  /* Where the lair sits, for the rings the renderer puts around it. Held here rather than read
+   * from content at draw time because a run need not have a lair, or the lair need not be
+   * plotted, and the draw loop should not have to know either. */
+  let mapLairPoint: { readonly u: number; readonly v: number } | null = null;
 
   /**
    * Where the camera is leaning, and where it is being asked to lean.
@@ -5744,6 +5773,17 @@ function initGameController(
     );
     updateMapCamera();
     syncMapProjection();
+
+    /* One text write a second rather than one a frame. The clock is the only per-frame DOM work
+     * on the panel that is not a transform, and a `textContent` assignment that changes nothing
+     * still costs more than the comparison that skips it. */
+    if (mapClockEl !== null) {
+      const shown = formatConsoleClock(mapTimeSeconds);
+      if (shown !== mapClockShown) {
+        mapClockShown = shown;
+        mapClockEl.textContent = shown;
+      }
+    }
   }
 
   /** Seconds for the lean to close most of the distance to a newly staged target. */
@@ -5772,6 +5812,11 @@ function initGameController(
         timeSeconds: mapTimeSeconds,
         aspect: plot.width / plot.height,
         signals: mapSignals,
+        /* Derived here rather than kept as state: the schedule is a pure function of the clock,
+         * so there is nothing to advance, nothing to reset when the panel is rebuilt, and
+         * nothing that can drift out of step with the shaders reading the same clock. */
+        tracks: ambientTracks(mapTimeSeconds),
+        lair: mapLairPoint,
       });
     }
     for (const { el, marker } of mapProjectedEls) {
@@ -5779,6 +5824,15 @@ function initGameController(
       el.style.setProperty("--map-px", `${projected.x.toFixed(2)}px`);
       el.style.setProperty("--map-py", `${projected.y.toFixed(2)}px`);
       el.hidden = !projected.visible;
+    }
+    /* The reticle rides the same projection as the pins, so it stays welded to the one it has
+     * closed on through the drift rather than sliding off it. */
+    if (mapReticleEl !== null && mapReticleMarker !== null) {
+      const projected = mapProjector.project(mapReticleMarker, plot);
+      mapReticleEl.style.setProperty("--map-px", `${projected.x.toFixed(2)}px`);
+      mapReticleEl.style.setProperty("--map-py", `${projected.y.toFixed(2)}px`);
+      /* A reticle drawn around a pin the camera has turned out of frame points at nothing. */
+      mapReticleEl.hidden = !projected.visible;
     }
     syncMapLeaderLine(plot);
   }
@@ -5897,6 +5951,7 @@ Your lair`;
     });
     mapProjectedEls.push({ el: home, marker: at });
     mapMarkersBySubject.set("lair", at);
+    mapLairPoint = { u: at.x / 100, v: at.y / 100 };
 
     const ring = document.createElement("span");
     ring.className = "map-marker__ring";
@@ -5916,6 +5971,106 @@ Your lair`;
   }
 
   /**
+   * The reticle: brackets that close on whatever the pointer is over, and its coordinates.
+   *
+   * Inert markup — `aria-hidden`, and no pointer events. Everything it says about a site the pin
+   * underneath already says in its `aria-label` and its tooltip, so to a screen reader this is
+   * duplicate noise, and to the pointer it is an obstacle sitting exactly where the thing you
+   * are trying to click is.
+   */
+  function buildMapReticle(plot: HTMLElement): void {
+    const reticle = document.createElement("div");
+    reticle.className = "map-reticle";
+    reticle.setAttribute("aria-hidden", "true");
+    reticle.hidden = true;
+
+    const sweep = document.createElement("span");
+    sweep.className = "map-reticle__sweep";
+    reticle.appendChild(sweep);
+    for (const corner of ["tl", "tr", "bl", "br"]) {
+      const bracket = document.createElement("span");
+      bracket.className = `map-reticle__corner map-reticle__corner--${corner}`;
+      reticle.appendChild(bracket);
+    }
+    const readout = document.createElement("span");
+    readout.className = "map-reticle__readout";
+    reticle.appendChild(readout);
+
+    plot.appendChild(reticle);
+    mapReticleEl = reticle;
+    mapReticleReadoutEl = readout;
+    /* A pin can survive the rebuild that just dropped this element, so re-point it now rather
+     * than wait for a pointer move that may never come. */
+    syncMapReticle();
+  }
+
+  /**
+   * The console furniture in the plot's corners.
+   *
+   * Says nothing about the run on purpose. Everything here is either constant or a clock, so
+   * there is no chance of a player reading a state out of it that the rules do not back — and
+   * the corners it sits in are the two the authored markers leave empty.
+   */
+  function buildMapTelemetry(plot: HTMLElement): void {
+    const head = document.createElement("div");
+    head.className = "map-telemetry map-telemetry--head";
+    head.setAttribute("aria-hidden", "true");
+    const dot = document.createElement("span");
+    dot.className = "map-telemetry__dot";
+    head.appendChild(dot);
+    const label = document.createElement("span");
+    label.textContent = "ORBITAL UPLINK · NOMINAL";
+    head.appendChild(label);
+    plot.appendChild(head);
+
+    const foot = document.createElement("div");
+    foot.className = "map-telemetry map-telemetry--foot";
+    foot.setAttribute("aria-hidden", "true");
+    const clock = document.createElement("span");
+    clock.className = "map-telemetry__clock";
+    clock.textContent = "T+00:00:00";
+    foot.appendChild(clock);
+    const bar = document.createElement("span");
+    bar.className = "map-telemetry__bar";
+    foot.appendChild(bar);
+    plot.appendChild(foot);
+
+    mapClockEl = clock;
+    mapClockShown = "";
+  }
+
+  /** `T+HH:MM:SS` since the console came up. */
+  function formatConsoleClock(totalSeconds: number): string {
+    const whole = Math.max(0, Math.floor(totalSeconds));
+    const pad = (n: number): string => String(n).padStart(2, "0");
+    return `T+${pad(Math.floor(whole / 3600))}:${pad(Math.floor(whole / 60) % 60)}:${pad(whole % 60)}`;
+  }
+
+  /**
+   * Point the reticle at whatever is hovered, or put it away.
+   *
+   * The coordinates are written here rather than per frame: they are a property of which site is
+   * under the pointer, not of where the camera has drifted to, so the only thing the animation
+   * loop has to do for this element is move it.
+   */
+  function syncMapReticle(): void {
+    const key = mapSubjectKey(hoveredMapSubject);
+    const marker = key === null ? undefined : mapMarkersBySubject.get(key);
+    mapReticleMarker = marker ?? null;
+    if (mapReticleEl === null) {
+      return;
+    }
+    if (marker === undefined) {
+      mapReticleEl.hidden = true;
+      return;
+    }
+    if (mapReticleReadoutEl !== null) {
+      mapReticleReadoutEl.textContent = formatMapCoordinates(marker.x / 100, marker.y / 100);
+    }
+    mapReticleEl.hidden = false;
+  }
+
+  /**
    * The run's map with its sites plotted on it. Markers carry the same drag payload as location
    * cards, so the map is a second way to pick a mission target rather than a picture of one.
    */
@@ -5926,6 +6081,12 @@ Your lair`;
     mapPanelEl.innerHTML = "";
     mapPlotResizeObserver.disconnect();
     mapProjectedEls = [];
+    mapLairPoint = null;
+    mapReticleEl = null;
+    mapReticleReadoutEl = null;
+    mapReticleMarker = null;
+    mapClockEl = null;
+    mapClockShown = "";
     mapPlotEl = null;
     mapLeaderLineEls = [];
     mapMarkersBySubject = new Map();
@@ -6003,6 +6164,9 @@ Your lair`;
     });
     plot.appendChild(leader);
 
+    buildMapReticle(plot);
+    buildMapTelemetry(plot);
+
     const playable = new Set(runLocations().map((l) => l.id));
     const mainOnly = state.phase === "main";
     const targetedLocationId =
@@ -6065,6 +6229,11 @@ Your lair`;
       pin.type = "button";
       pin.className = `map-marker map-marker--${loc.locationType}`;
       pin.dataset.locationId = loc.id;
+      /* Where this pin sits in its idle animation, so fifteen of them do not breathe in unison —
+       * which reads as the panel pulsing rather than as fifteen separate places. Stepped by the
+       * golden ratio because consecutive markers are usually neighbours on the map, and any
+       * smaller step would leave visible bands of pins in phase with each other. */
+      pin.style.setProperty("--map-pin-phase", `${(mapProjectedEls.length * 0.618) % 1}`);
       mapProjectedEls.push({ el: pin, marker });
       if (intel === 0) {
         pin.classList.add("map-marker--dark");
@@ -6370,6 +6539,7 @@ Your lair`;
       return;
     }
     hoveredMapSubject = subject;
+    syncMapReticle();
     renderSiteInspector();
   }
 

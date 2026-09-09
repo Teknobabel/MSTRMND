@@ -3780,6 +3780,12 @@ body {
   z-index: 1;
 }
 
+/*
+ * The dash offset runs negative, which walks the pattern toward x2 — the panel end. A line that
+ * flowed the other way would read as the panel feeding the map, which is backwards: the site is
+ * the subject and the card is what is being told about it. One period of the 6/5 dash is 11
+ * units, so ending the cycle there loops without a visible jump.
+ */
 .map-leader__line {
   stroke: var(--red-bright);
   stroke-width: 1.5;
@@ -3787,6 +3793,13 @@ body {
   stroke-linecap: round;
   opacity: 0.75;
   filter: drop-shadow(0 0 4px var(--red-glow));
+  animation: leader-flow 0.85s linear infinite;
+}
+
+@keyframes leader-flow {
+  to {
+    stroke-dashoffset: -11;
+  }
 }
 
 /* The GPU art layer, when WebGL2 is available. Same box as the image it stands in for: the
@@ -3829,11 +3842,41 @@ body {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 8px rgba(232, 17, 45, 0.9);
 }
 
+/*
+ * The ring breathes, offset per pin by `--map-pin-phase` (see `renderMapPanel`). A negative
+ * delay starts the animation already part-way through rather than pausing before it, which is
+ * what puts fifteen pins at fifteen different points of the same cycle on the first frame.
+ *
+ * Deliberately shallow. This is the map's resting state, not an alert: it has to survive being
+ * looked at for a whole turn without becoming the thing in the panel you cannot ignore.
+ */
 .map-marker__ring {
   position: absolute;
   inset: 0;
   border: 1px solid rgba(232, 17, 45, 0.55);
   border-radius: 50%;
+  animation: pin-breathe 4.6s ease-in-out infinite;
+  animation-delay: calc(var(--map-pin-phase, 0) * -4.6s);
+}
+
+@keyframes pin-breathe {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Anything the player is pointing at, has staged, or has tabbed to holds still and stays lit.
+ * Breathing is for the pins nothing is happening to. */
+.map-marker:hover .map-marker__ring,
+.map-marker:focus-visible .map-marker__ring,
+.map-marker--preview .map-marker__ring,
+.map-marker--targeted .map-marker__ring {
+  animation: none;
+  opacity: 1;
 }
 
 .map-marker:hover,
@@ -3875,6 +3918,38 @@ body {
   box-shadow: 0 0 12px rgba(255, 255, 255, 0.7);
 }
 
+/*
+ * The staged target gets the one ping a site pin ever has. It says nothing the white ring above
+ * does not already say — which is the point: motion here draws the eye to a state the player
+ * put the map into, without adding a channel they have to learn to read.
+ *
+ * `::before` is free on a site pin; the lair uses its own for the beacon, and `--agents` uses
+ * `::after`. A lair is never a target, so the two ping rules can never meet.
+ */
+.map-marker--targeted::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: pin-ping 2.4s ease-out infinite;
+}
+
+@keyframes pin-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+/* Someone else's people are standing there, so the mark blinks rather than sits. Faster than
+ * the pins breathe underneath it — this is the one thing on the map that is not the player's. */
 .map-marker--agents::after {
   content: "";
   position: absolute;
@@ -3885,6 +3960,20 @@ body {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+  animation: agent-blink 1.9s ease-in-out infinite;
+  animation-delay: calc(var(--map-pin-phase, 0) * -1.9s);
+}
+
+@keyframes agent-blink {
+  0%,
+  100% {
+    opacity: 0.45;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 9px rgba(255, 255, 255, 1);
+  }
 }
 
 /* ---------------- The player's lair ---------------- */
@@ -4101,7 +4190,206 @@ body {
 
 /* A pin the projector reports as not visible. Spelled out rather than left to the UA's
  * `[hidden]` rule, which the stack's own `display: flex` would otherwise win against. */
+/* ---------------- Hover reticle ---------------- */
+
+/*
+ * Brackets that close on whatever the pointer is over, placed by the projector exactly as the
+ * pins are — the same two custom properties, the same centring by negative margin. It sits above
+ * the other pins so its brackets are never cut in half by one, and below the hovered pin itself,
+ * which lifts to z-index 3.
+ */
+.map-reticle {
+  --map-px: 0px;
+  --map-py: 0px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(var(--map-px), var(--map-py));
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: -1.7rem 0 0 -1.7rem;
+  pointer-events: none;
+  z-index: 2;
+  animation: reticle-close 0.18s ease-out;
+}
+
+/* Snapping open is the whole gesture: an instrument acquiring something, rather than a decal
+ * that was already there. Short enough that moving along a row of pins does not lag the hand. */
+@keyframes reticle-close {
+  from {
+    transform: translate(var(--map-px), var(--map-py)) scale(1.5);
+    opacity: 0;
+  }
+}
+
+.map-reticle__sweep {
+  position: absolute;
+  inset: 0.5rem;
+  border: 1px solid rgba(232, 17, 45, 0.32);
+  border-top-color: rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+  animation: reticle-spin 3.8s linear infinite;
+}
+
+@keyframes reticle-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.map-reticle__corner {
+  position: absolute;
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 0 solid rgba(255, 255, 255, 0.8);
+}
+
+.map-reticle__corner--tl {
+  top: 0;
+  left: 0;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+
+.map-reticle__corner--tr {
+  top: 0;
+  right: 0;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+
+.map-reticle__corner--bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+
+.map-reticle__corner--br {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
+/*
+ * The coordinate readout. Tabular figures and a fixed-width format (see `ui/map/coordinates`)
+ * so it does not twitch as the hand moves from pin to pin, and centred under the brackets where
+ * it cannot cover the site itself.
+ */
+.map-reticle__readout {
+  position: absolute;
+  /* Above the brackets, not below. The pin's own name label sits at 1.05rem under the site and
+   * appears on the same hover this does, so a readout under the reticle lands on top of it — the
+   * two pieces of text the map shows about a site, printed over each other. */
+  bottom: 100%;
+  left: 50%;
+  transform: translate(-50%, -0.15rem);
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.72);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.95);
+}
+
+/* ---------------- Corner telemetry ---------------- */
+
+/*
+ * Console furniture. Inert to the pointer and hidden from assistive tech: it carries nothing the
+ * run depends on, and it sits over a panel whose whole job is being clicked accurately.
+ *
+ * The two corners chosen are the ones the authored markers leave empty — top right is open ocean
+ * north of Siberia, bottom left is the South Pacific — so this never covers a pin.
+ */
+.map-telemetry {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  pointer-events: none;
+  z-index: 4;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(232, 17, 45, 0.55);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+}
+
+/*
+ * Top left rather than top right, which is where this started. The Site Detail inspector slides
+ * in over the plot's top-right corner, so that placement put the uplink readout underneath a
+ * panel for as long as any site was being inspected — which is most of a turn, and makes the
+ * thing not worth drawing. Both offsets clear the panel's own corner brackets.
+ */
+.map-telemetry--head {
+  top: 0.75rem;
+  left: 0.95rem;
+}
+
+.map-telemetry--foot {
+  bottom: 0.6rem;
+  left: 0.95rem;
+}
+
+.map-telemetry__dot {
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 50%;
+  background: var(--red-bright);
+  box-shadow: 0 0 6px var(--red-glow);
+  animation: telemetry-blink 2.6s steps(1, end) infinite;
+}
+
+/* Steps, not a fade: a link indicator is on or it is off. */
+@keyframes telemetry-blink {
+  0%,
+  62% {
+    opacity: 1;
+  }
+  63%,
+  100% {
+    opacity: 0.16;
+  }
+}
+
+.map-telemetry__clock {
+  font-variant-numeric: tabular-nums;
+  color: rgba(232, 17, 45, 0.7);
+}
+
+/* A sweep crossing a short rail, on a period that does not divide into the lattice sweeps
+ * above it — three things pulsing in time would read as one thing. */
+.map-telemetry__bar {
+  position: relative;
+  width: 3rem;
+  height: 2px;
+  overflow: hidden;
+  background: rgba(232, 17, 45, 0.16);
+}
+
+.map-telemetry__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, var(--red-bright), transparent);
+  animation: telemetry-sweep 3.1s ease-in-out infinite;
+}
+
+@keyframes telemetry-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(286%);
+  }
+}
+
 .map-marker[hidden],
+.map-reticle[hidden],
 .map-callout-stack[hidden] {
   display: none;
 }
@@ -4852,6 +5140,16 @@ body {
 
   .omega-ticker__track {
     animation: none;
+  }
+
+  /*
+   * The console clock is driven by the map's own frame clock, which stops here along with
+   * everything else on the panel. A readout frozen at T+00:00:00 reads as broken rather than as
+   * deliberately still, so it is not shown at all — and the alternative, a second timer that
+   * keeps ticking regardless, would be adding back the motion this preference asked us to drop.
+   */
+  .map-telemetry__clock {
+    display: none;
   }
 }
 
