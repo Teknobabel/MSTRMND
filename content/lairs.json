@@ -7,6 +7,10 @@
       "smash_and_grab",
       "ghost_heist"
     ],
+    "mapPosition": {
+      "x": 79.2,
+      "y": 66.6
+    },
     "startingAssets": {
       "dirty_money": 1,
       "ghost_protocol": 1

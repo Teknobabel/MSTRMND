@@ -540,13 +540,17 @@ export type LocationIntelState = {
 };
 
 /**
- * Where one site sits on its map's art. `x`/`y` are percentages of the art box (0–100,
- * left/top origin) rather than pixels, so the plot survives any panel size.
+ * A point on a map's art. `x`/`y` are percentages of the art box (0–100, left/top origin)
+ * rather than pixels, so anything plotted from one survives any panel size.
  */
-export type MapMarker = {
-  locationId: string;
+export type MapPoint = {
   x: number;
   y: number;
+};
+
+/** Where one site sits on its map's art. */
+export type MapMarker = MapPoint & {
+  locationId: string;
 };
 
 export type MapTemplate = {
@@ -698,6 +702,20 @@ export type LairTemplate = {
   upgradeLevels: LairUpgradeLevel[];
   /** Optional starting `Asset.id` quantities merged into `player.assets` at run start. */
   startingAssets?: Record<string, number>;
+  /**
+   * Where this lair sits on the world map, in the same percentage space as {@link MapMarker}.
+   *
+   * Authored per lair and **fixed for every run**, rather than rolled at run start. A lair is a
+   * described place — a hollowed-out volcano, a drowned trench station — and the map art is
+   * hand-plotted, so a random point would as often land in open ocean or contradict the
+   * description as read as a real base. Fixed also means the player learns where a lair lives,
+   * which is what makes picking one at the title screen a choice about the map.
+   *
+   * Absent ⇒ the lair is simply not plotted, the same graceful skip an unmarked location gets.
+   * If maps ever diverge enough that one coordinate cannot serve them all, `MapTemplate` can
+   * grow a per-map override without disturbing this.
+   */
+  mapPosition?: MapPoint;
 };
 
 /** Catalog entry for the player mastermind identity; one row chosen per run. */

@@ -3,6 +3,7 @@
     "id": "case_the_site",
     "name": "Case the Joint",
     "description": "Put eyes on the target until its secrets start showing.",
+    "cardArt": "/assets/cards/custom/mission-case-the-site.webp",
     "coreMission": true,
     "durationTurns": 1,
     "onFailureEffects": [
@@ -54,6 +55,7 @@
     "id": "smash_and_grab",
     "name": "Smash and Grab",
     "description": "Subtlety is for people who can't lift a vault door.",
+    "cardArt": "/assets/cards/custom/mission-smash-and-grab.webp",
     "durationTurns": 1,
     "onFailureEffects": [
       {
@@ -92,6 +94,7 @@
     "id": "ghost_heist",
     "name": "The Ghost Heist",
     "description": "In and out through the vents. The mark finds an empty case and a calling card.",
+    "cardArt": "/assets/cards/custom/mission-ghost-heist.webp",
     "durationTurns": 2,
     "onFailureEffects": [
       {
@@ -682,6 +685,7 @@
     "id": "om1_convoy",
     "name": "Ambush the Fusion Convoy",
     "description": "The core crosses the mountains under armed escort at dawn. Take it on the road.",
+    "cardArt": "/assets/cards/custom/mission-om1-convoy.webp",
     "durationTurns": 2,
     "onFailureEffects": [
       {
@@ -732,6 +736,7 @@
     "id": "om1_committee",
     "name": "Own the Defense Committee",
     "description": "Five signatures release the core to a contractor that exists only on your letterhead.",
+    "cardArt": "/assets/cards/custom/mission-om1-committee.webp",
     "durationTurns": 2,
     "onFailureEffects": [
       {
@@ -778,6 +783,7 @@
     "id": "om1_buyout",
     "name": "Black Market Buyout",
     "description": "Somewhere between customs seizures, a fusion core is for sale. Outbid everyone.",
+    "cardArt": "/assets/cards/custom/mission-om1-buyout.webp",
     "durationTurns": 2,
     "onFailureEffects": [
       {
@@ -824,6 +830,7 @@
     "id": "om2_skywatch",
     "name": "Seize the Skywatch Uplink",
     "description": "Whoever owns the dish owns the sky. Storm the station and repoint it at your array.",
+    "cardArt": "/assets/cards/custom/mission-om2-skywatch.webp",
     "durationTurns": 2,
     "onFailureEffects": [
       {
@@ -882,6 +889,7 @@
     "id": "om2_ministry",
     "name": "Capture the Ministry",
     "description": "The launch licenses, the airspace waivers, the denials — all signed by people you own.",
+    "cardArt": "/assets/cards/custom/mission-om2-ministry.webp",
     "durationTurns": 2,
     "onFailureEffects": [
       {
@@ -930,6 +938,7 @@
     "id": "om2_aerodyne",
     "name": "Hostile Takeover: AeroDyne",
     "description": "Collateralize the tender with bullion nobody can trace and a board nobody dares refuse.",
+    "cardArt": "/assets/cards/custom/mission-om2-aerodyne.webp",
     "durationTurns": 2,
     "onFailureEffects": [
       {
@@ -982,6 +991,7 @@
     "id": "om3_interceptors",
     "name": "Blind the Interceptors",
     "description": "The Citadel's launch grid goes dark for ninety minutes. The Midnight Sun rises unchallenged.",
+    "cardArt": "/assets/cards/custom/mission-om3-interceptors.webp",
     "durationTurns": 3,
     "onFailureEffects": [
       {
@@ -1039,6 +1049,7 @@
     "id": "om3_assembly",
     "name": "Seize the World Assembly",
     "description": "Walk to the podium, smile for the cameras, and read the world your terms.",
+    "cardArt": "/assets/cards/custom/mission-om3-assembly.webp",
     "durationTurns": 3,
     "onFailureEffects": [
       {
@@ -1096,6 +1107,7 @@
     "id": "om3_markets",
     "name": "Ransom the World Markets",
     "description": "Every ledger on Earth clears through Meridian. Tonight, it clears through you.",
+    "cardArt": "/assets/cards/custom/mission-om3-markets.webp",
     "durationTurns": 3,
     "onFailureEffects": [
       {

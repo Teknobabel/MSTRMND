@@ -106,8 +106,21 @@
 
           <div class="omega-body">
             <aside class="omega-sidebar game-panel game-panel--plan-column" aria-label="Mission planning">
-              <div class="plan-column-stack">
+              <header class="game-panel-head">
                 <h2 id="plan-panel-title" class="game-panel-title">Mission Planning</h2>
+                <button
+                  type="button"
+                  class="game-panel-minimize"
+                  data-panel-minimize="plan"
+                  aria-expanded="true"
+                >
+                  <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path class="game-panel-minimize__bar" d="M7 12h10" />
+                    <path class="game-panel-minimize__stem" d="M12 7v10" />
+                  </svg>
+                </button>
+              </header>
+              <div class="plan-column-stack">
                 <div
                   id="plan-column-panel-plan"
                   class="missions-panel-page"
@@ -194,24 +207,171 @@
                 >
                   <div id="map-panel" class="map-panel"></div>
                 </aside>
-                <aside class="game-panel game-panel--locations" data-menu-panel="locations" aria-labelledby="locations-panel-title">
-                  <h2 id="locations-panel-title" class="game-panel-title">Locations</h2>
-                  <div id="locations-panel" class="locations-panel"></div>
+                <!-- The map's inspector panes, hanging along the top of the map rather than in
+                     the dock band. Slot 0 sits at the right corner and the stack grows leftward,
+                     four of them spanning exactly the width the dock band does. Which pane sits
+                     in which slot is `renderSiteInspector`'s to say — it keeps a pane on the
+                     subject it is already showing, so cards slide between slots instead of being
+                     rebuilt in place. None carry `data-menu-panel`: they are not menu
+                     destinations, so their `hidden` is owned outright. -->
+                <aside
+                  class="game-panel game-panel--site-inspector"
+                  id="site-inspector"
+                  data-inspector-pane="0"
+                  aria-labelledby="site-inspector-title"
+                  hidden
+                >
+                  <header class="game-panel-head">
+                    <h2 id="site-inspector-title" class="game-panel-title">Site Detail</h2>
+                    <button
+                      type="button"
+                      class="game-panel-close"
+                      data-inspector-close="0"
+                      aria-label="Close site detail"
+                    >
+                      <svg class="game-panel-close__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M7 7l10 10M17 7L7 17" />
+                      </svg>
+                    </button>
+                  </header>
+                  <div id="site-inspector-body" class="site-inspector-body"></div>
+                </aside>
+                <aside
+                  class="game-panel game-panel--site-inspector"
+                  id="site-inspector-2"
+                  data-inspector-pane="1"
+                  aria-labelledby="site-inspector-2-title"
+                  hidden
+                >
+                  <header class="game-panel-head">
+                    <h2 id="site-inspector-2-title" class="game-panel-title">Site Detail</h2>
+                    <button
+                      type="button"
+                      class="game-panel-close"
+                      data-inspector-close="1"
+                      aria-label="Close site detail"
+                    >
+                      <svg class="game-panel-close__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M7 7l10 10M17 7L7 17" />
+                      </svg>
+                    </button>
+                  </header>
+                  <div id="site-inspector-2-body" class="site-inspector-body"></div>
+                </aside>
+                <aside
+                  class="game-panel game-panel--site-inspector"
+                  id="site-inspector-3"
+                  data-inspector-pane="2"
+                  aria-labelledby="site-inspector-3-title"
+                  hidden
+                >
+                  <header class="game-panel-head">
+                    <h2 id="site-inspector-3-title" class="game-panel-title">Site Detail</h2>
+                    <button
+                      type="button"
+                      class="game-panel-close"
+                      data-inspector-close="2"
+                      aria-label="Close site detail"
+                    >
+                      <svg class="game-panel-close__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M7 7l10 10M17 7L7 17" />
+                      </svg>
+                    </button>
+                  </header>
+                  <div id="site-inspector-3-body" class="site-inspector-body"></div>
+                </aside>
+                <aside
+                  class="game-panel game-panel--site-inspector"
+                  id="site-inspector-4"
+                  data-inspector-pane="3"
+                  aria-labelledby="site-inspector-4-title"
+                  hidden
+                >
+                  <header class="game-panel-head">
+                    <h2 id="site-inspector-4-title" class="game-panel-title">Site Detail</h2>
+                    <button
+                      type="button"
+                      class="game-panel-close"
+                      data-inspector-close="3"
+                      aria-label="Close site detail"
+                    >
+                      <svg class="game-panel-close__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M7 7l10 10M17 7L7 17" />
+                      </svg>
+                    </button>
+                  </header>
+                  <div id="site-inspector-4-body" class="site-inspector-body"></div>
                 </aside>
                 <aside class="game-panel game-panel--omega" data-menu-panel="omega" aria-labelledby="omega-plan-panel-title">
-                  <h2 id="omega-plan-panel-title" class="game-panel-title">Omega Plan</h2>
+                  <header class="game-panel-head">
+                    <h2 id="omega-plan-panel-title" class="game-panel-title">Omega Plan</h2>
+                    <button
+                      type="button"
+                      class="game-panel-minimize"
+                      data-panel-minimize="omega"
+                      aria-expanded="true"
+                    >
+                      <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path class="game-panel-minimize__bar" d="M7 12h10" />
+                        <path class="game-panel-minimize__stem" d="M12 7v10" />
+                      </svg>
+                    </button>
+                  </header>
                   <div id="omega-plan-panel" class="omega-plan-panel"></div>
                 </aside>
                 <aside class="game-panel game-panel--minions" data-menu-panel="minions" aria-labelledby="minions-panel-title">
-                  <h2 id="minions-panel-title" class="game-panel-title">Resources</h2>
+                  <header class="game-panel-head">
+                    <h2 id="minions-panel-title" class="game-panel-title">Resources</h2>
+                    <button
+                      type="button"
+                      class="game-panel-minimize"
+                      data-panel-minimize="minions"
+                      aria-expanded="true"
+                    >
+                      <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path class="game-panel-minimize__bar" d="M7 12h10" />
+                        <path class="game-panel-minimize__stem" d="M12 7v10" />
+                      </svg>
+                    </button>
+                  </header>
                   <div id="minions-panel" class="minions-panel"></div>
+                </aside>
+                <aside class="game-panel game-panel--locations" data-menu-panel="locations" aria-labelledby="locations-panel-title">
+                  <header class="game-panel-head">
+                    <h2 id="locations-panel-title" class="game-panel-title">Locations</h2>
+                    <button
+                      type="button"
+                      class="game-panel-minimize"
+                      data-panel-minimize="locations"
+                      aria-expanded="true"
+                    >
+                      <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path class="game-panel-minimize__bar" d="M7 12h10" />
+                        <path class="game-panel-minimize__stem" d="M12 7v10" />
+                      </svg>
+                    </button>
+                  </header>
+                  <div id="locations-panel" class="locations-panel"></div>
                 </aside>
                 <aside
                   class="game-panel game-panel--lair"
                   data-menu-panel="lair"
                   aria-labelledby="lair-panel-title"
                 >
-                  <h2 id="lair-panel-title" class="game-panel-title">Lair</h2>
+                  <header class="game-panel-head">
+                    <h2 id="lair-panel-title" class="game-panel-title">Lair</h2>
+                    <button
+                      type="button"
+                      class="game-panel-minimize"
+                      data-panel-minimize="lair"
+                      aria-expanded="true"
+                    >
+                      <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path class="game-panel-minimize__bar" d="M7 12h10" />
+                        <path class="game-panel-minimize__stem" d="M12 7v10" />
+                      </svg>
+                    </button>
+                  </header>
                   <div id="lair-panel" class="lair-panel"></div>
                 </aside>
                 <!-- Missions has no dashboard tile: the Lair panel carries an Active Missions
@@ -222,7 +382,9 @@
                   data-dashboard-hidden="true"
                   aria-labelledby="missions-panel-title"
                 >
-                  <h2 id="missions-panel-title" class="game-panel-title">Active Missions</h2>
+                  <header class="game-panel-head">
+                    <h2 id="missions-panel-title" class="game-panel-title">Active Missions</h2>
+                  </header>
                   <div id="missions-panel-root" class="missions-panel-root"></div>
                 </aside>
               </div>

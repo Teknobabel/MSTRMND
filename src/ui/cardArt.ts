@@ -57,6 +57,35 @@ export function createCardArtImg(src: string, extraClass = ""): HTMLImageElement
 }
 
 /**
+ * Art-led card shell: the art runs full-bleed across the top of the card and the card's name
+ * and stat line sit on the bottom of the image behind a scrim, so `meta` is the block that
+ * rides the art and `body` is everything that follows it under the image.
+ *
+ * The alternative to {@link appendCardArtShell}'s side thumbnail; shared by location cards and
+ * Omega plan mission cards so the two read as the same object.
+ */
+export function appendCardHeroShell(
+  article: HTMLElement,
+  src: string,
+): { meta: HTMLDivElement; body: HTMLDivElement } {
+  article.classList.add("card-with-hero-art");
+
+  const hero = document.createElement("div");
+  hero.className = "card-hero";
+  hero.appendChild(createCardArtImg(src));
+
+  const meta = document.createElement("div");
+  meta.className = "card-hero__meta";
+  hero.appendChild(meta);
+  article.appendChild(hero);
+
+  const body = document.createElement("div");
+  body.className = "card-body";
+  article.appendChild(body);
+  return { meta, body };
+}
+
+/**
  * Adds `.card-with-art`, a thumbnail `img`, and a `.card-body` wrapper; returns the body for text/stats.
  */
 export function appendCardArtShell(article: HTMLElement, src: string): HTMLDivElement {

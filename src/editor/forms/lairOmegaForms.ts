@@ -51,6 +51,36 @@ export function renderLairForm(container: HTMLElement, ctx: FormCtx): void {
     }),
   );
 
+  /* Where this lair is plotted on the world map: percentages of the map art, left/top origin,
+   * the same space maps.json markers use. Fixed per lair, not rolled per run. Clearing either
+   * field back to blank drops the key and the lair simply is not plotted. */
+  function asRow(v: unknown): Row {
+    return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Row) : {};
+  }
+  const pos = asRow(ctx.row["mapPosition"]);
+  const hasPos = ctx.row["mapPosition"] !== undefined;
+  function commitMapPosition(axis: "x" | "y", v: number): void {
+    ctx.update((row) => {
+      const base = asRow(row["mapPosition"]);
+      row["mapPosition"] = {
+        x: axis === "x" ? v : num(base, "x"),
+        y: axis === "y" ? v : num(base, "y"),
+      };
+    });
+  }
+  container.appendChild(
+    formRow(
+      "mapPosition x / y (% of map art)",
+      numberInput(num(pos, "x"), (v) => commitMapPosition("x", v), { min: 0, max: 100 }),
+      numberInput(num(pos, "y"), (v) => commitMapPosition("y", v), { min: 0, max: 100 }),
+    ),
+  );
+  if (!hasPos) {
+    container.appendChild(
+      hint("Not plotted on the world map yet — set both to place this lair's omega marker."),
+    );
+  }
+
   const missionIds = ctx.ids("missions");
   const missionNames = ctx.names("missions");
   container.appendChild(

@@ -426,10 +426,14 @@ export const locationTemplateSchema: z.ZodType<LocationTemplate> = z.object({
   locationLevel: locationLevelSchema,
 });
 
-const mapMarkerSchema: z.ZodType<MapMarker> = z.object({
-  locationId: z.string().min(1),
+/** Percentages of the map art, left/top origin; shared by site markers and lair positions. */
+const mapPointSchema = z.object({
   x: z.number().min(0).max(100),
   y: z.number().min(0).max(100),
+});
+
+const mapMarkerSchema: z.ZodType<MapMarker> = mapPointSchema.extend({
+  locationId: z.string().min(1),
 });
 
 export const mapTemplateSchema: z.ZodType<MapTemplate> = z.object({
@@ -595,6 +599,8 @@ export const lairTemplateSchema = z.object({
    */
   upgradeMissionIds: z.array(z.string().min(1)).optional(),
   startingAssets: z.record(z.string().min(1), z.number().int().min(1)).optional(),
+  /** Fixed spot on the world map; see `LairTemplate.mapPosition`. */
+  mapPosition: mapPointSchema.optional(),
 });
 
 /** Whole-file (array) schema per slice; shape only — semantic rules are in {@link collectContentIssues}. */
@@ -804,6 +810,7 @@ function normalizeLairs(arr: z.infer<typeof lairTemplateSchema>[]): LairTemplate
     availableMissionIds: [...l.availableMissionIds],
     upgradeLevels: normalizeLairUpgradeLevels(l),
     ...(l.startingAssets !== undefined ? { startingAssets: { ...l.startingAssets } } : {}),
+    ...(l.mapPosition !== undefined ? { mapPosition: { ...l.mapPosition } } : {}),
   }));
 }
 

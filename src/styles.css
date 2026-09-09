@@ -840,39 +840,254 @@ body {
   min-height: 0;
 }
 
-/*
- * Dashboard: three columns over two rows. The map straddles the first two columns of the top
- * row; every other tile owns exactly one cell.
- */
 .game-ui-columns-row {
   flex: 1 1 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 0.5rem;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.game-ui-columns-row > .game-panel--map {
-  grid-area: 1 / 1 / 2 / 3;
+/* ---------------- Dashboard: floating panels over a full-bleed map ---------------- */
+
+/*
+ * The dashboard is one map with the panels floating on top of it, not a row of columns. The
+ * body becomes a positioning context, the map fills it edge to edge, and every other panel is
+ * docked to a margin so the middle of the map — where the sites are — stays readable. Each
+ * floating panel can be minimized to its header (see `.game-panel--collapsed`) to clear more.
+ *
+ * `.omega-body--floating` is toggled by `applyGameMenuVisibility` in main.ts; without it the
+ * body stays the plain sidebar + fullscreen-panel grid the single-menu views use.
+ */
+.omega-body--floating {
+  position: relative;
+  display: block;
+  gap: 0;
 }
 
-.game-ui-columns-row > .game-panel--locations {
-  grid-area: 1 / 3 / 2 / 4;
+/*
+ * The floating panels live in two different subtrees — the plan column is a child of the body,
+ * the rest sit inside `.game-ui-columns-row` — so both wrappers are collapsed onto the body box.
+ * That leaves every panel resolving its offsets against the same rectangle.
+ */
+.omega-body--floating > .omega-main,
+.omega-body--floating .game-ui-columns-row {
+  position: absolute;
+  inset: 0;
+  display: block;
+  gap: 0;
+  overflow: visible;
 }
 
-.game-ui-columns-row > .game-panel--omega {
-  grid-area: 2 / 1 / 3 / 2;
+.omega-body--floating .game-panel--map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
-.game-ui-columns-row > .game-panel--minions {
-  grid-area: 2 / 2 / 3 / 3;
+.omega-body--floating .game-panel--plan-column,
+.omega-body--floating .game-panel--locations,
+.omega-body--floating .game-panel--omega,
+.omega-body--floating .game-panel--minions,
+.omega-body--floating .game-panel--lair,
+.omega-body--floating .game-panel--site-inspector {
+  position: absolute;
+  z-index: 2;
+  /* Denser than the docked panels were: there is live art behind these now, not page bg. */
+  --panel-bg: rgba(9, 3, 5, 0.93);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
 }
 
-.game-ui-columns-row > .game-panel--lair {
-  grid-area: 2 / 3 / 3 / 4;
+.omega-body--floating .game-panel--plan-column,
+.omega-body--floating .game-panel--locations,
+.omega-body--floating .game-panel--omega,
+.omega-body--floating .game-panel--minions,
+.omega-body--floating .game-panel--lair,
+.omega-body--floating .game-panel--site-inspector {
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 52px rgba(120, 12, 24, 0.09);
+}
+
+.omega-body--floating .game-panel--plan-column:hover,
+.omega-body--floating .game-panel--locations:hover,
+.omega-body--floating .game-panel--omega:hover,
+.omega-body--floating .game-panel--minions:hover,
+.omega-body--floating .game-panel--lair:hover,
+.omega-body--floating .game-panel--site-inspector:hover {
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 0 52px rgba(120, 12, 24, 0.09),
+    inset 0 0 30px rgba(232, 17, 45, 0.06);
+}
+
+/* Docks: planner down the left edge, then the four tiles as one equal-width band along the
+   bottom, filling everything right of the planner. Widths come from `--dock-w` rather than
+   fixed rem so the four always divide the same leftover space; only `left` differs per tile
+   (the last one pins to the right edge so rounding never leaves a sliver). */
+.omega-body--floating {
+  --dock-gap: 0.5rem;
+  /* Planner width (18.5rem) + the gap after it. */
+  --dock-left: 19rem;
+  --dock-h: 58%;
+  --dock-w: calc((100% - var(--dock-left) - var(--dock-gap) * 3) / 4);
+}
+
+/*
+ * The planner is as tall as what is in it and rides the middle of the map's left edge, rather
+ * than stretching the full height with dead air between the last slot and the footer. Held
+ * between `top: 0` and `bottom: 0`, `margin-block: auto` is what centres it; `max-height`
+ * keeps a long plan inside the frame, and the stack scrolls at that point as it always did.
+ */
+.omega-body--floating .game-panel--plan-column {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 18.5rem;
+  height: fit-content;
+  max-height: 100%;
+  margin-block: auto;
+}
+
+/*
+ * Measuring the panel from its contents means the children have to report a real height. The
+ * docked layout gives these `flex: 1 1 0` so the body fills the column and the footer sits at
+ * its foot; under an auto height that same `flex-basis: 0` reports a hypothetical size of zero
+ * and would collapse the whole panel down to its footer.
+ */
+.omega-body--floating .game-panel.game-panel--plan-column > .plan-column-stack,
+.omega-body--floating .game-panel.game-panel--plan-column .missions-panel-page {
+  flex: 0 1 auto;
+}
+
+/*
+ * 100px of slack under the last field, which is what makes the content-sized panel 100px taller
+ * than the slots strictly need. It goes inside the scrolling body rather than under the footer
+ * so it reads as room to drop into; a plan long enough to scroll spends it as trailing space.
+ */
+.omega-body--floating .game-panel.game-panel--plan-column .missions-panel-page {
+  padding-bottom: 100px;
+}
+
+.omega-body--floating .game-panel--omega,
+.omega-body--floating .game-panel--minions,
+.omega-body--floating .game-panel--locations,
+.omega-body--floating .game-panel--lair {
+  bottom: 0;
+  width: var(--dock-w);
+  height: var(--dock-h);
+}
+
+.omega-body--floating .game-panel--omega {
+  left: var(--dock-left);
+}
+
+.omega-body--floating .game-panel--minions {
+  left: calc(var(--dock-left) + (var(--dock-w) + var(--dock-gap)));
+}
+
+.omega-body--floating .game-panel--locations {
+  left: calc(var(--dock-left) + (var(--dock-w) + var(--dock-gap)) * 2);
+}
+
+.omega-body--floating .game-panel--lair {
+  right: 0;
+}
+
+/*
+ * The inspector panes are the panels that are not part of the bottom band: they hang along the
+ * top of the map from its right corner, each as wide as a dock tile and stopping short of the
+ * band. `right` is set per pane in `renderInspectorPane` — slot 0 at the corner, each further
+ * slot a tile-width to its left — and transitions, which is what carries a preview across when
+ * the selection in front of it is released. While a pane is only previewing a hover it must
+ * not swallow the pointer: the marker it covers would lose the hover the moment the pane
+ * appeared over it, and the two would flicker against each other. So a pane stays
+ * click-through until it is the selected one.
+ */
+.omega-body--floating .game-panel--site-inspector {
+  top: 0;
+  right: 0;
+  width: var(--dock-w);
+  max-height: calc(100% - var(--dock-h) - var(--dock-gap));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .omega-body--floating .game-panel--site-inspector {
+    transition: right 0.22s ease, border-color 0.2s, box-shadow 0.2s;
+  }
+}
+
+/* The selection reads as the one in front, whichever pane happens to be holding it. */
+.omega-body--floating .game-panel--site-inspector--pinned {
+  z-index: 3;
+}
+
+.game-panel--site-inspector {
+  --panel-bg: rgba(16, 5, 8, 0.9);
+  min-height: 0;
+}
+
+.game-panel--site-inspector:not(.game-panel--site-inspector--pinned) {
+  pointer-events: none;
+}
+
+.site-inspector-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* A site is one card and sizes to it; the lair brings a whole tabbed panel, which is given the
+   full height the dock band leaves so its list scrolls inside the panel rather than running on. */
+.game-panel--site-inspector--lair {
+  height: calc(100% - var(--dock-h) - var(--dock-gap));
+}
+
+/* Minimized: the panel shrinks to its header, staying pinned to the edge it is docked to. */
+.omega-body--floating .game-panel--collapsed {
+  height: auto;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.omega-body--floating .game-panel--plan-column.game-panel--collapsed {
+  bottom: auto;
+  height: auto;
+}
+
+/*
+ * The generic "hide everything but the header" collapse rule loses to the plan column's own
+ * `display: flex` on its stack — same specificity, declared later — so the planner needs to be
+ * told by name. Without this its body stays laid out and "collapsed" only trims the padding.
+ */
+.omega-body--floating .game-panel--plan-column.game-panel--collapsed > .plan-column-stack {
+  display: none;
+}
+
+.omega-body--floating .game-panel--collapsed > .game-panel-head {
+  position: static;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.omega-body--floating .game-panel--collapsed > *:not(.game-panel-head) {
+  display: none;
+}
+
+/* Fullscreen menus give the whole area to one panel, so there is nothing to minimize. */
+.omega-body:not(.omega-body--floating) .game-panel-minimize {
+  display: none;
 }
 
 /* Single-menu (fullscreen) view: whichever panel is showing takes the whole area. */
@@ -989,12 +1204,31 @@ body {
   border-right: 2px solid var(--red);
 }
 
-.game-panel-title {
+/*
+ * Panel header: the title bar every panel wears, plus the minimize affordance the floating
+ * dashboard panels hang off it. The chrome lives here so the <h2> stays a plain text node —
+ * a few titles are rewritten with `textContent`, which would eat a nested button.
+ */
+.game-panel-head {
   position: sticky;
   top: -0.7rem;
   z-index: 3;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin: -0.7rem -0.75rem 0.1rem;
   padding: 0.5rem 0.75rem 0.4rem;
+  background: linear-gradient(180deg, rgba(26, 8, 11, 0.97), rgba(16, 6, 8, 0.94));
+  border-bottom: 1px solid var(--red-deep);
+  border-image: linear-gradient(90deg, var(--red), rgba(232, 17, 45, 0.35) 45%, transparent 92%) 1;
+  box-shadow: 0 10px 18px -12px var(--red-glow);
+}
+
+.game-panel-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
   font-family: var(--font-display);
   font-size: 0.76rem;
   font-weight: 700;
@@ -1002,10 +1236,61 @@ body {
   text-transform: uppercase;
   color: var(--red-bright);
   text-shadow: 0 0 10px var(--red-glow-soft);
-  background: linear-gradient(180deg, rgba(26, 8, 11, 0.97), rgba(16, 6, 8, 0.94));
-  border-bottom: 1px solid var(--red-deep);
-  border-image: linear-gradient(90deg, var(--red), rgba(232, 17, 45, 0.35) 45%, transparent 92%) 1;
-  box-shadow: 0 10px 18px -12px var(--red-glow);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-panel-minimize,
+.game-panel-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line-1);
+  border-radius: 2px;
+  background: rgba(28, 8, 11, 0.6);
+  color: var(--text-1);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+
+.game-panel-minimize:hover,
+.game-panel-close:hover {
+  color: var(--red-bright);
+  border-color: var(--line-2);
+  background: rgba(46, 13, 17, 0.75);
+  box-shadow: 0 0 10px var(--red-glow-soft);
+}
+
+.game-panel-minimize:focus-visible,
+.game-panel-close:focus-visible {
+  outline: 2px solid var(--red-bright);
+  outline-offset: 1px;
+}
+
+.game-panel-minimize__icon,
+.game-panel-close__icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* Expanded reads as a minus; collapsed grows the stem into a plus. */
+.game-panel-minimize__stem {
+  display: none;
+}
+
+.game-panel--collapsed .game-panel-minimize__stem {
+  display: inline;
 }
 
 .game-panel-title::before {
@@ -1175,11 +1460,10 @@ body {
   gap: 0.45rem;
 }
 
-.plan-column-stack > .game-panel-title {
+/* The plan column never scrolls as a whole (the stack inside it does), so its header sits put. */
+.game-panel--plan-column > .game-panel-head {
   position: static;
-  margin: 0 -0.75rem 0.1rem;
   top: auto;
-  flex-shrink: 0;
 }
 
 .plan-column-footer {
@@ -2539,10 +2823,6 @@ body {
   z-index: 1;
 }
 
-.omega-plan-mission-card .asset-card-title {
-  padding-right: 5.6rem;
-}
-
 /* Single-menu (fullscreen) Omega view: phases as columns */
 .game-ui-columns-row--single
   .game-panel.game-panel--omega:not([hidden])
@@ -2717,7 +2997,6 @@ body {
 }
 
 .asset-card:hover > .card-art,
-.location-card:hover > .card-art,
 .minions-card:hover > .card-art {
   border-color: var(--line-2);
   box-shadow: 0 0 10px var(--red-glow-soft);
@@ -2738,6 +3017,94 @@ body {
   align-self: stretch;
   flex-shrink: 1;
   min-width: 0;
+}
+
+/* ---------------- Art-led cards: full-bleed hero banner ---------------- */
+
+/*
+ * The alternative to the side thumbnail above: the art runs full-bleed across the top of the
+ * card as a 16:9 banner, with the card's name and stat line riding the bottom of the image over
+ * a scrim. Location cards and Omega plan mission cards both wear it. The hero's negative margins
+ * pull it out to the card's padding box on three sides, and the clip-path re-cuts the top-right
+ * chamfer so the card's notch still reads through the art.
+ */
+.card-with-hero-art {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-hero {
+  position: relative;
+  margin: -0.5rem -0.55rem 0.45rem;
+  border-bottom: 1px solid var(--line-1);
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--cut-sm)) 0,
+    100% var(--cut-sm),
+    100% 100%,
+    0 100%
+  );
+}
+
+.card-hero > .card-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: rgba(10, 4, 5, 0.8);
+  filter: saturate(0.85) contrast(1.05);
+  transition: filter 0.15s;
+}
+
+/* The clip-path would crop the thumbnail hover glow, so the banner lifts with light instead. */
+.card-with-hero-art:hover > .card-hero {
+  border-bottom-color: var(--line-2);
+}
+
+.card-with-hero-art:hover > .card-hero > .card-art {
+  filter: saturate(1) contrast(1.08) brightness(1.08);
+}
+
+/*
+ * The name plate. The gradient is the scrim: it has to carry white display type and the stat
+ * badges over whatever the art happens to be behind them, so it runs from clear at the top to
+ * near-opaque at the baseline rather than flat-tinting the whole banner.
+ */
+.card-hero__meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1.5rem 0.55rem 0.4rem;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 3, 4, 0) 0%,
+    rgba(8, 3, 4, 0.55) 45%,
+    rgba(8, 3, 4, 0.88) 100%
+  );
+}
+
+/* Matches whichever title class the card uses (`.location-card-title`, `.asset-card-title`). */
+.card-hero__meta > h4 {
+  margin: 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+}
+
+.card-hero__meta > .minions-card-stats-row {
+  margin: 0.25rem 0 0;
+}
+
+/* Badges sit on art here, not on panel bg — they need to hold their own ground. */
+.card-hero__meta .minions-card-badge {
+  background: rgba(14, 5, 7, 0.82);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.card-hero__meta .minions-card-badge:hover,
+.card-hero__meta .minions-card-badge:focus-visible {
+  background: rgba(44, 13, 17, 0.95);
 }
 
 .card-art--chip {
@@ -3151,6 +3518,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -3215,6 +3583,7 @@ body {
 
 .game-panel.game-panel--lair,
 .game-panel.game-panel--minions,
+.game-panel.game-panel--locations,
 .game-panel.game-panel--missions,
 .game-panel.game-panel--map,
 .game-panel.game-panel--plan-column {
@@ -3395,6 +3764,31 @@ body {
   object-fit: fill;
 }
 
+/*
+ * The leader tying the inspected site to the Site Detail panel. No viewBox on purpose: the SVG
+ * user unit is then one layout pixel of the plot, which is exactly the space the projector
+ * hands back marker positions in, so the line's endpoints need no conversion. Inert to the
+ * pointer — it crosses the map and must never take a click meant for a pin under it.
+ */
+.map-leader {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.map-leader__line {
+  stroke: var(--red-bright);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+  stroke-linecap: round;
+  opacity: 0.75;
+  filter: drop-shadow(0 0 4px var(--red-glow));
+}
+
 /* The GPU art layer, when WebGL2 is available. Same box as the image it stands in for: the
  * backing store is sized separately in device pixels, this only says where it sits. */
 .map-plot__gl {
@@ -3491,6 +3885,89 @@ body {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+}
+
+/* ---------------- The player's lair ---------------- */
+
+/*
+ * The one mark on the map that belongs to the player rather than being a target of theirs, so
+ * it is deliberately unlike a site pin: bigger, inert (no pointer, no focus, no drag), wearing
+ * the omega the HUD flies over the plan, and named all the time instead of on hover.
+ * Position is authored per lair in `content/lairs.json` — see `LairTemplate.mapPosition`.
+ */
+.map-marker--lair {
+  width: 1.6rem;
+  height: 1.6rem;
+  margin: -0.8rem 0 0 -0.8rem;
+  z-index: 2;
+}
+
+.map-marker--lair .map-marker__ring {
+  border-color: rgba(255, 43, 64, 0.9);
+  background: radial-gradient(circle, rgba(28, 5, 9, 0.92), rgba(10, 2, 4, 0.55) 70%);
+  box-shadow:
+    0 0 14px rgba(232, 17, 45, 0.55),
+    inset 0 0 10px rgba(232, 17, 45, 0.3);
+  animation: lair-beacon 3.6s ease-in-out infinite;
+}
+
+/* A second ring breathing outward, so the base reads as live without moving the mark itself. */
+.map-marker--lair::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(232, 17, 45, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: lair-ping 3.6s ease-out infinite;
+}
+
+.map-marker__omega {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--red-bright);
+  text-shadow: 0 0 8px var(--red-glow), 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+/* Fifteen site names would collide; one base name is an anchor, so it never hides. */
+.map-marker--lair .map-marker__label {
+  top: 1.35rem;
+  opacity: 1;
+  color: var(--red-bright);
+  border-color: var(--line-2);
+}
+
+@keyframes lair-beacon {
+  0%,
+  100% {
+    box-shadow:
+      0 0 10px rgba(232, 17, 45, 0.45),
+      inset 0 0 10px rgba(232, 17, 45, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 22px rgba(255, 43, 64, 0.8),
+      inset 0 0 14px rgba(232, 17, 45, 0.45);
+  }
+}
+
+@keyframes lair-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  70%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
 }
 
 /* Twelve names at tile size overlap badly, so the name is a hover affordance and the dot's

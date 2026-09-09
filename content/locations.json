@@ -3,6 +3,7 @@
     "id": "harbor_armory",
     "name": "Harborside Armory",
     "description": "A national guard depot with rusting fences and a night crew that plays cards.",
+    "cardArt": "/assets/cards/custom/locations-harbor-armory.webp",
     "locationLevel": 1,
     "locationType": "military"
   },
@@ -10,13 +11,15 @@
     "id": "southern_airfield",
     "name": "Southern Cross Airfield",
     "description": "A gravel strip in the outback where transport crews refuel, sleep off the heat, and log almost nothing.",
+    "cardArt": "/assets/cards/custom/locations-southern-airfield.webp",
     "locationLevel": 1,
     "locationType": "military"
   },
   {
     "id": "fort_bastion",
     "name": "Fort Bastion Motor Pool",
-    "description": "Armored columns fuel here before every parade \u2014 and every crackdown.",
+    "description": "Armored columns fuel here before every parade — and every crackdown.",
+    "cardArt": "/assets/cards/custom/locations-fort-bastion.webp",
     "locationLevel": 2,
     "locationType": "military"
   },
@@ -24,13 +27,15 @@
     "id": "skywatch_station",
     "name": "Skywatch Radar Station",
     "description": "A mountaintop dish array that tracks everything in low orbit. Everything.",
+    "cardArt": "/assets/cards/custom/locations-skywatch-station.webp",
     "locationLevel": 2,
     "locationType": "military"
   },
   {
     "id": "the_citadel",
-    "name": "The Citadel \u2014 Strategic Command",
+    "name": "The Citadel — Strategic Command",
     "description": "The alliance's hardened war room. Interceptors launch on its word alone.",
+    "cardArt": "/assets/cards/custom/locations-the-citadel.webp",
     "locationLevel": 3,
     "locationType": "military"
   },
@@ -38,6 +43,7 @@
     "id": "city_hall_annex",
     "name": "City Hall Annex",
     "description": "Permits, zoning, and the first rung of every ladder worth corrupting.",
+    "cardArt": "/assets/cards/custom/locations-city-hall-annex.webp",
     "locationLevel": 1,
     "locationType": "political"
   },
@@ -45,6 +51,7 @@
     "id": "records_bureau",
     "name": "Provincial Records Bureau",
     "description": "Land deeds, census rolls, and a new identity for anyone whose paperwork is thick enough.",
+    "cardArt": "/assets/cards/custom/locations-records-bureau.webp",
     "locationLevel": 1,
     "locationType": "political"
   },
@@ -52,6 +59,7 @@
     "id": "grand_embassy",
     "name": "The Grand Embassy",
     "description": "Chandeliers, diplomatic pouches, and secrets traded over sparkling wine.",
+    "cardArt": "/assets/cards/custom/locations-grand-embassy.webp",
     "locationLevel": 2,
     "locationType": "political"
   },
@@ -59,6 +67,7 @@
     "id": "broadcast_house",
     "name": "Global Broadcasting House",
     "description": "The feed the whole world trusts, uplinked from one very bribable tower.",
+    "cardArt": "/assets/cards/custom/locations-broadcast-house.webp",
     "locationLevel": 2,
     "locationType": "political"
   },
@@ -66,6 +75,7 @@
     "id": "world_assembly",
     "name": "World Assembly Hall",
     "description": "Every flag on Earth under one glass dome. The podium hears everything first.",
+    "cardArt": "/assets/cards/custom/locations-world-assembly.webp",
     "locationLevel": 3,
     "locationType": "political"
   },
@@ -73,6 +83,7 @@
     "id": "dockside_freeport",
     "name": "Dockside Freeport",
     "description": "Bonded warehouses where cargo changes owners faster than paperwork.",
+    "cardArt": "/assets/cards/custom/locations-dockside-freeport.webp",
     "locationLevel": 1,
     "locationType": "economic"
   },
@@ -80,6 +91,7 @@
     "id": "sunstone_exchange",
     "name": "Sunstone Gem Exchange",
     "description": "Rough stones cross this floor uncut, untaxed, and untraceable by closing bell.",
+    "cardArt": "/assets/cards/custom/locations-sunstone-exchange.webp",
     "locationLevel": 1,
     "locationType": "economic"
   },
@@ -87,6 +99,7 @@
     "id": "gilded_lotus",
     "name": "Gilded Lotus Casino",
     "description": "High rollers, higher stakes, and a vault that launders three currencies a night.",
+    "cardArt": "/assets/cards/custom/locations-gilded-lotus.webp",
     "locationLevel": 2,
     "locationType": "economic"
   },
@@ -94,6 +107,7 @@
     "id": "aerodyne_campus",
     "name": "AeroDyne Aerospace Campus",
     "description": "Private launch contractor with orbital lift capacity and lax shareholder oversight.",
+    "cardArt": "/assets/cards/custom/locations-aerodyne-campus.webp",
     "locationLevel": 2,
     "locationType": "economic"
   },
@@ -101,6 +115,7 @@
     "id": "meridian_bank",
     "name": "Meridian World Bank",
     "description": "The clearing house for half the planet's money. The other half wishes it was.",
+    "cardArt": "/assets/cards/custom/locations-meridian-bank.webp",
     "locationLevel": 3,
     "locationType": "economic"
   }

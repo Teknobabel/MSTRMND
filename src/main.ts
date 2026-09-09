@@ -28,7 +28,6 @@ import type {
   DynamicTrait,
   LocationAssetSlot,
   LocationType,
-  MapMarker,
   MinionInstance,
   MissionEffect,
   MissionSource,
@@ -115,6 +114,7 @@ import {
   createMatrixProjector,
   flatMapMatrix,
   type MapProjector,
+  type MarkerPoint,
   type PlotSize,
 } from "./ui/map/projection";
 import { createMapPlaneRenderer, type MapPlaneRenderer } from "./ui/map/planeRenderer";
@@ -129,6 +129,7 @@ import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
   appendCardArtShell,
+  appendCardHeroShell,
   createCardArtImg,
   resolveAgentCardArt,
   resolveAssetCardArt,
@@ -1252,6 +1253,34 @@ function initGameController(
   const minionsPanelTitleEl = req<HTMLElement>("minions-panel-title");
   const lairPanelEl = req<HTMLElement>("lair-panel");
   const mapPanelEl = req<HTMLElement>("map-panel");
+  /**
+   * The map inspector's panes, in pane order (not slot order — a pane's slot moves). Each is a
+   * whole panel; `renderSiteInspector` decides which subject each one holds and where it sits.
+   */
+  interface InspectorPane {
+    readonly el: HTMLElement;
+    readonly titleEl: HTMLElement;
+    readonly bodyEl: HTMLElement;
+    readonly closeEl: HTMLButtonElement;
+    /** What this pane is currently showing, so a re-render can keep it where it already is. */
+    subject: MapSubject | null;
+  }
+  const inspectorPanes: InspectorPane[] = Array.from(
+    document.querySelectorAll<HTMLElement>("[data-inspector-pane]"),
+  ).map((el) => {
+    const titleEl = el.querySelector<HTMLElement>(".game-panel-title");
+    const bodyEl = el.querySelector<HTMLElement>(".site-inspector-body");
+    const closeEl = el.querySelector<HTMLButtonElement>("[data-inspector-close]");
+    if (titleEl === null || bodyEl === null || closeEl === null) {
+      throw new Error(`Malformed inspector pane: ${el.id}`);
+    }
+    return { el, titleEl, bodyEl, closeEl, subject: null };
+  });
+  if (inspectorPanes.length === 0) {
+    throw new Error("No inspector panes in the markup");
+  }
+  /** How many cards fit along the top of the map — the markup's pane count is the cap. */
+  const MAX_INSPECTOR_CARDS = inspectorPanes.length;
   const rightColumnsRowElLookup = document.querySelector<HTMLElement>(".game-ui-columns-row");
   if (rightColumnsRowElLookup === null) {
     throw new Error("Missing .game-ui-columns-row");
@@ -1260,12 +1289,31 @@ function initGameController(
   if (!rightColumnsRowEl) {
     throw new Error("Missing .game-ui-columns-row");
   }
+  const omegaBodyElLookup = document.querySelector<HTMLElement>(".omega-body");
+  if (omegaBodyElLookup === null) {
+    throw new Error("Missing .omega-body");
+  }
+  const omegaBodyEl: HTMLElement = omegaBodyElLookup;
   const menuButtons = Array.from(
     document.querySelectorAll<HTMLButtonElement>("[data-game-menu]"),
   );
   const menuPanels = Array.from(
     document.querySelectorAll<HTMLElement>("[data-menu-panel]"),
   );
+  const panelMinimizeButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>("[data-panel-minimize]"),
+  );
+  /**
+   * Which floating dashboard panels are minimized to their header, keyed by
+   * `data-panel-minimize`. Kept across menu switches on purpose: a fullscreen menu ignores the
+   * state (the CSS is scoped to the floating dashboard), and coming back to the dashboard
+   * should find the panels the way they were left.
+   *
+   * The run opens with the whole tile band folded to its headers so the first thing on screen
+   * is the map. The planner keeps its column — it is the only panel with a job to do before
+   * anything has been looked at.
+   */
+  const collapsedPanels = new Set<string>(["omega", "minions", "locations", "lair"]);
 
   const rng = (): number => Math.random();
 
@@ -1294,6 +1342,41 @@ function initGameController(
     | { kind: "mission-slot" }
     | { kind: "assign-target" }
     | null = null;
+
+  /**
+   * What a map marker stands for. Every marker but one is a site; the odd one out is the
+   * player's own lair, which has no location id to be known by and shows the Lair tile's
+   * contents rather than a location card.
+   */
+  type MapSubject = { readonly kind: "site"; readonly locationId: string } | { readonly kind: "lair" };
+
+  /** A subject flattened to something comparable, and the key its marker is cached under. */
+  function mapSubjectKey(subject: MapSubject | null): string | null {
+    if (subject === null) {
+      return null;
+    }
+    return subject.kind === "lair" ? "lair" : `site:${subject.locationId}`;
+  }
+
+  /**
+   * The map's site inspector. `hovered` is whichever marker the pointer (or keyboard focus) is
+   * on right now; `pinned` is one a click parked there. Hover wins while it lasts so the map
+   * stays browsable with a card pinned, and the pinned card is what it falls back to — only
+   * closing the panel clears it.
+   */
+  let hoveredMapSubject: MapSubject | null = null;
+  /**
+   * The selected subjects, oldest first. The index into this list *is* the slot the card sits
+   * in, counting leftward from the map's right corner — so a new selection goes on the end and
+   * lands on the left, and dropping one from the middle shuffles everything after it one slot
+   * to the right with no bookkeeping of its own.
+   */
+  let pinnedMapSubjects: MapSubject[] = [];
+
+  function isPinnedMapSubject(subject: MapSubject | null): boolean {
+    const key = mapSubjectKey(subject);
+    return key !== null && pinnedMapSubjects.some((s) => mapSubjectKey(s) === key);
+  }
 
   let locationsCategoryTab: LocationType = "economic";
   let lairPanelTab: DashboardLairTab = "missions";
@@ -2751,11 +2834,11 @@ function initGameController(
       wrap.className = "assign-pick-slot-card-wrap";
       const article = document.createElement("article");
       article.className = "assign-pick-preview-card location-card assign-target-asset-card";
-      const body = appendCardArtShell(article, resolveLocationCardArt(loc));
+      const { meta, body } = appendCardHeroShell(article, resolveLocationCardArt(loc));
       const title = document.createElement("h4");
       title.className = "location-card-title";
       title.textContent = loc?.name ?? targetPick.locationId;
-      body.appendChild(title);
+      meta.appendChild(title);
       const dl = document.createElement("dl");
       dl.className = "location-card-stats";
       const visLabel = targetPick.visibilityAtAssign === "hidden" ? "Hidden" : "Revealed";
@@ -3442,12 +3525,12 @@ function initGameController(
     const article = document.createElement("article");
     article.className = "asset-card omega-plan-mission-card";
 
-    const body = appendCardArtShell(article, resolveMissionCardArt(mission));
+    const { meta, body } = appendCardHeroShell(article, resolveMissionCardArt(mission));
 
     const title = document.createElement("h4");
     title.className = "asset-card-title";
     title.textContent = mission?.name ?? missionId;
-    body.appendChild(title);
+    meta.appendChild(title);
 
     if (mission?.description) {
       const desc = document.createElement("p");
@@ -3478,21 +3561,23 @@ function initGameController(
         duration: mission.durationTurns,
       });
 
+      meta.appendChild(statsRow);
+
+      /* Requirement pills stay under the art: they wrap to any number of lines, which would
+       * push the name off the top of a fixed-height banner. */
       const traitIdsForDisplay =
         mergedRequiredTraitIdsForDisplay !== undefined
           ? mergedRequiredTraitIdsForDisplay
           : mission.requiredTraitIds;
       const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
       appendRequiredMissionRequirementPills(
-        statsRow,
+        body,
         content,
         traitIdsForDisplay,
         rosterTraitIds,
         mission.requiredAssetIds,
         state.player.assets,
       );
-
-      body.appendChild(statsRow);
 
       const effectsEl = createMissionCardEffectsEl(mission, content);
       if (effectsEl !== null) {
@@ -3531,12 +3616,12 @@ function initGameController(
       });
     }
 
-    const body = appendCardArtShell(article, resolveLocationCardArt(loc));
+    const { meta, body } = appendCardHeroShell(article, resolveLocationCardArt(loc));
 
     const title = document.createElement("h4");
     title.className = "location-card-title";
     title.textContent = loc.name;
-    body.appendChild(title);
+    meta.appendChild(title);
 
     const statsRow = createLocationCardStatsRow({
       type: formatLocationTypeLabel(loc.locationType),
@@ -3544,20 +3629,22 @@ function initGameController(
       securityLevel: securityLevel !== undefined ? String(securityLevel) : "—",
       intelLevel: intelLevel,
     });
+    meta.appendChild(statsRow);
 
+    /* The trait pills stay under the art: they wrap to any number of lines, which would push
+     * the name off the top of a fixed-height banner. */
     const revealedSecIds = locationSecurityTraitIds.slice(
       0,
       Math.min(securityLevel ?? 0, locationSecurityTraitIds.length),
     );
     const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
     appendLocationRequirementPills(
-      statsRow,
+      body,
       content,
       siteRequiredTraitIds,
       revealedSecIds,
       rosterTraitIds,
     );
-    body.appendChild(statsRow);
 
     const dl = document.createElement("dl");
     dl.className = "location-card-stats";
@@ -5388,18 +5475,34 @@ function initGameController(
   }
 
   /**
-   * Everything that has to stay glued to a site, paired with the marker it was plotted from.
-   * The projector owns the placement now (see `ui/map/projection`), so nothing here is
-   * positioned by CSS percentages; `renderMapPanel` rebuilds this list and `syncMapProjection`
-   * replays it whenever the plot changes size — and, once the art underneath is animated,
-   * once per frame.
+   * Everything that has to stay glued to a spot on the art, paired with the point it was
+   * plotted from. The projector owns the placement now (see `ui/map/projection`), so nothing
+   * here is positioned by CSS percentages; `renderMapPanel` rebuilds this list and
+   * `syncMapProjection` replays it whenever the plot changes size — and, once the art
+   * underneath is animated, once per frame.
+   *
+   * A bare point rather than a `MapMarker`: the player's lair rides this list too, and it is
+   * plotted from its own template rather than from a site marker.
    */
   interface ProjectedMapEl {
     readonly el: HTMLElement;
-    readonly marker: MapMarker;
+    readonly marker: MarkerPoint;
   }
   let mapProjectedEls: ProjectedMapEl[] = [];
   let mapPlotEl: HTMLElement | null = null;
+  /**
+   * The leader line tying the inspected site to the Site Detail panel, and the lookup that
+   * finds the marker to draw it from. The line is redrawn with the pins rather than with the
+   * card: the site under it drifts with the camera every frame, the panel does not.
+   */
+  let mapLeaderLineEls: SVGLineElement[] = [];
+  let mapMarkersBySubject = new Map<string, MarkerPoint>();
+  /**
+   * Where the line lands on the panel, in the plot's own pre-scale pixels. Cached because it
+   * only moves when something is laid out — see `refreshMapLeaderAnchor` for why it is read
+   * from offsets rather than from a client rect.
+   */
+  let mapLeaderAnchors: ({ x: number; y: number } | null)[] = [];
   /* Survives a re-render on purpose: this is the panel's size, not the plot element's
    * identity, and reusing it spares the first sync the rounded `offsetWidth` fallback. */
   let mapPlotSize: PlotSize | null = null;
@@ -5510,6 +5613,83 @@ function initGameController(
     mapPlotRect = mapPlotEl?.getBoundingClientRect() ?? null;
   }
 
+  /**
+   * An element's position in the shell's pre-scale layout space, summed up the offsetParent
+   * chain. Two elements read this way can be subtracted to get the offset between them.
+   *
+   * Not `getBoundingClientRect()`, for the reason `ui/map/projection` gives: the shell sits
+   * inside `scale(var(--ui-scale))` and, on a portrait phone, a `rotate(90deg)`, so a rect is
+   * in post-scale visual pixels with the axes possibly swapped — while everything the plot
+   * places is written in layout pixels. Offsets are already in that space. They round to whole
+   * pixels, which would be too coarse to plant a pin but is far below notice on a leader line.
+   */
+  function layoutOrigin(el: HTMLElement): { x: number; y: number } {
+    let x = 0;
+    let y = 0;
+    let node: HTMLElement | null = el;
+    while (node !== null) {
+      x += node.offsetLeft;
+      y += node.offsetTop;
+      node = node.offsetParent instanceof HTMLElement ? node.offsetParent : null;
+    }
+    return { x, y };
+  }
+
+  /**
+   * Where the leader line meets the panel: the middle of its left edge, in plot coordinates.
+   * Only recomputed on a layout change (the plot resizing, the card swapping for a taller one)
+   * rather than per frame, so the animation loop never forces a reflow to draw the line.
+   */
+  function refreshMapLeaderAnchor(): void {
+    const plotEl = mapPlotEl;
+    if (plotEl === null) {
+      mapLeaderAnchors = [];
+      return;
+    }
+    const plotAt = layoutOrigin(plotEl);
+    mapLeaderAnchors = inspectorPanes.map((pane) => {
+      if (pane.el.hidden) {
+        return null;
+      }
+      const panelAt = layoutOrigin(pane.el);
+      return {
+        x: panelAt.x - plotAt.x,
+        y: panelAt.y - plotAt.y + pane.el.offsetHeight / 2,
+      };
+    });
+  }
+
+  /**
+   * Redraws the leader from the inspected site to the panel. Hidden along with the panel, and
+   * hidden too when the camera has turned its site away from the viewer — a line running to a
+   * pin that is not on screen points at nothing.
+   */
+  function syncMapLeaderLine(plot: PlotSize): void {
+    inspectorPanes.forEach((pane, i) => {
+      const line = mapLeaderLineEls[i];
+      if (line === undefined) {
+        return;
+      }
+      const key = pane.el.hidden ? null : mapSubjectKey(pane.subject);
+      const marker = key === null ? undefined : mapMarkersBySubject.get(key);
+      const anchor = mapLeaderAnchors[i] ?? null;
+      if (marker === undefined || anchor === null) {
+        line.style.display = "none";
+        return;
+      }
+      const from = mapProjector.project(marker, plot);
+      if (!from.visible) {
+        line.style.display = "none";
+        return;
+      }
+      line.style.display = "";
+      line.setAttribute("x1", from.x.toFixed(2));
+      line.setAttribute("y1", from.y.toFixed(2));
+      line.setAttribute("x2", anchor.x.toFixed(2));
+      line.setAttribute("y2", anchor.y.toFixed(2));
+    });
+  }
+
   function currentPlotSize(): PlotSize | null {
     if (mapPlotEl === null) {
       return null;
@@ -5600,6 +5780,7 @@ function initGameController(
       el.style.setProperty("--map-py", `${projected.y.toFixed(2)}px`);
       el.hidden = !projected.visible;
     }
+    syncMapLeaderLine(plot);
   }
 
   /* The plot resizes when the dashboard swaps between the map tile and the fullscreen
@@ -5687,14 +5868,67 @@ function initGameController(
   });
 
   /**
+   * The player's own base, plotted on the world like any site.
+   *
+   * Deliberately not a `.map-marker` button: the lair is not a mission target and carries no
+   * drag payload, so it is inert markup that only reads as a place. It also stays out of
+   * `mapSignals` — those are security / operation glows, and the lair has neither.
+   *
+   * Drawn last so it sits over any site pin it happens to land near.
+   */
+  function plotLairMarker(plot: HTMLElement): void {
+    const lair = state.activeLairId !== null ? getLairById(content, state.activeLairId) : undefined;
+    const at = lair?.mapPosition;
+    if (lair === undefined || at === undefined) {
+      return;
+    }
+
+    const home = document.createElement("button");
+    home.type = "button";
+    home.className = "map-marker map-marker--lair";
+    /* A button, unlike the site pins, with nothing draggable about it: the lair is not a
+     * mission target and carries no payload. All a click does is park it in the inspector. */
+    home.dataset.mapLair = "true";
+    home.title = `${lair.name}
+Your lair`;
+    home.setAttribute("aria-label", `${lair.name}, your lair`);
+    home.addEventListener("click", () => {
+      toggleMapPin({ kind: "lair" });
+    });
+    mapProjectedEls.push({ el: home, marker: at });
+    mapMarkersBySubject.set("lair", at);
+
+    const ring = document.createElement("span");
+    ring.className = "map-marker__ring";
+    home.appendChild(ring);
+    /* The same omega the HUD flies over the plan — this is the one place on the map that is
+     * the player's rather than a target of theirs. */
+    const mark = document.createElement("span");
+    mark.className = "map-marker__omega";
+    mark.textContent = "Ω";
+    home.appendChild(mark);
+    const label = document.createElement("span");
+    label.className = "map-marker__label";
+    label.textContent = lair.name;
+    home.appendChild(label);
+
+    plot.appendChild(home);
+  }
+
+  /**
    * The run's map with its sites plotted on it. Markers carry the same drag payload as location
    * cards, so the map is a second way to pick a mission target rather than a picture of one.
    */
   function renderMapPanel(): void {
+    /* The pins about to be discarded will never fire `pointerout`, so the hover they left
+     * behind is dropped with them. A pinned site outlives the rebuild. */
+    hoveredMapSubject = null;
     mapPanelEl.innerHTML = "";
     mapPlotResizeObserver.disconnect();
     mapProjectedEls = [];
     mapPlotEl = null;
+    mapLeaderLineEls = [];
+    mapMarkersBySubject = new Map();
 
     const plan =
       state.activeOmegaPlanId !== null
@@ -5755,6 +5989,20 @@ function initGameController(
       plot.appendChild(art);
     }
 
+    /* Between the art and the pins: the line reaches the panel from under the marker it
+     * starts at, and never sits on top of one it happens to cross. */
+    const leader = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    leader.setAttribute("class", "map-leader");
+    leader.setAttribute("aria-hidden", "true");
+    mapLeaderLineEls = inspectorPanes.map(() => {
+      const leaderLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      leaderLine.setAttribute("class", "map-leader__line");
+      leaderLine.style.display = "none";
+      leader.appendChild(leaderLine);
+      return leaderLine;
+    });
+    plot.appendChild(leader);
+
     const playable = new Set(runLocations().map((l) => l.id));
     const mainOnly = state.phase === "main";
     const targetedLocationId =
@@ -5811,6 +6059,8 @@ function initGameController(
       const security = securityLevelForLocation(state.locationSecurityStates, loc.id);
       const agents = playerVisibleOpposingAgentsAtLocation(state, loc.id);
 
+      mapMarkersBySubject.set(`site:${loc.id}`, marker);
+
       const pin = document.createElement("button");
       pin.type = "button";
       pin.className = `map-marker map-marker--${loc.locationType}`;
@@ -5851,7 +6101,10 @@ function initGameController(
         e.dataTransfer!.effectAllowed = "copy";
       });
       pin.addEventListener("click", () => {
-        trySetMapTarget(loc.id);
+        /* Only a click that selects stages the site; deselecting has just dropped the target. */
+        if (toggleMapPin({ kind: "site", locationId: loc.id })) {
+          trySetMapTarget(loc.id);
+        }
       });
 
       const ring = document.createElement("span");
@@ -5889,6 +6142,8 @@ function initGameController(
       }
     }
 
+    plotLairMarker(plot);
+
     mapPanelEl.appendChild(plot);
     mapPlotEl = plot;
     /* Build the camera and place the pins before this frame paints, then let the observer keep
@@ -5899,13 +6154,357 @@ function initGameController(
     mapPlotResizeObserver.observe(plot);
   }
 
+  /**
+   * The card the inspector is showing, or null when it should be down. A pinned site that has
+   * dropped off the run's map (a plan swap between renders) is forgotten rather than shown.
+   */
+  /** Whether a subject still exists to be shown: sites leave with a plan swap, lairs get given up. */
+  function mapSubjectAlive(subject: MapSubject | null): boolean {
+    if (subject === null) {
+      return false;
+    }
+    return subject.kind === "lair"
+      ? state.activeLairId !== null
+      : runLocations().some((l) => l.id === subject.locationId);
+  }
+
+  /**
+   * Which subject each slot holds, nearest the map's right corner first.
+   *
+   * The selections fill from slot 0 leftward in the order they were made. A hover goes in the
+   * next slot along — to the left of the whole stack, so every selected card and its leader
+   * line stay exactly where they are while the map is browsed around them — and only if the
+   * stack has left room for it. Hovering something already selected adds nothing: its card is
+   * on screen already.
+   */
+  function inspectorSlotSubjects(): (MapSubject | null)[] {
+    const slots: (MapSubject | null)[] = Array.from(
+      { length: MAX_INSPECTOR_CARDS },
+      () => null,
+    );
+    if (currentMenu !== "dashboard") {
+      return slots;
+    }
+    pinnedMapSubjects = pinnedMapSubjects.filter((s) => mapSubjectAlive(s));
+    pinnedMapSubjects.forEach((subject, i) => {
+      slots[i] = subject;
+    });
+    const hovered = mapSubjectAlive(hoveredMapSubject) ? hoveredMapSubject : null;
+    if (
+      hovered !== null &&
+      !isPinnedMapSubject(hovered) &&
+      pinnedMapSubjects.length < MAX_INSPECTOR_CARDS
+    ) {
+      slots[pinnedMapSubjects.length] = hovered;
+    }
+    return slots;
+  }
+
+  /**
+   * Draws the inspector: which pane shows what, and where each pane sits.
+   *
+   * A pane already showing a subject keeps it, whatever slot that subject has moved to. That
+   * is the whole trick behind the slide — releasing a selection while previewing another site
+   * does not rebuild a card in a new place, it leaves the preview pane exactly as it is and
+   * changes only the slot it is parked in, which the CSS transitions across.
+   */
+  function renderSiteInspector(): void {
+    const slots = inspectorSlotSubjects();
+
+    /* Panes already holding one of the wanted subjects claim it first; the rest get handed out
+     * to whatever is left over, so at most one pane ever rebuilds its contents in a turn. */
+    const claimed = new Set<InspectorPane>();
+    const paneForSlot: (InspectorPane | null)[] = slots.map((subject) => {
+      if (subject === null) {
+        return null;
+      }
+      const held = inspectorPanes.find(
+        (p) => !claimed.has(p) && mapSubjectKey(p.subject) === mapSubjectKey(subject),
+      );
+      if (held !== undefined) {
+        claimed.add(held);
+        return held;
+      }
+      return null;
+    });
+    slots.forEach((subject, slot) => {
+      if (subject === null || paneForSlot[slot] !== null) {
+        return;
+      }
+      const free = inspectorPanes.find((p) => !claimed.has(p));
+      if (free !== undefined) {
+        claimed.add(free);
+        paneForSlot[slot] = free;
+      }
+    });
+
+    for (const pane of inspectorPanes) {
+      const slot = paneForSlot.indexOf(pane);
+      if (slot === -1) {
+        pane.subject = null;
+        pane.el.hidden = true;
+        pane.bodyEl.innerHTML = "";
+        pane.el.classList.remove("game-panel--site-inspector--pinned");
+        continue;
+      }
+      renderInspectorPane(pane, slots[slot] as MapSubject, slot);
+    }
+
+    refreshMapLeader();
+  }
+
+  /** One pane: what it shows, whether it is the selected one, and which slot it is parked in. */
+  function renderInspectorPane(pane: InspectorPane, subject: MapSubject, slot: number): void {
+    const wasVisible = !pane.el.hidden;
+    pane.subject = subject;
+    pane.el.hidden = false;
+    /* Slot 0 sits at the right edge; each slot after it steps one tile-width to the left.
+     * `--dock-w` is a percentage of the containing block, which is what `right` resolves it
+     * against too — so this cannot go through a transform, where a percentage would resolve
+     * against the panel's own width instead. */
+    const right = slot === 0 ? "0px" : `calc((var(--dock-w) + var(--dock-gap)) * ${slot})`;
+    if (pane.el.style.right !== right) {
+      pane.el.style.right = right;
+      /* A pane appearing is not a pane moving: only something already on screen slides. */
+      if (wasVisible) {
+        trackInspectorSlide();
+      }
+    }
+
+    /* Only the selected pane takes the pointer: see the click-through note in the CSS. Its X
+     * is the only one that could do anything, so the preview's is not offered. */
+    const isPinned = isPinnedMapSubject(subject);
+    pane.el.classList.toggle("game-panel--site-inspector--pinned", isPinned);
+    pane.closeEl.hidden = !isPinned;
+
+    pane.titleEl.textContent = subject.kind === "lair" ? "Lair" : "Site Detail";
+    pane.el.classList.toggle(
+      "game-panel--site-inspector--lair",
+      subject.kind === "lair",
+    );
+
+    pane.bodyEl.innerHTML = "";
+    if (subject.kind === "lair") {
+      /* The tile's own contents, under a per-pane id prefix — several tablists can be up at
+       * once, and shared tab ids would leave every `aria-labelledby` ambiguous. */
+      renderLairPanelInto(pane.bodyEl, `${pane.el.id}-lair`);
+      return;
+    }
+    const loc = getLocationById(content, subject.locationId);
+    if (loc === undefined) {
+      return;
+    }
+    pane.bodyEl.appendChild(
+      buildLocationCardArticle(
+        loc,
+        securityLevelForLocation(state.locationSecurityStates, loc.id),
+        intelLevelAtLocation(state, loc.id),
+        state.locationAssetSlots.find((p) => p.locationId === loc.id)?.slots ?? [],
+        new Map(content.assets.map((a) => [a.id, a.name])),
+        state.phase === "main",
+        state.locationRequiredTraits[loc.id] ?? [],
+        state.locationSecurityTraits[loc.id] ?? [],
+      ),
+    );
+  }
+
+  /** Re-measure where the lines meet the panes, then redraw them. */
+  function refreshMapLeader(): void {
+    refreshMapLeaderAnchor();
+    const plot = currentPlotSize();
+    if (plot !== null) {
+      syncMapLeaderLine(plot);
+    }
+  }
+
+  /**
+   * A pane's height follows whichever card is in it, and its line meets it halfway down, so
+   * every card swap moves an anchor. Observing is what catches the art loading in a beat after
+   * the card is built and growing a pane under a line already drawn.
+   */
+  const siteInspectorResizeObserver = new ResizeObserver(() => {
+    refreshMapLeader();
+  });
+  for (const pane of inspectorPanes) {
+    siteInspectorResizeObserver.observe(pane.el);
+  }
+
+  /**
+   * A pane sliding between slots moves its leader's landing point the whole way there, and the
+   * anchors are cached rather than measured per frame. So the slide is tracked for exactly as
+   * long as it runs: a handful of frames, only while one is actually happening.
+   */
+  const INSPECTOR_SLIDE_MS = 220;
+  let inspectorSlideUntil = 0;
+  let inspectorSlideRaf: number | null = null;
+
+  function trackInspectorSlide(): void {
+    inspectorSlideUntil = performance.now() + INSPECTOR_SLIDE_MS;
+    if (inspectorSlideRaf !== null) {
+      return;
+    }
+    const step = (): void => {
+      refreshMapLeader();
+      if (performance.now() >= inspectorSlideUntil) {
+        inspectorSlideRaf = null;
+        return;
+      }
+      inspectorSlideRaf = requestAnimationFrame(step);
+    };
+    inspectorSlideRaf = requestAnimationFrame(step);
+  }
+
+  /* The rAF window is timed off the CSS duration, so its last frame can land a beat before the
+   * transition's own — which would leave a line pointing just short of where its pane stopped.
+   * The end event is the one moment the final position is certainly readable. */
+  for (const pane of inspectorPanes) {
+    pane.el.addEventListener("transitionend", (e) => {
+      if (e.propertyName === "right") {
+        refreshMapLeader();
+      }
+    });
+  }
+
+  function setHoveredMapSubject(subject: MapSubject | null): void {
+    if (mapSubjectKey(hoveredMapSubject) === mapSubjectKey(subject)) {
+      return;
+    }
+    hoveredMapSubject = subject;
+    renderSiteInspector();
+  }
+
+  /**
+   * Takes a subject out of the selection. Selecting a site staged it in two places — the
+   * inspector and the mission target slot — so letting it go has to undo both, or the map keeps
+   * a pin lit for a card that is gone. A target staged from somewhere else is left alone: only
+   * the one this subject put there.
+   */
+  function dropPinnedMapSubject(subject: MapSubject): void {
+    const key = mapSubjectKey(subject);
+    const before = pinnedMapSubjects.length;
+    pinnedMapSubjects = pinnedMapSubjects.filter((s) => mapSubjectKey(s) !== key);
+    if (pinnedMapSubjects.length === before) {
+      return;
+    }
+    renderSiteInspector();
+    if (
+      subject.kind === "site" &&
+      assignTarget?.kind === "location" &&
+      assignTarget.locationId === subject.locationId
+    ) {
+      assignTarget = null;
+      renderAssignPickSlots();
+      renderAssignMinionSlots();
+      onAssignSlotsChanged();
+    }
+  }
+
+  /**
+   * Adds a subject to the selection, on the left of the stack. Past the cap the oldest card —
+   * the one at the right corner — falls off, so a click on the map always shows you what you
+   * just clicked rather than quietly doing nothing once the row is full.
+   */
+  function pushPinnedMapSubject(subject: MapSubject): void {
+    if (isPinnedMapSubject(subject)) {
+      return;
+    }
+    while (pinnedMapSubjects.length >= MAX_INSPECTOR_CARDS) {
+      const evicted = pinnedMapSubjects[0];
+      if (evicted === undefined) {
+        break;
+      }
+      dropPinnedMapSubject(evicted);
+    }
+    pinnedMapSubjects = [...pinnedMapSubjects, subject];
+    renderSiteInspector();
+  }
+
+  /**
+   * Markers are rebuilt on every map render, so the hover is read off the map panel rather than
+   * bound to each pin. Sites are known by the location id they already carry for the drag
+   * payload; the lair has none to carry and is flagged instead.
+   */
+  function mapMarkerSubject(target: EventTarget | null): MapSubject | null {
+    const el =
+      target instanceof Element ? target.closest<HTMLElement>(".map-marker") : null;
+    if (el === null) {
+      return null;
+    }
+    if (el.dataset.mapLair === "true") {
+      return { kind: "lair" };
+    }
+    const locationId = el.dataset.locationId;
+    return locationId === undefined ? null : { kind: "site", locationId };
+  }
+
+  mapPanelEl.addEventListener("pointerover", (e) => {
+    const subject = mapMarkerSubject(e.target);
+    if (subject !== null) {
+      setHoveredMapSubject(subject);
+    }
+  });
+  mapPanelEl.addEventListener("pointerout", (e) => {
+    const key = mapSubjectKey(mapMarkerSubject(e.target));
+    if (key === null || key !== mapSubjectKey(hoveredMapSubject)) {
+      return;
+    }
+    /* Moving between a pin's own children is not leaving it. */
+    const to = e.relatedTarget instanceof Node ? e.relatedTarget : null;
+    if (to !== null && mapSubjectKey(mapMarkerSubject(to)) === key) {
+      return;
+    }
+    setHoveredMapSubject(null);
+  });
+  /* Pins are buttons, so tabbing the map inspects them the same way hovering does. */
+  mapPanelEl.addEventListener("focusin", (e) => {
+    setHoveredMapSubject(mapMarkerSubject(e.target));
+  });
+  mapPanelEl.addEventListener("focusout", (e) => {
+    if (mapSubjectKey(mapMarkerSubject(e.target)) === mapSubjectKey(hoveredMapSubject)) {
+      setHoveredMapSubject(null);
+    }
+  });
+
+  /**
+   * A marker click is a toggle: a second one on an already-selected marker lets that card go,
+   * and the cards left of it shuffle right into the gap. Returns whether the click selected
+   * rather than deselected — the caller decides what else selecting means.
+   */
+  function toggleMapPin(subject: MapSubject): boolean {
+    if (isPinnedMapSubject(subject)) {
+      dropPinnedMapSubject(subject);
+      return false;
+    }
+    pushPinnedMapSubject(subject);
+    return true;
+  }
+
+  /* A pane's X drops whatever that pane is showing, not whatever was selected last. */
+  for (const pane of inspectorPanes) {
+    pane.closeEl.addEventListener("click", () => {
+      if (pane.subject !== null) {
+        dropPinnedMapSubject(pane.subject);
+      }
+    });
+  }
+
+  /** The dashboard Lair tile, and the inspector when the lair marker is the one being shown. */
   function renderLairPanel(): void {
-    lairPanelEl.innerHTML = "";
+    renderLairPanelInto(lairPanelEl, "lair-panel");
+  }
+
+  /**
+   * Both surfaces that draw the lair, rendered from one place so a tab picked on either is the
+   * tab both are on. `idPrefix` namespaces the tablist: the tile and the inspector can be up
+   * together, and two tablists sharing tab ids would leave every `aria-labelledby` ambiguous.
+   */
+  function renderLairPanelInto(container: HTMLElement, idPrefix: string): void {
+    container.innerHTML = "";
     if (state.activeLairId === null) {
       const empty = document.createElement("p");
       empty.className = "assets-panel-empty";
       empty.textContent = "No lair in this run.";
-      lairPanelEl.appendChild(empty);
+      container.appendChild(empty);
       return;
     }
     const lair = getLairById(content, state.activeLairId);
@@ -5913,7 +6512,7 @@ function initGameController(
       const empty = document.createElement("p");
       empty.className = "assets-panel-empty";
       empty.textContent = "Lair not found in catalog.";
-      lairPanelEl.appendChild(empty);
+      container.appendChild(empty);
       return;
     }
     const header = document.createElement("div");
@@ -5929,7 +6528,7 @@ function initGameController(
       desc.textContent = lair.description;
       headerBody.appendChild(desc);
     }
-    lairPanelEl.appendChild(header);
+    container.appendChild(header);
 
     function missionNameForSort(mid: string): string {
       return content.missions.find((m) => m.id === mid)?.name ?? mid;
@@ -6024,7 +6623,7 @@ function initGameController(
         column.appendChild(list);
         columnsWrap.appendChild(column);
       }
-      lairPanelEl.appendChild(columnsWrap);
+      container.appendChild(columnsWrap);
       return;
     }
 
@@ -6042,7 +6641,7 @@ function initGameController(
       }
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-selected", def.id === lairPanelTab ? "true" : "false");
-      tab.id = `lair-panel-tab-${def.id}`;
+      tab.id = `${idPrefix}-tab-${def.id}`;
       tab.textContent = def.label;
       tab.addEventListener("click", () => {
         if (lairPanelTab === def.id) {
@@ -6050,17 +6649,18 @@ function initGameController(
         }
         lairPanelTab = def.id;
         renderLairPanel();
+        renderSiteInspector();
       });
       tablist.appendChild(tab);
     }
-    lairPanelEl.appendChild(tablist);
+    container.appendChild(tablist);
 
     const list = document.createElement("div");
     list.className = "lair-panel-missions";
     list.setAttribute("role", "tabpanel");
-    list.setAttribute("aria-labelledby", `lair-panel-tab-${lairPanelTab}`);
+    list.setAttribute("aria-labelledby", `${idPrefix}-tab-${lairPanelTab}`);
     fillLairSectionInto(lairPanelTab, list);
-    lairPanelEl.appendChild(list);
+    container.appendChild(list);
   }
 
   function activityEventTone(ev: ActivityEvent): "neutral" | "good" | "bad" {
@@ -6314,6 +6914,40 @@ function initGameController(
     hudShort.focus();
   }
 
+  /**
+   * Push `collapsedPanels` onto the DOM. The button's label flips with the state because the
+   * icon alone (a minus that becomes a plus) says nothing to a screen reader.
+   */
+  function applyPanelCollapse(): void {
+    for (const button of panelMinimizeButtons) {
+      const key = button.dataset.panelMinimize;
+      const panel = button.closest<HTMLElement>(".game-panel");
+      if (key === undefined || panel === null) {
+        continue;
+      }
+      const collapsed = collapsedPanels.has(key);
+      panel.classList.toggle("game-panel--collapsed", collapsed);
+      button.setAttribute("aria-expanded", String(!collapsed));
+      const name = panel.querySelector(".game-panel-title")?.textContent?.trim() ?? "panel";
+      button.setAttribute("aria-label", `${collapsed ? "Expand" : "Minimize"} ${name} panel`);
+    }
+  }
+
+  for (const button of panelMinimizeButtons) {
+    button.addEventListener("click", () => {
+      const key = button.dataset.panelMinimize;
+      if (key === undefined) {
+        return;
+      }
+      if (collapsedPanels.has(key)) {
+        collapsedPanels.delete(key);
+      } else {
+        collapsedPanels.add(key);
+      }
+      applyPanelCollapse();
+    });
+  }
+
   function applyGameMenuVisibility(): void {
     const showDashboard = currentMenu === "dashboard";
 
@@ -6326,6 +6960,9 @@ function initGameController(
     }
 
     rightColumnsRowEl.classList.toggle("game-ui-columns-row--single", !showDashboard);
+    /* Dashboard floats the panels over a full-bleed map; every other menu is one panel wide. */
+    omegaBodyEl.classList.toggle("omega-body--floating", showDashboard);
+    applyPanelCollapse();
 
     for (const button of menuButtons) {
       const menu = button.dataset.gameMenu;
@@ -6347,6 +6984,7 @@ function initGameController(
     renderOmegaPlanPanel();
     renderMinionsPanel();
     renderMapPanel();
+    renderSiteInspector();
   }
 
   /**
@@ -7014,6 +7652,7 @@ function initGameController(
     renderMissionsPanel();
     renderLairPanel();
     renderMapPanel();
+    renderSiteInspector();
     if (!overlayActivityLog.hidden) {
       renderActivityLogModal();
     }
