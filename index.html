@@ -207,6 +207,35 @@
                 >
                   <div id="map-panel" class="map-panel"></div>
                 </aside>
+                <!-- Map layers: what the plot is allowed to draw. Its own panel rather than
+                     furniture inside the plot, because everything inside `#map-panel` is torn
+                     down and rebuilt by `renderMapPanel` on every state change — a control
+                     living in there would lose focus mid-click — and because the map panel is
+                     its own stacking context under the floating tiles, which would bury an
+                     open menu behind whichever card happened to be over it. Sits at the top of
+                     the map just right of the planner; `buildMapLayersPanel` fills the body
+                     from `MAP_LAYER_GROUPS`. -->
+                <aside
+                  class="game-panel game-panel--map-layers"
+                  data-menu-panel="dashboard"
+                  aria-labelledby="map-layers-panel-title"
+                >
+                  <header class="game-panel-head">
+                    <h2 id="map-layers-panel-title" class="game-panel-title">Map Layers</h2>
+                    <button
+                      type="button"
+                      class="game-panel-minimize"
+                      data-panel-minimize="map-layers"
+                      aria-expanded="true"
+                    >
+                      <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path class="game-panel-minimize__bar" d="M7 12h10" />
+                        <path class="game-panel-minimize__stem" d="M12 7v10" />
+                      </svg>
+                    </button>
+                  </header>
+                  <div id="map-layers-panel" class="map-layers-panel"></div>
+                </aside>
                 <!-- The map's inspector panes, hanging along the top of the map rather than in
                      the dock band. Slot 0 sits at the right corner and the stack grows leftward,
                      four of them spanning exactly the width the dock band does. Which pane sits

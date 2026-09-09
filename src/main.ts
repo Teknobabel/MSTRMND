@@ -90,6 +90,7 @@ import {
   effectiveVisibilityOfSlot,
   intelLevelAtLocation,
   isOpposingAgentMoveVisibleToPlayer,
+  MAX_INTEL_LEVEL,
   playerVisibleOpposingAgentsAtLocation,
   totalPlayerVisibleOpposingAgents,
 } from "./game/intel";
@@ -127,6 +128,16 @@ import {
 import { ambientTracks } from "./ui/map/ambientTraffic";
 import { formatMapCoordinates } from "./ui/map/coordinates";
 import { mapSiteSignals, type MapSiteSignal } from "./ui/map/siteSignals";
+import {
+  MAP_LAYER_GROUPS,
+  MAP_LAYER_PLOT_CLASSES,
+  loadMapLayers,
+  mapLayerPlotClasses,
+  saveMapLayers,
+  type MapLayerKey,
+  type MapLayerState,
+} from "./ui/map/mapLayers";
+import { omegaPhaseTargetsByLocation } from "./ui/map/omegaTargets";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
@@ -1255,6 +1266,7 @@ function initGameController(
   const minionsPanelTitleEl = req<HTMLElement>("minions-panel-title");
   const lairPanelEl = req<HTMLElement>("lair-panel");
   const mapPanelEl = req<HTMLElement>("map-panel");
+  const mapLayersPanelEl = req<HTMLElement>("map-layers-panel");
   /**
    * The map inspector's panes, in pane order (not slot order — a pane's slot moves). Each is a
    * whole panel; `renderSiteInspector` decides which subject each one holds and where it sits.
@@ -5540,6 +5552,19 @@ function initGameController(
 
   /** What each lit site is saying, rebuilt from game state on every render. */
   let mapSignals: readonly MapSiteSignal[] = [];
+
+  /**
+   * What the plot is allowed to draw, from the Map Layers panel.
+   *
+   * A player preference rather than run state, so it is parked in `localStorage` and outlives
+   * the run — and deliberately kept out of `GameState`, which is the rules' data and gets
+   * rebuilt every time a run starts.
+   */
+  let mapLayers: MapLayerState = loadMapLayers(
+    typeof localStorage === "undefined" ? null : localStorage,
+  );
+  /** The panel's own checkboxes, so a state change can push itself back onto them. */
+  const mapLayerInputs = new Map<MapLayerKey, HTMLInputElement>();
   /**
    * The reticle that snaps to whatever the pointer is over, and the marker it is currently on.
    *
@@ -5922,6 +5947,152 @@ function initGameController(
   });
 
   /**
+   * Sites the **active** Omega phase can still be aimed at, and which of its missions want
+   * each one.
+   *
+   * Only the phase's unfinished slots count: a mission already completed is not something the
+   * plan still needs a place for, and flagging its targets would point the player at work they
+   * have done. Intel and security are read from current run state, so a site can join or leave
+   * the set as surveillance and heat move — which is exactly what the flag is for.
+   */
+  function activeOmegaPhaseTargetsByLocation(): Map<string, string[]> {
+    const planId = state.activeOmegaPlanId;
+    const plan = planId !== null ? getOmegaPlanById(content, planId) : undefined;
+    const stageIndex = state.activeOmegaStageIndex;
+    const stage = plan?.stages[stageIndex];
+    const progress = state.omegaStageProgress[stageIndex];
+    if (stage === undefined || progress === undefined) {
+      return new Map();
+    }
+    const missions: MissionTemplate[] = [];
+    for (let slotIndex = 0; slotIndex < OMEGA_MISSIONS_PER_STAGE; slotIndex += 1) {
+      const missionTemplateId = stage.missionIds[slotIndex];
+      if (missionTemplateId === undefined || progress[slotIndex] === true) {
+        continue;
+      }
+      const template = findMissionOrEventTemplate(missionTemplateId);
+      if (template !== undefined) {
+        missions.push(template);
+      }
+    }
+    return omegaPhaseTargetsByLocation({
+      missions,
+      sites: runLocations().map((location) => ({
+        location,
+        intelLevel: intelLevelAtLocation(state, location.id),
+        securityLevel: securityLevelForLocation(state.locationSecurityStates, location.id),
+      })),
+    });
+  }
+
+  /**
+   * One chip on a pin's tag rail.
+   *
+   * Every chip a site could show is built on every render and hidden by the stylesheet, so the
+   * panel's switches never cost a rebuild. Purely visual: the rail is inert to the pointer (it
+   * would otherwise sit between neighbouring pins and take their clicks) and hidden from
+   * assistive tech, which reads the same facts off the pin's own label.
+   */
+  function createMapMarkerTag(
+    modifier: string,
+    icon: SVGElement | null,
+    text: string,
+  ): HTMLElement {
+    const tag = document.createElement("span");
+    tag.className = `map-marker__tag map-marker__tag--${modifier}`;
+    if (icon !== null) {
+      tag.appendChild(icon);
+    }
+    const value = document.createElement("span");
+    value.className = "map-marker__tag-value";
+    value.textContent = text;
+    tag.appendChild(value);
+    return tag;
+  }
+
+  /**
+   * Push `mapLayers` onto the plot.
+   *
+   * Every layer is a class and nothing else, which is what lets a toggle be instant: the pins
+   * are built once per render carrying every decoration they could ever show, and the switches
+   * only decide which of them the stylesheet reveals. Flipping one costs no rebuild, so the
+   * checkbox the player is holding never disappears out from under the click.
+   */
+  function applyMapLayerClasses(): void {
+    if (mapPlotEl === null) {
+      return;
+    }
+    mapPlotEl.classList.remove(...MAP_LAYER_PLOT_CLASSES);
+    mapPlotEl.classList.add(...mapLayerPlotClasses(mapLayers));
+  }
+
+  function setMapLayer(key: MapLayerKey, on: boolean): void {
+    if (mapLayers[key] === on) {
+      return;
+    }
+    mapLayers = { ...mapLayers, [key]: on };
+    saveMapLayers(typeof localStorage === "undefined" ? null : localStorage, mapLayers);
+    const input = mapLayerInputs.get(key);
+    if (input !== undefined && input.checked !== on) {
+      input.checked = on;
+    }
+    applyMapLayerClasses();
+  }
+
+  /**
+   * The Map Layers panel, built once at startup from {@link MAP_LAYER_GROUPS}.
+   *
+   * Built once rather than per render because it holds no run state: what it shows is the
+   * player's preference, and a control that rebuilt itself mid-turn would drop focus every
+   * time a mission ticked.
+   */
+  function buildMapLayersPanel(): void {
+    mapLayersPanelEl.innerHTML = "";
+    mapLayerInputs.clear();
+    for (const group of MAP_LAYER_GROUPS) {
+      const fieldset = document.createElement("fieldset");
+      fieldset.className = "map-layers-group";
+      const legend = document.createElement("legend");
+      legend.className = "map-layers-group__label";
+      legend.textContent = group.label;
+      fieldset.appendChild(legend);
+
+      for (const option of group.options) {
+        const row = document.createElement("label");
+        row.className = "map-layers-row";
+        row.title = option.hint;
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.className = "map-layers-row__input";
+        input.checked = mapLayers[option.key];
+        input.setAttribute("aria-label", `${option.label}. ${option.hint}`);
+        input.addEventListener("change", () => {
+          setMapLayer(option.key, input.checked);
+        });
+        mapLayerInputs.set(option.key, input);
+        row.appendChild(input);
+
+        if (option.swatch !== undefined) {
+          /* The pin's own dot colour, so the row reads at a glance as "these pins". */
+          const swatch = document.createElement("span");
+          swatch.className = `map-layers-row__swatch map-layers-row__swatch--${option.swatch}`;
+          swatch.setAttribute("aria-hidden", "true");
+          row.appendChild(swatch);
+        }
+
+        const label = document.createElement("span");
+        label.className = "map-layers-row__label";
+        label.textContent = option.label;
+        row.appendChild(label);
+
+        fieldset.appendChild(row);
+      }
+      mapLayersPanelEl.appendChild(fieldset);
+    }
+  }
+
+  /**
    * The player's own base, plotted on the world like any site.
    *
    * Deliberately not a `.map-marker` button: the lair is not a mission target and carries no
@@ -6205,6 +6376,12 @@ Your lair`;
       targetedLocationId,
     });
 
+    /* What the plan wants next and what is worth taking, worked out once for the whole map
+     * rather than per pin. Both feed the tag rail the Map Layers panel switches on and off. */
+    const omegaTargets = activeOmegaPhaseTargetsByLocation();
+    const omegaPhaseNumber = state.activeOmegaStageIndex + 1;
+    const assetNameById = new Map(content.assets.map((a) => [a.id, a.name]));
+
     /* The camera leans at whatever is staged, and settles back when nothing is. */
     const focusMarker =
       targetedLocationId === null
@@ -6248,7 +6425,7 @@ Your lair`;
       const tipLines = [
         loc.name,
         `${formatLocationTypeLabel(loc.locationType)} · Level ${loc.locationLevel}`,
-        `Security ${security}/${maxSecurityLevelForLocation(content, loc.id)} · Intel ${intel}`,
+        `Security ${security}/${maxSecurityLevelForLocation(content, loc.id)} · Intel ${intel}/${MAX_INTEL_LEVEL}`,
       ];
       if (agents.length > 0) {
         const names = agents.map(
@@ -6256,6 +6433,33 @@ Your lair`;
         );
         tipLines.push(`Agents: ${names.join(", ")}`);
       }
+
+      /* Sites the active Omega phase could still be aimed at, and the gear the player has
+       * actually identified at this one. Both are worked out whatever the Map Layers panel is
+       * set to: the tooltip is the accessible reading of the tag rail, and a chip the player
+       * has switched off is still a fact about the site. */
+      const omegaMissionIds = omegaTargets.get(loc.id) ?? [];
+      if (omegaMissionIds.length > 0) {
+        const names = omegaMissionIds.map(
+          (id) => findMissionOrEventTemplate(id)?.name ?? id,
+        );
+        tipLines.push(`Omega Phase ${omegaPhaseNumber} target: ${names.join(", ")}`);
+      }
+      const revealedAssetNames: string[] = [];
+      for (const slot of state.locationAssetSlots.find((p) => p.locationId === loc.id)?.slots ??
+        []) {
+        /* The same bar the location card names a slot by: stored as revealed, or intel deep
+         * enough to read the site's inventory. Anything short of that is not the player's to
+         * see, whatever the layer is set to. */
+        if (!isOccupiedAssetSlot(slot) || assetSlotKnowledge(slot, intel) !== "identified") {
+          continue;
+        }
+        revealedAssetNames.push(assetNameById.get(slot.assetId) ?? slot.assetId);
+      }
+      if (revealedAssetNames.length > 0) {
+        tipLines.push(`Assets: ${revealedAssetNames.join(", ")}`);
+      }
+
       pin.title = tipLines.join("\n");
       pin.setAttribute("aria-label", tipLines.join(". "));
 
@@ -6282,10 +6486,51 @@ Your lair`;
       const dot = document.createElement("span");
       dot.className = "map-marker__dot";
       pin.appendChild(dot);
+      /* Name and tag rail hang off one column under the pin, so a name showing and a readout
+       * showing can never land on top of each other — which they would if each were pinned to
+       * the marker at its own offset. */
+      const info = document.createElement("span");
+      info.className = "map-marker__info";
       const label = document.createElement("span");
       label.className = "map-marker__label";
       label.textContent = loc.name;
-      pin.appendChild(label);
+      info.appendChild(label);
+
+      const tags = document.createElement("span");
+      tags.className = "map-marker__tags";
+      tags.setAttribute("aria-hidden", "true");
+      if (omegaMissionIds.length > 0) {
+        tags.appendChild(createMapMarkerTag("omega", null, "\u03A9"));
+      }
+      /* Intel and security ride the rail as a pair — one says how much of the site the player
+       * can see, the other how hard it is to walk into, and reading either alone is misleading.
+       * Both are `x / max` in the pin's tooltip; the chip is the numerator, which is the part
+       * that moves. */
+      tags.appendChild(
+        createMapMarkerTag(
+          "intel",
+          createSvgPillIcon(UNKNOWN_ICON_SVG_PATHS, "map-marker__tag-icon"),
+          `${intel}`,
+        ),
+      );
+      tags.appendChild(
+        createMapMarkerTag(
+          "security",
+          createSvgPillIcon(SECURITY_ICON_SVG_PATHS, "map-marker__tag-icon"),
+          `${security}`,
+        ),
+      );
+      if (revealedAssetNames.length > 0) {
+        tags.appendChild(
+          createMapMarkerTag(
+            "assets",
+            createSvgPillIcon(ASSET_ICON_SVG_PATHS, "map-marker__tag-icon"),
+            `${revealedAssetNames.length}`,
+          ),
+        );
+      }
+      info.appendChild(tags);
+      pin.appendChild(info);
 
       plot.appendChild(pin);
 
@@ -6315,6 +6560,9 @@ Your lair`;
 
     mapPanelEl.appendChild(plot);
     mapPlotEl = plot;
+    /* The pins carry every decoration they could show; this is what decides which of them the
+     * player is looking at. Applied before the first paint, like the camera below it. */
+    applyMapLayerClasses();
     /* Build the camera and place the pins before this frame paints, then let the observer keep
      * them honest; observing alone would flash the map flat with every marker stacked at the
      * plot's top-left corner for a frame. */
@@ -7997,6 +8245,7 @@ Your lair`;
 
   ensureAssignPickSlotsWired();
   renderAssignPickSlots();
+  buildMapLayersPanel();
   refresh();
 
   return { startRun };

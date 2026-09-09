@@ -893,6 +893,7 @@ body {
 .omega-body--floating .game-panel--omega,
 .omega-body--floating .game-panel--minions,
 .omega-body--floating .game-panel--lair,
+.omega-body--floating .game-panel--map-layers,
 .omega-body--floating .game-panel--site-inspector {
   position: absolute;
   z-index: 2;
@@ -907,6 +908,7 @@ body {
 .omega-body--floating .game-panel--omega,
 .omega-body--floating .game-panel--minions,
 .omega-body--floating .game-panel--lair,
+.omega-body--floating .game-panel--map-layers,
 .omega-body--floating .game-panel--site-inspector {
   box-shadow:
     0 18px 44px rgba(0, 0, 0, 0.62),
@@ -919,6 +921,7 @@ body {
 .omega-body--floating .game-panel--omega:hover,
 .omega-body--floating .game-panel--minions:hover,
 .omega-body--floating .game-panel--lair:hover,
+.omega-body--floating .game-panel--map-layers:hover,
 .omega-body--floating .game-panel--site-inspector:hover {
   box-shadow:
     0 18px 44px rgba(0, 0, 0, 0.62),
@@ -998,6 +1001,23 @@ body {
 
 .omega-body--floating .game-panel--lair {
   right: 0;
+}
+
+/*
+ * Map Layers rides the top of the map in the one strip nothing else claims: the planner ends
+ * at `--dock-left`, the tile band starts below the top 42%, and the inspector panes hang from
+ * the right corner. It outranks the panes (z-index 3) because a pane sliding in over a menu the
+ * player has open would take the click they were about to make; it is narrow and foldable, so
+ * covering a corner of a card costs less than being covered by one.
+ */
+.omega-body--floating .game-panel--map-layers {
+  left: var(--dock-left);
+  top: 0;
+  z-index: 3;
+  width: 11.5rem;
+  height: fit-content;
+  max-height: calc(100% - var(--dock-h) - var(--dock-gap));
+  overflow: auto;
 }
 
 /*
@@ -4088,6 +4108,130 @@ body {
   opacity: 1;
 }
 
+/*
+ * Site pins hang their name and their tag rail off one column, so the two can never land on
+ * top of each other: whether the name is showing — the panel's Site names layer, or a hover —
+ * does not move the readouts under it, because the column lays them out in flow. The lair keeps
+ * the plain absolute label: it has no tags, and its name is on all the time.
+ */
+.map-marker__info {
+  position: absolute;
+  left: 50%;
+  top: 1.05rem;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.16rem;
+  pointer-events: none;
+}
+
+.map-marker__info > .map-marker__label {
+  position: static;
+  transform: none;
+}
+
+/* Site names: what a hover does for one pin, done for every pin at once. */
+.map-plot--names .map-marker__label {
+  opacity: 1;
+}
+
+.map-marker__tags {
+  display: flex;
+  align-items: center;
+  gap: 0.14rem;
+}
+
+/*
+ * Every chip a site could show is in the markup on every render; which of them are up is the
+ * plot's business (the four layer rules below). Hidden with `display: none` rather than a fade
+ * so the rail is only ever as wide as what is on it and stays centred under the pin.
+ */
+.map-marker__tag {
+  display: none;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.02rem 0.2rem;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid var(--line-1);
+  white-space: nowrap;
+}
+
+.map-plot--readouts .map-marker__tag--intel,
+.map-plot--readouts .map-marker__tag--security,
+.map-plot--omega .map-marker__tag--omega,
+.map-plot--assets .map-marker__tag--assets {
+  display: inline-flex;
+}
+
+.map-marker__tag-icon {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The same omega the HUD flies over the plan, shrunk onto a pin: this site is what the active
+ * phase is asking for. Red, where the readouts are cool, because it is the one chip that is
+ * about the plan rather than about the place. */
+.map-marker__tag--omega {
+  color: var(--red-bright);
+  border-color: var(--line-2);
+  text-shadow: 0 0 6px var(--red-glow);
+}
+
+.map-marker__tag--intel {
+  color: #b9e6ff;
+}
+
+.map-marker__tag--security {
+  color: #ffc9a8;
+}
+
+.map-marker__tag--assets {
+  color: #ffe9a8;
+}
+
+/*
+ * A category switched off is dimmed, never dropped.
+ *
+ * The site is still plotted, still takes a click, still carries its drag payload — turning a
+ * layer off is the player saying "not what I am looking at", not "not in play", and a control
+ * that could hide a mission target would be a control that loses them a turn. Hovering or
+ * focusing a dimmed pin brings it right back, so a map read with every category off is still a
+ * map that can be worked.
+ */
+.map-plot--dim-political .map-marker--political,
+.map-plot--dim-economic .map-marker--economic,
+.map-plot--dim-military .map-marker--military {
+  opacity: 0.28;
+  filter: saturate(0.4);
+  transition: opacity 0.14s, filter 0.14s;
+}
+
+.map-plot--dim-political .map-marker--political:hover,
+.map-plot--dim-political .map-marker--political:focus-visible,
+.map-plot--dim-political .map-marker--political.map-marker--targeted,
+.map-plot--dim-economic .map-marker--economic:hover,
+.map-plot--dim-economic .map-marker--economic:focus-visible,
+.map-plot--dim-economic .map-marker--economic.map-marker--targeted,
+.map-plot--dim-military .map-marker--military:hover,
+.map-plot--dim-military .map-marker--military:focus-visible,
+.map-plot--dim-military .map-marker--military.map-marker--targeted {
+  opacity: 1;
+  filter: none;
+}
+
 /* Active-operation callouts: a small crew badge tethered to the site the mission is aimed at.
  * The stack itself is inert so it never steals a click from a marker underneath it; only the
  * callout boxes take the pointer, and hovering one names the operation. */
@@ -4398,6 +4542,97 @@ body {
   margin: 0;
   font-size: 0.8rem;
   color: var(--text-2);
+}
+
+/* ---------------- Map layers ----------------
+ *
+ * The panel that decides what the plot above is allowed to draw. Every switch resolves to one
+ * `map-plot--*` class (see `ui/map/mapLayers.ts`), so the rules below are the whole contract
+ * between the control and the picture — the markup a pin carries never changes with them.
+ */
+
+.map-layers-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.map-layers-group {
+  margin: 0;
+  padding: 0.3rem 0.4rem 0.35rem;
+  border: 1px solid var(--line-1);
+  background: rgba(18, 6, 8, 0.4);
+}
+
+.map-layers-group__label {
+  padding: 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+}
+
+.map-layers-row {
+  display: flex;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0.1rem 0.05rem;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.map-layers-row:hover {
+  color: #fff;
+}
+
+.map-layers-row__input {
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin: 0;
+  accent-color: var(--red);
+  cursor: pointer;
+}
+
+/* The pin's own dot colour, so a row is readable as "these pins" without reading the word. */
+.map-layers-row__swatch {
+  flex: 0 0 auto;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+}
+
+.map-layers-row__swatch--military {
+  background: #ff5a3c;
+}
+
+.map-layers-row__swatch--political {
+  background: #ffd166;
+}
+
+.map-layers-row__swatch--economic {
+  background: #4fd1c5;
+}
+
+/* An unchecked row is the dimmed one, so the row reads as dimmed itself. The box comes first
+   in the markup, so this is a sibling rule rather than anything cleverer. */
+.map-layers-row__input:not(:checked) ~ .map-layers-row__swatch {
+  opacity: 0.3;
+}
+
+.map-layers-row__input:not(:checked) ~ .map-layers-row__label {
+  color: var(--text-2);
+}
+
+.map-layers-row__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 
