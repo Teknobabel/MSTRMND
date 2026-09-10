@@ -55,6 +55,10 @@
   --stage-w: 1920px;
   --stage-h: 1080px;
   --ui-scale: 1;
+  /* Pinch-to-zoom on top of the fit, driven by src/ui/stageZoom.ts */
+  --stage-zoom: 1;
+  --stage-pan-x: 0px;
+  --stage-pan-y: 0px;
 }
 
 *,
@@ -72,10 +76,12 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  /* pan-x pan-y = scrolling inside panels still works, but pinch-zoom and
-     double-tap zoom are excluded. Zooming the fixed 1920x1080 stage forces a
-     re-raster at zoom x DPR that can get the tab killed on a phone; see
-     initZoomGuards() in src/ui/stageScale.ts for the iOS-side guard. */
+  /* pan-x pan-y = scrolling inside panels still works, but the browser's own
+     pinch-zoom and double-tap zoom are excluded: they force a re-raster of the
+     fixed 1920x1080 stage at an uncapped zoom x DPR that can get the tab killed
+     on a phone. The pinch itself is not lost - src/ui/stageZoom.ts catches it
+     (and the iOS gesture events touch-action does not cover) and spends it on
+     --stage-zoom below. */
   touch-action: pan-x pan-y;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -387,7 +393,10 @@ body {
   top: 50%;
   width: var(--stage-w);
   height: var(--stage-h);
-  transform: translate(-50%, -50%) scale(var(--ui-scale));
+  /* The pan sits ahead of the scale (and of the portrait rotation below) so it stays in
+     unrotated screen pixels, which is the space stageZoom does its maths in. */
+  transform: translate(-50%, -50%) translate(var(--stage-pan-x), var(--stage-pan-y))
+    scale(calc(var(--ui-scale) * var(--stage-zoom)));
   transform-origin: center;
   z-index: 1;
   display: grid;
@@ -400,7 +409,8 @@ body {
 /* Touch devices held in portrait: rotate the stage to landscape
    (class set by src/ui/stageScale.ts, which also swaps the scale axes) */
 :root.stage-rotated .omega-shell {
-  transform: translate(-50%, -50%) rotate(90deg) scale(var(--ui-scale));
+  transform: translate(-50%, -50%) translate(var(--stage-pan-x), var(--stage-pan-y))
+    rotate(90deg) scale(calc(var(--ui-scale) * var(--stage-zoom)));
 }
 
 :root.stage-rotated .pause-panel {

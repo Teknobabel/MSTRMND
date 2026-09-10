@@ -110,6 +110,7 @@ import {
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation, type NavigationApi } from "./navigation";
 import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
+import { initStageZoom, stageZoomFactor } from "./ui/stageZoom";
 import {
   createFlatProjector,
   createMatrixProjector,
@@ -5614,12 +5615,16 @@ function initGameController(
    */
   let mapPlotRect: DOMRect | null = null;
 
-  /** The uniform scale `ui/stageScale` puts on the shell, as a number. */
+  /**
+   * The total scale the shell is drawn at: the fit `ui/stageScale` chose, times whatever
+   * `ui/stageZoom` has the player pinched to.
+   */
   function stageScaleFactor(): number {
     const raw = Number(
       getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"),
     );
-    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+    const fit = Number.isFinite(raw) && raw > 0 ? raw : 1;
+    return fit * stageZoomFactor();
   }
 
   /**
@@ -8271,4 +8276,5 @@ const navigation = initNavigation({
 startRunFromMenu = initGameController(catalog, navigation, runSetup).startRun;
 
 initStageScale();
+initStageZoom();
 initGlobalTooltips();
