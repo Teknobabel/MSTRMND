@@ -9,11 +9,13 @@
  * tryLockLandscape() attempts a native fullscreen + orientation lock where
  * the platform allows it.
  *
- * Pinch-zoom is deliberately fought on two fronts (see initZoomGuards): the
- * stage is a fixed-size layer that the browser has to re-rasterize at
- * zoom x devicePixelRatio, which is enough to get a mobile tab killed, and
- * the scale below is measured against the *layout* viewport so a zoom that
- * slips through cannot shrink the UI by the exact factor it was zoomed by.
+ * Pinch-zoom is handled by `ui/stageZoom`, which takes the gesture off the
+ * browser and spends it on a capped transform over the scale below. The
+ * browser's own page zoom stays disabled either way: it re-rasterizes the
+ * fixed-size layer at zoom x devicePixelRatio with no ceiling, which is
+ * enough to get a mobile tab killed. The scale below is measured against the
+ * *layout* viewport for the same reason - so a page zoom that slips through
+ * cannot shrink the UI by the exact factor it was zoomed by.
  */
 export const STAGE_WIDTH = 1920;
 export const STAGE_HEIGHT = 1080;
@@ -53,12 +55,23 @@ function coarsePointer(): boolean {
  * the "it resets when I pinch" symptom. `documentElement.clientWidth/Height`
  * is the layout viewport and is unaffected by zoom on every browser.
  */
-function layoutViewport(): { width: number; height: number } {
+export function layoutViewportSize(): { width: number; height: number } {
   const doc = document.documentElement;
   return {
     width: doc.clientWidth || window.innerWidth,
     height: doc.clientHeight || window.innerHeight,
   };
+}
+
+/**
+ * The layout the shell is fitted to right now.
+ *
+ * Exported because `ui/stageZoom` has to agree with it exactly and reading `--ui-scale` back
+ * out of the stylesheet would race the frame this module writes it on.
+ */
+export function currentStageLayout(): StageLayout {
+  const { width, height } = layoutViewportSize();
+  return computeStageLayout(width, height, coarsePointer());
 }
 
 export function initStageScale(): void {
@@ -69,8 +82,7 @@ export function initStageScale(): void {
 
   const update = (): void => {
     frame = null;
-    const { width, height } = layoutViewport();
-    const { scale, rotated } = computeStageLayout(width, height, coarsePointer());
+    const { scale, rotated } = currentStageLayout();
     // Only touch the DOM on a real change: resize fires in bursts (URL bar,
     // rotation, keyboard) and every write here invalidates a 1920x1080 layer.
     if (rotated !== lastRotated) {
@@ -94,41 +106,6 @@ export function initStageScale(): void {
   update();
   window.addEventListener("resize", schedule);
   window.addEventListener("orientationchange", schedule);
-  initZoomGuards();
-}
-
-/**
- * Keep the page at zoom 1 on touch devices.
- *
- * The stage is one big fixed-size composited layer full of glows and looping
- * animations; pinch-zooming it makes the browser re-rasterize that layer at
- * zoom x devicePixelRatio, which on a phone reliably ends in the tab being
- * dropped and reloaded (losing the run). `user-scalable=no` in the viewport
- * meta is ignored by iOS Safari, and `touch-action` alone is not honoured for
- * page zoom there either, so the gesture is cancelled explicitly:
- *
- * - `gesturestart`/`gesturechange`/`gestureend` are the WebKit-only pinch
- *   events; preventing them stops Safari's page zoom.
- * - a multi-touch `touchmove` covers browsers without gesture events.
- *
- * Single-finger scrolling inside panels is untouched.
- */
-export function initZoomGuards(): void {
-  const cancel = (event: Event): void => {
-    event.preventDefault();
-  };
-  for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
-    document.addEventListener(type, cancel, { passive: false });
-  }
-  document.addEventListener(
-    "touchmove",
-    (event: TouchEvent): void => {
-      if (event.touches.length > 1) {
-        event.preventDefault();
-      }
-    },
-    { passive: false },
-  );
 }
 
 type OrientationLockable = ScreenOrientation & {

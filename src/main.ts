@@ -110,6 +110,7 @@ import {
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation, type NavigationApi } from "./navigation";
 import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
+import { initStageZoom, stageFitScale } from "./ui/stageZoom";
 import {
   createFlatProjector,
   createMatrixProjector,
@@ -5614,12 +5615,15 @@ function initGameController(
    */
   let mapPlotRect: DOMRect | null = null;
 
-  /** The uniform scale `ui/stageScale` puts on the shell, as a number. */
+  /**
+   * The uniform scale `ui/stageScale` puts on the shell, as a number.
+   *
+   * Read from a cached number rather than off `--ui-scale`, because this runs once per frame:
+   * a `getComputedStyle` here forces a synchronous style recalc of whatever the frame has
+   * already invalidated. It deliberately excludes the pinch zoom — see `stageFitScale`.
+   */
   function stageScaleFactor(): number {
-    const raw = Number(
-      getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"),
-    );
-    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+    return stageFitScale();
   }
 
   /**
@@ -8271,4 +8275,5 @@ const navigation = initNavigation({
 startRunFromMenu = initGameController(catalog, navigation, runSetup).startRun;
 
 initStageScale();
+initStageZoom();
 initGlobalTooltips();

@@ -72,10 +72,12 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  /* pan-x pan-y = scrolling inside panels still works, but pinch-zoom and
-     double-tap zoom are excluded. Zooming the fixed 1920x1080 stage forces a
-     re-raster at zoom x DPR that can get the tab killed on a phone; see
-     initZoomGuards() in src/ui/stageScale.ts for the iOS-side guard. */
+  /* pan-x pan-y = scrolling inside panels still works, but the browser's own
+     pinch-zoom and double-tap zoom are excluded: they force a re-raster of the
+     fixed 1920x1080 stage at an uncapped zoom x DPR that can get the tab killed
+     on a phone. The pinch itself is not lost - src/ui/stageZoom.ts catches it
+     (and the iOS gesture events touch-action does not cover) and spends it on
+     a capped transform on the shell instead. */
   touch-action: pan-x pan-y;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -387,6 +389,10 @@ body {
   top: 50%;
   width: var(--stage-w);
   height: var(--stage-h);
+  /* Holds the stage at fit. While the player has it pinched, src/ui/stageZoom.ts overrides
+     this with an inline transform composed against the same --ui-scale, and clears it again
+     on the way back to fit. Deliberately an element-level write rather than a custom property
+     on :root, which would inherit into a whole-document style recalc every touch sample. */
   transform: translate(-50%, -50%) scale(var(--ui-scale));
   transform-origin: center;
   z-index: 1;
@@ -395,6 +401,21 @@ body {
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0.5rem;
   padding: 0.4rem 0.6rem 0.5rem;
+}
+
+/* What a shell being pinched does differently. Set and cleared by src/ui/stageZoom.ts.
+
+   pointer-events: fingers mid-gesture arrive as pointer events too, and the UI answers them -
+   the map leans toward the "pointer", tooltips raise under the fingers. Nobody pinching is
+   asking for hover. */
+.omega-shell--pinching {
+  pointer-events: none;
+  /* Hold the raster still for the duration. Without this the browser re-rasterizes a
+     1920x1080 layer at every intermediate zoom of the gesture - tens of allocations climbing
+     toward ~33MB each - which is memory pressure applied at the one moment the compositor is
+     already asking for the most. With it, the existing raster is scaled on the GPU (a little
+     soft while the fingers are down) and re-rastered once, sharply, when they lift. */
+  will-change: transform;
 }
 
 /* Touch devices held in portrait: rotate the stage to landscape
