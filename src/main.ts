@@ -1323,11 +1323,17 @@ function initGameController(
    * state (the CSS is scoped to the floating dashboard), and coming back to the dashboard
    * should find the panels the way they were left.
    *
-   * The run opens with the whole tile band folded to its headers so the first thing on screen
-   * is the map. The planner keeps its column — it is the only panel with a job to do before
-   * anything has been looked at.
+   * The run opens with the whole tile band, plus Map Layers, folded to their headers so the
+   * first thing on screen is the map. The planner keeps its column — it is the only panel with
+   * a job to do before anything has been looked at.
    */
-  const collapsedPanels = new Set<string>(["omega", "minions", "locations", "lair"]);
+  const collapsedPanels = new Set<string>([
+    "omega",
+    "minions",
+    "locations",
+    "lair",
+    "map-layers",
+  ]);
 
   const rng = (): number => Math.random();
 
@@ -2045,6 +2051,107 @@ function initGameController(
     return false;
   }
 
+  /** Stages a mission into the planner's mission slot, replacing whatever was staged before. */
+  function applyMissionPayloadToPlanner(payload: MissionDragPayload): boolean {
+    if (payload.source === "event") {
+      if (state.phase !== "main") {
+        return false;
+      }
+      if (
+        state.currentEventTemplateId === null ||
+        payload.missionTemplateId !== state.currentEventTemplateId
+      ) {
+        return false;
+      }
+    }
+    assignMissionTemplateId = payload.missionTemplateId;
+    assignMissionSource = payload.source;
+    if (payload.source === "omega") {
+      assignOmegaStageIndex = payload.stageIndex;
+      assignOmegaSlotIndex = payload.slotIndex;
+    } else {
+      assignOmegaStageIndex = null;
+      assignOmegaSlotIndex = null;
+    }
+    reconcileTargetWithMission();
+    rebuildAssignAssetSlots();
+    updateAssignTargetFieldVisibility();
+    renderAssignPickSlots();
+    renderAssignMinionSlots();
+    onAssignSlotsChanged();
+    return true;
+  }
+
+  /** Stages a location/asset/minion into the planner's target slot, replacing any prior pick. */
+  function applyTargetPayloadToPlanner(
+    payload: Exclude<AnyDragPayload, MissionDragPayload>,
+  ): boolean {
+    const m = selectedMissionTemplate();
+    if (m?.targetType === "none") {
+      return false;
+    }
+    if (!targetPayloadMatchesPlannedMission(payload)) {
+      return false;
+    }
+    const mt = payloadToMissionTarget(payload);
+    if (!mt) {
+      return false;
+    }
+    if (mt.kind === "location" || mt.kind === "asset") {
+      const playable = new Set(runLocations().map((l) => l.id));
+      if (!playable.has(mt.locationId)) {
+        return false;
+      }
+    }
+    if (mt.kind === "asset") {
+      const placement = state.locationAssetSlots.find((p) => p.locationId === mt.locationId);
+      const slot = placement?.slots[mt.slotIndex];
+      const intel = intelLevelAtLocation(state, mt.locationId);
+      if (effectiveVisibilityOfSlot(slot, intel) !== mt.visibilityAtAssign) {
+        return false;
+      }
+    }
+    if (mt.kind === "minion") {
+      const busy = busyInstanceIds(state.activeMissions);
+      const inst = state.player.minions.find((x) => x.instanceId === mt.instanceId);
+      if (!inst || busy.has(mt.instanceId)) {
+        return false;
+      }
+      if (getAssignParticipantIds().includes(mt.instanceId)) {
+        return false;
+      }
+      removeInstanceFromAllAssignSlots(mt.instanceId);
+    }
+    assignTarget = mt;
+    renderAssignPickSlots();
+    renderAssignMinionSlots();
+    onAssignSlotsChanged();
+    return true;
+  }
+
+  /** Small reticle button pinned to a card's corner that stages it into the planner on click. */
+  function appendAddToPlannerButton(
+    card: HTMLElement,
+    ariaLabel: string,
+    onClick: () => void,
+  ): void {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "card-add-to-planner-btn";
+    btn.setAttribute("aria-label", ariaLabel);
+    btn.title = ariaLabel;
+    btn.innerHTML = ICON_CROSSHAIR;
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      onClick();
+    });
+    btn.addEventListener("mousedown", (ev) => {
+      ev.stopPropagation();
+    });
+    card.appendChild(btn);
+  }
+
   function missionDragJson(
     source: "lair" | "omega" | "event",
     missionTemplateId: string,
@@ -2121,78 +2228,11 @@ function initGameController(
         return;
       }
       if (kind === "mission" && payload.kind === "mastermind-mission") {
-        if (payload.source === "event") {
-          if (state.phase !== "main") {
-            return;
-          }
-          if (
-            state.currentEventTemplateId === null ||
-            payload.missionTemplateId !== state.currentEventTemplateId
-          ) {
-            return;
-          }
-        }
-        assignMissionTemplateId = payload.missionTemplateId;
-        assignMissionSource = payload.source;
-        if (payload.source === "omega") {
-          assignOmegaStageIndex = payload.stageIndex;
-          assignOmegaSlotIndex = payload.slotIndex;
-        } else {
-          assignOmegaStageIndex = null;
-          assignOmegaSlotIndex = null;
-        }
-        reconcileTargetWithMission();
-        rebuildAssignAssetSlots();
-        updateAssignTargetFieldVisibility();
-            renderAssignPickSlots();
-        renderAssignMinionSlots();
-        onAssignSlotsChanged();
+        applyMissionPayloadToPlanner(payload);
         return;
       }
-      if (kind === "target") {
-        if (payload.kind === "mastermind-mission") {
-          return;
-        }
-        const m = selectedMissionTemplate();
-        if (m?.targetType === "none") {
-          return;
-        }
-        if (!targetPayloadMatchesPlannedMission(payload)) {
-          return;
-        }
-        const mt = payloadToMissionTarget(payload);
-        if (!mt) {
-          return;
-        }
-        if (mt.kind === "location" || mt.kind === "asset") {
-          const playable = new Set(runLocations().map((l) => l.id));
-          if (!playable.has(mt.locationId)) {
-            return;
-          }
-        }
-        if (mt.kind === "asset") {
-          const placement = state.locationAssetSlots.find((p) => p.locationId === mt.locationId);
-          const slot = placement?.slots[mt.slotIndex];
-          const intel = intelLevelAtLocation(state, mt.locationId);
-          if (effectiveVisibilityOfSlot(slot, intel) !== mt.visibilityAtAssign) {
-            return;
-          }
-        }
-        if (mt.kind === "minion") {
-          const busy = busyInstanceIds(state.activeMissions);
-          const inst = state.player.minions.find((x) => x.instanceId === mt.instanceId);
-          if (!inst || busy.has(mt.instanceId)) {
-            return;
-          }
-          if (getAssignParticipantIds().includes(mt.instanceId)) {
-            return;
-          }
-          removeInstanceFromAllAssignSlots(mt.instanceId);
-        }
-        assignTarget = mt;
-        renderAssignPickSlots();
-        renderAssignMinionSlots();
-        onAssignSlotsChanged();
+      if (kind === "target" && payload.kind !== "mastermind-mission") {
+        applyTargetPayloadToPlanner(payload);
       }
     });
   }
@@ -3628,6 +3668,9 @@ function initGameController(
         e.dataTransfer?.setData("text/plain", locationDragJson(loc.id));
         e.dataTransfer!.effectAllowed = "copy";
       });
+      appendAddToPlannerButton(article, "Add location to planner", () => {
+        applyTargetPayloadToPlanner({ kind: "mastermind-location", locationId: loc.id });
+      });
     }
 
     const { meta, body } = appendCardHeroShell(article, resolveLocationCardArt(loc));
@@ -4248,6 +4291,23 @@ function initGameController(
                 );
         e.dataTransfer?.setData("text/plain", json);
         e.dataTransfer!.effectAllowed = "copy";
+      });
+      appendAddToPlannerButton(article, "Add mission to planner", () => {
+        const payload: MissionDragPayload =
+          meta.source === "omega"
+            ? {
+                kind: "mastermind-mission",
+                source: "omega",
+                missionTemplateId: meta.missionTemplateId,
+                stageIndex: meta.stageIndex,
+                slotIndex: meta.slotIndex,
+              }
+            : {
+                kind: "mastermind-mission",
+                source: meta.source,
+                missionTemplateId: meta.missionTemplateId,
+              };
+        applyMissionPayloadToPlanner(payload);
       });
     } else {
       article.draggable = false;

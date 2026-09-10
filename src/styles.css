@@ -2843,6 +2843,39 @@ body {
   z-index: 1;
 }
 
+/* Reticle button pinned to a mission/location card's corner: click to stage it in the planner. */
+.card-add-to-planner-btn {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.3rem;
+  z-index: 2;
+  width: 1.65rem;
+  height: 1.65rem;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-1);
+  background: rgba(14, 5, 7, 0.92);
+  border: 1px solid var(--line-1);
+  cursor: pointer;
+}
+
+.card-add-to-planner-btn svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.card-add-to-planner-btn:hover {
+  border-color: var(--red-bright);
+  color: var(--red-bright);
+}
+
 /* Single-menu (fullscreen) Omega view: phases as columns */
 .game-ui-columns-row--single
   .game-panel.game-panel--omega:not([hidden])
