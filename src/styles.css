@@ -4163,8 +4163,8 @@ body {
   white-space: nowrap;
 }
 
-.map-plot--readouts .map-marker__tag--intel,
-.map-plot--readouts .map-marker__tag--security,
+.map-plot--intel .map-marker__tag--intel,
+.map-plot--security .map-marker__tag--security,
 .map-plot--omega .map-marker__tag--omega,
 .map-plot--assets .map-marker__tag--assets {
   display: inline-flex;

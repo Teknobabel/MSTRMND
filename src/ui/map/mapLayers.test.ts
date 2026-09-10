@@ -45,9 +45,10 @@ describe("map layer defaults", () => {
     expect(MAP_LAYER_DEFAULTS.military).toBe(true);
   });
 
-  it("keeps the two per-pin text overlays off", () => {
+  it("keeps the three per-pin text overlays off", () => {
     expect(MAP_LAYER_DEFAULTS.names).toBe(false);
-    expect(MAP_LAYER_DEFAULTS.readouts).toBe(false);
+    expect(MAP_LAYER_DEFAULTS.intel).toBe(false);
+    expect(MAP_LAYER_DEFAULTS.security).toBe(false);
   });
 
   it("offers every key exactly once across the groups", () => {
@@ -86,7 +87,7 @@ describe("normalizeMapLayers", () => {
 describe("map layer storage", () => {
   it("round-trips a state", () => {
     const storage = fakeStorage();
-    const layers: MapLayerState = { ...MAP_LAYER_DEFAULTS, economic: false, readouts: true };
+    const layers: MapLayerState = { ...MAP_LAYER_DEFAULTS, economic: false, intel: true };
     saveMapLayers(storage, layers);
     expect(storage.written[MAP_LAYERS_STORAGE_KEY]).toBeDefined();
     expect(loadMapLayers(storage)).toEqual(layers);
@@ -134,12 +135,14 @@ describe("mapLayerPlotClasses", () => {
     const classes = mapLayerPlotClasses({
       ...MAP_LAYER_DEFAULTS,
       names: true,
-      readouts: true,
+      intel: true,
+      security: false,
       omega: false,
       assets: false,
     });
     expect(classes).toContain("map-plot--names");
-    expect(classes).toContain("map-plot--readouts");
+    expect(classes).toContain("map-plot--intel");
+    expect(classes).not.toContain("map-plot--security");
     expect(classes).not.toContain("map-plot--omega");
     expect(classes).not.toContain("map-plot--assets");
   });
@@ -152,7 +155,8 @@ describe("mapLayerPlotClasses", () => {
       economic: false,
       military: false,
       names: true,
-      readouts: true,
+      intel: true,
+      security: true,
       omega: true,
       assets: true,
     };

@@ -3,7 +3,7 @@
  *
  * The map is the dashboard's background as much as it is a control, and every run adds more to
  * it — fifteen pins, their names, their readouts, the plan's targets, the gear sitting in them.
- * This is the player's say over how much of that is on at once, held as seven independent
+ * This is the player's say over how much of that is on at once, held as eight independent
  * booleans and nothing else.
  *
  * Two rules shape the whole model:
@@ -23,7 +23,8 @@ import type { LocationType } from "../../game/types";
 export type MapLayerKey =
   | LocationType
   | "names"
-  | "readouts"
+  | "intel"
+  | "security"
   | "omega"
   | "assets";
 
@@ -38,16 +39,17 @@ export const SITE_CATEGORY_LAYER_KEYS: readonly LocationType[] = [
 
 /**
  * The opening state: every site at full strength, the overlays that answer a question the
- * player is already asking (what the plan wants next, what is worth stealing) on, and the two
- * that add text to every pin at once off — names and readouts are what turn a map into a
- * wall of labels, so they are opt-in.
+ * player is already asking (what the plan wants next, what is worth stealing) on, and the
+ * three that add text to every pin at once off — names, intel, and security readouts are what
+ * turn a map into a wall of labels, so they are opt-in.
  */
 export const MAP_LAYER_DEFAULTS: MapLayerState = {
   political: true,
   economic: true,
   military: true,
   names: false,
-  readouts: false,
+  intel: false,
+  security: false,
   omega: true,
   assets: true,
 };
@@ -99,9 +101,14 @@ export const MAP_LAYER_GROUPS: readonly MapLayerGroup[] = [
         hint: "Show every site's name at all times instead of on hover.",
       },
       {
-        key: "readouts",
-        label: "Intel & security",
-        hint: "Show each site's intel and security level on its pin.",
+        key: "intel",
+        label: "Intel",
+        hint: "Show each site's intel level on its pin.",
+      },
+      {
+        key: "security",
+        label: "Security",
+        hint: "Show each site's security level on its pin.",
       },
       {
         key: "omega",
@@ -187,7 +194,8 @@ export function saveMapLayers(storage: MapLayerStorage | null, layers: MapLayerS
 export const MAP_LAYER_PLOT_CLASSES: readonly string[] = [
   ...SITE_CATEGORY_LAYER_KEYS.map((t) => `map-plot--dim-${t}`),
   "map-plot--names",
-  "map-plot--readouts",
+  "map-plot--intel",
+  "map-plot--security",
   "map-plot--omega",
   "map-plot--assets",
 ];
@@ -209,8 +217,11 @@ export function mapLayerPlotClasses(layers: MapLayerState): string[] {
   if (layers.names) {
     classes.push("map-plot--names");
   }
-  if (layers.readouts) {
-    classes.push("map-plot--readouts");
+  if (layers.intel) {
+    classes.push("map-plot--intel");
+  }
+  if (layers.security) {
+    classes.push("map-plot--security");
   }
   if (layers.omega) {
     classes.push("map-plot--omega");

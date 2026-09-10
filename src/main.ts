@@ -5401,31 +5401,6 @@ function initGameController(
   }
 
   /**
-   * Click-to-target from the map: the same rule the target slot applies to a dropped location
-   * card, without the drag. Returns false (and changes nothing) when the planned mission would
-   * not accept this site.
-   */
-  function trySetMapTarget(locationId: string): boolean {
-    if (state.phase !== "main") {
-      return false;
-    }
-    if (selectedMissionTemplate()?.targetType === "none") {
-      return false;
-    }
-    if (!targetPayloadMatchesPlannedMission({ kind: "mastermind-location", locationId })) {
-      return false;
-    }
-    if (!runLocations().some((l) => l.id === locationId)) {
-      return false;
-    }
-    assignTarget = { kind: "location", locationId };
-    renderAssignPickSlots();
-    renderAssignMinionSlots();
-    onAssignSlotsChanged();
-    return true;
-  }
-
-  /**
    * Hover text for a map callout: which operation is running at this site, how far along it is,
    * and who is on it. The same facts the Missions menu card carries, minus the planning detail.
    */
@@ -6474,10 +6449,7 @@ Your lair`;
         e.dataTransfer!.effectAllowed = "copy";
       });
       pin.addEventListener("click", () => {
-        /* Only a click that selects stages the site; deselecting has just dropped the target. */
-        if (toggleMapPin({ kind: "site", locationId: loc.id })) {
-          trySetMapTarget(loc.id);
-        }
+        toggleMapPin({ kind: "site", locationId: loc.id });
       });
 
       const ring = document.createElement("span");
