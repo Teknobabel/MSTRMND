@@ -1,44 +1,75 @@
-import {
-  STAGE_HEIGHT,
-  STAGE_WIDTH,
-  currentStageLayout,
-  layoutViewportSize,
-} from "./stageScale";
+import { STAGE_HEIGHT, STAGE_WIDTH, currentStageLayout, layoutViewportSize } from "./stageScale";
 
 /**
  * Pinch-to-zoom for the scaled stage.
  *
  * The shell is authored at 1920x1080 and scaled down to fit (see stageScale.ts). On a phone
  * that lands near 0.36, so a 12px label arrives about four points tall and the natural thing
- * to reach for is the browser's own pinch-zoom — which is the one gesture this stage cannot
- * afford. Page zoom re-rasterizes the whole fixed-size composited layer at zoom x
- * devicePixelRatio with no ceiling, and on a phone that reliably ends with the tab dropped and
- * the run lost.
+ * to reach for is pinch-to-zoom — which is the one gesture this stage cannot hand to the
+ * browser. Page zoom re-rasterizes the whole fixed-size composited layer at zoom x
+ * devicePixelRatio with no ceiling, and on a phone that ends with the tab dropped and the run
+ * lost. So the gesture is intercepted and spent on a transform this module owns instead.
  *
- * So the gesture is intercepted rather than allowed, and spent on a transform this module owns.
- * That buys three things the browser's version does not:
+ * Owning it is only worth anything if it stays cheaper than the thing it replaced, and the
+ * naive version is not: it is easy to write a pinch that costs more per frame than page zoom
+ * ever did. Four rules keep it affordable, and none of them is optional.
  *
- * - **A ceiling.** Zoom stops where the shell reaches its authored 1:1 size, which is both the
- *   most legible it can ever be and a raster cost every desktop already pays.
- * - **A clamp.** The stage can never be dragged off its own letterbox, so there is no state
- *   where the player is stranded looking at blank space.
- * - **Composition.** The zoom multiplies the same `--ui-scale` the rest of the app already
- *   reads, so the WebGL map re-renders at the zoomed resolution instead of going soft, and
- *   every rect-based hit test keeps working because the zoom is in the same transform.
+ * 1. **The transform goes on the shell, never on `:root`.** Custom properties inherit, so a
+ *    `--stage-zoom` written to the document element invalidates style for every node in the
+ *    tree — measured at ~4.6ms per recalc on a 1920x1080 shell, once per touch sample. The
+ *    write here lands on one element and dirties one element.
+ * 2. **Nothing reads style back during a gesture.** A `getComputedStyle` in the frame loop
+ *    forces a synchronous recalc of whatever the last write invalidated, which turns rule 1's
+ *    saving straight back into a stall. The fit scale is therefore cached here as a number and
+ *    handed out by `stageBufferScale()`.
+ * 3. **One update per frame.** Touch sampling runs ahead of the display — 120Hz on current
+ *    phones — and every sample past the first in a frame is a write nobody ever sees.
+ * 4. **The zoom buys no extra render resolution.** Feeding it into the map's backing store
+ *    looked free and was not: it took that buffer from 9MB to 32MB and reallocated it mid
+ *    gesture. The map is background art and the things worth zooming into — pins, labels,
+ *    numbers — are DOM, which stays sharp because it is vector. So renderers size off the fit
+ *    alone, exactly as they did before any of this existed.
+ * 5. **The shell stops taking pointers for the duration.** Fingers mid-pinch also arrive as
+ *    pointer events, and the UI answers them — leaning the map toward the "pointer", raising
+ *    tooltips under the fingers. That is wrong on its own terms rather than expensive (it
+ *    measured at a handful of forced layout reads per gesture), and one class carrying it
+ *    also carries rule 6.
  *
- * Panning is deliberately two-fingered: one finger stays with the UI, so buttons, card drags
- * and panel scrolling behave exactly as they do at fit.
+ * 6. **The raster is held still while the fingers are down.** A transform that changes every
+ *    frame re-rasterizes the layer every frame, each one a fresh allocation climbing toward
+ *    the ceiling below; `will-change: transform` on the same pinching class trades a little
+ *    sharpness mid-gesture for one re-raster at the end.
+ *
+ * On top of that the zoom is capped twice over: at the shell's authored 1:1 size, past which
+ * zooming adds no information, and at a raster density no greater than a retina desktop
+ * already pays, which is what keeps the layer itself from becoming the thing that kills the
+ * tab. Panning is two-fingered, so one finger stays with the UI and buttons, card drags and
+ * panel scrolling behave exactly as they do at fit.
  */
 
 /** Fit. The stage is never zoomed out past the size stageScale chose for it. */
 export const MIN_ZOOM = 1;
 
 /**
- * A hard ceiling over the 1:1 rule below, for the case where the fit scale is very small.
+ * A hard ceiling over the two rules below, for the case where the fit scale is very small.
  * Past 4x the shell covers so little of the screen that finding the rest of it costs more
  * than the size gained.
  */
 export const MAX_ZOOM = 4;
+
+/**
+ * The most device pixels the stage may be rasterized at per authored pixel.
+ *
+ * This is the number that decides whether a pinch survives on a phone. A DPR-3 device fitting
+ * the shell at 0.36 already rasterizes it at 1.08, or about 10MB; the same 1920x1080 layer
+ * costs ~33MB at 2.0, ~52MB at 2.5, and ~75MB at the 3.0 the 1:1 rule alone would ask for —
+ * before any of its sublayers. A phone handed the largest of those mid-gesture drops the tab.
+ *
+ * 2.0 is the density a retina desktop (DPR 2 at fit 1.0) pays today and is therefore known to
+ * be survivable. The effect is per-device rather than universal: DPR-2 phones are bounded by
+ * the 1:1 rule and reach authored size, DPR-3 phones stop a little short of it.
+ */
+const MAX_RASTER_DENSITY = 2;
 
 /** Zoom within this of fit is treated as fit, so a sloppy pinch-out lands exactly home. */
 const FIT_EPSILON = 0.02;
@@ -47,7 +78,7 @@ const FIT_EPSILON = 0.02;
 const MIN_PINCH_SPAN_PX = 1;
 
 export interface StageView {
-  /** Multiplier on top of `--ui-scale`. */
+  /** Multiplier on top of the fit scale. */
   readonly zoom: number;
   /** Screen-space offset of the stage from where the fit put it, in CSS pixels. */
   readonly panX: number;
@@ -62,6 +93,8 @@ export interface StageFrame {
   readonly scale: number;
   /** True while the stage is rotated 90deg to fake landscape, which swaps its on-screen axes. */
   readonly rotated: boolean;
+  /** `devicePixelRatio`, which decides how much raster a given zoom actually costs. */
+  readonly pixelRatio: number;
   /**
    * Where the shell's centre sits on screen with no pan applied.
    *
@@ -83,17 +116,17 @@ function clamp(value: number, low: number, high: number): number {
 }
 
 /**
- * The zoom at which the shell reaches the size it was authored at, capped.
- *
- * 1:1 rather than some round number because that is the point past which zooming stops adding
- * information: the layout was designed to be read at that size, and every step beyond it is
- * pure raster cost on the device least able to pay it.
+ * How far this device is allowed to zoom: to the shell's authored size, but no denser than
+ * `MAX_RASTER_DENSITY`, and never below fit even on a screen where that budget is already spent.
  */
-export function maxZoomFor(scale: number): number {
+export function maxZoomFor(scale: number, pixelRatio: number): number {
   if (!Number.isFinite(scale) || scale <= 0) {
     return MIN_ZOOM;
   }
-  return clamp(1 / scale, MIN_ZOOM, MAX_ZOOM);
+  const density = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
+  const authoredSize = 1 / scale;
+  const rasterBudget = MAX_RASTER_DENSITY / (scale * density);
+  return clamp(Math.min(authoredSize, rasterBudget), MIN_ZOOM, MAX_ZOOM);
 }
 
 /**
@@ -124,7 +157,7 @@ export function panLimits(
  * limit, which would otherwise reach the stylesheet as `-0.00px`.
  */
 export function clampView(view: StageView, frame: StageFrame): StageView {
-  const zoom = clamp(view.zoom, MIN_ZOOM, maxZoomFor(frame.scale));
+  const zoom = clamp(view.zoom, MIN_ZOOM, maxZoomFor(frame.scale, frame.pixelRatio));
   const limits = panLimits(frame, zoom);
   return {
     zoom,
@@ -148,7 +181,7 @@ export function zoomAbout(
   from: Point,
   to: Point,
 ): StageView {
-  const zoom = clamp(nextZoom, MIN_ZOOM, maxZoomFor(frame.scale));
+  const zoom = clamp(nextZoom, MIN_ZOOM, maxZoomFor(frame.scale, frame.pixelRatio));
   const ratio = zoom / start.zoom;
   return clampView(
     {
@@ -169,6 +202,23 @@ export function isFit(view: StageView): boolean {
   return view.zoom === MIN_ZOOM && view.panX === 0 && view.panY === 0;
 }
 
+/** The CSS transform for a view, as the stylesheet would have written it. */
+export function stageTransform(view: StageView, rotated: boolean): string {
+  const pan = `translate(${px(view.panX)}, ${px(view.panY)})`;
+  const spin = rotated ? " rotate(90deg)" : "";
+  /* Composed against `--ui-scale` rather than a number so the zoomed stage keeps agreeing with
+     the fit stageScale is maintaining, to the digit. */
+  return `translate(-50%, -50%) ${pan}${spin} scale(calc(var(--ui-scale) * ${view.zoom.toFixed(4)}))`;
+}
+
+/**
+ * A pan as CSS. Rounded first and then nudged off negative zero, which the focal maths leaves
+ * behind as a residue too small to see and `toFixed` would otherwise write out as `-0.00px`.
+ */
+function px(value: number): string {
+  return `${(Math.round(value * 100) / 100 + 0).toFixed(2)}px`;
+}
+
 /* ------------------------------------------------------------------ *
  * DOM wiring
  * ------------------------------------------------------------------ */
@@ -176,14 +226,26 @@ export function isFit(view: StageView): boolean {
 let view: StageView = FIT_VIEW;
 
 /**
- * The zoom the stage is currently held at.
+ * The fit scale, cached.
  *
- * Read by anything that renders into the stage at device resolution: the shell's on-screen
- * size is `--ui-scale * zoom`, and a renderer sizing its backing store off the fit scale alone
- * goes soft the moment someone pinches in.
+ * Kept as a number precisely so `stageBufferScale()` never has to read style back during a
+ * gesture: a `getComputedStyle` there forces a synchronous recalc of everything the frame's
+ * own write just invalidated, which was half the cost of the first version of this module.
  */
-export function stageZoomFactor(): number {
-  return view.zoom;
+let fitScale = 1;
+let rotated = false;
+
+/**
+ * The fit scale, for anything that allocates a buffer to match how big the stage is drawn.
+ *
+ * Deliberately not multiplied by the zoom. A renderer that follows the zoom reallocates a
+ * large buffer repeatedly during a gesture, which is memory pressure applied at the exact
+ * moment the compositor is asking for the most — the pinch's share of a phone's budget is
+ * better spent on the shell's own layer than on re-rendering background art the player is not
+ * zooming in to read.
+ */
+export function stageFitScale(): number {
+  return fitScale;
 }
 
 let shellEl: HTMLElement | null = null;
@@ -196,44 +258,63 @@ function stage(): HTMLElement | null {
 }
 
 /**
- * Measure the current fit.
- *
- * The layout is recomputed here rather than read back out of `--ui-scale` so this cannot race
- * the frame stageScale writes that property on.
+ * Measure the current fit. Reads layout, so it runs once when a gesture opens and on resize,
+ * never inside the gesture's own frame loop.
  */
 function measureFrame(): StageFrame {
-  const { scale, rotated } = currentStageLayout();
-  const { width, height } = layoutViewportSize();
+  const layout = currentStageLayout();
+  fitScale = layout.scale;
+  rotated = layout.rotated;
   const rect = stage()?.getBoundingClientRect();
   /* The rect is post-transform, so its centre is the origin plus whatever pan is applied;
      subtracting the pan back off recovers the fixed centre. A hidden shell measures zero,
      and then the viewport's own middle is the best guess available. */
   const centred = rect === undefined || rect.width === 0 || rect.height === 0;
+  const viewport = centred ? layoutViewportSize() : { width: 0, height: 0 };
   return {
-    scale,
-    rotated,
-    originX: centred ? width / 2 : rect.left + rect.width / 2 - view.panX,
-    originY: centred ? height / 2 : rect.top + rect.height / 2 - view.panY,
+    scale: layout.scale,
+    rotated: layout.rotated,
+    pixelRatio: window.devicePixelRatio,
+    originX: centred ? viewport.width / 2 : rect.left + rect.width / 2 - view.panX,
+    originY: centred ? viewport.height / 2 : rect.top + rect.height / 2 - view.panY,
   };
 }
 
 /**
- * A pan as CSS. Rounded first and then nudged off negative zero, which the focal maths leaves
- * behind as a residue too small to see and `toFixed` would otherwise write out as `-0.00px`.
+ * Write the view to the shell.
+ *
+ * One element, one property — never a custom property on `:root`, which would inherit its way
+ * into a style recalc of the entire document on every frame of the pinch. At fit the inline
+ * transform is removed outright so the stylesheet's own rule takes the stage back, which also
+ * means nothing is left overriding it if the stage rotates later.
  */
-function px(value: number): string {
-  return `${(Math.round(value * 100) / 100 + 0).toFixed(2)}px`;
-}
-
 function apply(next: StageView): void {
   if (next.zoom === view.zoom && next.panX === view.panX && next.panY === view.panY) {
     return;
   }
   view = next;
-  const style = document.documentElement.style;
-  style.setProperty("--stage-zoom", view.zoom.toFixed(4));
-  style.setProperty("--stage-pan-x", px(view.panX));
-  style.setProperty("--stage-pan-y", px(view.panY));
+  const el = stage();
+  if (el === null) {
+    return;
+  }
+  el.style.transform = isFit(view) ? "" : stageTransform(view, rotated);
+}
+
+/**
+ * Take the shell out of hit-testing, or put it back.
+ *
+ * Guarded by its own flag rather than written every time a gesture re-anchors: `pointer-events`
+ * inherits, so each real change costs a recalc of the shell's subtree, and the whole point is
+ * to spend two of those instead of hundreds.
+ */
+let inert = false;
+
+function setInert(on: boolean): void {
+  if (on === inert) {
+    return;
+  }
+  inert = on;
+  stage()?.classList.toggle("omega-shell--pinching", on);
 }
 
 /** The reference a live gesture is measured against: where the fingers were when it opened. */
@@ -246,52 +327,56 @@ interface Pinch {
 
 let pinch: Pinch | null = null;
 
-function midpoint(a: Touch, b: Touch): Point {
-  return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+function midpoint(a: Point, b: Point): Point {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
-function span(a: Touch, b: Touch): number {
-  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+function span(a: Point, b: Point): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function fingers(event: TouchEvent): readonly [Point, Point] {
+  const a = event.touches[0];
+  const b = event.touches[1];
+  return [
+    { x: a.clientX, y: a.clientY },
+    { x: b.clientX, y: b.clientY },
+  ];
 }
 
 /**
  * Anchor a gesture on the two fingers currently down: the span and midpoint everything after
  * this is measured against, plus the fit those measurements only mean anything relative to.
  */
-function anchor(a: Touch, b: Touch): void {
+function anchor(a: Point, b: Point): void {
   const startSpan = span(a, b);
   if (startSpan < MIN_PINCH_SPAN_PX) {
     return;
   }
   const frame = measureFrame();
   const startView = clampView(view, frame);
+  setInert(true);
   apply(startView);
   pinch = { startView, frame, startSpan, from: midpoint(a, b) };
 }
 
 /**
- * Re-anchor whenever the set of fingers on the glass changes, because the reference held from
- * before was measured off fingers that are no longer the two being tracked. Anchoring here
- * rather than on the first move means a pinch loses no travel to its own setup; the lazy
- * re-anchor in `onTouchMove` is what covers the case with no touchstart to hang it on, a
- * third finger *lifting* and leaving two still down.
+ * The latest finger positions, waiting for a frame to be spent on.
+ *
+ * Touch sampling outruns the display, so without this the handler writes a transform several
+ * times per frame and only the last one is ever shown.
  */
-function onTouchStart(event: TouchEvent): void {
-  pinch = null;
-  if (event.touches.length >= 2) {
-    anchor(event.touches[0], event.touches[1]);
-  }
-}
+let pending: readonly [Point, Point] | null = null;
+let gestureFrame: number | null = null;
 
-function onTouchMove(event: TouchEvent): void {
-  if (event.touches.length < 2) {
+function runGestureFrame(): void {
+  gestureFrame = null;
+  const touches = pending;
+  pending = null;
+  if (touches === null) {
     return;
   }
-  /* Unconditional, and ahead of everything else: whatever this module goes on to do with the
-     gesture, the browser's own page zoom must never get to start. */
-  event.preventDefault();
-  const a = event.touches[0];
-  const b = event.touches[1];
+  const [a, b] = touches;
   const current = span(a, b);
   if (current < MIN_PINCH_SPAN_PX) {
     return;
@@ -304,7 +389,42 @@ function onTouchMove(event: TouchEvent): void {
   apply(zoomAbout(pinch.startView, pinch.frame, zoom, pinch.from, midpoint(a, b)));
 }
 
+/**
+ * Re-anchor whenever the set of fingers on the glass changes, because the reference held from
+ * before was measured off fingers that are no longer the two being tracked. Anchoring here
+ * rather than on the first move means a pinch loses no travel to its own setup; the lazy
+ * re-anchor in `runGestureFrame` covers the case with no touchstart to hang it on, a third
+ * finger *lifting* and leaving two still down.
+ */
+function onTouchStart(event: TouchEvent): void {
+  pinch = null;
+  pending = null;
+  if (event.touches.length >= 2) {
+    const [a, b] = fingers(event);
+    anchor(a, b);
+  }
+}
+
+function onTouchMove(event: TouchEvent): void {
+  if (event.touches.length < 2) {
+    return;
+  }
+  /* Unconditional, and ahead of everything else: whatever this module goes on to do with the
+     gesture, the browser's own page zoom must never get to start. */
+  event.preventDefault();
+  pending = fingers(event);
+  if (gestureFrame === null) {
+    gestureFrame = requestAnimationFrame(runGestureFrame);
+  }
+}
+
 function onTouchEnd(): void {
+  pending = null;
+  if (gestureFrame !== null) {
+    cancelAnimationFrame(gestureFrame);
+    gestureFrame = null;
+  }
+  setInert(false);
   if (pinch === null) {
     return;
   }
@@ -321,10 +441,15 @@ function onTouchEnd(): void {
  * one, so that case goes home rather than being clamped into a corner. A plain resize (the
  * URL bar sliding away) only needs the pan pulled back inside the new bounds.
  */
-function refit(previousRotated: boolean): boolean {
+function refit(previousRotated: boolean): void {
   const frame = measureFrame();
-  apply(frame.rotated === previousRotated ? clampView(view, frame) : FIT_VIEW);
-  return frame.rotated;
+  if (frame.rotated !== previousRotated) {
+    apply(FIT_VIEW);
+    return;
+  }
+  /* The new fit scale needs no rewrite of its own: the transform composes `var(--ui-scale)`
+     rather than a baked number, so stageScale's own resize write carries it. */
+  apply(clampView(view, frame));
 }
 
 /**
@@ -348,17 +473,19 @@ export function initStageZoom(): void {
   document.addEventListener("touchend", onTouchEnd, { passive: true });
   document.addEventListener("touchcancel", onTouchEnd, { passive: true });
 
-  let rotated = currentStageLayout().rotated;
-  let frame: number | null = null;
+  const initial = currentStageLayout();
+  fitScale = initial.scale;
+  rotated = initial.rotated;
+  let resizeFrame: number | null = null;
   /* Coalesced into one measure per frame: resize fires in bursts (URL bar, rotation, keyboard)
      and every one of these reads layout. */
   const schedule = (): void => {
-    if (frame !== null) {
+    if (resizeFrame !== null) {
       return;
     }
-    frame = requestAnimationFrame(() => {
-      frame = null;
-      rotated = refit(rotated);
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = null;
+      refit(rotated);
     });
   };
   window.addEventListener("resize", schedule);

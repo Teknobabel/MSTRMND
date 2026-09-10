@@ -11,6 +11,7 @@ import {
   maxZoomFor,
   panLimits,
   snapToFit,
+  stageTransform,
   zoomAbout,
 } from "./stageZoom";
 
@@ -19,10 +20,12 @@ const PHONE_WIDTH = 844;
 const PHONE_HEIGHT = 390;
 const phoneFit = computeStageLayout(PHONE_WIDTH, PHONE_HEIGHT, true);
 
+/** A phone whose pixel ratio leaves the raster budget slack, so the 1:1 rule is the binding one. */
 function frame(overrides: Partial<StageFrame> = {}): StageFrame {
   return {
     scale: phoneFit.scale,
     rotated: false,
+    pixelRatio: 2,
     originX: PHONE_WIDTH / 2,
     originY: PHONE_HEIGHT / 2,
     ...overrides,
@@ -39,23 +42,62 @@ function project(view: StageView, f: StageFrame, point: { x: number; y: number }
 
 describe("maxZoomFor", () => {
   it("stops at the zoom that puts the shell at its authored 1:1 size", () => {
-    expect(maxZoomFor(0.5)).toBeCloseTo(2, 5);
-    // A phone fits the 1920x1080 shell at about a third, so 1:1 is about 3x.
-    expect(maxZoomFor(phoneFit.scale)).toBeCloseTo(1 / phoneFit.scale, 5);
+    expect(maxZoomFor(0.5, 2)).toBeCloseTo(2, 5);
+    // A phone fits the 1920x1080 shell at about a third, so 1:1 is about 2.8x.
+    expect(maxZoomFor(phoneFit.scale, 2)).toBeCloseTo(1 / phoneFit.scale, 5);
+  });
+
+  it("stops short of 1:1 on a device dense enough that the raster would not be affordable", () => {
+    // A DPR-3 phone already rasterizes the fitted shell at ~1.08 device px per authored px;
+    // carrying that to 1:1 would ask for 3.0, which is the ~75MB layer that kills the tab.
+    const dense = maxZoomFor(phoneFit.scale, 3);
+    expect(dense).toBeLessThan(1 / phoneFit.scale);
+    expect(dense * phoneFit.scale * 3).toBeCloseTo(2, 5);
+  });
+
+  it("still allows a useful zoom on the densest phones", () => {
+    // ~1.85x on a DPR-3 phone: a 14px label lands near 9px rather than 5px.
+    expect(maxZoomFor(phoneFit.scale, 3)).toBeGreaterThan(1.8);
   });
 
   it("never lets the stage zoom out past the fit", () => {
     // A display large enough to scale the shell *up* is already past 1:1.
-    expect(maxZoomFor(2)).toBe(MIN_ZOOM);
+    expect(maxZoomFor(2, 1)).toBe(MIN_ZOOM);
+    // ...and a screen whose raster budget is already spent at fit still gets to sit at fit.
+    expect(maxZoomFor(1.5, 3)).toBe(MIN_ZOOM);
   });
 
   it("caps a very small fit at the hard ceiling", () => {
-    expect(maxZoomFor(0.01)).toBe(MAX_ZOOM);
+    expect(maxZoomFor(0.01, 1)).toBe(MAX_ZOOM);
   });
 
   it("falls back to fit for a nonsense scale", () => {
-    expect(maxZoomFor(0)).toBe(MIN_ZOOM);
-    expect(maxZoomFor(Number.NaN)).toBe(MIN_ZOOM);
+    expect(maxZoomFor(0, 2)).toBe(MIN_ZOOM);
+    expect(maxZoomFor(Number.NaN, 2)).toBe(MIN_ZOOM);
+  });
+
+  it("treats a missing pixel ratio as 1 rather than disabling zoom", () => {
+    expect(maxZoomFor(0.5, Number.NaN)).toBeCloseTo(2, 5);
+  });
+});
+
+describe("stageTransform", () => {
+  it("composes against --ui-scale, so the fit stays the stylesheet's to change", () => {
+    const css = stageTransform({ zoom: 2, panX: 12.345, panY: -6 }, false);
+    expect(css).toBe(
+      "translate(-50%, -50%) translate(12.35px, -6.00px) scale(calc(var(--ui-scale) * 2.0000))",
+    );
+  });
+
+  it("puts the pan ahead of the portrait rotation, keeping it in screen pixels", () => {
+    const css = stageTransform({ zoom: 1.5, panX: 8, panY: 0 }, true);
+    expect(css).toBe(
+      "translate(-50%, -50%) translate(8.00px, 0.00px) rotate(90deg) scale(calc(var(--ui-scale) * 1.5000))",
+    );
+  });
+
+  it("does not emit a negative zero the focal maths left behind", () => {
+    expect(stageTransform({ zoom: 2, panX: -1e-14, panY: 0 }, false)).toContain("0.00px, 0.00px");
   });
 });
 
@@ -91,7 +133,7 @@ describe("panLimits", () => {
 describe("clampView", () => {
   it("holds the zoom inside the range the fit allows", () => {
     const f = frame();
-    expect(clampView({ zoom: 99, panX: 0, panY: 0 }, f).zoom).toBeCloseTo(maxZoomFor(f.scale), 5);
+    expect(clampView({ zoom: 99, panX: 0, panY: 0 }, f).zoom).toBeCloseTo(maxZoomFor(f.scale, f.pixelRatio), 5);
     expect(clampView({ zoom: 0.2, panX: 0, panY: 0 }, f).zoom).toBe(MIN_ZOOM);
   });
 
@@ -108,7 +150,7 @@ describe("clampView", () => {
 
   it("leaves the stage put on a device that cannot zoom at all", () => {
     // A fine-pointer window big enough to scale the shell up has maxZoom === MIN_ZOOM.
-    const desktop = frame({ scale: computeStageLayout(3840, 2160, false).scale });
+    const desktop = frame({ scale: computeStageLayout(3840, 2160, false).scale, pixelRatio: 1 });
     expect(clampView({ zoom: 3, panX: 200, panY: 200 }, desktop)).toEqual(FIT_VIEW);
   });
 });
