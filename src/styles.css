@@ -410,13 +410,15 @@ body {
    asking for hover. */
 .omega-shell--pinching {
   pointer-events: none;
-  /* Hold the raster still for the duration. Without this the browser re-rasterizes a
-     1920x1080 layer at every intermediate zoom of the gesture - tens of allocations climbing
-     toward ~33MB each - which is memory pressure applied at the one moment the compositor is
-     already asking for the most. With it, the existing raster is scaled on the GPU (a little
-     soft while the fingers are down) and re-rastered once, sharply, when they lift. */
-  will-change: transform;
 }
+
+/* No will-change: transform here, deliberately. It reads like the obvious thing to promote a
+   layer being animated, and tracing a zoom in and back out says it pays for nothing: total
+   raster over the round trip is unchanged (788ms with, 784ms without), while the worst single
+   raster task more than doubles (103ms vs 48ms) and composite events rise ~23%. The spike is
+   the toggle itself - adding or dropping the hint while the shell is at full zoom forces the
+   largest layer this app ever builds to be rasterized again - and a round trip crosses that
+   twice, once as the fingers lift and once as they come back down. */
 
 /* Touch devices held in portrait: rotate the stage to landscape
    (class set by src/ui/stageScale.ts, which also swaps the scale axes) */

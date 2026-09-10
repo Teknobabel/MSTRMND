@@ -12,7 +12,7 @@ import { STAGE_HEIGHT, STAGE_WIDTH, currentStageLayout, layoutViewportSize } fro
  *
  * Owning it is only worth anything if it stays cheaper than the thing it replaced, and the
  * naive version is not: it is easy to write a pinch that costs more per frame than page zoom
- * ever did. Four rules keep it affordable, and none of them is optional.
+ * ever did. Five rules keep it affordable, and none of them is optional.
  *
  * 1. **The transform goes on the shell, never on `:root`.** Custom properties inherit, so a
  *    `--stage-zoom` written to the document element invalidates style for every node in the
@@ -21,7 +21,7 @@ import { STAGE_HEIGHT, STAGE_WIDTH, currentStageLayout, layoutViewportSize } fro
  * 2. **Nothing reads style back during a gesture.** A `getComputedStyle` in the frame loop
  *    forces a synchronous recalc of whatever the last write invalidated, which turns rule 1's
  *    saving straight back into a stall. The fit scale is therefore cached here as a number and
- *    handed out by `stageBufferScale()`.
+ *    handed out by `stageFitScale()`.
  * 3. **One update per frame.** Touch sampling runs ahead of the display — 120Hz on current
  *    phones — and every sample past the first in a frame is a write nobody ever sees.
  * 4. **The zoom buys no extra render resolution.** Feeding it into the map's backing store
@@ -29,16 +29,12 @@ import { STAGE_HEIGHT, STAGE_WIDTH, currentStageLayout, layoutViewportSize } fro
  *    gesture. The map is background art and the things worth zooming into — pins, labels,
  *    numbers — are DOM, which stays sharp because it is vector. So renderers size off the fit
  *    alone, exactly as they did before any of this existed.
- * 5. **The shell stops taking pointers for the duration.** Fingers mid-pinch also arrive as
- *    pointer events, and the UI answers them — leaning the map toward the "pointer", raising
- *    tooltips under the fingers. That is wrong on its own terms rather than expensive (it
- *    measured at a handful of forced layout reads per gesture), and one class carrying it
- *    also carries rule 6.
- *
- * 6. **The raster is held still while the fingers are down.** A transform that changes every
- *    frame re-rasterizes the layer every frame, each one a fresh allocation climbing toward
- *    the ceiling below; `will-change: transform` on the same pinching class trades a little
- *    sharpness mid-gesture for one re-raster at the end.
+ * 5. **Style flips happen at fit, never at full zoom.** Whatever else a gesture changes on the
+ *    shell — see `.omega-shell--pinching` — it changes on the way in while the stage is still
+ *    fitted, and undoes on the way out only after the stage is fitted again. Flipping either
+ *    edge the other way round asks the browser to rebuild the largest layer this app has, in
+ *    the act of leaving it. Getting that backwards was a reliable crash on a real phone, and
+ *    it cost 78.7ms in a single raster task where the fixed order costs 10.7ms.
  *
  * On top of that the zoom is capped twice over: at the shell's authored 1:1 size, past which
  * zooming adds no information, and at a raster density no greater than a retina desktop
@@ -424,13 +420,16 @@ function onTouchEnd(): void {
     cancelAnimationFrame(gestureFrame);
     gestureFrame = null;
   }
-  setInert(false);
-  if (pinch === null) {
-    return;
+  if (pinch !== null) {
+    const { frame } = pinch;
+    pinch = null;
+    apply(clampView(snapToFit(view), frame));
   }
-  const { frame } = pinch;
-  pinch = null;
-  apply(clampView(snapToFit(view), frame));
+  /* After the view, never before it. Anything this flips is a style change on the shell, and
+     flipping it first would apply that change while the stage is still at full zoom — paying
+     for the most expensive state the app has, on the way out of it. `anchor` is the mirror of
+     this: it flips the same class on while the stage is still at fit. */
+  setInert(false);
 }
 
 /**
