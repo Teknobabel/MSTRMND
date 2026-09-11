@@ -145,6 +145,9 @@ import {
   appendCardArtShell,
   appendCardHeroShell,
   createCardArtImg,
+  loadCardArt,
+  unloadCardArt,
+  withDeferredCardArt,
   resolveAgentCardArt,
   resolveAssetCardArt,
   resolveLairCardArt,
@@ -4098,7 +4101,16 @@ function initGameController(
     }
   }
 
+  /**
+   * The menus are rendered on every refresh whether or not anyone has them open, so each of
+   * these builds its cards with their art parked while its drawer is down — see the deferred-art
+   * note in `ui/cardArt.ts`. `applyDrawerState` loads it when the drawer comes up.
+   */
   function renderMinionsPanel(): void {
+    withDeferredCardArt(openDrawer !== "minions", buildMinionsPanel);
+  }
+
+  function buildMinionsPanel(): void {
     minionsPanelEl.innerHTML = "";
     const p = state.player;
     const eligibleRehires = state.minionRehireQueue.filter(
@@ -4240,6 +4252,10 @@ function initGameController(
   }
 
   function renderOmegaPlanPanel(): void {
+    withDeferredCardArt(openDrawer !== "omega", buildOmegaPlanPanel);
+  }
+
+  function buildOmegaPlanPanel(): void {
     omegaPlanPanelEl.innerHTML = "";
     const activeId = state.activeOmegaPlanId;
     if (activeId === null) {
@@ -5220,6 +5236,10 @@ function initGameController(
   }
 
   function renderMissionsPanel(): void {
+    withDeferredCardArt(openDrawer !== "missions", buildMissionsPanel);
+  }
+
+  function buildMissionsPanel(): void {
     missionsPanelRootEl.innerHTML = "";
     const columns = document.createElement("div");
     columns.className = "missions-menu-columns";
@@ -5232,6 +5252,10 @@ function initGameController(
   }
 
   function renderLocationsPanel(): void {
+    withDeferredCardArt(openDrawer !== "locations", buildLocationsPanel);
+  }
+
+  function buildLocationsPanel(): void {
     locationsPanelEl.innerHTML = "";
     const securityByLocationId = new Map(
       state.locationSecurityStates.map((s) => [s.locationId, s.securityLevel]),
@@ -6772,7 +6796,9 @@ Your lair`;
 
   /** The Lair drawer. */
   function renderLairPanel(): void {
-    renderLairPanelInto(lairPanelEl, { kind: "columns" });
+    withDeferredCardArt(openDrawer !== "lair", () => {
+      renderLairPanelInto(lairPanelEl, { kind: "columns" });
+    });
   }
 
   /**
@@ -7238,18 +7264,25 @@ Your lair`;
    * `.drawer--open`. A closed drawer's menu is made inert so the part pushed below the map takes
    * no focus or clicks. One that has just been closed is marked `--closing` until it lands,
    * which drops it behind the tabs still in the row instead of sliding down across them.
+   *
+   * It is also where a menu's art is loaded. A drawer on its way down keeps it until it lands
+   * (below), since blanking the cards out from under a menu still sliding across the map would
+   * read as a glitch; the menus nobody is looking at hold parked art and cost nothing.
    */
   function applyDrawerState(): void {
     for (const drawer of menuDrawers) {
       const isOpen = drawer.id === openDrawer;
       const wasOpen = drawer.el.classList.contains("drawer--open");
+      const isClosing = !isOpen && (wasOpen || drawer.el.classList.contains("drawer--closing"));
       drawer.el.classList.toggle("drawer--open", isOpen);
-      drawer.el.classList.toggle(
-        "drawer--closing",
-        !isOpen && (wasOpen || drawer.el.classList.contains("drawer--closing")),
-      );
+      drawer.el.classList.toggle("drawer--closing", isClosing);
       drawer.tabEl.setAttribute("aria-expanded", String(isOpen));
       drawer.panelEl.inert = !isOpen;
+      if (isOpen || isClosing) {
+        loadCardArt(drawer.panelEl);
+      } else {
+        unloadCardArt(drawer.panelEl);
+      }
     }
   }
 
@@ -7274,6 +7307,11 @@ Your lair`;
     drawer.el.addEventListener("transitionend", (e) => {
       if (e.target === drawer.el && e.propertyName === "transform") {
         drawer.el.classList.remove("drawer--closing");
+        /* Landed. A menu that has gone back down is off screen, so it lets go of its art here
+         * rather than holding the decoded images for a drawer nobody has open. */
+        if (drawer.id !== openDrawer) {
+          unloadCardArt(drawer.panelEl);
+        }
       }
     });
   }
