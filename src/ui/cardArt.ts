@@ -45,10 +45,70 @@ export function resolveAssetCardArt(asset: Asset | undefined): string {
   return asset?.cardArt ?? DEFAULT_ASSET_CARD_ART;
 }
 
+/**
+ * Deferred art: the card art is the heaviest thing the UI owns. A 16:9 hero is a 1280x720
+ * source — 3.5 MB of bitmap once decoded, whatever size it is drawn at — and the menus hold
+ * dozens of them. Built all at once that is well over 100 MB of decoded image for a screen
+ * showing at most a handful of cards, which is enough to have a phone browser kill the tab.
+ *
+ * So art can be **parked**: the URL rides in `data-card-art` and the `img` carries no `src`, so
+ * the browser never fetches or decodes it. Nothing is parked by default — a card built the
+ * ordinary way loads its art the moment it is created. It is {@link withDeferredCardArt} that
+ * says a run of cards is being built somewhere nobody can see, and {@link loadCardArt} /
+ * {@link unloadCardArt} that move a subtree between the two states as that changes.
+ *
+ * Both shapes below are sized by CSS rather than by the image (the hero through `aspect-ratio`,
+ * the thumbnail through a fixed box), so a parked card lays out exactly like a loaded one and
+ * the art fades in where the placeholder already was.
+ */
+let deferNewCardArt = false;
+
+/**
+ * Runs `build` with every card it creates having its art parked rather than loaded. Restores
+ * the previous setting afterwards, nested calls included, so a build that renders a visible
+ * surface inside a deferred one is not silently parked along with it.
+ */
+export function withDeferredCardArt<T>(defer: boolean, build: () => T): T {
+  const previous = deferNewCardArt;
+  deferNewCardArt = defer;
+  try {
+    return build();
+  } finally {
+    deferNewCardArt = previous;
+  }
+}
+
+/** Loads the parked art under `root`, as when the menu holding it is opened. */
+export function loadCardArt(root: ParentNode): void {
+  for (const img of root.querySelectorAll<HTMLImageElement>("img.card-art[data-card-art]")) {
+    const src = img.dataset.cardArt;
+    delete img.dataset.cardArt;
+    if (src !== undefined && src !== "") {
+      img.src = src;
+    }
+  }
+}
+
+/**
+ * Parks the art under `root` and lets go of the decoded image, as when the menu holding it is
+ * closed. `removeAttribute` rather than `src = ""`, which would resolve against the page and
+ * fetch the document back as an image.
+ */
+export function unloadCardArt(root: ParentNode): void {
+  for (const img of root.querySelectorAll<HTMLImageElement>("img.card-art[src]")) {
+    img.dataset.cardArt = img.getAttribute("src") ?? "";
+    img.removeAttribute("src");
+  }
+}
+
 export function createCardArtImg(src: string, extraClass = ""): HTMLImageElement {
   const img = document.createElement("img");
   img.className = extraClass === "" ? "card-art" : `card-art ${extraClass}`;
-  img.src = src;
+  if (deferNewCardArt) {
+    img.dataset.cardArt = src;
+  } else {
+    img.src = src;
+  }
   img.alt = "";
   img.decoding = "async";
   img.loading = "lazy";
