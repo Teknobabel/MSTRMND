@@ -139,6 +139,12 @@ import {
 } from "./ui/map/mapLayers";
 import { omegaPhaseTargetsByLocation } from "./ui/map/omegaTargets";
 import { initDragFocus } from "./ui/dragFocus";
+import {
+  beginCardDrag,
+  initDropHints,
+  setDropAccepts,
+  type DragPayloadKind,
+} from "./ui/dropHint";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
@@ -2413,6 +2419,7 @@ function initGameController(
       slot.className = "assign-minion-slot assign-asset-slot";
       slot.dataset.assetSlotIndex = String(slotIndex);
       slot.dataset.requiredAssetId = requiredId;
+      setDropAccepts(slot, ["mastermind-asset-card"]);
 
       slot.addEventListener("dragenter", (e) => {
         e.preventDefault();
@@ -2514,6 +2521,7 @@ function initGameController(
       const slot = document.createElement("div");
       slot.className = "assign-minion-slot assign-asset-slot assign-support-asset-slot";
       slot.dataset.supportSlotIndex = String(slotIndex);
+      setDropAccepts(slot, ["mastermind-asset-card"]);
 
       slot.addEventListener("dragenter", (e) => {
         e.preventDefault();
@@ -2692,6 +2700,32 @@ function initGameController(
     return chip;
   }
 
+  /**
+   * Keeps the target slot's drop hint honest: it lights up only for the kind of card the planned
+   * mission actually takes, so a mission after a location never shines for a minion. Mirrors the
+   * kind test in `targetPayloadMatchesPlannedMission` — the per-card filters that go with it
+   * (location type, intel, visibility) are finer than a slot can advertise, so the hint stops at
+   * the kind. With no mission staged yet nothing has been ruled out, so every target kind shines.
+   */
+  function syncAssignTargetDropAccepts(m: MissionTemplate | undefined): void {
+    if (!m) {
+      setDropAccepts(assignTargetSlotEl, [
+        "mastermind-location",
+        "mastermind-asset",
+        "mastermind-minion",
+      ]);
+      return;
+    }
+    const byTargetType: Record<MissionTargetType, readonly DragPayloadKind[]> = {
+      location: ["mastermind-location"],
+      asset_hidden: ["mastermind-asset"],
+      asset_revealed: ["mastermind-asset"],
+      minion: ["mastermind-minion"],
+      none: [],
+    };
+    setDropAccepts(assignTargetSlotEl, byTargetType[m.targetType]);
+  }
+
   function renderAssignPickSlots(): void {
     hideAssignPickPreview();
     assignMissionSlotEl.innerHTML = "";
@@ -2699,6 +2733,7 @@ function initGameController(
     updateAssignTargetFieldVisibility();
     const mainOnly = state.phase === "main";
     const mTpl = selectedMissionTemplate();
+    syncAssignTargetDropAccepts(mTpl);
     const hideTargetField = mTpl?.targetType === "none";
 
     const missionSlot = document.createElement("div");
@@ -2748,7 +2783,7 @@ function initGameController(
                       assignOmegaStageIndex ?? 0,
                       assignOmegaSlotIndex ?? 0,
                     );
-            e.dataTransfer?.setData("text/plain", json);
+            beginCardDrag(e, json);
             e.dataTransfer!.effectAllowed = "move";
           },
         ),
@@ -2792,14 +2827,11 @@ function initGameController(
       }
       dndDragSource = { kind: "assign-target" };
       if (t.kind === "location") {
-        e.dataTransfer?.setData("text/plain", locationDragJson(t.locationId));
+        beginCardDrag(e, locationDragJson(t.locationId));
       } else if (t.kind === "asset") {
-        e.dataTransfer?.setData(
-          "text/plain",
-          assetDragJson(t.locationId, t.slotIndex, t.visibilityAtAssign),
-        );
+        beginCardDrag(e, assetDragJson(t.locationId, t.slotIndex, t.visibilityAtAssign));
       } else if (t.kind === "minion") {
-        e.dataTransfer?.setData("text/plain", minionDragJson(t.instanceId));
+        beginCardDrag(e, minionDragJson(t.instanceId));
       }
       e.dataTransfer!.effectAllowed = "move";
     }
@@ -3456,6 +3488,7 @@ function initGameController(
       const slot = document.createElement("div");
       slot.className = "assign-minion-slot";
       slot.dataset.slotIndex = String(slotIndex);
+      setDropAccepts(slot, ["mastermind-minion"]);
 
       slot.addEventListener("dragenter", (e) => {
         e.preventDefault();
@@ -3533,7 +3566,7 @@ function initGameController(
             return;
           }
           dndDragSource = { kind: "slot", slotIndex };
-          e.dataTransfer?.setData("text/plain", instanceId);
+          beginCardDrag(e, instanceId);
           e.dataTransfer!.effectAllowed = "move";
         });
 
@@ -3658,7 +3691,7 @@ function initGameController(
       article.classList.add("assign-draggable-location");
       article.addEventListener("dragstart", (e) => {
         e.stopPropagation();
-        e.dataTransfer?.setData("text/plain", locationDragJson(loc.id));
+        beginCardDrag(e, locationDragJson(loc.id));
         e.dataTransfer!.effectAllowed = "copy";
       });
       appendAddToPlannerButton(article, "Add location to planner", () => {
@@ -3788,10 +3821,7 @@ function initGameController(
         chip.title = `Drag to Plan mission target (slot ${si + 1})`;
         chip.addEventListener("dragstart", (e) => {
           e.stopPropagation();
-          e.dataTransfer?.setData(
-            "text/plain",
-            assetDragJson(loc.id, si, targetVisibility),
-          );
+          beginCardDrag(e, assetDragJson(loc.id, si, targetVisibility));
           e.dataTransfer!.effectAllowed = "copy";
         });
         knownAssetChips.push(chip);
@@ -4224,7 +4254,7 @@ function initGameController(
                   meta.stageIndex,
                   meta.slotIndex,
                 );
-        e.dataTransfer?.setData("text/plain", json);
+        beginCardDrag(e, json);
         e.dataTransfer!.effectAllowed = "copy";
       });
       appendAddToPlannerButton(article, "Add mission to planner", () => {
@@ -4475,7 +4505,7 @@ function initGameController(
         e.preventDefault();
         return;
       }
-      e.dataTransfer?.setData("text/plain", assetCardDragJson(assetId));
+      beginCardDrag(e, assetCardDragJson(assetId));
       e.dataTransfer!.effectAllowed = "copy";
     });
     if (article.draggable) {
@@ -6371,7 +6401,7 @@ Your lair`;
           return;
         }
         e.stopPropagation();
-        e.dataTransfer?.setData("text/plain", locationDragJson(loc.id));
+        beginCardDrag(e, locationDragJson(loc.id));
         e.dataTransfer!.effectAllowed = "copy";
       });
       pin.addEventListener("click", () => {
@@ -8119,7 +8149,7 @@ Your lair`;
       return;
     }
     const id = card.dataset.assignInstanceId;
-    e.dataTransfer?.setData("text/plain", minionDragJson(id));
+    beginCardDrag(e, minionDragJson(id));
     e.dataTransfer!.effectAllowed = "copy";
     dndDragSource = { kind: "roster" };
   });
@@ -8190,3 +8220,4 @@ startRunFromMenu = initGameController(catalog, navigation, runSetup).startRun;
 initStageScale();
 initGlobalTooltips();
 initDragFocus();
+initDropHints();
