@@ -122,6 +122,32 @@
     "targetType": "asset_hidden"
   },
   {
+    "id": "pen_test",
+    "name": "Pen Test",
+    "description": "Rattle an unscouted site's network until something gives. Nobody reads the intrusion logs anyway.",
+    "durationTurns": 1,
+    "onFailureEffects": [
+      {
+        "kind": "heat_delta",
+        "amount": 3
+      }
+    ],
+    "onSuccessEffects": [
+      {
+        "kind": "intel_level_delta",
+        "delta": 1
+      }
+    ],
+    "requiredTraitIds": [
+      "hacker"
+    ],
+    "startCommandPoints": 1,
+    "targetLocationIntelLevels": [
+      0
+    ],
+    "targetType": "location"
+  },
+  {
     "id": "inside_job",
     "name": "Inside Job",
     "description": "A bribed supervisor, a rewritten patrol roster, and suddenly nobody is watching.",

@@ -5,7 +5,8 @@
     "description": "A hollowed-out volcano fortress: lava-tube hangars, a caldera helipad, and excellent acoustics for monologuing.",
     "availableMissionIds": [
       "smash_and_grab",
-      "ghost_heist"
+      "ghost_heist",
+      "pen_test"
     ],
     "mapPosition": {
       "x": 79.2,

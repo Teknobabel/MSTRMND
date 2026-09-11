@@ -274,14 +274,18 @@ const UNKNOWN_ICON_SVG_PATHS =
   '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>';
 const SECURITY_ICON_SVG_PATHS =
   '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>';
+/* Site-category sigils. Each names what the player means to do to a place rather than what the
+ * place is: an arsenal to arm from, a government to work on strings, a market to crash. Solid
+ * silhouettes (filled parts carry their own `fill`, overriding the pin's stroked default) so they
+ * survive the pin's 1.1rem glyph box; strings and the crash line stay strokes. */
 const MILITARY_ICON_SVG_PATHS =
-  '<circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>';
+  '<g fill="currentColor" stroke="none"><path d="M13.8 8.88 17 3.34A10 10 0 0 1 22 12h-6.4a3.6 3.6 0 0 0-1.8-3.12Z"/><path d="M13.8 15.12 17 20.66a10 10 0 0 1-10 0l3.2-5.54a3.6 3.6 0 0 0 3.6 0Z"/><path d="M8.4 12H2a10 10 0 0 1 5-8.66l3.2 5.54A3.6 3.6 0 0 0 8.4 12Z"/><circle cx="12" cy="12" r="2"/></g>';
 const POLITICAL_ICON_SVG_PATHS =
-  '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>';
+  '<path d="M6 2.2h12M4 2.2v8M12 2.2v5M20 2.2v8" stroke-width="1.1"/><path fill="currentColor" stroke="none" d="M2.8 21.5V9.6l4.8 4.2L12 6.6l4.4 7.2 4.8-4.2v11.9Z"/>';
 const ECONOMIC_ICON_SVG_PATHS =
-  '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>';
-/** Map pin glyph per site category — a crosshair, a star, a dollar sign — so type reads
- * without leaning on colour alone. */
+  '<path d="M2 5l7 7 4-4 8 8" stroke-width="2.6"/><path fill="currentColor" stroke="none" d="M22.5 19.5v-8l-8 8Z"/>';
+/** Map pin glyph per site category — a radiation trefoil, a crown on puppet strings, a plunging
+ * market line — so type reads without leaning on colour alone. */
 const MAP_MARKER_TYPE_ICON_SVG_PATHS: Record<LocationType, string> = {
   military: MILITARY_ICON_SVG_PATHS,
   political: POLITICAL_ICON_SVG_PATHS,
@@ -1246,6 +1250,8 @@ function initGameController(
   const assignSupportAssetsLabel = req<HTMLElement>("assign-support-assets-label");
   const assignSupportAssetsList = req<HTMLElement>("assign-support-assets-list");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
+  const assignSubmitWrapEl = req<HTMLElement>("assign-submit-wrap");
+  const assignBlockedAlertEl = req<HTMLElement>("assign-blocked-alert");
   const assignRequirementsEl = req<HTMLElement>("assign-requirements");
   const assignRequirementsListEl = req<HTMLElement>("assign-requirements-list");
   const assignRequirementsTallyEl = req<HTMLElement>("assign-requirements-tally");
@@ -1356,6 +1362,11 @@ function initGameController(
   let assignOmegaStageIndex: number | null = null;
   let assignOmegaSlotIndex: number | null = null;
   let assignTarget: MissionTarget | null = null;
+  /** Why Submit is disabled, in short "flash on a click" form — null when it is not. Set by
+   * `applyAssignButtonEnabled`, read by the click handler that cannot reach a disabled button
+   * any other way (see `.btn-submit-mission-wrap` in styles.css). */
+  let assignBlockReason: string | null = null;
+  let assignBlockedAlertHideTimer: ReturnType<typeof setTimeout> | null = null;
   let dndDragSource:
     | { kind: "roster" }
     | { kind: "slot"; slotIndex: number }
@@ -3493,56 +3504,70 @@ function initGameController(
     btnAssign.classList.toggle("btn-submit-mission--ready", ready);
   }
 
+  /**
+   * Disables the button and records both why, for the two audiences that ask: `title` is the
+   * full sentence a hover gets, `assignBlockReason` is the short label a click on the disabled
+   * button flashes (see `flashAssignBlockedAlert`). Each call site is one blocking condition, in
+   * priority order — the first one reached is the "highest level" reason and the only one shown.
+   */
+  function disableAssignButton(title: string, alertReason: string): void {
+    btnAssign.disabled = true;
+    btnAssign.title = title;
+    assignBlockReason = alertReason;
+  }
+
   /** The gate itself: sets `disabled` and the reason, one early return per blocking condition. */
   function applyAssignButtonEnabled(): void {
     const mainOnly = state.phase === "main";
     if (!mainOnly) {
-      btnAssign.disabled = true;
-      btnAssign.title = "Only during Main Phase";
+      disableAssignButton("Only during Main Phase", "Main Phase Only");
       return;
     }
     if (!assignMissionTemplateId || assignMissionSource === null) {
-      btnAssign.disabled = true;
-      btnAssign.title = "Choose a mission";
+      disableAssignButton("Choose a mission", "No Mission Assigned");
       return;
     }
     const missionTemplate = findMissionOrEventTemplate(assignMissionTemplateId);
     if (!missionTemplate) {
-      btnAssign.disabled = true;
-      btnAssign.title = "Choose a mission";
+      disableAssignButton("Choose a mission", "No Mission Assigned");
       return;
     }
     if (missionTemplate.targetType !== "none") {
       if (!assignTarget) {
-        btnAssign.disabled = true;
-        btnAssign.title = "Choose a mission target";
+        disableAssignButton("Choose a mission target", "No Target Assigned");
         return;
       }
       if (!missionTargetMatchesTemplate(missionTemplate.targetType, assignTarget)) {
-        btnAssign.disabled = true;
-        btnAssign.title = "Target does not match mission type";
+        disableAssignButton("Target does not match mission type", "Wrong Target Type");
         return;
       }
       /* Intel and security can move under a target staged on an earlier turn, so re-check the
        * site filters here rather than letting the click fail. */
       if (!targetPassesMissionLocationFilters(missionTemplate, assignTarget)) {
-        btnAssign.disabled = true;
-        btnAssign.title = `Target site does not meet: ${formatTargetLocationFilters(missionTemplate, targetLocationDisplayName) ?? "this mission's requirements"}`;
+        disableAssignButton(
+          `Target site does not meet: ${formatTargetLocationFilters(missionTemplate, targetLocationDisplayName) ?? "this mission's requirements"}`,
+          "Target Requirements Not Met",
+        );
         return;
       }
     }
     const atMissionCap =
       state.activeMissions.length >= state.player.maxConcurrentMissions;
     if (atMissionCap) {
-      btnAssign.disabled = true;
-      btnAssign.title = `At concurrent mission limit (${state.activeMissions.length}/${state.player.maxConcurrentMissions})`;
+      disableAssignButton(
+        `At concurrent mission limit (${state.activeMissions.length}/${state.player.maxConcurrentMissions})`,
+        "Mission Limit Reached",
+      );
       return;
     }
     const parts = getAssignParticipantIds();
     const maxP = stagedParticipantCeiling();
-    if (parts.length < 1 || parts.length > maxP) {
-      btnAssign.disabled = true;
-      btnAssign.title = `Assign 1–${maxP} minions`;
+    if (parts.length < 1) {
+      disableAssignButton(`Assign 1–${maxP} minions`, "No Minions Assigned");
+      return;
+    }
+    if (parts.length > maxP) {
+      disableAssignButton(`Assign 1–${maxP} minions`, "Too Many Minions");
       return;
     }
     const instanceById = new Map(
@@ -3552,16 +3577,40 @@ function initGameController(
       .map((id) => instanceById.get(id))
       .filter((x): x is NonNullable<typeof x> => x !== undefined);
     if (!canAssignParticipants(participants, maxP)) {
-      btnAssign.disabled = true;
-      btnAssign.title = `Assign 1–${maxP} minions`;
+      disableAssignButton(`Assign 1–${maxP} minions`, "Invalid Minion Selection");
       return;
     }
     const cost = missionTemplate.startCommandPoints;
     const canAfford = state.player.commandPoints >= cost;
-    btnAssign.disabled = !canAfford;
-    btnAssign.title = canAfford
-      ? `Spend ${cost} CP to assign`
-      : `Need ${cost} CP (${state.player.commandPoints} available)`;
+    if (!canAfford) {
+      disableAssignButton(`Need ${cost} CP (${state.player.commandPoints} available)`, "No CP");
+      return;
+    }
+    btnAssign.disabled = false;
+    btnAssign.title = `Spend ${cost} CP to assign`;
+    assignBlockReason = null;
+  }
+
+  /**
+   * A click landed on Submit while it was disabled. The button itself never sees that click — a
+   * disabled control eats it — so `.btn-submit-mission-wrap` (pointer-events pass through the
+   * disabled button to it, see CSS) is what actually catches it. Clearing the text before
+   * re-setting it, rather than just toggling the visible class, is what makes the `aria-live`
+   * region re-announce on a second click — even one with the same reason — not just the first.
+   */
+  function flashAssignBlockedAlert(reason: string): void {
+    if (assignBlockedAlertHideTimer !== null) {
+      clearTimeout(assignBlockedAlertHideTimer);
+    }
+    assignBlockedAlertEl.classList.remove("assign-blocked-alert--visible");
+    assignBlockedAlertEl.textContent = "";
+    void assignBlockedAlertEl.offsetWidth;
+    assignBlockedAlertEl.textContent = reason;
+    assignBlockedAlertEl.classList.add("assign-blocked-alert--visible");
+    assignBlockedAlertHideTimer = setTimeout(() => {
+      assignBlockedAlertEl.classList.remove("assign-blocked-alert--visible");
+      assignBlockedAlertHideTimer = null;
+    }, 1600);
   }
 
   /**
@@ -8104,6 +8153,9 @@ Your lair`;
     turnReportOverlay.hidden = true;
     turnReportOverlay.setAttribute("aria-hidden", "true");
     turnReportBody.innerHTML = "";
+    /* Whatever menu was up when the last turn ended is not what the new one is about — the
+     * player's first look at a fresh turn should be the map, not wherever they left off. */
+    setOpenDrawer(null);
     dispatch((s) => advanceToNextTurn(s));
     btnExec.focus();
   }
@@ -8291,6 +8343,12 @@ Your lair`;
     refresh();
     return true;
   }
+
+  assignSubmitWrapEl.addEventListener("click", () => {
+    if (btnAssign.disabled && assignBlockReason !== null) {
+      flashAssignBlockedAlert(assignBlockReason);
+    }
+  });
 
   btnAssign.addEventListener("click", () => {
     if (state.phase !== "main") {

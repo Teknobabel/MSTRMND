@@ -191,9 +191,17 @@
                       <span id="assign-chance-note" class="plan-chance__note">No plan staged</span>
                     </div>
                   </div>
-                  <button type="button" class="btn btn-submit-mission" id="btn-assign-mission">
-                    <span>Submit</span>
-                  </button>
+                  <div class="btn-submit-mission-wrap" id="assign-submit-wrap">
+                    <button type="button" class="btn btn-submit-mission" id="btn-assign-mission">
+                      <span>Submit</span>
+                    </button>
+                    <span
+                      id="assign-blocked-alert"
+                      class="assign-blocked-alert"
+                      role="status"
+                      aria-live="polite"
+                    ></span>
+                  </div>
                 </div>
               </div>
             </aside>

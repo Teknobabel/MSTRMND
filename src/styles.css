@@ -27,6 +27,19 @@
   --warn: #ffb020;
   --warn-dim: #7a5410;
   --cyan: #5ad7e8;
+  /* Site categories on the world map: pin sigil, rim, reticle, and the Map Layers swatch.
+     Hot, poisoned, and tarnished rather than friendly — they sit on a blood-red map and have to
+     read as marks the player means harm to. `-ring` is the hue pulled toward the house red, for
+     the pin's outer ring, so the categories still belong to one console. */
+  --site-military: #ff6a2b;
+  --site-military-glow: rgba(255, 106, 43, 0.55);
+  --site-military-ring: rgba(245, 70, 40, 0.6);
+  --site-political: #b57cff;
+  --site-political-glow: rgba(181, 124, 255, 0.55);
+  --site-political-ring: rgba(190, 80, 170, 0.6);
+  --site-economic: #f5bd3a;
+  --site-economic-glow: rgba(245, 189, 58, 0.5);
+  --site-economic-ring: rgba(240, 120, 45, 0.6);
   --font-display: "Orbitron", "Segoe UI", sans-serif;
   --font-body: "Rajdhani", "Segoe UI", system-ui, sans-serif;
   /* Chamfer sizes for clipped / faked corner cuts */
@@ -942,10 +955,15 @@ body {
 }
 
 /*
- * The planner is as tall as what is in it and rides the middle of the map's left edge, rather
- * than stretching the full height with dead air between the last slot and the footer. Held
- * between `top: 0` and `bottom: 0`, `margin-block: auto` is what centres it; `max-height`
- * keeps a long plan inside the frame, and the stack scrolls at that point as it always did.
+ * The planner is one fixed size and rides the middle of the map's left edge. It used to be as
+ * tall as its contents, so it grew and re-centred every time a mission, a required-asset slot,
+ * or a line of requirements came or went — the panel jumping under the card the player was about
+ * to drop. 40rem is the height it had with nothing staged (header, the empty slots with room to
+ * drop into under them, and the footer), so an empty plan looks exactly as it did, and nothing
+ * staged moves its edges or its footer. The slot body takes whatever the header and footer leave
+ * (the docked layout's `flex: 1 1 0` on the stack and page, see "Plan column stack") and scrolls
+ * once a plan outgrows it. Held between `top: 0` and `bottom: 0`, `margin-block: auto` is what
+ * centres it; `max-height` keeps it inside the frame.
  *
  * `left` insets it off the map by the same 0.6rem the outer `.omega-shell` pads every edge
  * with — the gap that shows on the right of the Omega Plan drawer when it is open — so the
@@ -958,29 +976,9 @@ body {
   top: 0;
   bottom: 0;
   width: calc(18.5rem - 0.6rem);
-  height: fit-content;
+  height: 40rem;
   max-height: 100%;
   margin-block: auto;
-}
-
-/*
- * Measuring the panel from its contents means the children have to report a real height. The
- * docked layout gives these `flex: 1 1 0` so the body fills the column and the footer sits at
- * its foot; under an auto height that same `flex-basis: 0` reports a hypothetical size of zero
- * and would collapse the whole panel down to its footer.
- */
-.omega-body--floating .game-panel.game-panel--plan-column > .plan-column-stack,
-.omega-body--floating .game-panel.game-panel--plan-column .missions-panel-page {
-  flex: 0 1 auto;
-}
-
-/*
- * 100px of slack under the last field, which is what makes the content-sized panel 100px taller
- * than the slots strictly need. It goes inside the scrolling body rather than under the footer
- * so it reads as room to drop into; a plan long enough to scroll spends it as trailing space.
- */
-.omega-body--floating .game-panel.game-panel--plan-column .missions-panel-page {
-  padding-bottom: 100px;
 }
 
 /*
@@ -1718,6 +1716,69 @@ body {
   display: none !important;
 }
 
+/*
+ * The planner is a fixed height, so a long plan scrolls inside it — and a scroll the player cannot
+ * see is a slot they never find. A scrollbar would say so, but a classic one takes 10px of layout
+ * the moment the plan overflows and every slot narrows under the player's hand, which is the very
+ * content-driven resize the fixed height is there to stop (and the floating panels hide theirs
+ * anyway). So the cue is a fade instead: whichever edge has more plan beyond it dissolves, driven
+ * by the body's own scroll position. With nothing to scroll the timeline is inactive, both fades
+ * stay at 0, and the mask is a no-op. Browsers without scroll-driven animations skip the
+ * `@supports` block and simply scroll without the cue — the fades never run on a clock there.
+ */
+@property --plan-fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --plan-fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.game-panel--plan-column .missions-panel-page {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--plan-fade-top),
+    #000 calc(100% - var(--plan-fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--plan-fade-top),
+    #000 calc(100% - var(--plan-fade-bottom)),
+    transparent 100%
+  );
+}
+
+@supports (animation-timeline: scroll()) {
+  .game-panel--plan-column .missions-panel-page {
+    animation: plan-scroll-fade linear both;
+    animation-timeline: scroll(self);
+  }
+}
+
+@keyframes plan-scroll-fade {
+  0% {
+    --plan-fade-top: 0px;
+    --plan-fade-bottom: 1.75rem;
+  }
+  10% {
+    --plan-fade-top: 1.75rem;
+  }
+  90% {
+    --plan-fade-bottom: 1.75rem;
+  }
+  100% {
+    --plan-fade-top: 1.75rem;
+    --plan-fade-bottom: 0px;
+  }
+}
+
 .lair-panel-tabs {
   display: flex;
   flex-direction: row;
@@ -1818,6 +1879,11 @@ body {
   cursor: pointer;
 }
 
+.btn-submit-mission-wrap {
+  position: relative;
+  width: 100%;
+}
+
 .btn-submit-mission {
   display: flex;
   align-items: center;
@@ -1825,6 +1891,60 @@ body {
   gap: 0.5rem;
   width: 100%;
   margin-top: 0;
+}
+
+/* A disabled button swallows its click silently — nothing to hook to explain why. Letting the
+   pointer through to the wrap behind it is what lets a click on a blocked Submit be caught and
+   answered instead of just doing nothing. */
+.btn-submit-mission:disabled {
+  pointer-events: none;
+}
+
+/* Small "why not" toast for a click on a blocked Submit — whichever reason
+   `applyAssignButtonEnabled` currently has it disabled for. Sits above the button so it never
+   shifts the panel's layout; shown/hidden by toggling `--visible` from main.ts. Wraps rather
+   than overflowing since the reason can be as short as "No CP" or as long as "Target
+   Requirements Not Met". */
+.assign-blocked-alert {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.4rem);
+  transform: translate(-50%, 4px);
+  max-width: 100%;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--red-bright);
+  border-radius: 2px;
+  background: rgba(20, 4, 6, 0.95);
+  color: var(--red-bright);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  box-shadow: 0 0 12px rgba(232, 17, 45, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 5;
+}
+
+.assign-blocked-alert::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: inherit;
+  border-right: 1px solid var(--red-bright);
+  border-bottom: 1px solid var(--red-bright);
+}
+
+.assign-blocked-alert--visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 /* A startable plan: the fill and border come from .btn-primary, which main.ts adds alongside
@@ -4078,22 +4198,47 @@ body {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 8px rgba(232, 17, 45, 0.9);
 }
 
-/* The glyph riding the dot: type read by shape, not only by the dot's colour. Dark, so it
-   holds up against every category colour without needing its own per-type tint. */
+/* The sigil riding the dot: type read by shape, not only by colour. Lit in the category's hue
+   against the dark plate (see the per-type rules below) — the glow is the point, and the tight
+   black drop keeps its edge off the plate's own inner glow. */
 .map-marker__type-icon {
   width: 0.5rem;
   height: 0.5rem;
   flex: 0 0 auto;
+  color: var(--site-hue, currentColor);
   fill: none;
-  stroke: rgba(8, 2, 4, 0.88);
+  stroke: currentColor;
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+  filter: drop-shadow(0 0 2px var(--site-glow, transparent)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
 }
 
 /* No intel yet: the dot goes hollow and the glyph goes with it, same as the colour it rides on. */
 .map-marker--dark .map-marker__type-icon {
   display: none;
+}
+
+/*
+ * A site the player has any intel on reads twice the size of one they do not — a plain visual
+ * callout for "there is something to look at here" that does not wait for a hover. Unknown
+ * sites (`--dark`) and the lair (its own fixed size, see below) are excluded, so this only ever
+ * touches ordinary revealed pins. Dot inset and glyph size double alongside the pin itself so
+ * the icon stays proportioned rather than shrinking inside a bigger empty ring.
+ */
+.map-marker:not(.map-marker--dark):not(.map-marker--lair) {
+  width: 2.6rem;
+  height: 2.6rem;
+  margin: -1.3rem 0 0 -1.3rem;
+}
+
+.map-marker:not(.map-marker--dark):not(.map-marker--lair) .map-marker__dot {
+  inset: 0.5rem;
+}
+
+.map-marker:not(.map-marker--dark):not(.map-marker--lair) .map-marker__type-icon {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 /*
@@ -4111,6 +4256,24 @@ body {
   border-radius: 50%;
   animation: pin-breathe 4.6s ease-in-out infinite;
   animation-delay: calc(var(--map-pin-phase, 0) * -4.6s);
+}
+
+/*
+ * A known site sits in a reticle: the ring takes its category's ring tint and four inward ticks
+ * in the full hue. Every site is somewhere the player intends to hit. The ticks are painted as
+ * background so the ring's `border-radius` clips them to the circle and hover / target states,
+ * which only restyle the border, leave them alone. Declared ahead of those states so their
+ * border colours still win at equal specificity.
+ */
+.map-marker--military .map-marker__ring,
+.map-marker--political .map-marker__ring,
+.map-marker--economic .map-marker__ring {
+  border-color: var(--site-ring);
+  background:
+    linear-gradient(var(--site-hue), var(--site-hue)) 50% 0 / 1.5px 0.32rem no-repeat,
+    linear-gradient(var(--site-hue), var(--site-hue)) 50% 100% / 1.5px 0.32rem no-repeat,
+    linear-gradient(var(--site-hue), var(--site-hue)) 0 50% / 0.32rem 1.5px no-repeat,
+    linear-gradient(var(--site-hue), var(--site-hue)) 100% 50% / 0.32rem 1.5px no-repeat;
 }
 
 @keyframes pin-breathe {
@@ -4147,17 +4310,39 @@ body {
   box-shadow: 0 0 10px rgba(232, 17, 45, 0.75);
 }
 
-/* Site type is the one thing worth reading at a glance without hovering. */
-.map-marker--military .map-marker__dot {
-  background: #ff5a3c;
+/*
+ * Site type is the one thing worth reading at a glance without hovering. Each category binds its
+ * palette to `--site-hue` / `--site-glow` / `--site-ring` once, and the dot, sigil, and reticle
+ * read those. The dot is an obsidian plate rimmed in the hue with a lit sigil on it, not a
+ * coloured disc: it reads as marked, where a flat bright disc read as a sticker on the console.
+ */
+.map-marker--military {
+  --site-hue: var(--site-military);
+  --site-glow: var(--site-military-glow);
+  --site-ring: var(--site-military-ring);
 }
 
-.map-marker--political .map-marker__dot {
-  background: #ffd166;
+.map-marker--political {
+  --site-hue: var(--site-political);
+  --site-glow: var(--site-political-glow);
+  --site-ring: var(--site-political-ring);
 }
 
+.map-marker--economic {
+  --site-hue: var(--site-economic);
+  --site-glow: var(--site-economic-glow);
+  --site-ring: var(--site-economic-ring);
+}
+
+.map-marker--military .map-marker__dot,
+.map-marker--political .map-marker__dot,
 .map-marker--economic .map-marker__dot {
-  background: #4fd1c5;
+  background: radial-gradient(circle at 50% 38%, #24090d 0%, #0a0305 62%, #030102 100%);
+  box-shadow:
+    0 0 0 1.5px var(--site-hue),
+    0 0 0 2.5px rgba(0, 0, 0, 0.9),
+    0 0 12px var(--site-glow),
+    inset 0 0 7px var(--site-glow);
 }
 
 /* Dark sites read as hollow: the player has no intel there yet. */
@@ -4358,6 +4543,12 @@ body {
   align-items: center;
   gap: 0.16rem;
   pointer-events: none;
+}
+
+/* `top` is measured from the pin's own box, so a doubled box needs a doubled offset to keep the
+   name and tag rail sitting just under the dot instead of drifting up inside it. */
+.map-marker:not(.map-marker--dark):not(.map-marker--lair) .map-marker__info {
+  top: 2.1rem;
 }
 
 .map-marker__info > .map-marker__label {
@@ -4832,7 +5023,8 @@ body {
   cursor: pointer;
 }
 
-/* The pin's own dot colour, so a row is readable as "these pins" without reading the word. */
+/* The pin's own category hue and glow, so a row is readable as "these pins" without reading the
+   word. */
 .map-layers-row__swatch {
   flex: 0 0 auto;
   width: 0.45rem;
@@ -4841,15 +5033,18 @@ body {
 }
 
 .map-layers-row__swatch--military {
-  background: #ff5a3c;
+  background: var(--site-military);
+  box-shadow: 0 0 5px var(--site-military-glow);
 }
 
 .map-layers-row__swatch--political {
-  background: #ffd166;
+  background: var(--site-political);
+  box-shadow: 0 0 5px var(--site-political-glow);
 }
 
 .map-layers-row__swatch--economic {
-  background: #4fd1c5;
+  background: var(--site-economic);
+  box-shadow: 0 0 5px var(--site-economic-glow);
 }
 
 /* An unchecked row is the dimmed one, so the row reads as dimmed itself. The box comes first
