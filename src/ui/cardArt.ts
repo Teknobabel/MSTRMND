@@ -15,6 +15,24 @@ export const DEFAULT_LOCATION_CARD_ART = "/assets/cards/location.png";
 export const DEFAULT_LAIR_CARD_ART = "/assets/cards/lair.png";
 export const DEFAULT_ASSET_CARD_ART = "/assets/cards/asset.png";
 export const DEFAULT_OMEGA_PLAN_CARD_ART = "/assets/cards/mission.png";
+/**
+ * Animated TV static standing in for a site the player has no intel on. An SVG rather than a
+ * CSS effect so it travels through every path a card's art URL does — hero, chip, drag token,
+ * and the deferred-art parking below — without any of them knowing it is special.
+ */
+export const UNKNOWN_LOCATION_CARD_ART = "/assets/cards/location-unknown.svg";
+/**
+ * The same static held on one frame. Chosen here rather than by a media query inside the SVG:
+ * an SVG loaded as an image does not reliably see the page's `prefers-reduced-motion`.
+ */
+export const UNKNOWN_LOCATION_CARD_ART_STILL = "/assets/cards/location-unknown-still.svg";
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
+}
 
 export function resolveMissionCardArt(mission: MissionTemplate | undefined): string {
   return mission?.cardArt ?? DEFAULT_MISSION_CARD_ART;
@@ -35,6 +53,17 @@ export function resolveAgentCardArt(template: AgentTemplate | undefined): string
 
 export function resolveLocationCardArt(loc: LocationTemplate | undefined): string {
   return loc?.cardArt ?? DEFAULT_LOCATION_CARD_ART;
+}
+
+/** The art the player gets to see: static until the site is identified (see `intel.ts`). */
+export function resolvePlayerLocationCardArt(
+  loc: LocationTemplate | undefined,
+  identified: boolean,
+): string {
+  if (identified) {
+    return resolveLocationCardArt(loc);
+  }
+  return prefersReducedMotion() ? UNKNOWN_LOCATION_CARD_ART_STILL : UNKNOWN_LOCATION_CARD_ART;
 }
 
 export function resolveLairCardArt(lair: LairTemplate | undefined): string {
@@ -113,6 +142,13 @@ export function createCardArtImg(src: string, extraClass = ""): HTMLImageElement
   img.decoding = "async";
   img.loading = "lazy";
   img.setAttribute("aria-hidden", "true");
+  /* The art is never its own drag. An image is draggable by default, so grabbing a card by its
+   * picture — which is most of the card — would start an *image* drag: the browser packs the
+   * art's URL, markup, and the file itself in beside the card's payload. A real OS drag (Windows
+   * at least) round-trips that bundle through the system, and the drop comes back without the
+   * payload the slot lit up for, so the card never lands. Off, the drag falls through to the
+   * card's own `draggable`, carrying only what `beginCardDrag` put there. */
+  img.draggable = false;
   return img;
 }
 

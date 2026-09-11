@@ -23,8 +23,10 @@ import type {
 } from "./types";
 import {
   intelLevelForLocation,
+  isLocationIdentifiedByPlayer,
   isOpposingAgentMoveVisibleToPlayer,
   isOpposingAgentVisibleToPlayer,
+  playerFacingLocationName,
 } from "./intel";
 import { isOccupiedAssetSlot } from "./types";
 import type { MissionResult } from "./mission";
@@ -148,8 +150,9 @@ function traitName(catalog: ContentCatalog, id: string): string {
   return catalog.traits.find((t) => t.id === id)?.name ?? id;
 }
 
-function locationName(catalog: ContentCatalog, id: string): string {
-  return catalog.locations.find((l) => l.id === id)?.name ?? id;
+/** The site as the player knows it in `state` — "Unknown" where intel there is 0. */
+function locationName(catalog: ContentCatalog, state: GameState, id: string): string {
+  return playerFacingLocationName(catalog, state.locationIntelStates, id);
 }
 
 function minionName(catalog: ContentCatalog, state: GameState, instanceId: string): string {
@@ -658,7 +661,7 @@ export function describeAgentAbilityUse(
   ev: Extract<ActivityEvent, { kind: "agent_ability_used" }>,
 ): string {
   const who = agentReportName(catalog, state, ev.agentInstanceId, ev.locationId);
-  const where = locationName(catalog, ev.locationId);
+  const where = locationName(catalog, state, ev.locationId);
   switch (ev.abilityId) {
     case "brawler":
       return `${who} put the crew in the hospital at ${where}.`;
@@ -713,8 +716,9 @@ function agentsSection(
     lines.push({
       text: `${agentName(catalog, after, ev.agentInstanceId)} moved from ${locationName(
         catalog,
+        after,
         ev.fromLocationId,
-      )} to ${locationName(catalog, ev.toLocationId)} — ${MOVEMENT_REASONS[ev.behavior]}.`,
+      )} to ${locationName(catalog, after, ev.toLocationId)} — ${MOVEMENT_REASONS[ev.behavior]}.`,
       tone: "bad",
     });
   }
@@ -732,8 +736,14 @@ function sitesSection(
     if (prior === undefined || prior.securityLevel === st.securityLevel) {
       continue;
     }
+    /* Security at a site the player cannot identify is not theirs to read. */
+    if (
+      !isLocationIdentifiedByPlayer(intelLevelForLocation(after.locationIntelStates, st.locationId))
+    ) {
+      continue;
+    }
     lines.push({
-      text: `Security at ${locationName(catalog, st.locationId)} ${prior.securityLevel} → ${st.securityLevel}`,
+      text: `Security at ${locationName(catalog, after, st.locationId)} ${prior.securityLevel} → ${st.securityLevel}`,
       tone: st.securityLevel > prior.securityLevel ? "bad" : "good",
     });
   }
@@ -742,8 +752,11 @@ function sitesSection(
     if (prior === undefined || prior.intelLevel === st.intelLevel) {
       continue;
     }
+    /* Named from whichever side of the change could see it, so a site burned back to 0 is
+     * reported by the name the player is losing rather than as "Unknown". */
+    const namedFrom = st.intelLevel > prior.intelLevel ? after : before;
     lines.push({
-      text: `Intel at ${locationName(catalog, st.locationId)} ${prior.intelLevel} → ${st.intelLevel}`,
+      text: `Intel at ${locationName(catalog, namedFrom, st.locationId)} ${prior.intelLevel} → ${st.intelLevel}`,
       tone: st.intelLevel > prior.intelLevel ? "good" : "bad",
     });
   }
@@ -771,7 +784,7 @@ function sitesSection(
         revealed += 1;
       }
     }
-    const where = locationName(catalog, placement.locationId);
+    const where = locationName(catalog, after, placement.locationId);
     if (revealed > 0) {
       lines.push({
         text: `${revealed} asset slot${revealed === 1 ? "" : "s"} uncovered at ${where}.`,
@@ -791,7 +804,7 @@ function sitesSection(
     null;
   for (const agent of after.opposingAgentInstances) {
     const where = locationOfAgent(after, agent.instanceId);
-    const whereLabel = where !== null ? locationName(catalog, where) : "an unknown site";
+    const whereLabel = where !== null ? locationName(catalog, after, where) : "an unknown site";
     if (!priorAgentIds.has(agent.instanceId)) {
       lines.push({
         text: `${agentName(catalog, after, agent.instanceId)} deployed to ${whereLabel}.`,

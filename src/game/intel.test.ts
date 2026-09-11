@@ -7,9 +7,12 @@ import {
   countPlayerVisibleOpposingAgentsAtLocation,
   effectiveAssetSlotVisibility,
   intelLevelAtLocation,
+  isLocationIdentifiedByPlayer,
   isOpposingAgentVisibleToPlayer,
+  playerFacingLocationName,
   playerVisibleOpposingAgentsAtLocation,
   totalPlayerVisibleOpposingAgents,
+  UNKNOWN_LOCATION_NAME,
 } from "./intel";
 import { createAgentFromTemplate, getAgentTemplateById } from "./agent";
 import type { AgentInstance, LocationAssetSlot } from "./types";
@@ -98,6 +101,34 @@ describe("initial intel", () => {
     const slots = state.locationAssetSlots.flatMap((p) => p.slots);
     expect(slots.length).toBeGreaterThan(0);
     expect(slots.every((s) => s.kind === "occupied" && s.visibility === "hidden")).toBe(true);
+  });
+});
+
+describe("site identity", () => {
+  it("leaves a site unidentified only at intel 0", () => {
+    expect(isLocationIdentifiedByPlayer(0)).toBe(false);
+    expect(isLocationIdentifiedByPlayer(1)).toBe(true);
+    expect(isLocationIdentifiedByPlayer(3)).toBe(true);
+  });
+
+  it("names a site the player can identify and calls the rest Unknown", () => {
+    const states = [
+      { locationId: "loc-a", intelLevel: 1 as const },
+      { locationId: "loc-b", intelLevel: 0 as const },
+    ];
+    expect(playerFacingLocationName(catalog, states, "loc-a")).toBe("First Bank");
+    expect(playerFacingLocationName(catalog, states, "loc-b")).toBe(UNKNOWN_LOCATION_NAME);
+    /* A site with no intel row (not in play this run) reads as intel 0 like everywhere else. */
+    expect(playerFacingLocationName(catalog, [], "loc-a")).toBe(UNKNOWN_LOCATION_NAME);
+  });
+
+  it("forgets the name again when intel is burned back to 0", () => {
+    const lit = setLocationIntelLevel(darkState(), "loc-a", 1);
+    expect(playerFacingLocationName(catalog, lit.locationIntelStates, "loc-a")).toBe("First Bank");
+    const burned = setLocationIntelLevel(lit, "loc-a", 0);
+    expect(playerFacingLocationName(catalog, burned.locationIntelStates, "loc-a")).toBe(
+      UNKNOWN_LOCATION_NAME,
+    );
   });
 });
 

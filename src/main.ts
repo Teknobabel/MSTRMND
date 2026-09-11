@@ -89,10 +89,13 @@ import {
   assetSlotKnowledge,
   effectiveVisibilityOfSlot,
   intelLevelAtLocation,
+  isLocationIdentifiedByPlayer,
   isOpposingAgentMoveVisibleToPlayer,
   MAX_INTEL_LEVEL,
+  playerFacingLocationName,
   playerVisibleOpposingAgentsAtLocation,
   totalPlayerVisibleOpposingAgents,
+  UNKNOWN_LOCATION_NAME,
 } from "./game/intel";
 import {
   currentLairUpgradeLevel,
@@ -162,15 +165,15 @@ import {
   resolveAgentCardArt,
   resolveAssetCardArt,
   resolveLairCardArt,
-  resolveLocationCardArt,
   resolveMissionCardArt,
+  resolvePlayerLocationCardArt,
   resolveMinionCardArt,
   resolveOmegaPlanCardArt,
 } from "./ui/cardArt";
 
 /** What each intel step unlocks at a site (hover text on the location card's Intel Level label). */
 const INTEL_LEVEL_TOOLTIP_LINES: readonly string[] = [
-  "0 — assets and agents here stay secret unless uncovered another way",
+  "0 — Unknown: no name, type, level, security or site traits; assets and agents stay secret unless uncovered another way",
   "1 — every asset slot is listed (contents still unknown)",
   "2 — asset contents are identified and count as revealed for missions",
   "3 — opposing agents here are visible, including any that arrive later",
@@ -271,6 +274,19 @@ const UNKNOWN_ICON_SVG_PATHS =
   '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>';
 const SECURITY_ICON_SVG_PATHS =
   '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>';
+const MILITARY_ICON_SVG_PATHS =
+  '<circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>';
+const POLITICAL_ICON_SVG_PATHS =
+  '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>';
+const ECONOMIC_ICON_SVG_PATHS =
+  '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>';
+/** Map pin glyph per site category — a crosshair, a star, a dollar sign — so type reads
+ * without leaning on colour alone. */
+const MAP_MARKER_TYPE_ICON_SVG_PATHS: Record<LocationType, string> = {
+  military: MILITARY_ICON_SVG_PATHS,
+  political: POLITICAL_ICON_SVG_PATHS,
+  economic: ECONOMIC_ICON_SVG_PATHS,
+};
 
 /* Minion, Mission & Location card stat icons */
 const MINION_STAT_ICON_CP =
@@ -1982,17 +1998,16 @@ function initGameController(
         const tpl = findMissionOrEventTemplate(payload.missionTemplateId);
         return { art: resolveMissionCardArt(tpl), label: tpl?.name ?? payload.missionTemplateId };
       }
-      case "mastermind-location": {
-        const loc = getLocationById(content, payload.locationId);
-        return { art: resolveLocationCardArt(loc), label: loc?.name ?? payload.locationId };
-      }
-      case "mastermind-asset": {
-        const loc = getLocationById(content, payload.locationId);
+      case "mastermind-location":
         return {
-          art: resolveLocationCardArt(loc),
-          label: `${loc?.name ?? payload.locationId} - Slot ${payload.slotIndex + 1}`,
+          art: siteCardArt(payload.locationId),
+          label: siteDisplayName(payload.locationId),
         };
-      }
+      case "mastermind-asset":
+        return {
+          art: siteCardArt(payload.locationId),
+          label: `${siteDisplayName(payload.locationId)} - Slot ${payload.slotIndex + 1}`,
+        };
       case "mastermind-minion":
         return minionFace(payload.instanceId);
       case "mastermind-asset-card": {
@@ -2023,6 +2038,40 @@ function initGameController(
   /** Catalog name for a site pinned by `targetLocationIds`; unknown ids show as the raw id. */
   function targetLocationDisplayName(locationId: string): string {
     return getLocationById(content, locationId)?.name ?? locationId;
+  }
+
+  /** Whether the player can identify the site; below that it shows as "Unknown" everywhere. */
+  function isSiteIdentified(locationId: string): boolean {
+    return isLocationIdentifiedByPlayer(intelLevelAtLocation(state, locationId));
+  }
+
+  /** A site's name as the player knows it — "Unknown" while intel there is 0. */
+  function siteDisplayName(locationId: string): string {
+    return playerFacingLocationName(content, state.locationIntelStates, locationId);
+  }
+
+  /** A site's card art as the player sees it — static while intel there is 0. */
+  function siteCardArt(locationId: string): string {
+    return resolvePlayerLocationCardArt(
+      getLocationById(content, locationId),
+      isSiteIdentified(locationId),
+    );
+  }
+
+  /**
+   * `missionSuccessOptionsForTarget` as the player is allowed to see it. An Unknown site's
+   * rolled site and security traits are not the player's to know, so previews leave them out —
+   * the same rule as hidden agents' challenge traits. The resolve roll still counts them.
+   */
+  function playerVisibleSuccessOptionsForTarget(
+    target: MissionTarget,
+    supportAbilities?: Parameters<typeof missionSuccessOptionsForTarget>[2],
+  ): ReturnType<typeof missionSuccessOptionsForTarget> {
+    const lid = getMissionTargetLocationId(target);
+    if (lid !== null && !isSiteIdentified(lid)) {
+      return {};
+    }
+    return missionSuccessOptionsForTarget(state, target, supportAbilities);
   }
 
   /**
@@ -2816,9 +2865,7 @@ function initGameController(
         missionTpl !== undefined
           ? mergedRequiredTraitIdsSorted(
               missionTpl,
-              assignTarget !== null
-                ? missionSuccessOptionsForTarget(state, assignTarget)
-                : {},
+              assignTarget !== null ? playerVisibleSuccessOptionsForTarget(assignTarget) : {},
             )
           : undefined;
 
@@ -2959,8 +3006,8 @@ function initGameController(
         article.classList.add("assign-pick-preview-card");
         wrap.appendChild(
           buildAssignPickChip(
-            resolveLocationCardArt(loc),
-            loc.name,
+            siteCardArt(loc.id),
+            siteDisplayName(loc.id),
             article,
             mainOnly,
             setDragDataForTarget,
@@ -2970,17 +3017,21 @@ function initGameController(
         targetSlot.appendChild(wrap);
       }
     } else if (targetPick.kind === "asset") {
-      const loc = content.locations.find((l) => l.id === targetPick.locationId);
       const placement = state.locationAssetSlots.find((p) => p.locationId === targetPick.locationId);
       const slot = placement?.slots[targetPick.slotIndex];
+      const siteIdentified = isSiteIdentified(targetPick.locationId);
+      const siteName = siteDisplayName(targetPick.locationId);
       const wrap = document.createElement("div");
       wrap.className = "assign-pick-slot-card-wrap";
       const article = document.createElement("article");
       article.className = "assign-pick-preview-card location-card assign-target-asset-card";
-      const { meta, body } = appendCardHeroShell(article, resolveLocationCardArt(loc));
+      if (!siteIdentified) {
+        article.classList.add("location-card--unknown");
+      }
+      const { meta, body } = appendCardHeroShell(article, siteCardArt(targetPick.locationId));
       const title = document.createElement("h4");
       title.className = "location-card-title";
-      title.textContent = loc?.name ?? targetPick.locationId;
+      title.textContent = siteName;
       meta.appendChild(title);
       const dl = document.createElement("dl");
       dl.className = "location-card-stats";
@@ -3029,20 +3080,22 @@ function initGameController(
         },
       ]);
       body.appendChild(dl);
-      const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
-      const reqPillsEl = createLocationRequirementPillsEl(
-        content,
-        siteIds,
-        revealedSecIds,
-        rosterTraitIds,
-      );
+      /* An Unknown site's traits are not the player's to see (see `buildLocationCardArticle`). */
+      const reqPillsEl = siteIdentified
+        ? createLocationRequirementPillsEl(
+            content,
+            siteIds,
+            revealedSecIds,
+            unionParticipantTraitIds(state.player.minions),
+          )
+        : null;
       if (reqPillsEl !== null) {
         body.appendChild(reqPillsEl);
       }
       wrap.appendChild(
         buildAssignPickChip(
-          resolveLocationCardArt(loc),
-          `${loc?.name ?? targetPick.locationId} - Slot ${targetPick.slotIndex + 1}`,
+          siteCardArt(targetPick.locationId),
+          `${siteName} - Slot ${targetPick.slotIndex + 1}`,
           article,
           mainOnly,
           setDragDataForTarget,
@@ -3095,8 +3148,8 @@ function initGameController(
    * block the click, not the arithmetic, and the number is what tells the player whether freeing
    * one up is worth it. Empty required-asset slots are a real (lower) chance, not an unknown one.
    *
-   * Mirrors the active-mission card: hidden agents' challenge traits stay out, so the preview
-   * only ever promises what the player can actually see.
+   * Mirrors the active-mission card: hidden agents' challenge traits and an Unknown site's
+   * traits stay out, so the preview only ever promises what the player can actually see.
    */
   function stagedSuccessChance(): {
     breakdown: SuccessChanceBreakdown;
@@ -3135,7 +3188,7 @@ function initGameController(
     const supportAbilities = supportAbilitiesForAssetIds(stagedSupportAssetIds(), content.assets);
     syncAssignAssetSlotArrayWithMission();
     const successOpts = {
-      ...missionSuccessOptionsForTarget(state, target, supportAbilities),
+      ...playerVisibleSuccessOptionsForTarget(target, supportAbilities),
       traitsCatalog: content.traits,
       balance: content.balance,
       challengeTraitIds:
@@ -3806,35 +3859,52 @@ function initGameController(
       }));
     }
 
-    const { meta, body } = appendCardHeroShell(article, resolveLocationCardArt(loc));
+    /* Intel 0: the player does not know what this place is. Static for art, "Unknown" for a
+     * name, and nothing about its category, level, security or traits — only the intel reading
+     * itself, which is the one thing they do know. The card still drags into the planner, since
+     * running a mission here is how the player finds out. */
+    const identified = isLocationIdentifiedByPlayer(intelLevel);
+    if (!identified) {
+      article.classList.add("location-card--unknown");
+    }
+
+    const { meta, body } = appendCardHeroShell(
+      article,
+      resolvePlayerLocationCardArt(loc, identified),
+    );
 
     const title = document.createElement("h4");
     title.className = "location-card-title";
-    title.textContent = loc.name;
+    title.textContent = identified ? loc.name : UNKNOWN_LOCATION_NAME;
     meta.appendChild(title);
 
-    const statsRow = createLocationCardStatsRow({
-      type: formatLocationTypeLabel(loc.locationType),
-      level: loc.locationLevel,
-      securityLevel: securityLevel !== undefined ? String(securityLevel) : "—",
-      intelLevel: intelLevel,
-    });
+    const statsRow = createLocationCardStatsRow(
+      identified
+        ? {
+            type: formatLocationTypeLabel(loc.locationType),
+            level: loc.locationLevel,
+            securityLevel: securityLevel !== undefined ? String(securityLevel) : "—",
+            intelLevel: intelLevel,
+          }
+        : { type: "?", level: "?", securityLevel: "?", intelLevel: intelLevel },
+    );
     meta.appendChild(statsRow);
 
     /* The trait pills stay under the art: they wrap to any number of lines, which would push
      * the name off the top of a fixed-height banner. */
-    const revealedSecIds = locationSecurityTraitIds.slice(
-      0,
-      Math.min(securityLevel ?? 0, locationSecurityTraitIds.length),
-    );
-    const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
-    appendLocationRequirementPills(
-      body,
-      content,
-      siteRequiredTraitIds,
-      revealedSecIds,
-      rosterTraitIds,
-    );
+    if (identified) {
+      const revealedSecIds = locationSecurityTraitIds.slice(
+        0,
+        Math.min(securityLevel ?? 0, locationSecurityTraitIds.length),
+      );
+      appendLocationRequirementPills(
+        body,
+        content,
+        siteRequiredTraitIds,
+        revealedSecIds,
+        unionParticipantTraitIds(state.player.minions),
+      );
+    }
 
     const dl = document.createElement("dl");
     dl.className = "location-card-stats";
@@ -4716,13 +4786,10 @@ function initGameController(
     switch (target.kind) {
       case "none":
         return "—";
-      case "location": {
-        const loc = content.locations.find((l) => l.id === target.locationId);
-        return loc?.name ?? target.locationId;
-      }
+      case "location":
+        return siteDisplayName(target.locationId);
       case "asset": {
-        const loc = content.locations.find((l) => l.id === target.locationId);
-        const locName = loc?.name ?? target.locationId;
+        const locName = siteDisplayName(target.locationId);
         const placement = state.locationAssetSlots.find((p) => p.locationId === target.locationId);
         const slot = placement?.slots[target.slotIndex];
         const vis = target.visibilityAtAssign === "hidden" ? "Hidden" : "Revealed";
@@ -4755,9 +4822,11 @@ function initGameController(
       am.target.kind === "location" || am.target.kind === "asset"
         ? am.target.locationId
         : null;
-    const targetLoc = targetLocId
-      ? content.locations.find((l) => l.id === targetLocId)
-      : undefined;
+    /* An Unknown target site keeps its category and level to itself, even with a crew on it. */
+    const targetLoc =
+      targetLocId !== null && isSiteIdentified(targetLocId)
+        ? content.locations.find((l) => l.id === targetLocId)
+        : undefined;
     const sourceLabel =
       am.missionSource === "lair"
         ? "Lair"
@@ -4830,7 +4899,7 @@ function initGameController(
       );
       const supportAbilities = supportAbilitiesForAssetIds(am.supportAssetIds, content.assets);
       const successOpts = {
-        ...missionSuccessOptionsForTarget(state, am.target, supportAbilities),
+        ...playerVisibleSuccessOptionsForTarget(am.target, supportAbilities),
         traitsCatalog: content.traits,
         balance: content.balance,
         challengeTraitIds,
@@ -5124,56 +5193,13 @@ function initGameController(
 
   /**
    * Every mission the run has unlocked and could still be started from, grouped by source.
-   * Mirrors what `assignMission` accepts: the active omega phase's unfinished slots, the lair
-   * pool, pending lair upgrades, and the global event offer.
+   * Mirrors what `assignMission` accepts: the lair pool, pending lair upgrades, and the global
+   * event offer. The active omega phase's own unfinished slots are the Omega Plan panel's to
+   * show, not this menu's — see `renderOmegaPlanPanel`.
    */
   function collectAvailableMissionGroups(): AvailableMissionGroup[] {
     const mainOnly = state.phase === "main";
     const groups: AvailableMissionGroup[] = [];
-
-    const planId = state.activeOmegaPlanId;
-    const plan = planId !== null ? getOmegaPlanById(content, planId) : undefined;
-    if (plan) {
-      const stageIndex = state.activeOmegaStageIndex;
-      const stage = plan.stages[stageIndex];
-      const stageProgress = state.omegaStageProgress[stageIndex];
-      const entries: AvailableMissionEntry[] = [];
-      if (stage && stageProgress) {
-        for (let slotIndex = 0; slotIndex < OMEGA_MISSIONS_PER_STAGE; slotIndex += 1) {
-          const missionTemplateId = stage.missionIds[slotIndex];
-          if (missionTemplateId === undefined || stageProgress[slotIndex] === true) {
-            continue;
-          }
-          const running = state.activeMissions.some(
-            (am) =>
-              am.missionSource === "omega" &&
-              am.omegaStageIndex === stageIndex &&
-              am.omegaSlotIndex === slotIndex,
-          );
-          entries.push({
-            missionTemplateId,
-            dragMeta:
-              mainOnly && !running
-                ? {
-                    draggable: true,
-                    source: "omega",
-                    missionTemplateId,
-                    stageIndex,
-                    slotIndex,
-                  }
-                : undefined,
-            status: running
-              ? { label: "In Progress", kind: "inprogress" }
-              : { label: "Pending", kind: "pending" },
-          });
-        }
-      }
-      groups.push({
-        label: `Omega Plan — Phase ${stageIndex + 1}`,
-        emptyText: "Every mission this phase needs is done.",
-        entries,
-      });
-    }
 
     if (state.activeLairId !== null) {
       groups.push({
@@ -5470,8 +5496,13 @@ function initGameController(
     const assetNameById = new Map(content.assets.map((a) => [a.id, a.name]));
     const mainOnly = state.phase === "main";
 
+    /* Sorting an Unknown site into its category's column would say what it is, so they get a
+     * column of their own, in map order (their names would give the order away just as well). */
+    const identifiedLocations = runLocations().filter((loc) => isSiteIdentified(loc.id));
+    const unknownLocations = runLocations().filter((loc) => !isSiteIdentified(loc.id));
+
     function sortedLocationsForCategory(tabType: LocationType) {
-      return runLocations()
+      return identifiedLocations
         .filter((loc) => loc.locationType === tabType)
         .sort((a, b) => {
           if (a.locationLevel !== b.locationLevel) {
@@ -5481,16 +5512,19 @@ function initGameController(
         });
     }
 
-    function fillLocationList(listEl: HTMLElement, tabType: LocationType): void {
-      const sortedForTab = sortedLocationsForCategory(tabType);
-      if (sortedForTab.length === 0) {
+    function fillLocationList(
+      listEl: HTMLElement,
+      locations: readonly (typeof content.locations)[number][],
+      emptyText: string,
+    ): void {
+      if (locations.length === 0) {
         const empty = document.createElement("p");
         empty.className = "locations-panel-empty";
-        empty.textContent = `No ${LOCATION_CATEGORY_LABEL[tabType].toLowerCase()} locations on this map.`;
+        empty.textContent = emptyText;
         listEl.appendChild(empty);
         return;
       }
-      for (const loc of sortedForTab) {
+      for (const loc of locations) {
         const sec = securityByLocationId.get(loc.id);
         const slots = assetSlotsByLocationId.get(loc.id) ?? [];
         const article = buildLocationCardArticle(
@@ -5507,24 +5541,44 @@ function initGameController(
       }
     }
 
-    const columnsWrap = document.createElement("div");
-    columnsWrap.className = "locations-panel-columns";
-    for (const tabType of LOCATION_CATEGORY_TAB_ORDER) {
+    function appendLocationColumn(
+      columnsWrap: HTMLElement,
+      label: string,
+      locations: readonly (typeof content.locations)[number][],
+      emptyText: string,
+    ): void {
       const column = document.createElement("section");
       column.className = "locations-panel-column";
-      column.setAttribute("aria-label", `${LOCATION_CATEGORY_LABEL[tabType]} locations`);
+      column.setAttribute("aria-label", `${label} locations`);
 
       const heading = document.createElement("h3");
       heading.className = "game-controls-heading locations-panel-column-title";
-      heading.textContent = LOCATION_CATEGORY_LABEL[tabType];
+      heading.textContent = label;
 
       const listEl = document.createElement("div");
       listEl.className = "locations-panel-list";
-      fillLocationList(listEl, tabType);
+      fillLocationList(listEl, locations, emptyText);
 
       column.appendChild(heading);
       column.appendChild(listEl);
       columnsWrap.appendChild(column);
+    }
+
+    const columnsWrap = document.createElement("div");
+    columnsWrap.className = "locations-panel-columns";
+    for (const tabType of LOCATION_CATEGORY_TAB_ORDER) {
+      const label = LOCATION_CATEGORY_LABEL[tabType];
+      appendLocationColumn(
+        columnsWrap,
+        label,
+        sortedLocationsForCategory(tabType),
+        unknownLocations.length > 0
+          ? `No known ${label.toLowerCase()} locations yet.`
+          : `No ${label.toLowerCase()} locations on this map.`,
+      );
+    }
+    if (unknownLocations.length > 0) {
+      appendLocationColumn(columnsWrap, UNKNOWN_LOCATION_NAME, unknownLocations, "");
     }
     locationsPanelEl.appendChild(columnsWrap);
   }
@@ -6468,8 +6522,11 @@ Your lair`;
     mapSignals = mapSiteSignals({
       markers,
       playableLocationIds: playable,
+      /* An Unknown site's security is not the player's to read, so it never glows. */
       securityLevelByLocation: new Map(
-        state.locationSecurityStates.map((row) => [row.locationId, row.securityLevel]),
+        state.locationSecurityStates
+          .filter((row) => isSiteIdentified(row.locationId))
+          .map((row) => [row.locationId, row.securityLevel]),
       ),
       maxSecurityByLocation: new Map(
         markers.map((m) => [m.locationId, maxSecurityLevelForLocation(content, m.locationId)]),
@@ -6499,6 +6556,9 @@ Your lair`;
       }
 
       const intel = intelLevelAtLocation(state, loc.id);
+      /* Intel 0: an Unknown pin. No name, no category (colour, glyph, or the type layers that
+       * dim by it), no level and no security — only where it is and that intel there is 0. */
+      const identified = isLocationIdentifiedByPlayer(intel);
       const security = securityLevelForLocation(state.locationSecurityStates, loc.id);
       const agents = playerVisibleOpposingAgentsAtLocation(state, loc.id);
 
@@ -6506,7 +6566,7 @@ Your lair`;
 
       const pin = document.createElement("button");
       pin.type = "button";
-      pin.className = `map-marker map-marker--${loc.locationType}`;
+      pin.className = identified ? `map-marker map-marker--${loc.locationType}` : "map-marker";
       pin.dataset.locationId = loc.id;
       /* Where this pin sits in its idle animation, so fifteen of them do not breathe in unison —
        * which reads as the panel pulsing rather than as fifteen separate places. Stepped by the
@@ -6524,11 +6584,16 @@ Your lair`;
         pin.classList.add("map-marker--targeted");
       }
 
-      const tipLines = [
-        loc.name,
-        `${formatLocationTypeLabel(loc.locationType)} · Level ${loc.locationLevel}`,
-        `Security ${security}/${maxSecurityLevelForLocation(content, loc.id)} · Intel ${intel}/${MAX_INTEL_LEVEL}`,
-      ];
+      const tipLines = identified
+        ? [
+            loc.name,
+            `${formatLocationTypeLabel(loc.locationType)} · Level ${loc.locationLevel}`,
+            `Security ${security}/${maxSecurityLevelForLocation(content, loc.id)} · Intel ${intel}/${MAX_INTEL_LEVEL}`,
+          ]
+        : [
+            UNKNOWN_LOCATION_NAME,
+            `Intel ${intel}/${MAX_INTEL_LEVEL} — run a mission here to learn more`,
+          ];
       if (agents.length > 0) {
         const names = agents.map(
           (a) => getAgentTemplateById(content, a.templateId)?.name ?? a.templateId,
@@ -6585,6 +6650,11 @@ Your lair`;
       pin.appendChild(ring);
       const dot = document.createElement("span");
       dot.className = "map-marker__dot";
+      if (identified) {
+        dot.appendChild(
+          createSvgPillIcon(MAP_MARKER_TYPE_ICON_SVG_PATHS[loc.locationType], "map-marker__type-icon"),
+        );
+      }
       pin.appendChild(dot);
       /* Name and tag rail hang off one column under the pin, so a name showing and a readout
        * showing can never land on top of each other — which they would if each were pinned to
@@ -6593,7 +6663,7 @@ Your lair`;
       info.className = "map-marker__info";
       const label = document.createElement("span");
       label.className = "map-marker__label";
-      label.textContent = loc.name;
+      label.textContent = identified ? loc.name : UNKNOWN_LOCATION_NAME;
       info.appendChild(label);
 
       const tags = document.createElement("span");
@@ -6613,13 +6683,15 @@ Your lair`;
           `${intel}`,
         ),
       );
-      tags.appendChild(
-        createMapMarkerTag(
-          "security",
-          createSvgPillIcon(SECURITY_ICON_SVG_PATHS, "map-marker__tag-icon"),
-          `${security}`,
-        ),
-      );
+      if (identified) {
+        tags.appendChild(
+          createMapMarkerTag(
+            "security",
+            createSvgPillIcon(SECURITY_ICON_SVG_PATHS, "map-marker__tag-icon"),
+            `${security}`,
+          ),
+        );
+      }
       if (revealedAssetNames.length > 0) {
         tags.appendChild(
           createMapMarkerTag(
@@ -7337,10 +7409,8 @@ Your lair`;
           return describeAgentAbilityUse(content, state, ev);
         case "agent_moved": {
           const who = content.agents.find((a) => a.id === ev.agentTemplateId)?.name ?? "An agent";
-          const nameOf = (lid: string): string =>
-            content.locations.find((l) => l.id === lid)?.name ?? lid;
-          const from = nameOf(ev.fromLocationId);
-          const to = nameOf(ev.toLocationId);
+          const from = siteDisplayName(ev.fromLocationId);
+          const to = siteDisplayName(ev.toLocationId);
           return `${who} moved from ${from} to ${to}.`;
         }
         case "run_ended": {

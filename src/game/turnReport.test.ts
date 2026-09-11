@@ -267,6 +267,7 @@ describe("buildTurnReport — turn summary", () => {
     function stateWithCopAtLocB(
       catalogVisibility: "hidden" | "revealed",
       intelAtLocA: IntelLevel = 0,
+      intelAtLocB: IntelLevel = 0,
     ): GameState {
       const seeded = baseState(4);
       return {
@@ -284,15 +285,24 @@ describe("buildTurnReport — turn summary", () => {
         ],
         locationIntelStates: [
           { locationId: "loc-a", intelLevel: intelAtLocA },
-          { locationId: "loc-b", intelLevel: 0 },
+          { locationId: "loc-b", intelLevel: intelAtLocB },
         ],
       };
     }
 
-    const revealed = stateWithCopAtLocB("revealed");
+    const revealed = stateWithCopAtLocB("revealed", 1, 1);
     expect(lineTexts(buildTurnReport(revealed, resolve(revealed, 0.99), catalog).summary, "agents")).toContain(
       "Detective moved from Armory to First Bank — working the scene of your last failure.",
     );
+
+    /* A revealed agent is still followable between dark sites, but the sites stay unnamed. */
+    const revealedInTheDark = stateWithCopAtLocB("revealed");
+    expect(
+      lineTexts(
+        buildTurnReport(revealedInTheDark, resolve(revealedInTheDark, 0.99), catalog).summary,
+        "agents",
+      ),
+    ).toContain("Detective moved from Unknown to Unknown — working the scene of your last failure.");
 
     /* Same move, an agent the player has never uncovered, both sites dark: no line at all. */
     const hidden = stateWithCopAtLocB("hidden");
@@ -313,7 +323,7 @@ describe("buildTurnReport — turn summary", () => {
     /** A Security Chief standing at loc-a, at the given visibility and site intel. */
     function stateWithChief(
       catalogVisibility: "hidden" | "revealed",
-      intelAtLocA: IntelLevel = 0,
+      intelAtLocA: IntelLevel = 1,
     ): GameState {
       const seeded = baseState(5);
       const template = getAgentTemplateById(catalog, "a-spy")!;
@@ -352,6 +362,38 @@ describe("buildTurnReport — turn summary", () => {
     expect(
       lineTexts(buildTurnReport(watched, resolve(watched, 0), catalog).summary, "agents"),
     ).toContain("Spy raised the security level at First Bank.");
+
+    /* At intel 0 the site itself goes unnamed, and its security change stays off the Sites list. */
+    const dark = stateWithChief("hidden", 0);
+    const darkReport = buildTurnReport(dark, resolve(dark, 0), catalog);
+    expect(lineTexts(darkReport.summary, "agents")).toContain(
+      "An unknown agent raised the security level at Unknown.",
+    );
+    expect(
+      lineTexts(darkReport.summary, "sites").filter((t) => t.startsWith("Security at")),
+    ).toEqual([]);
+  });
+
+  it("names a site losing its last intel by the name the player had", () => {
+    /* A Counterintelligence agent at loc-a burns it from 1 to 0 in the Agent Phase. */
+    const seeded = baseState(5);
+    const template = getAgentTemplateById(catalog, "a-spy")!;
+    const before: GameState = {
+      ...seeded,
+      opposingAgentInstances: [
+        { ...createAgentFromTemplate(template, "opp-1"), abilityIds: ["counterintelligence"] },
+      ],
+      locationAgentPresence: [
+        { locationId: "loc-a", agentInstanceIds: ["opp-1"] },
+        { locationId: "loc-b", agentInstanceIds: [] },
+      ],
+      locationIntelStates: [
+        { locationId: "loc-a", intelLevel: 1 },
+        { locationId: "loc-b", intelLevel: 0 },
+      ],
+    };
+    const report = buildTurnReport(before, resolve(before, 0), catalog);
+    expect(lineTexts(report.summary, "sites")).toContain("Intel at First Bank 1 → 0");
   });
 
   it("lists still-running missions and stays quiet about resolved ones when none finished", () => {

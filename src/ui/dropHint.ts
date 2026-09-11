@@ -162,6 +162,15 @@ let pointerAtDragStart = pointerAt;
 let homeSlot: Element | null = null;
 
 /**
+ * What the card in hand carries, as `beginCardDrag` was given it. This — not the drag's
+ * `dataTransfer` — is what a slot stages on drop. The browser is only *asked* to carry the
+ * payload, and some do not: Brave on Windows delivers the drop with no data at all (`types`
+ * empty, `getData` blank), so a slot that read it back from the event would light up for the
+ * card and then have nothing to stage. Every card drag starts here, so the page already knows.
+ */
+let cardPayload: string | null = null;
+
+/**
  * Whether a card drag is in progress. A file or a run of text dragged in from outside never goes
  * through `beginCardDrag`, and nothing in the planner should shake at it.
  */
@@ -208,6 +217,7 @@ export function clearDropHints(): void {
   inHand?.classList.remove(IN_HAND_CLASS);
   inHand = null;
   homeSlot = null;
+  cardPayload = null;
   /* The token keeps its grey through the exit it is about to play; only the tracking goes. */
   refusingHover = null;
   if (cardDragLive) {
@@ -280,14 +290,17 @@ function matchSlots(
  * skips the hint, and no slot will take its drop.
  */
 export function beginCardDrag(e: DragEvent, payload: string): void {
+  /* Still set: Firefox will not start a drag that carries no data. */
   e.dataTransfer?.setData("text/plain", payload);
   clearHoverHints();
   clearDropHints();
   cardDragLive = true;
+  cardPayload = payload;
   dragStartedAt = performance.now();
   pointerAtDragStart = pointerAt;
   startDragToken(e, payload);
-  /* What the browser is carrying: a drag begun on a nested image reports the image. */
+  /* What the browser is carrying: the card, not whichever child the drag was begun on. (Card
+   * art is `draggable = false` — see `createCardArtImg` — so it never becomes the source itself.) */
   const source = e.target instanceof Element ? e.target.closest('[draggable="true"]') : null;
   const { taking, home } = matchSlots(payload, source);
   homeSlot = home;
@@ -526,8 +539,9 @@ export function wireDropSlot(el: HTMLElement, opts: DropSlotOptions): void {
   let depth = 0;
   let depthSerial = -1;
   /* Read on every `dragover`, and kept for `drop`: by the time a slot hears its drop, the
-   * document's capture listener has already put the hints out. */
+   * document's capture listener has already put the hints out — and `cardPayload` with them. */
   let role: "target" | "home" | null = null;
+  let payload: string | null = null;
 
   el.addEventListener("dragenter", (e) => {
     if (depthSerial !== dragSerial) {
@@ -536,6 +550,7 @@ export function wireDropSlot(el: HTMLElement, opts: DropSlotOptions): void {
     }
     depth += 1;
     role = roleOf(el);
+    payload = cardPayload;
     if (role !== null) {
       e.preventDefault();
     }
@@ -566,6 +581,7 @@ export function wireDropSlot(el: HTMLElement, opts: DropSlotOptions): void {
 
   el.addEventListener("dragover", (e) => {
     role = roleOf(el);
+    payload = cardPayload;
     if (role === null) {
       return;
     }
@@ -581,10 +597,15 @@ export function wireDropSlot(el: HTMLElement, opts: DropSlotOptions): void {
   el.addEventListener("drop", (e) => {
     e.preventDefault();
     const wasTarget = role === "target";
+    /* The payload this slot lit up for, not whatever the browser handed back (see
+     * `cardPayload`). A drop only fires here after this slot cancelled a `dragover`, which it
+     * does only for a card drag, so the held payload is always there; the event's own data is a
+     * fallback that should never be needed. */
+    const raw = (payload ?? e.dataTransfer?.getData("text/plain") ?? "").trim();
     depth = 0;
     role = null;
+    payload = null;
     unlock();
-    const raw = e.dataTransfer?.getData("text/plain")?.trim() ?? "";
     const staged = raw !== "" && opts.onDrop(raw);
     /* The handler has just re-rendered the slot; the token needs the new one to fly into. */
     const findSlot = (): HTMLElement | null =>

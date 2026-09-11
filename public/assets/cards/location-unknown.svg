@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" preserveAspectRatio="xMidYMid slice">
+  <!--
+    Card art for a site the player has no intel on (see UNKNOWN_LOCATION_CARD_ART in
+    src/ui/cardArt.ts). The grain re-rolls its seed a few times a second, which is what reads as
+    a dead feed rather than a noise texture; a faint bright band rolls down it like a bad
+    vertical hold. `location-unknown-still.svg` is the same picture held on one frame, for
+    reduced motion — chosen by the app, since an SVG loaded as an image does not reliably see
+    the page's media preferences.
+  -->
+  <defs>
+    <filter id="grain" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="1" stitchTiles="stitch">
+        <animate attributeName="seed" values="1;7;3;11;5;13;2;9" dur="0.48s" calcMode="discrete" repeatCount="indefinite"/>
+      </feTurbulence>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncR type="linear" slope="2.1" intercept="-0.62"/>
+        <feFuncG type="linear" slope="2.1" intercept="-0.62"/>
+        <feFuncB type="linear" slope="2.1" intercept="-0.62"/>
+        <feFuncA type="linear" slope="0" intercept="1"/>
+      </feComponentTransfer>
+    </filter>
+    <pattern id="scanlines" width="4" height="3" patternUnits="userSpaceOnUse">
+      <rect width="4" height="1" fill="#000" fill-opacity="0.45"/>
+    </pattern>
+    <linearGradient id="roll" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0.55" stop-color="#0a0405" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0a0405" stop-opacity="0.85"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="320" height="180" fill="#141012"/>
+  <rect width="320" height="180" filter="url(#grain)" opacity="0.8"/>
+  <rect x="0" y="-40" width="320" height="36" fill="url(#roll)">
+    <animate attributeName="y" values="-40;184" dur="3.2s" repeatCount="indefinite"/>
+  </rect>
+  <rect width="320" height="180" fill="url(#scanlines)"/>
+  <rect width="320" height="180" fill="#e8112d" fill-opacity="0.05"/>
+  <rect width="320" height="180" fill="url(#vignette)"/>
+</svg>

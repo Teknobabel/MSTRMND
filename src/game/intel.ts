@@ -26,6 +26,12 @@ import type { GameState } from "./gameState";
  */
 export const MAX_INTEL_LEVEL = 3;
 
+/**
+ * Intel needed to know what a site *is*: its name, card art, category, level, security and
+ * site traits. Below it the site is an unnamed "Unknown" pin — still a legal mission target, so
+ * the player can go and find out.
+ */
+export const INTEL_SITE_IDENTITY = 1;
 /** Intel needed to see that an asset slot exists (contents still unknown). */
 export const INTEL_ASSET_EXISTENCE = 1;
 /** Intel needed to identify what every asset slot holds. */
@@ -48,6 +54,30 @@ export function intelLevelForLocation(
 /** @see {@link intelLevelForLocation} */
 export function intelLevelAtLocation(state: GameState, locationId: string): IntelLevel {
   return intelLevelForLocation(state.locationIntelStates, locationId);
+}
+
+/** What every player-facing surface calls a site the player cannot identify. */
+export const UNKNOWN_LOCATION_NAME = "Unknown";
+
+/** Whether the player can identify the site at all (see {@link INTEL_SITE_IDENTITY}). */
+export function isLocationIdentifiedByPlayer(intelLevel: number): boolean {
+  return intelLevel >= INTEL_SITE_IDENTITY;
+}
+
+/**
+ * The site's name as the player knows it: the catalog name, or {@link UNKNOWN_LOCATION_NAME}
+ * while intel there is below {@link INTEL_SITE_IDENTITY}. Read against *current* intel, so a
+ * site named in an old log line goes dark again if intel is burned back to 0.
+ */
+export function playerFacingLocationName(
+  catalog: ContentCatalog,
+  states: readonly LocationIntelState[],
+  locationId: string,
+): string {
+  if (!isLocationIdentifiedByPlayer(intelLevelForLocation(states, locationId))) {
+    return UNKNOWN_LOCATION_NAME;
+  }
+  return catalog.locations.find((l) => l.id === locationId)?.name ?? locationId;
 }
 
 /**
