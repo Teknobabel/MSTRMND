@@ -104,7 +104,7 @@
             </div>
           </div>
 
-          <div class="omega-body">
+          <div class="omega-body omega-body--floating">
             <aside class="omega-sidebar game-panel game-panel--plan-column" aria-label="Mission planning">
               <header class="game-panel-head">
                 <h2 id="plan-panel-title" class="game-panel-title">Mission Planning</h2>
@@ -202,7 +202,6 @@
               <div class="game-ui-columns-row">
                 <aside
                   class="game-panel game-panel--map"
-                  data-menu-panel="dashboard"
                   aria-label="Global map"
                 >
                   <div id="map-panel" class="map-panel"></div>
@@ -217,7 +216,6 @@
                      from `MAP_LAYER_GROUPS`. -->
                 <aside
                   class="game-panel game-panel--map-layers"
-                  data-menu-panel="dashboard"
                   aria-labelledby="map-layers-panel-title"
                 >
                   <header class="game-panel-head">
@@ -236,13 +234,12 @@
                   </header>
                   <div id="map-layers-panel" class="map-layers-panel"></div>
                 </aside>
-                <!-- The map's inspector panes, hanging along the top of the map rather than in
-                     the dock band. Slot 0 sits at the right corner and the stack grows leftward,
-                     four of them spanning exactly the width the dock band does. Which pane sits
-                     in which slot is `renderSiteInspector`'s to say — it keeps a pane on the
-                     subject it is already showing, so cards slide between slots instead of being
-                     rebuilt in place. None carry `data-menu-panel`: they are not menu
-                     destinations, so their `hidden` is owned outright. -->
+                <!-- The map's inspector panes, hanging along the top of the map. Slot 0 sits at
+                     the right corner and the stack grows leftward, four of them spanning the
+                     width right of the planner. Which pane sits in which slot is
+                     `renderSiteInspector`'s to say — it keeps a pane on the subject it is
+                     already showing, so cards slide between slots instead of being rebuilt in
+                     place. -->
                 <aside
                   class="game-panel game-panel--site-inspector"
                   id="site-inspector"
@@ -331,91 +328,141 @@
                   </header>
                   <div id="site-inspector-4-body" class="site-inspector-body"></div>
                 </aside>
-                <aside class="game-panel game-panel--omega" data-menu-panel="omega" aria-labelledby="omega-plan-panel-title">
-                  <header class="game-panel-head">
-                    <h2 id="omega-plan-panel-title" class="game-panel-title">Omega Plan</h2>
-                    <button
-                      type="button"
-                      class="game-panel-minimize"
-                      data-panel-minimize="omega"
-                      aria-expanded="true"
-                    >
-                      <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path class="game-panel-minimize__bar" d="M7 12h10" />
-                        <path class="game-panel-minimize__stem" d="M12 7v10" />
-                      </svg>
-                    </button>
-                  </header>
-                  <div id="omega-plan-panel" class="omega-plan-panel"></div>
-                </aside>
-                <aside class="game-panel game-panel--minions" data-menu-panel="minions" aria-labelledby="minions-panel-title">
-                  <header class="game-panel-head">
-                    <h2 id="minions-panel-title" class="game-panel-title">Resources</h2>
-                    <button
-                      type="button"
-                      class="game-panel-minimize"
-                      data-panel-minimize="minions"
-                      aria-expanded="true"
-                    >
-                      <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path class="game-panel-minimize__bar" d="M7 12h10" />
-                        <path class="game-panel-minimize__stem" d="M12 7v10" />
-                      </svg>
-                    </button>
-                  </header>
-                  <div id="minions-panel" class="minions-panel"></div>
-                </aside>
-                <aside class="game-panel game-panel--locations" data-menu-panel="locations" aria-labelledby="locations-panel-title">
-                  <header class="game-panel-head">
-                    <h2 id="locations-panel-title" class="game-panel-title">Locations</h2>
-                    <button
-                      type="button"
-                      class="game-panel-minimize"
-                      data-panel-minimize="locations"
-                      aria-expanded="true"
-                    >
-                      <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path class="game-panel-minimize__bar" d="M7 12h10" />
-                        <path class="game-panel-minimize__stem" d="M12 7v10" />
-                      </svg>
-                    </button>
-                  </header>
-                  <div id="locations-panel" class="locations-panel"></div>
-                </aside>
-                <aside
-                  class="game-panel game-panel--lair"
-                  data-menu-panel="lair"
-                  aria-labelledby="lair-panel-title"
-                >
-                  <header class="game-panel-head">
-                    <h2 id="lair-panel-title" class="game-panel-title">Lair</h2>
-                    <button
-                      type="button"
-                      class="game-panel-minimize"
-                      data-panel-minimize="lair"
-                      aria-expanded="true"
-                    >
-                      <svg class="game-panel-minimize__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path class="game-panel-minimize__bar" d="M7 12h10" />
-                        <path class="game-panel-minimize__stem" d="M12 7v10" />
-                      </svg>
-                    </button>
-                  </header>
-                  <div id="lair-panel" class="lair-panel"></div>
-                </aside>
-                <!-- Missions has no dashboard tile: the Lair panel carries an Active Missions
-                     tab. This panel is only the fullscreen Missions menu. -->
-                <aside
-                  class="game-panel game-panel--missions"
-                  data-menu-panel="missions"
-                  data-dashboard-hidden="true"
-                  aria-labelledby="missions-panel-title"
-                >
-                  <header class="game-panel-head">
-                    <h2 id="missions-panel-title" class="game-panel-title">Active Missions</h2>
-                  </header>
-                  <div id="missions-panel-root" class="missions-panel-root"></div>
-                </aside>
+              </div>
+              <!-- The menus, filed along the bottom of the map like folders in a cabinet drawer.
+                   Each drawer is its tab plus its menu; a closed drawer is pushed down until
+                   only the tab shows, and opening it slides the whole folder up with the tab
+                   riding its top edge. `--drawer-slot` is where along the row the tab sits,
+                   which it keeps while raised. Open state is `setOpenDrawer`'s in main.ts. -->
+              <div class="drawer-cabinet" aria-label="Menus">
+                <section class="drawer" data-drawer="omega" style="--drawer-slot: 0">
+                  <button
+                    type="button"
+                    class="drawer-tab"
+                    id="drawer-tab-omega"
+                    data-drawer-tab="omega"
+                    aria-expanded="false"
+                    aria-controls="drawer-panel-omega"
+                  >
+                    <span class="nav-icon nav-icon--text" aria-hidden="true">&Omega;</span>
+                    <span class="drawer-tab__label">Omega Plan</span>
+                    <svg class="drawer-tab__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M6 15l6-6 6 6" />
+                    </svg>
+                  </button>
+                  <aside
+                    class="game-panel game-panel--omega drawer__panel"
+                    id="drawer-panel-omega"
+                    aria-labelledby="drawer-tab-omega"
+                  >
+                    <div id="omega-plan-panel" class="omega-plan-panel"></div>
+                  </aside>
+                </section>
+                <section class="drawer" data-drawer="missions" style="--drawer-slot: 1">
+                  <button
+                    type="button"
+                    class="drawer-tab"
+                    id="drawer-tab-missions"
+                    data-drawer-tab="missions"
+                    aria-expanded="false"
+                    aria-controls="drawer-panel-missions"
+                  >
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <circle cx="12" cy="12" r="7.5" />
+                      <circle cx="12" cy="12" r="2.5" />
+                      <path d="M12 1.5v3.5m0 14v3.5M1.5 12H5m14 0h3.5" />
+                    </svg>
+                    <span class="drawer-tab__label">Missions</span>
+                    <svg class="drawer-tab__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M6 15l6-6 6 6" />
+                    </svg>
+                  </button>
+                  <aside
+                    class="game-panel game-panel--missions drawer__panel"
+                    id="drawer-panel-missions"
+                    aria-labelledby="drawer-tab-missions"
+                  >
+                    <div id="missions-panel-root" class="missions-panel-root"></div>
+                  </aside>
+                </section>
+                <section class="drawer" data-drawer="minions" style="--drawer-slot: 2">
+                  <button
+                    type="button"
+                    class="drawer-tab"
+                    id="drawer-tab-minions"
+                    data-drawer-tab="minions"
+                    aria-expanded="false"
+                    aria-controls="drawer-panel-minions"
+                  >
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <circle cx="12" cy="7.5" r="4" />
+                      <path d="M4.5 21v-1.5a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6V21" />
+                    </svg>
+                    <span class="drawer-tab__label">Minions</span>
+                    <svg class="drawer-tab__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M6 15l6-6 6 6" />
+                    </svg>
+                  </button>
+                  <aside
+                    class="game-panel game-panel--minions drawer__panel"
+                    id="drawer-panel-minions"
+                    aria-labelledby="drawer-tab-minions"
+                  >
+                    <div id="minions-panel" class="minions-panel"></div>
+                  </aside>
+                </section>
+                <section class="drawer" data-drawer="locations" style="--drawer-slot: 3">
+                  <button
+                    type="button"
+                    class="drawer-tab"
+                    id="drawer-tab-locations"
+                    data-drawer-tab="locations"
+                    aria-expanded="false"
+                    aria-controls="drawer-panel-locations"
+                  >
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M12 21s-7-5.7-7-11a7 7 0 0 1 14 0c0 5.3-7 11-7 11Z" />
+                      <circle cx="12" cy="10" r="2.5" />
+                    </svg>
+                    <span class="drawer-tab__label">Locations</span>
+                    <svg class="drawer-tab__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M6 15l6-6 6 6" />
+                    </svg>
+                  </button>
+                  <aside
+                    class="game-panel game-panel--locations drawer__panel"
+                    id="drawer-panel-locations"
+                    aria-labelledby="drawer-tab-locations"
+                  >
+                    <div id="locations-panel" class="locations-panel"></div>
+                  </aside>
+                </section>
+                <section class="drawer" data-drawer="lair" style="--drawer-slot: 4">
+                  <button
+                    type="button"
+                    class="drawer-tab"
+                    id="drawer-tab-lair"
+                    data-drawer-tab="lair"
+                    aria-expanded="false"
+                    aria-controls="drawer-panel-lair"
+                  >
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M4 21V9l8-6 8 6v12" />
+                      <path d="M10 21v-6h4v6" />
+                    </svg>
+                    <span class="drawer-tab__label">Lair</span>
+                    <svg class="drawer-tab__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M6 15l6-6 6 6" />
+                    </svg>
+                  </button>
+                  <aside
+                    class="game-panel game-panel--lair drawer__panel"
+                    id="drawer-panel-lair"
+                    aria-labelledby="drawer-tab-lair"
+                  >
+                    <div id="lair-panel" class="lair-panel"></div>
+                  </aside>
+                </section>
               </div>
             </main>
           </div>
@@ -428,58 +475,10 @@
               <span class="omega-bottombar__corner">OMEGA OS v0.0.1</span>
             </div>
 
-            <nav class="game-panel-menu" aria-label="Game panel navigation">
-              <button type="button" class="game-panel-menu__button" data-game-menu="dashboard" aria-pressed="true">
-                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M3 10.5 12 3l9 7.5" />
-                  <path d="M5.5 9.5V21h13V9.5" />
-                </svg>
-                <span>Dashboard</span>
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="omega" aria-pressed="false">
-                <span class="nav-icon nav-icon--text" aria-hidden="true">&Omega;</span>
-                <span>Omega Plan</span>
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="missions" aria-pressed="false">
-                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <circle cx="12" cy="12" r="7.5" />
-                  <circle cx="12" cy="12" r="2.5" />
-                  <path d="M12 1.5v3.5m0 14v3.5M1.5 12H5m14 0h3.5" />
-                </svg>
-                <span>Missions</span>
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="minions" aria-pressed="false">
-                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <circle cx="12" cy="7.5" r="4" />
-                  <path d="M4.5 21v-1.5a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6V21" />
-                </svg>
-                <span>Minions</span>
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="locations" aria-pressed="false">
-                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M12 21s-7-5.7-7-11a7 7 0 0 1 14 0c0 5.3-7 11-7 11Z" />
-                  <circle cx="12" cy="10" r="2.5" />
-                </svg>
-                <span>Locations</span>
-              </button>
-              <button type="button" class="game-panel-menu__button" data-game-menu="lair" aria-pressed="false">
-                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M4 21V9l8-6 8 6v12" />
-                  <path d="M10 21v-6h4v6" />
-                </svg>
-                <span>Lair</span>
-              </button>
-              <button type="button" class="game-panel-menu__button game-panel-menu__button--system" id="btn-game-panel-system">
-                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M12 2.5v3m0 13v3M2.5 12h3m13 0h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19" />
-                </svg>
-                <span>System</span>
-              </button>
-            </nav>
+            <!-- The menus that used to live here are drawers on the map now; see `.drawer-cabinet`. -->
 
             <button type="button" class="btn btn-primary btn-execute" id="btn-execute-plan">
-              Execute <span class="btn-execute__chev" aria-hidden="true">&#9656;</span>
+              Execute Turn <span class="btn-execute__chev" aria-hidden="true">&#9656;</span>
             </button>
           </footer>
         </div>

@@ -72,13 +72,18 @@ const STATUS = () => ({
   turn: document.querySelector("#game-hud-short")?.textContent ?? "",
 });
 
+/** Hires from the Minions drawer, which has to be pulled up to take a click (closed ones are inert). */
 async function hireIfAffordable() {
   const hire = page.locator("#minions-available-list button.minions-card-hire:not([disabled])");
   if ((await hire.count()) === 0) {
     return false;
   }
+  await page.click("[data-drawer-tab='minions']");
+  await page.waitForTimeout(600);
   await hire.first().click();
   await page.waitForTimeout(150);
+  await page.click("[data-drawer-tab='minions']");
+  await page.waitForTimeout(600);
   return true;
 }
 

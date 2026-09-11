@@ -2,42 +2,50 @@
   {
     "id": "dirty_money",
     "name": "Dirty Money",
-    "description": "Unmarked, untraceable, and spent before anyone asks where it came from."
+    "description": "Unmarked, untraceable, and spent before anyone asks where it came from.",
+    "cardArt": "/assets/cards/custom/assets-dirty-money.webp"
   },
   {
     "id": "mercenary_contracts",
     "name": "Mercenary Contracts",
-    "description": "Standing agreements with outfits that shoot first and invoice later."
+    "description": "Standing agreements with outfits that shoot first and invoice later.",
+    "cardArt": "/assets/cards/custom/assets-mercenary-contracts.webp"
   },
   {
     "id": "blackmail_dossier",
     "name": "Blackmail Dossier",
-    "description": "Photographs, ledgers, and one very compromising guest list."
+    "description": "Photographs, ledgers, and one very compromising guest list.",
+    "cardArt": "/assets/cards/custom/assets-blackmail-dossier.webp"
   },
   {
     "id": "gold_bullion",
     "name": "Gold Bullion",
-    "description": "Heavy, shiny, and utterly indifferent to sanctions."
+    "description": "Heavy, shiny, and utterly indifferent to sanctions.",
+    "cardArt": "/assets/cards/custom/assets-gold-bullion.webp"
   },
   {
     "id": "state_secrets",
     "name": "State Secrets",
-    "description": "Classified files worth more than the country that classified them."
+    "description": "Classified files worth more than the country that classified them.",
+    "cardArt": "/assets/cards/custom/assets-state-secrets.webp"
   },
   {
     "id": "prototype_railgun",
     "name": "Prototype Railgun",
-    "description": "A weapon that officially does not exist, which makes it hard to report stolen."
+    "description": "A weapon that officially does not exist, which makes it hard to report stolen.",
+    "cardArt": "/assets/cards/custom/assets-prototype-railgun.webp"
   },
   {
     "id": "midnight_lens",
     "name": "Midnight Lens",
-    "description": "A meter-wide focusing mirror of impossible precision — the heart of an orbital array."
+    "description": "A meter-wide focusing mirror of impossible precision — the heart of an orbital array.",
+    "cardArt": "/assets/cards/custom/assets-midnight-lens.webp"
   },
   {
     "id": "fusion_core",
     "name": "Prototype Fusion Core",
     "description": "Enough clean energy to power a city — or one spectacular act of villainy.",
+    "cardArt": "/assets/cards/custom/assets-fusion-core.webp",
     "supportAbility": {
       "kind": "success_chance_bonus",
       "percent": 20
@@ -47,6 +55,7 @@
     "id": "slush_fund",
     "name": "Offshore Slush Fund",
     "description": "Grease for palms at every altitude.",
+    "cardArt": "/assets/cards/custom/assets-slush-fund.webp",
     "supportAbility": {
       "kind": "success_chance_bonus",
       "percent": 10
@@ -56,6 +65,7 @@
     "id": "inside_man",
     "name": "The Inside Man",
     "description": "Someone on the payroll opens the right door at the right moment.",
+    "cardArt": "/assets/cards/custom/assets-inside-man.webp",
     "supportAbility": {
       "kind": "success_chance_bonus",
       "percent": 15
@@ -65,6 +75,7 @@
     "id": "holo_disguise",
     "name": "Holo-Disguise Kit",
     "description": "Be anyone. Badge checks, retina scans, and awkward reunions all pass.",
+    "cardArt": "/assets/cards/custom/assets-holo-disguise.webp",
     "supportAbility": {
       "kind": "ignore_security_traits"
     }
@@ -73,6 +84,7 @@
     "id": "emp_scrambler",
     "name": "EMP Scrambler",
     "description": "Cameras hiccup, logs corrupt, and the site never learns it was hit.",
+    "cardArt": "/assets/cards/custom/assets-emp-scrambler.webp",
     "supportAbility": {
       "kind": "prevent_security_increase"
     }
@@ -81,6 +93,7 @@
     "id": "ghost_protocol",
     "name": "Ghost Protocol Kit",
     "description": "Burner identities and clean exits. The trail ends at a locker that never existed.",
+    "cardArt": "/assets/cards/custom/assets-ghost-protocol.webp",
     "supportAbility": {
       "kind": "prevent_heat_increase"
     }
@@ -89,6 +102,7 @@
     "id": "decoy_doubles",
     "name": "Decoy Doubles",
     "description": "Body doubles and staged sightings send every nemesis chasing shadows.",
+    "cardArt": "/assets/cards/custom/assets-decoy-doubles.webp",
     "supportAbility": {
       "kind": "ignore_agent_challenge_traits"
     }
@@ -97,6 +111,7 @@
     "id": "med_drone",
     "name": "Auto-Doc Drone",
     "description": "Hovers over the op, stitches wounds mid-firefight, bills nobody.",
+    "cardArt": "/assets/cards/custom/assets-med-drone.webp",
     "supportAbility": {
       "kind": "prevent_injuries"
     }

@@ -61,8 +61,8 @@ export function createCardArtImg(src: string, extraClass = ""): HTMLImageElement
  * and stat line sit on the bottom of the image behind a scrim, so `meta` is the block that
  * rides the art and `body` is everything that follows it under the image.
  *
- * The alternative to {@link appendCardArtShell}'s side thumbnail; shared by location cards and
- * Omega plan mission cards so the two read as the same object.
+ * The alternative to {@link appendCardArtShell}'s side thumbnail; shared by location, asset and
+ * Omega plan mission cards so they read as the same object.
  */
 export function appendCardHeroShell(
   article: HTMLElement,

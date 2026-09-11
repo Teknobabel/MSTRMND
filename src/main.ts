@@ -182,7 +182,7 @@ const HEAT_TOOLTIP_LINES: readonly string[] = [
   "The tier never drops once reached, even when heat falls again.",
 ];
 
-/** Tabs left-to-right; locations filtered and sorted by name within each. */
+/** Locations drawer columns left-to-right; locations filtered and sorted within each. */
 const LOCATION_CATEGORY_TAB_ORDER: readonly LocationType[] = [
   "economic",
   "political",
@@ -195,49 +195,30 @@ const LOCATION_CATEGORY_LABEL: Record<LocationType, string> = {
   military: "Military",
 };
 
-const GAME_MENU_VALUES = [
-  "dashboard",
-  "omega",
-  "missions",
-  "minions",
-  "locations",
-  "lair",
-] as const;
+/** The menus filed as drawers along the bottom of the map, keyed by `data-drawer` in the markup. */
+const DRAWER_IDS = ["omega", "missions", "minions", "locations", "lair"] as const;
 
-type GameMenu = (typeof GAME_MENU_VALUES)[number];
+type DrawerId = (typeof DRAWER_IDS)[number];
 
-function isGameMenu(value: string | undefined): value is GameMenu {
-  return value !== undefined && (GAME_MENU_VALUES as readonly string[]).includes(value);
+function isDrawerId(value: string | undefined): value is DrawerId {
+  return value !== undefined && (DRAWER_IDS as readonly string[]).includes(value);
 }
 
-/**
- * Tabs on the dashboard Resources tile: everything a mission gets stocked from —
- * the hired roster, who else is buyable, and the assets on the shelf.
- */
-type ResourcesPanelTab = "roster" | "hire" | "assets";
-
-const DASHBOARD_RESOURCES_TABS: readonly { id: ResourcesPanelTab; label: string }[] = [
-  { id: "roster", label: "Minions" },
-  { id: "hire", label: "For Hire" },
-  { id: "assets", label: "Assets" },
-];
-
-type DashboardLairTab = "missions" | "active" | "upgrades";
-type LairPanelSection = DashboardLairTab | "assets";
+type LairInspectorTab = "missions" | "active" | "upgrades";
+type LairPanelSection = LairInspectorTab | "assets";
 
 /**
- * Lair sections shown as tabs on the dashboard lair tile.
- * Owned assets are not among them — they belong to the dashboard Resources tile,
- * alongside the minions they get committed with.
+ * Lair sections shown as tabs on the lair's map inspector card, which is a quarter of the map
+ * wide — too narrow for the drawer's columns. Owned assets are left to the drawer.
  */
-const DASHBOARD_LAIR_TABS: readonly { id: DashboardLairTab; label: string }[] = [
+const LAIR_INSPECTOR_TABS: readonly { id: LairInspectorTab; label: string }[] = [
   { id: "missions", label: "Missions" },
   { id: "active", label: "Active Missions" },
   { id: "upgrades", label: "Upgrades" },
 ];
 
 /**
- * Lair sections shown as columns in the main fullscreen Lair menu.
+ * Lair sections shown as columns in the Lair drawer.
  */
 const LAIR_MENU_COLUMNS: readonly { id: LairPanelSection; label: string }[] = [
   { id: "missions", label: "Missions" },
@@ -1262,8 +1243,6 @@ function initGameController(
   const omegaPlanPanelEl = req<HTMLElement>("omega-plan-panel");
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const missionsPanelRootEl = req<HTMLElement>("missions-panel-root");
-  const missionsPanelTitleEl = req<HTMLElement>("missions-panel-title");
-  const minionsPanelTitleEl = req<HTMLElement>("minions-panel-title");
   const lairPanelEl = req<HTMLElement>("lair-panel");
   const mapPanelEl = req<HTMLElement>("map-panel");
   const mapLayersPanelEl = req<HTMLElement>("map-layers-panel");
@@ -1295,45 +1274,35 @@ function initGameController(
   }
   /** How many cards fit along the top of the map — the markup's pane count is the cap. */
   const MAX_INSPECTOR_CARDS = inspectorPanes.length;
-  const rightColumnsRowElLookup = document.querySelector<HTMLElement>(".game-ui-columns-row");
-  if (rightColumnsRowElLookup === null) {
-    throw new Error("Missing .game-ui-columns-row");
+  /** The menu drawers filed along the bottom of the map, in slot order. */
+  interface MenuDrawer {
+    readonly id: DrawerId;
+    readonly el: HTMLElement;
+    readonly tabEl: HTMLButtonElement;
+    readonly panelEl: HTMLElement;
   }
-  const rightColumnsRowEl = rightColumnsRowElLookup;
-  if (!rightColumnsRowEl) {
-    throw new Error("Missing .game-ui-columns-row");
-  }
-  const omegaBodyElLookup = document.querySelector<HTMLElement>(".omega-body");
-  if (omegaBodyElLookup === null) {
-    throw new Error("Missing .omega-body");
-  }
-  const omegaBodyEl: HTMLElement = omegaBodyElLookup;
-  const menuButtons = Array.from(
-    document.querySelectorAll<HTMLButtonElement>("[data-game-menu]"),
-  );
-  const menuPanels = Array.from(
-    document.querySelectorAll<HTMLElement>("[data-menu-panel]"),
-  );
+  const menuDrawers: MenuDrawer[] = Array.from(
+    document.querySelectorAll<HTMLElement>("[data-drawer]"),
+  ).map((el) => {
+    const id = el.dataset.drawer;
+    const tabEl = el.querySelector<HTMLButtonElement>(".drawer-tab");
+    const panelEl = el.querySelector<HTMLElement>(".drawer__panel");
+    if (!isDrawerId(id) || tabEl === null || panelEl === null) {
+      throw new Error(`Malformed menu drawer: ${id ?? "(no id)"}`);
+    }
+    return { id, el, tabEl, panelEl };
+  });
   const panelMinimizeButtons = Array.from(
     document.querySelectorAll<HTMLButtonElement>("[data-panel-minimize]"),
   );
   /**
-   * Which floating dashboard panels are minimized to their header, keyed by
-   * `data-panel-minimize`. Kept across menu switches on purpose: a fullscreen menu ignores the
-   * state (the CSS is scoped to the floating dashboard), and coming back to the dashboard
-   * should find the panels the way they were left.
+   * Which floating panels are minimized to their header, keyed by `data-panel-minimize`.
    *
-   * The run opens with the whole tile band, plus Map Layers, folded to their headers so the
-   * first thing on screen is the map. The planner keeps its column — it is the only panel with
-   * a job to do before anything has been looked at.
+   * The run opens with Map Layers folded to its header so the first thing on screen is the map.
+   * The planner keeps its column — it is the only panel with a job to do before anything has
+   * been looked at.
    */
-  const collapsedPanels = new Set<string>([
-    "omega",
-    "minions",
-    "locations",
-    "lair",
-    "map-layers",
-  ]);
+  const collapsedPanels = new Set<string>(["map-layers"]);
 
   const rng = (): number => Math.random();
 
@@ -1398,11 +1367,9 @@ function initGameController(
     return key !== null && pinnedMapSubjects.some((s) => mapSubjectKey(s) === key);
   }
 
-  let locationsCategoryTab: LocationType = "economic";
-  let lairPanelTab: DashboardLairTab = "missions";
-  let resourcesPanelTab: ResourcesPanelTab = "roster";
-  let omegaPlanPanelTab: number | null = null;
-  let currentMenu: GameMenu = "dashboard";
+  let lairInspectorTab: LairInspectorTab = "missions";
+  /** The drawer pulled up over the map, or `null` when the map is clear. */
+  let openDrawer: DrawerId | null = null;
 
   function findMissionOrEventTemplate(id: string): MissionTemplate | undefined {
     return content.missions.find((m) => m.id === id) ?? content.events.find((e) => e.id === id);
@@ -2373,6 +2340,55 @@ function initGameController(
     return n;
   }
 
+  /** Puts one owned unit of `assetId` in required slot `slotIndex`, if the slot asks for it. */
+  function stageRequiredAssetSlot(slotIndex: number, assetId: string): boolean {
+    const req = selectedMissionTemplate()?.requiredAssetIds ?? [];
+    if (req[slotIndex] !== assetId) {
+      return false;
+    }
+    const owned = state.player.assets[assetId] ?? 0;
+    if (owned - stagedAssetUnits(assetId, { list: "required", index: slotIndex }) < 1) {
+      return false;
+    }
+    assignAssetSlotAssetIds[slotIndex] = assetId;
+    renderAssignMinionSlots();
+    onAssignSlotsChanged();
+    return true;
+  }
+
+  /** Puts one owned unit of `assetId` in support slot `slotIndex`, if it is a support asset. */
+  function stageSupportAssetSlot(slotIndex: number, assetId: string): boolean {
+    const tpl = content.assets.find((a) => a.id === assetId);
+    if (tpl === undefined || !isSupportAsset(tpl)) {
+      return false;
+    }
+    const owned = state.player.assets[assetId] ?? 0;
+    if (owned - stagedAssetUnits(assetId, { list: "support", index: slotIndex }) < 1) {
+      return false;
+    }
+    assignSupportAssetIds[slotIndex] = assetId;
+    renderAssignMinionSlots();
+    onAssignSlotsChanged();
+    return true;
+  }
+
+  /**
+   * The asset card's add-to-planner action: fills the first empty required slot that asks for
+   * this asset, else the first empty support slot. Never replaces an asset already staged.
+   */
+  function applyAssetToPlanner(assetId: string): boolean {
+    const req = selectedMissionTemplate()?.requiredAssetIds ?? [];
+    const reqIndex = req.findIndex(
+      (id, i) => id === assetId && (assignAssetSlotAssetIds[i] ?? null) === null,
+    );
+    if (reqIndex >= 0) {
+      return stageRequiredAssetSlot(reqIndex, assetId);
+    }
+    syncAssignSupportSlotArray();
+    const supportIndex = assignSupportAssetIds.findIndex((id) => id === null);
+    return supportIndex >= 0 && stageSupportAssetSlot(supportIndex, assetId);
+  }
+
   function renderAssignAssetSlots(): void {
     assignAssetSlotsList.innerHTML = "";
     const m = selectedMissionTemplate();
@@ -2419,20 +2435,7 @@ function initGameController(
         if (parsed?.kind !== "mastermind-asset-card") {
           return;
         }
-        if (parsed.assetId !== requiredId) {
-          return;
-        }
-        const owned = state.player.assets[parsed.assetId] ?? 0;
-        const usedElsewhere = stagedAssetUnits(parsed.assetId, {
-          list: "required",
-          index: slotIndex,
-        });
-        if (owned - usedElsewhere < 1) {
-          return;
-        }
-        assignAssetSlotAssetIds[slotIndex] = parsed.assetId;
-        renderAssignMinionSlots();
-        onAssignSlotsChanged();
+        stageRequiredAssetSlot(slotIndex, parsed.assetId);
       });
 
       const placed = assignAssetSlotAssetIds[slotIndex] ?? null;
@@ -2533,21 +2536,7 @@ function initGameController(
         if (parsed?.kind !== "mastermind-asset-card") {
           return;
         }
-        const tpl = content.assets.find((a) => a.id === parsed.assetId);
-        if (tpl === undefined || !isSupportAsset(tpl)) {
-          return;
-        }
-        const owned = state.player.assets[parsed.assetId] ?? 0;
-        const usedElsewhere = stagedAssetUnits(parsed.assetId, {
-          list: "support",
-          index: slotIndex,
-        });
-        if (owned - usedElsewhere < 1) {
-          return;
-        }
-        assignSupportAssetIds[slotIndex] = parsed.assetId;
-        renderAssignMinionSlots();
-        onAssignSlotsChanged();
+        stageSupportAssetSlot(slotIndex, parsed.assetId);
       });
 
       const placed = assignSupportAssetIds[slotIndex] ?? null;
@@ -4110,25 +4099,20 @@ function initGameController(
 
   function renderMinionsPanel(): void {
     minionsPanelEl.innerHTML = "";
-    /* The dashboard tile gathers assets alongside the roster, so it is titled for all of them;
-     * the fullscreen menu behind the nav button is still just the minions. */
-    minionsPanelTitleEl.textContent = currentMenu === "minions" ? "Minions" : "Resources";
     const p = state.player;
     const eligibleRehires = state.minionRehireQueue.filter(
       (e) => state.turnNumber >= e.availableFromTurn,
     );
     const hireOfferCount = state.availableMinionTemplateIds.length + eligibleRehires.length;
 
-    function buildRosterSection(isColumn: boolean): HTMLElement {
+    function buildRosterSection(): HTMLElement {
       const section = document.createElement("section");
-      section.className = isColumn ? "minions-panel-column" : "minions-panel-section";
+      section.className = "minions-panel-column";
       section.setAttribute("aria-label", "Hired minions");
 
       const heading = document.createElement("h3");
       heading.id = "minions-roster-heading";
-      heading.className = isColumn
-        ? "game-controls-heading minions-panel-column-title"
-        : "game-controls-heading";
+      heading.className = "game-controls-heading minions-panel-column-title";
       heading.textContent = `Your roster (${p.minions.length}/${p.maxRosterSize})`;
       section.appendChild(heading);
 
@@ -4140,29 +4124,9 @@ function initGameController(
       return section;
     }
 
-    function buildAssetsSection(): HTMLElement {
+    function buildHireSection(): HTMLElement {
       const section = document.createElement("section");
-      section.className = "minions-panel-section";
-      section.setAttribute("aria-label", "Owned assets");
-
-      const ownedKinds = Object.values(state.player.assets).filter((qty) => qty > 0).length;
-      const heading = document.createElement("h3");
-      heading.id = "minions-assets-heading";
-      heading.className = "game-controls-heading";
-      heading.textContent = `Owned assets (${ownedKinds})`;
-      section.appendChild(heading);
-
-      const list = document.createElement("div");
-      list.id = "minions-assets-list";
-      list.className = "minions-panel-list";
-      fillAssetsInto(list);
-      section.appendChild(list);
-      return section;
-    }
-
-    function buildHireSection(isColumn: boolean): HTMLElement {
-      const section = document.createElement("section");
-      section.className = isColumn ? "minions-panel-column" : "minions-panel-section";
+      section.className = "minions-panel-column";
       section.setAttribute("aria-label", "Minions available for hire");
 
       const headingRow = document.createElement("div");
@@ -4170,9 +4134,7 @@ function initGameController(
 
       const heading = document.createElement("h3");
       heading.id = "minions-available-heading";
-      heading.className = isColumn
-        ? "game-controls-heading minions-panel-column-title"
-        : "game-controls-heading";
+      heading.className = "game-controls-heading minions-panel-column-title";
       heading.textContent = `Available to hire (${hireOfferCount})`;
       headingRow.appendChild(heading);
 
@@ -4208,51 +4170,11 @@ function initGameController(
       return section;
     }
 
-    if (currentMenu === "minions") {
-      const columnsWrap = document.createElement("div");
-      columnsWrap.className = "minions-panel-columns";
-      columnsWrap.appendChild(buildRosterSection(true));
-      columnsWrap.appendChild(buildHireSection(true));
-      minionsPanelEl.appendChild(columnsWrap);
-      return;
-    }
-
-    const tablist = document.createElement("div");
-    tablist.className = "minions-panel-tabs";
-    tablist.setAttribute("role", "tablist");
-    tablist.setAttribute("aria-label", "Resources sections");
-
-    for (const def of DASHBOARD_RESOURCES_TABS) {
-      const tab = document.createElement("button");
-      tab.type = "button";
-      tab.className = "minions-panel-tab";
-      if (def.id === resourcesPanelTab) {
-        tab.classList.add("minions-panel-tab--active");
-      }
-      tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", def.id === resourcesPanelTab ? "true" : "false");
-      tab.id = `minions-panel-tab-${def.id}`;
-      tab.textContent = def.label;
-      tab.addEventListener("click", () => {
-        if (resourcesPanelTab === def.id) {
-          return;
-        }
-        resourcesPanelTab = def.id;
-        renderMinionsPanel();
-      });
-      tablist.appendChild(tab);
-    }
-    minionsPanelEl.appendChild(tablist);
-
-    const activePage =
-      resourcesPanelTab === "roster"
-        ? buildRosterSection(false)
-        : resourcesPanelTab === "hire"
-          ? buildHireSection(false)
-          : buildAssetsSection();
-    activePage.setAttribute("role", "tabpanel");
-    activePage.setAttribute("aria-labelledby", `minions-panel-tab-${resourcesPanelTab}`);
-    minionsPanelEl.appendChild(activePage);
+    const columnsWrap = document.createElement("div");
+    columnsWrap.className = "minions-panel-columns";
+    columnsWrap.appendChild(buildRosterSection());
+    columnsWrap.appendChild(buildHireSection());
+    minionsPanelEl.appendChild(columnsWrap);
   }
 
   type MissionCardDragMeta =
@@ -4477,58 +4399,18 @@ function initGameController(
       return section;
     }
 
-    if (currentMenu === "omega") {
-      const phasesWrap = document.createElement("div");
-      phasesWrap.className = "omega-plan-phases";
-      for (let stageIndex = 0; stageIndex < 3; stageIndex += 1) {
-        phasesWrap.appendChild(buildPhaseSection(stageIndex));
-      }
-      omegaPlanPanelEl.appendChild(phasesWrap);
-      return;
+    const phasesWrap = document.createElement("div");
+    phasesWrap.className = "omega-plan-phases";
+    for (let stageIndex = 0; stageIndex < 3; stageIndex += 1) {
+      phasesWrap.appendChild(buildPhaseSection(stageIndex));
     }
-
-    const tablist = document.createElement("div");
-    tablist.className = "omega-plan-tabs";
-    tablist.setAttribute("role", "tablist");
-    tablist.setAttribute("aria-label", "Omega Plan phases");
-
-    const tabDefs = [
-      { id: 0, label: "Phase 1" },
-      { id: 1, label: "Phase 2" },
-      { id: 2, label: "Phase 3" },
-    ];
-
-    const activeStageTab = omegaPlanPanelTab ?? state.activeOmegaStageIndex;
-
-    for (const def of tabDefs) {
-      const tab = document.createElement("button");
-      tab.type = "button";
-      tab.className = "omega-plan-tab";
-      if (def.id === activeStageTab) {
-        tab.classList.add("omega-plan-tab--active");
-      }
-      tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", def.id === activeStageTab ? "true" : "false");
-      tab.id = `omega-plan-tab-${def.id + 1}`;
-      tab.textContent = def.label;
-      tab.addEventListener("click", () => {
-        if (omegaPlanPanelTab === def.id) {
-          return;
-        }
-        omegaPlanPanelTab = def.id;
-        renderOmegaPlanPanel();
-      });
-      tablist.appendChild(tab);
-    }
-    omegaPlanPanelEl.appendChild(tablist);
-
-    const activeSection = buildPhaseSection(activeStageTab);
-    activeSection.setAttribute("role", "tabpanel");
-    activeSection.setAttribute("aria-labelledby", `omega-plan-tab-${activeStageTab + 1}`);
-    omegaPlanPanelEl.appendChild(activeSection);
+    omegaPlanPanelEl.appendChild(phasesWrap);
   }
 
-  /** Owned assets, newest inventory state, as draggable cards. */
+  /**
+   * Owned assets as draggable art-led cards, one card per unit held. Units already reserved
+   * by the staged plan are listed after the free ones, dimmed and not draggable.
+   */
   function fillAssetsInto(container: HTMLElement): void {
     container.innerHTML = "";
     const assetById = new Map(content.assets.map((a) => [a.id, a]));
@@ -4551,57 +4433,65 @@ function initGameController(
 
     for (const { assetId, quantity, template } of rows) {
       const available = Math.max(0, quantity - stagedAssetUnits(assetId));
-      const mainOnly = state.phase === "main";
+      for (let unit = 0; unit < quantity; unit += 1) {
+        container.appendChild(buildAssetCardArticle(assetId, template, unit < available));
+      }
+    }
+  }
 
-      const article = document.createElement("article");
-      article.className = "asset-card";
-      if (template !== undefined && isSupportAsset(template)) {
-        article.classList.add("asset-card--support");
+  function buildAssetCardArticle(
+    assetId: string,
+    template: Asset | undefined,
+    available: boolean,
+  ): HTMLElement {
+    const article = document.createElement("article");
+    article.className = "asset-card";
+    if (template !== undefined && isSupportAsset(template)) {
+      article.classList.add("asset-card--support");
+    }
+    if (!available) {
+      article.classList.add("asset-card--unavailable");
+    }
+    article.draggable = state.phase === "main" && available;
+    article.addEventListener("dragstart", (e) => {
+      if (!article.draggable) {
+        e.preventDefault();
+        return;
       }
-      if (available <= 0) {
-        article.classList.add("asset-card--unavailable");
-      }
-      article.draggable = mainOnly && available > 0;
-      article.addEventListener("dragstart", (e) => {
-        if (!article.draggable) {
-          e.preventDefault();
-          return;
-        }
-        e.dataTransfer?.setData("text/plain", assetCardDragJson(assetId));
-        e.dataTransfer!.effectAllowed = "copy";
+      e.dataTransfer?.setData("text/plain", assetCardDragJson(assetId));
+      e.dataTransfer!.effectAllowed = "copy";
+    });
+    if (article.draggable) {
+      appendAddToPlannerButton(article, "Add asset to planner", () => {
+        applyAssetToPlanner(assetId);
       });
+    }
 
-      const body = appendCardArtShell(article, resolveAssetCardArt(template));
-      const title = document.createElement("h4");
-      title.className = "asset-card-title";
-      title.textContent = template?.name ?? assetId;
-      body.appendChild(title);
+    const { meta, body } = appendCardHeroShell(article, resolveAssetCardArt(template));
 
+    const title = document.createElement("h4");
+    title.className = "asset-card-title";
+    title.textContent = template?.name ?? assetId;
+    meta.appendChild(title);
+
+    const descText = template?.description?.trim();
+    if (descText) {
+      const desc = document.createElement("p");
+      desc.className = "asset-card-description";
+      desc.textContent = descText;
+      body.appendChild(desc);
+    }
+
+    if (template?.supportAbility !== undefined) {
       const dl = document.createElement("dl");
       dl.className = "asset-card-stats";
-      const assetRows: Array<{ label: string; value: string }> = [
-        { label: "Available", value: String(available) },
-        { label: "Owned", value: String(quantity) },
-      ];
-      if (template?.supportAbility !== undefined) {
-        assetRows.push({
-          label: "Support",
-          value: describeSupportAssetAbility(template.supportAbility),
-        });
-      }
-      appendMinionStatRows(dl, assetRows);
+      appendMinionStatRows(dl, [
+        { label: "Support", value: describeSupportAssetAbility(template.supportAbility) },
+      ]);
       body.appendChild(dl);
-
-      const descText = template?.description?.trim();
-      if (descText) {
-        const desc = document.createElement("p");
-        desc.className = "asset-card-description";
-        desc.textContent = descText;
-        body.appendChild(desc);
-      }
-
-      container.appendChild(article);
     }
+
+    return article;
   }
 
   function formatMissionTargetSummary(target: MissionTarget): string {
@@ -5330,15 +5220,6 @@ function initGameController(
 
   function renderMissionsPanel(): void {
     missionsPanelRootEl.innerHTML = "";
-
-    if (currentMenu !== "missions") {
-      /* Dashboard keeps the compact panel: what is running right now. */
-      missionsPanelTitleEl.textContent = "Active Missions";
-      renderActiveMissionsInto(missionsPanelRootEl);
-      return;
-    }
-
-    missionsPanelTitleEl.textContent = "Missions";
     const columns = document.createElement("div");
     columns.className = "missions-menu-columns";
     appendMissionsMenuColumn(columns, "Available", fillAvailableMissionsInto);
@@ -5400,64 +5281,26 @@ function initGameController(
       }
     }
 
-    if (currentMenu === "locations") {
-      const columnsWrap = document.createElement("div");
-      columnsWrap.className = "locations-panel-columns";
-      for (const tabType of LOCATION_CATEGORY_TAB_ORDER) {
-        const column = document.createElement("section");
-        column.className = "locations-panel-column";
-        column.setAttribute("aria-label", `${LOCATION_CATEGORY_LABEL[tabType]} locations`);
-
-        const heading = document.createElement("h3");
-        heading.className = "game-controls-heading locations-panel-column-title";
-        heading.textContent = LOCATION_CATEGORY_LABEL[tabType];
-
-        const listEl = document.createElement("div");
-        listEl.className = "locations-panel-list";
-        fillLocationList(listEl, tabType);
-
-        column.appendChild(heading);
-        column.appendChild(listEl);
-        columnsWrap.appendChild(column);
-      }
-      locationsPanelEl.appendChild(columnsWrap);
-      return;
-    }
-
-    const tablist = document.createElement("div");
-    tablist.className = "locations-category-tabs";
-    tablist.setAttribute("role", "tablist");
-    tablist.setAttribute("aria-label", "Location category");
-
+    const columnsWrap = document.createElement("div");
+    columnsWrap.className = "locations-panel-columns";
     for (const tabType of LOCATION_CATEGORY_TAB_ORDER) {
-      const tab = document.createElement("button");
-      tab.type = "button";
-      tab.className = "locations-category-tab";
-      if (tabType === locationsCategoryTab) {
-        tab.classList.add("locations-category-tab--active");
-      }
-      tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", tabType === locationsCategoryTab ? "true" : "false");
-      tab.id = `locations-tab-${tabType}`;
-      tab.textContent = LOCATION_CATEGORY_LABEL[tabType];
-      tab.addEventListener("click", () => {
-        if (locationsCategoryTab === tabType) {
-          return;
-        }
-        locationsCategoryTab = tabType;
-        renderLocationsPanel();
-      });
-      tablist.appendChild(tab);
-    }
-    locationsPanelEl.appendChild(tablist);
+      const column = document.createElement("section");
+      column.className = "locations-panel-column";
+      column.setAttribute("aria-label", `${LOCATION_CATEGORY_LABEL[tabType]} locations`);
 
-    const listEl = document.createElement("div");
-    listEl.className = "locations-panel-list";
-    listEl.id = "locations-panel-list";
-    listEl.setAttribute("role", "tabpanel");
-    listEl.setAttribute("aria-labelledby", `locations-tab-${locationsCategoryTab}`);
-    fillLocationList(listEl, locationsCategoryTab);
-    locationsPanelEl.appendChild(listEl);
+      const heading = document.createElement("h3");
+      heading.className = "game-controls-heading locations-panel-column-title";
+      heading.textContent = LOCATION_CATEGORY_LABEL[tabType];
+
+      const listEl = document.createElement("div");
+      listEl.className = "locations-panel-list";
+      fillLocationList(listEl, tabType);
+
+      column.appendChild(heading);
+      column.appendChild(listEl);
+      columnsWrap.appendChild(column);
+    }
+    locationsPanelEl.appendChild(columnsWrap);
   }
 
   /**
@@ -5694,8 +5537,8 @@ function initGameController(
    * right-hand edge half a pixel off the land it was authored on. The observer's box sizes are
    * fractional and, unlike a client rect, are read in the same pre-scale layout space the
    * transforms are written in — so `scale(var(--ui-scale))` and the portrait `rotate(90deg)`
-   * cannot skew them. A zero box means another dashboard menu has the space; the observer runs
-   * everything again when the panel comes back.
+   * cannot skew them. A zero box means the game screen is not laid out (it is `hidden` until a
+   * run starts); the observer runs everything again once it is.
    */
   /** Cache the plot's on-screen rect for the pointer maths; see `mapPlotRect`. */
   function refreshMapPlotRect(): void {
@@ -5808,8 +5651,8 @@ function initGameController(
   /**
    * One frame of the map. Cheap by construction: the camera is sixteen numbers, the draw is two
    * quads, and the marker pass writes two custom properties per pin without reading layout. The
-   * early return is what keeps it free while another dashboard menu owns the panel — the
-   * observer reports a hidden panel as a zero box, and there is nothing to animate.
+   * early return is what keeps it free while the game screen is hidden — the observer reports a
+   * hidden panel as a zero box, and there is nothing to animate.
    */
   function drawMapFrame(timeMs: number): void {
     if (mapRenderer === null || currentPlotSize() === null) {
@@ -5897,10 +5740,8 @@ function initGameController(
     syncMapLeaderLine(plot);
   }
 
-  /* The plot resizes when the dashboard swaps between the map tile and the fullscreen
-   * single-panel view, and when it is revealed again after another menu had the space.
-   * Observing also fires once immediately, which is what upgrades the bootstrap size above to
-   * the real fractional one. */
+  /* The plot resizes when the game screen is revealed for a run. Observing also fires once
+   * immediately, which is what upgrades the bootstrap size above to the real fractional one. */
   /* The drawing buffer is not preserved (keeping it would cost a full-size copy every frame on
    * exactly the phones this shell is tight for), so the compositor's copy is the only thing
    * holding the last frame. A tab that gets backgrounded and restored can come back with that
@@ -6631,7 +6472,9 @@ Your lair`;
       { length: MAX_INSPECTOR_CARDS },
       () => null,
     );
-    if (currentMenu !== "dashboard") {
+    /* An open drawer covers the map the cards point into. The selection is kept, so the cards
+     * come back as they were when the drawer goes down. */
+    if (openDrawer !== null) {
       return slots;
     }
     pinnedMapSubjects = pinnedMapSubjects.filter((s) => mapSubjectAlive(s));
@@ -6734,9 +6577,9 @@ Your lair`;
 
     pane.bodyEl.innerHTML = "";
     if (subject.kind === "lair") {
-      /* The tile's own contents, under a per-pane id prefix — several tablists can be up at
-       * once, and shared tab ids would leave every `aria-labelledby` ambiguous. */
-      renderLairPanelInto(pane.bodyEl, `${pane.el.id}-lair`);
+      /* The drawer's contents folded into tabs, under a per-pane id prefix — several tablists
+       * can be up at once, and shared tab ids would leave every `aria-labelledby` ambiguous. */
+      renderLairPanelInto(pane.bodyEl, { kind: "tabs", idPrefix: `${pane.el.id}-lair` });
       return;
     }
     const loc = getLocationById(content, subject.locationId);
@@ -6824,10 +6667,8 @@ Your lair`;
   }
 
   /**
-   * Takes a subject out of the selection. Selecting a site staged it in two places — the
-   * inspector and the mission target slot — so letting it go has to undo both, or the map keeps
-   * a pin lit for a card that is gone. A target staged from somewhere else is left alone: only
-   * the one this subject put there.
+   * Takes a subject out of the selection. Pinning a site is purely about the inspector card —
+   * it never touches the mission target slot, so letting it go does not either.
    */
   function dropPinnedMapSubject(subject: MapSubject): void {
     const key = mapSubjectKey(subject);
@@ -6837,16 +6678,6 @@ Your lair`;
       return;
     }
     renderSiteInspector();
-    if (
-      subject.kind === "site" &&
-      assignTarget?.kind === "location" &&
-      assignTarget.locationId === subject.locationId
-    ) {
-      assignTarget = null;
-      renderAssignPickSlots();
-      renderAssignMinionSlots();
-      onAssignSlotsChanged();
-    }
   }
 
   /**
@@ -6938,17 +6769,21 @@ Your lair`;
     });
   }
 
-  /** The dashboard Lair tile, and the inspector when the lair marker is the one being shown. */
+  /** The Lair drawer. */
   function renderLairPanel(): void {
-    renderLairPanelInto(lairPanelEl, "lair-panel");
+    renderLairPanelInto(lairPanelEl, { kind: "columns" });
   }
 
   /**
-   * Both surfaces that draw the lair, rendered from one place so a tab picked on either is the
-   * tab both are on. `idPrefix` namespaces the tablist: the tile and the inspector can be up
-   * together, and two tablists sharing tab ids would leave every `aria-labelledby` ambiguous.
+   * Both surfaces that draw the lair, rendered from one place: the drawer lays every section
+   * out as a column, the map inspector's narrow card folds them into tabs. `idPrefix`
+   * namespaces a tablist, since several inspector cards can be up together and tablists sharing
+   * tab ids would leave every `aria-labelledby` ambiguous.
    */
-  function renderLairPanelInto(container: HTMLElement, idPrefix: string): void {
+  function renderLairPanelInto(
+    container: HTMLElement,
+    layout: { readonly kind: "columns" } | { readonly kind: "tabs"; readonly idPrefix: string },
+  ): void {
     container.innerHTML = "";
     if (state.activeLairId === null) {
       const empty = document.createElement("p");
@@ -7053,7 +6888,7 @@ Your lair`;
       }
     }
 
-    if (currentMenu === "lair") {
+    if (layout.kind === "columns") {
       const columnsWrap = document.createElement("div");
       columnsWrap.className = "lair-panel-columns";
       for (const def of LAIR_MENU_COLUMNS) {
@@ -7082,23 +6917,22 @@ Your lair`;
     tablist.setAttribute("role", "tablist");
     tablist.setAttribute("aria-label", "Lair sections");
 
-    for (const def of DASHBOARD_LAIR_TABS) {
+    for (const def of LAIR_INSPECTOR_TABS) {
       const tab = document.createElement("button");
       tab.type = "button";
       tab.className = "lair-panel-tab";
-      if (def.id === lairPanelTab) {
+      if (def.id === lairInspectorTab) {
         tab.classList.add("lair-panel-tab--active");
       }
       tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", def.id === lairPanelTab ? "true" : "false");
-      tab.id = `${idPrefix}-tab-${def.id}`;
+      tab.setAttribute("aria-selected", def.id === lairInspectorTab ? "true" : "false");
+      tab.id = `${layout.idPrefix}-tab-${def.id}`;
       tab.textContent = def.label;
       tab.addEventListener("click", () => {
-        if (lairPanelTab === def.id) {
+        if (lairInspectorTab === def.id) {
           return;
         }
-        lairPanelTab = def.id;
-        renderLairPanel();
+        lairInspectorTab = def.id;
         renderSiteInspector();
       });
       tablist.appendChild(tab);
@@ -7108,8 +6942,8 @@ Your lair`;
     const list = document.createElement("div");
     list.className = "lair-panel-missions";
     list.setAttribute("role", "tabpanel");
-    list.setAttribute("aria-labelledby", `${idPrefix}-tab-${lairPanelTab}`);
-    fillLairSectionInto(lairPanelTab, list);
+    list.setAttribute("aria-labelledby", `${layout.idPrefix}-tab-${lairInspectorTab}`);
+    fillLairSectionInto(lairInspectorTab, list);
     container.appendChild(list);
   }
 
@@ -7398,48 +7232,55 @@ Your lair`;
     });
   }
 
-  function applyGameMenuVisibility(): void {
-    const showDashboard = currentMenu === "dashboard";
-
-    /* On the dashboard every tile shows except the ones whose content lives inside another tile
-     * (Missions, which the Lair panel carries as a tab). Otherwise exactly one panel is up. */
-    for (const panel of menuPanels) {
-      panel.hidden = showDashboard
-        ? panel.dataset.dashboardHidden === "true"
-        : panel.dataset.menuPanel !== currentMenu;
+  /**
+   * Push `openDrawer` onto the drawers. The slide is all CSS — a transform transition keyed off
+   * `.drawer--open`. A closed drawer's menu is made inert so the part pushed below the map takes
+   * no focus or clicks. One that has just been closed is marked `--closing` until it lands,
+   * which drops it behind the tabs still in the row instead of sliding down across them.
+   */
+  function applyDrawerState(): void {
+    for (const drawer of menuDrawers) {
+      const isOpen = drawer.id === openDrawer;
+      const wasOpen = drawer.el.classList.contains("drawer--open");
+      drawer.el.classList.toggle("drawer--open", isOpen);
+      drawer.el.classList.toggle(
+        "drawer--closing",
+        !isOpen && (wasOpen || drawer.el.classList.contains("drawer--closing")),
+      );
+      drawer.tabEl.setAttribute("aria-expanded", String(isOpen));
+      drawer.panelEl.inert = !isOpen;
     }
-
-    rightColumnsRowEl.classList.toggle("game-ui-columns-row--single", !showDashboard);
-    /* Dashboard floats the panels over a full-bleed map; every other menu is one panel wide. */
-    omegaBodyEl.classList.toggle("omega-body--floating", showDashboard);
-    applyPanelCollapse();
-
-    for (const button of menuButtons) {
-      const menu = button.dataset.gameMenu;
-      const isActive = menu === currentMenu;
-      button.classList.toggle("game-panel-menu__button--active", isActive);
-      button.setAttribute("aria-pressed", String(isActive));
-    }
-  }
-
-  function setGameMenu(menu: GameMenu): void {
-    if (currentMenu === menu) {
-      return;
-    }
-    currentMenu = menu;
-    applyGameMenuVisibility();
-    renderLocationsPanel();
-    renderMissionsPanel();
-    renderLairPanel();
-    renderOmegaPlanPanel();
-    renderMinionsPanel();
-    renderMapPanel();
-    renderSiteInspector();
   }
 
   /**
-   * Dashboard-only: hovering a Locations card lights the matching map pin and shows its name.
-   * Pointer events bubble from children, so relatedTarget is used to ignore moves inside a card.
+   * Pull a drawer up over the map, or pass `null` to send the open one back down. The drawers
+   * are rendered with everything else on each refresh, so switching is only a matter of which
+   * one is up — and of the map inspector, which stands down while the map is covered.
+   */
+  function setOpenDrawer(id: DrawerId | null): void {
+    if (openDrawer === id) {
+      return;
+    }
+    openDrawer = id;
+    applyDrawerState();
+    renderSiteInspector();
+  }
+
+  for (const drawer of menuDrawers) {
+    drawer.tabEl.addEventListener("click", () => {
+      setOpenDrawer(openDrawer === drawer.id ? null : drawer.id);
+    });
+    drawer.el.addEventListener("transitionend", (e) => {
+      if (e.target === drawer.el && e.propertyName === "transform") {
+        drawer.el.classList.remove("drawer--closing");
+      }
+    });
+  }
+
+  /**
+   * Hovering a Locations card lights the matching map pin and shows its name, where the open
+   * drawer leaves that pin in view. Pointer events bubble from children, so relatedTarget is
+   * used to ignore moves inside a card.
    */
   function locationCardFromEvent(target: EventTarget | null): HTMLElement | null {
     return target instanceof Element ? target.closest<HTMLElement>(".location-card") : null;
@@ -7449,7 +7290,7 @@ Your lair`;
     for (const pin of mapPanelEl.querySelectorAll(".map-marker--preview")) {
       pin.classList.remove("map-marker--preview");
     }
-    if (locationId === null || currentMenu !== "dashboard") {
+    if (locationId === null) {
       return;
     }
     const pin = mapPanelEl.querySelector(
@@ -7481,16 +7322,6 @@ Your lair`;
     setMapMarkerPreview(null);
   });
 
-  for (const button of menuButtons) {
-    const menu = button.dataset.gameMenu;
-    if (!isGameMenu(menu)) {
-      continue;
-    }
-    button.addEventListener("click", () => {
-      setGameMenu(menu);
-    });
-  }
-
   hudShort.addEventListener("click", () => {
     openActivityLogModal();
   });
@@ -7504,9 +7335,23 @@ Your lair`;
   });
 
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !overlayActivityLog.hidden) {
+    if (e.key !== "Escape") {
+      return;
+    }
+    if (!overlayActivityLog.hidden) {
       e.stopPropagation();
       closeActivityLogModal();
+      return;
+    }
+    /* Escape sends an open drawer back down, unless a dialog is up over it. Focus goes to its
+     * tab: wherever it was inside the menu is about to go inert. */
+    const dialogOpen =
+      document.querySelector(".turn-report-overlay:not([hidden]), .pause-overlay:not([hidden])") !==
+      null;
+    const drawer = menuDrawers.find((d) => d.id === openDrawer);
+    if (drawer !== undefined && !dialogOpen) {
+      drawer.tabEl.focus();
+      setOpenDrawer(null);
     }
   });
 
@@ -8106,7 +7951,8 @@ Your lair`;
     if (!overlayActivityLog.hidden) {
       renderActivityLogModal();
     }
-    applyGameMenuVisibility();
+    applyPanelCollapse();
+    applyDrawerState();
   }
 
   /**
