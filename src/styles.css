@@ -902,6 +902,13 @@ body {
   backdrop-filter: blur(7px);
 }
 
+/* The planner is the one floating panel the player is meant to notice first, so it gets a
+   brighter fill than its neighbours — dark red rather than near-black — to read as a distinct
+   card against the map instead of blending into it. */
+.omega-body--floating .game-panel--plan-column {
+  --panel-bg: rgba(36, 11, 15, 0.94);
+}
+
 .omega-body--floating .game-panel--plan-column,
 .omega-body--floating .game-panel--map-layers,
 .omega-body--floating .game-panel--site-inspector {
@@ -1582,6 +1589,20 @@ body {
 }
 
 /* Plan column stack */
+/*
+ * The stack and the scrolling page inside it both clip, and both would otherwise clip flush with
+ * the slots' own edges — shearing the sides off everything a slot draws outside itself while a
+ * card is in hand: the drop shine's glow, the lock-on brackets, the landing ring. Each reaches
+ * back out into the panel's padding by the same amount it pads itself in, so the content sits
+ * exactly where it did and the clip edge moves out to give those effects room.
+ */
+.game-panel.game-panel--plan-column > .plan-column-stack,
+.game-panel--plan-column .missions-panel-page {
+  --plan-slot-bleed: 10px;
+  margin-inline: calc(-1 * var(--plan-slot-bleed));
+  padding-inline: var(--plan-slot-bleed);
+}
+
 .game-panel.game-panel--plan-column > .plan-column-stack {
   flex: 1 1 0;
   min-height: 0;
@@ -5141,7 +5162,7 @@ body {
       rgba(232, 17, 45, 0.03) 0 8px,
       transparent 8px 16px
     ),
-    rgba(14, 5, 7, 0.55);
+    rgba(6, 2, 3, 0.8);
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 
@@ -5157,7 +5178,7 @@ body {
   background: var(--card-bg-hover);
 }
 
-.assign-pick-slot.assign-minion-slot--dragover {
+.assign-pick-slot.plan-slot--drop-lock {
   border: 1px dashed var(--red-bright);
   background: rgba(232, 17, 45, 0.12);
   box-shadow: 0 0 16px var(--red-glow-soft), inset 0 0 16px rgba(232, 17, 45, 0.08);
@@ -5360,7 +5381,7 @@ body {
       rgba(232, 17, 45, 0.03) 0 8px,
       transparent 8px 16px
     ),
-    rgba(14, 5, 7, 0.55);
+    rgba(6, 2, 3, 0.8);
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 
@@ -5370,7 +5391,7 @@ body {
   background: var(--card-bg);
 }
 
-.assign-minion-slot.assign-minion-slot--dragover {
+.assign-minion-slot.plan-slot--drop-lock {
   border-color: var(--red-bright);
   background: rgba(232, 17, 45, 0.12);
   box-shadow: 0 0 16px var(--red-glow-soft);
@@ -5402,11 +5423,34 @@ body {
   initial-value: 0deg;
 }
 
+/*
+ * The lit slots don't come on together: each ignites in turn, top of the planner first — a quick
+ * swell with a flare of glow, then the shine settling into its lap. A start catches the corner of
+ * the eye where a steady loop does not, so the sweep is what pulls the player's eye to the
+ * planner the moment the card leaves its menu. The order comes from src/ui/dropHint.ts. `backwards`
+ * holds each slot dark through its delay, so a slot waiting its turn does not glow early.
+ */
 .plan-slot--drop-hint {
+  --plan-slot-ignite-delay: calc(var(--plan-slot-hint-order, 0) * 55ms);
   box-shadow: 0 0 14px var(--red-glow-soft);
+  animation: plan-slot-ignite 0.4s ease-out var(--plan-slot-ignite-delay) backwards;
 }
 
-/* Lower specificity than either --dragover rule above, so the slot actually under the cursor
+@keyframes plan-slot-ignite {
+  0% {
+    box-shadow: none;
+    transform: scale(0.99);
+  }
+  40% {
+    box-shadow: 0 0 24px var(--red-bright);
+    transform: scale(1.04);
+  }
+  70% {
+    transform: scale(0.995);
+  }
+}
+
+/* Lower specificity than either --drop-lock rule above, so the slot actually under the cursor
    still takes over the border and fill while the shine keeps running on top of it. */
 .plan-slot--drop-hint::before {
   content: "";
@@ -5436,13 +5480,477 @@ body {
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: plan-slot-shine 1.5s linear infinite;
+  /* The ring fades up with its slot's ignition; the lap starts from the same moment, so every
+     slot's band sets off from its own turn rather than all of them running in step. */
+  animation:
+    plan-slot-ignite-ring 0.25s ease-out backwards,
+    plan-slot-shine 1.5s linear infinite;
+  animation-delay: var(--plan-slot-ignite-delay);
+}
+
+@keyframes plan-slot-ignite-ring {
+  from {
+    opacity: 0;
+  }
 }
 
 @keyframes plan-slot-shine {
   to {
     --plan-slot-shine-angle: 360deg;
   }
+}
+
+/* ---------------- Drop-target lock-on, landing, refusal ---------------- */
+
+/*
+ * Held over a lit slot, the card locks on: brackets snap in to the slot's corners the way the
+ * map's reticle closes on a site, the travelling band fills in to a solid ring with a white-hot
+ * glint racing round it, and a label types itself out over whatever the slot is showing. Let go,
+ * and the card stamps down into the slot with a flash and a ring kicking out from it. Let go over
+ * a slot that will not take it, and the slot shakes it off. The lock overlay is built and torn
+ * down by src/ui/dropHint.ts, which also decides when each of these plays.
+ *
+ * Every one-shot here animates *from* its first keyframe back to the element's own resting style
+ * and never uses `forwards`: the blanket reduced-motion rule at the end of this file cuts
+ * animations to nothing, and written this way what it leaves behind is the end state — brackets
+ * in place, the card at rest — rather than the start.
+ */
+
+.plan-slot--drop-hint.plan-slot--drop-lock::before {
+  /* Over the lock overlay's scrim, which would otherwise cover the ring's inner pixel. */
+  z-index: 4;
+  background: conic-gradient(
+    from var(--plan-slot-shine-angle),
+    var(--red-bright) 0deg,
+    var(--red-bright) 318deg,
+    #ffe3e7 348deg,
+    #ffffff 354deg,
+    var(--red-bright) 360deg
+  );
+  /* Only the lap speeds up; the ignition keeps its own length, or a lock landing inside it would
+     stretch the fade and dim the ring back down mid-lock. */
+  animation-duration: 0.25s, 0.7s;
+}
+
+.plan-slot-lock {
+  position: absolute;
+  inset: 0;
+  /* Over the slot's own clear / remove button (z-index 2). */
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The drop target and the card both have to stay hittable through it. */
+  pointer-events: none;
+  /* Dark enough to read the label over a staged card's name, light enough that the card it would
+     replace still shows through. */
+  background: rgba(24, 4, 8, 0.8);
+  box-shadow: inset 0 0 18px rgba(232, 17, 45, 0.28);
+  animation: plan-slot-lock-scrim 0.12s ease-out;
+}
+
+@keyframes plan-slot-lock-scrim {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Corner brackets: eight bars, two per corner, drawn as sized background layers on one box that
+   starts wide of the slot and closes in, overshooting a hair before it settles. */
+.plan-slot-lock::before {
+  --bracket-len: 14px;
+  --bracket-w: 2px;
+  content: "";
+  position: absolute;
+  inset: -5px;
+  background:
+    linear-gradient(#ffe3e7 0 0) top left / var(--bracket-len) var(--bracket-w),
+    linear-gradient(#ffe3e7 0 0) top left / var(--bracket-w) var(--bracket-len),
+    linear-gradient(#ffe3e7 0 0) top right / var(--bracket-len) var(--bracket-w),
+    linear-gradient(#ffe3e7 0 0) top right / var(--bracket-w) var(--bracket-len),
+    linear-gradient(#ffe3e7 0 0) bottom left / var(--bracket-len) var(--bracket-w),
+    linear-gradient(#ffe3e7 0 0) bottom left / var(--bracket-w) var(--bracket-len),
+    linear-gradient(#ffe3e7 0 0) bottom right / var(--bracket-len) var(--bracket-w),
+    linear-gradient(#ffe3e7 0 0) bottom right / var(--bracket-w) var(--bracket-len);
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 3px var(--red-bright));
+  animation: plan-slot-lock-brackets 0.24s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+@keyframes plan-slot-lock-brackets {
+  from {
+    inset: -18px;
+    opacity: 0;
+  }
+}
+
+.plan-slot-lock__label {
+  position: relative;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #ffe3e7;
+  text-shadow: 0 0 8px var(--red-bright);
+}
+
+/* The untyped remainder holds its space from the first frame, so the label types out in place
+   instead of growing from the middle. */
+.plan-slot-lock__rest {
+  visibility: hidden;
+}
+
+.plan-slot-lock__typed {
+  position: relative;
+}
+
+/* A block caret riding the end of the typed text, laid over the untyped rest so it pushes
+   nothing along. */
+.plan-slot-lock__typed::after {
+  content: "";
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  left: 100%;
+  width: 0.5em;
+  margin-left: 0.12em;
+  background: var(--red-bright);
+  box-shadow: 0 0 6px var(--red-bright);
+  animation: plan-slot-lock-caret 0.9s steps(1, end) infinite;
+}
+
+@keyframes plan-slot-lock-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The landing: the slot flashes white-hot and cools back to its resting border... */
+.plan-slot--landed {
+  animation: plan-slot-land 0.55s ease-out;
+}
+
+@keyframes plan-slot-land {
+  from {
+    border-color: #ffe3e7;
+    box-shadow:
+      0 0 26px var(--red-bright),
+      inset 0 0 24px rgba(255, 227, 231, 0.45);
+  }
+}
+
+/* ...the card drops in a touch big and lifted, then stamps down with a small overshoot... */
+.plan-slot--landed > * {
+  animation: plan-slot-land-card 0.36s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes plan-slot-land-card {
+  from {
+    opacity: 0.35;
+    transform: translateY(-3px) scale(1.12);
+  }
+}
+
+/* ...and a ring kicks out from the slot, fading as it goes. Resting at zero opacity, so it is
+   gone once the animation is, whether it ran or was cut short. It spreads less sideways than up
+   and down: the slots sit about 12px in from the plan panel's clipped edge, and a ring cut off
+   at the sides reads as two stray lines rather than a ring. */
+.plan-slot--landed::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 2px solid var(--red-bright);
+  pointer-events: none;
+  opacity: 0;
+  animation: plan-slot-land-ring 0.55s ease-out;
+}
+
+@keyframes plan-slot-land-ring {
+  from {
+    inset: -1px;
+    opacity: 1;
+  }
+  to {
+    inset: -14px -9px;
+    opacity: 0;
+  }
+}
+
+/* Refused: a quick head-shake, greying the border for the first swing. */
+.plan-slot--drop-reject {
+  animation: plan-slot-reject 0.32s ease-in-out;
+}
+
+@keyframes plan-slot-reject {
+  20% {
+    border-color: var(--text-3);
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+/* ---------------- Drag tether ---------------- */
+
+/*
+ * The dashed guide line from the pointer to the nearest lit slot (src/ui/dragTether.ts). It
+ * borrows the map's leader-line language — marching red dashes — but runs the dashes the other
+ * way round: toward the planner, the direction the card is meant to go. It fades in a beat after
+ * the pickup so the slots' ignition sweep lands first and the line reads as reaching out to them.
+ *
+ * Drawn in stage units (the viewBox undoes --ui-scale), so the widths below are stage pixels.
+ * `pointer-events: none` is load-bearing: a drag is hit-tested like a click, and a layer that
+ * took the pointer would stand between the card and every slot under it.
+ */
+.drag-tether {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Over the planner's floating card preview (90). */
+  z-index: 95;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+  /* Its own layer, so redrawing the line every frame never repaints the blurred console under it. */
+  will-change: opacity;
+}
+
+.drag-tether--live {
+  opacity: 1;
+  transition: opacity 0.2s ease-out 0.12s;
+}
+
+.drag-tether__stop {
+  stop-color: var(--red-bright);
+}
+
+.drag-tether__stop--tail {
+  stop-opacity: 0.2;
+}
+
+.drag-tether__stop--mid {
+  stop-opacity: 0.65;
+}
+
+/* One period of the 9/7 dash is 16 units, so ending the cycle there loops without a jump. */
+.drag-tether__line {
+  fill: none;
+  stroke: url(#drag-tether-fade);
+  stroke-width: 2;
+  stroke-dasharray: 9 7;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px var(--red-glow));
+  animation: drag-tether-flow 0.45s linear infinite;
+}
+
+@keyframes drag-tether-flow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+.drag-tether__cap {
+  fill: #ffe3e7;
+  filter: drop-shadow(0 0 4px var(--red-bright));
+}
+
+.drag-tether__ping {
+  fill: none;
+  stroke: var(--red-bright);
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: drag-tether-ping 0.9s ease-out infinite;
+}
+
+@keyframes drag-tether-ping {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(3.4);
+  }
+}
+
+/* ---------------- Before and behind the drag ---------------- */
+
+/*
+ * Resting the pointer on a card outlines, faintly and without moving, the planner slots it would
+ * drop into — so which card goes where can be learnt by looking, before ever picking one up. It
+ * is deliberately the quiet version of the drag's shine: a preview, not a call to action. Which
+ * slots is src/ui/dropHint.ts's to decide, by the same test the drag uses. Doubled up on the slot
+ * classes to outrank their `:has(chip)` filled-slot rules, and it eases in on the slots' own
+ * border / shadow transitions.
+ */
+.assign-pick-slot.plan-slot--hover-hint,
+.assign-minion-slot.plan-slot--hover-hint {
+  /* Solid, where every empty slot at rest is dashed in much the same red — a brighter dash alone
+     is lost among them. */
+  border-style: solid;
+  border-color: rgba(255, 43, 64, 0.9);
+  box-shadow:
+    0 0 14px rgba(232, 17, 45, 0.35),
+    inset 0 0 16px rgba(232, 17, 45, 0.12);
+}
+
+/*
+ * The card being carried, as it is left behind: a dashed outline where it was, breathing faintly,
+ * so the menu or the map shows a gap and the only full-strength copy is the one in hand. Resting
+ * opacity sits inside the breathing range, so under reduced motion — where the animation is cut
+ * to nothing — it still reads as lifted. Qualified by `[draggable]` to outrank pins' own
+ * `:hover { outline: none }`, which a pin picked up is still under.
+ */
+[draggable="true"].ui-card-in-hand {
+  opacity: 0.4;
+  outline: 2px dashed var(--red-bright);
+  outline-offset: -2px;
+  animation: card-in-hand 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes card-in-hand {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 0.28;
+  }
+}
+
+/* ---------------- Drag token ---------------- */
+
+/*
+ * What the player carries (src/ui/dragToken.ts), in place of the browser's translucent snapshot
+ * of the whole card: the card folded into the chip it becomes once staged, opaque, lifted off the
+ * console on a shadow. The outer box is positioned every frame by script — pointer, tilt, the
+ * magnet's pull, and --ui-scale, since it lives on `document.body` outside the scaled stage — so
+ * everything CSS animates happens on the inner body, where it cannot fight that transform.
+ * Authored in stage pixels like the chips it copies.
+ *
+ * `pointer-events: none` is load-bearing, as on the tether: a drag is hit-tested like a click,
+ * and a token under the pointer would be the only thing the pointer is ever over.
+ */
+.drag-token {
+  position: fixed;
+  left: 0;
+  top: 0;
+  /* Over the tether (95), which then reads as running out of the token. */
+  z-index: 96;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.drag-token__body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 250px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--red-bright);
+  background: linear-gradient(180deg, rgba(44, 11, 16, 0.98), rgba(22, 6, 9, 0.98));
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.75),
+    0 0 16px var(--red-glow-soft);
+  color: var(--text-0);
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    filter 0.15s;
+  /* The pick-up: it arrives a size up and settles into the hand, overshooting a hair. */
+  animation: drag-token-lift 0.24s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes drag-token-lift {
+  from {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+
+.drag-token__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.02em;
+}
+
+/* The "release to" line, hung under the token as a tab so the name row never moves. Empty — and
+   so not drawn — until a slot locks on. */
+.drag-token__verb {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: -1px;
+  padding: 3px 9px;
+  border: 1px solid #ffe3e7;
+  background: rgba(24, 4, 8, 0.95);
+  box-shadow: 0 0 12px var(--red-glow-soft);
+}
+
+.drag-token__verb:empty {
+  display: none;
+}
+
+.drag-token--locked .drag-token__body {
+  border-color: #ffe3e7;
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.75),
+    0 0 24px var(--red-bright);
+}
+
+/* Over a slot that will not take it: drained of colour, with a no-entry badge on its corner, and
+   a small shake on the way in. */
+.drag-token--refused .drag-token__body {
+  border-color: var(--text-3);
+  filter: grayscale(1) brightness(0.75);
+  animation: drag-token-refuse 0.28s ease-in-out;
+}
+
+.drag-token--refused .drag-token__body::after {
+  content: "";
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background:
+    linear-gradient(45deg, transparent 44%, #fff 44% 56%, transparent 56%),
+    #6b6b6b;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes drag-token-refuse {
+  25% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+}
+
+/* A slot a dropped card is flying into keeps its new contents out of sight until the token gets
+   there, so the chip does not appear first and then get flown onto. */
+.plan-slot--incoming > * {
+  opacity: 0;
 }
 
 .assign-minion-slot-placeholder {
@@ -5456,11 +5964,8 @@ body {
   cursor: default;
 }
 
-/* Support slots read as optional: cooler accent, dimmer empty state than a required slot. */
-.assign-support-asset-slot {
-  border-color: var(--line-1);
-}
-
+/* Support slots read as optional via the cyan accent once filled; empty, they match every
+   other slot's dashed border so the "empty" styling stays one consistent look. */
 .assign-support-asset-slot:has(.assign-minion-chip) {
   border-left: 2px solid var(--cyan);
 }
@@ -5605,6 +6110,23 @@ body {
    */
   .plan-slot--drop-hint::before {
     background: var(--red-bright);
+  }
+
+  /* Likewise the locked ring's racing glint: held still, the lock reads as the whole ring running
+     white-hot instead. */
+  .plan-slot--drop-hint.plan-slot--drop-lock::before {
+    background: #ffe3e7;
+  }
+
+  /* The blanket rule shortens animations but leaves their delays alone, so without this the
+     ignition sweep would still play out as slots blinking on one by one. All at once instead. */
+  .plan-slot--drop-hint {
+    --plan-slot-ignite-delay: 0s;
+  }
+
+  /* The ping is nothing but motion; frozen, it would be a stray circle round the tether's end. */
+  .drag-tether__ping {
+    display: none;
   }
 }
 

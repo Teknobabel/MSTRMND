@@ -139,11 +139,15 @@ import {
 } from "./ui/map/mapLayers";
 import { omegaPhaseTargetsByLocation } from "./ui/map/omegaTargets";
 import { initDragFocus } from "./ui/dragFocus";
+import { initDragTether } from "./ui/dragTether";
+import { initDragToken, setDragTokenFaces, type DragTokenFace } from "./ui/dragToken";
 import {
   beginCardDrag,
   initDropHints,
-  setDropAccepts,
-  type DragPayloadKind,
+  playLanding,
+  playRefusal,
+  setCardDragPayload,
+  wireDropSlot,
 } from "./ui/dropHint";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import { initGlobalTooltips } from "./ui/tooltip";
@@ -1953,6 +1957,50 @@ function initGameController(
     return null;
   }
 
+  /**
+   * What a drag payload looks like in hand (`src/ui/dragToken.ts`): the art and name of the chip
+   * it becomes once staged, down to the "site - Slot n" an asset target is labelled with, so the
+   * token the player carries is the thing that lands. A staged minion chip hands over its bare
+   * instance id rather than JSON.
+   */
+  function dragTokenFace(raw: string): DragTokenFace | null {
+    const minionFace = (instanceId: string): DragTokenFace | null => {
+      const inst = state.player.minions.find((m) => m.instanceId === instanceId);
+      if (inst === undefined) {
+        return null;
+      }
+      const tpl = content.minions.find((t) => t.id === inst.templateId);
+      return { art: resolveMinionCardArt(tpl), label: tpl?.name ?? instanceId };
+    };
+    const payload = parseDragPayload(raw);
+    if (payload === null) {
+      return minionFace(raw.trim());
+    }
+    switch (payload.kind) {
+      case "mastermind-mission": {
+        const tpl = findMissionOrEventTemplate(payload.missionTemplateId);
+        return { art: resolveMissionCardArt(tpl), label: tpl?.name ?? payload.missionTemplateId };
+      }
+      case "mastermind-location": {
+        const loc = getLocationById(content, payload.locationId);
+        return { art: resolveLocationCardArt(loc), label: loc?.name ?? payload.locationId };
+      }
+      case "mastermind-asset": {
+        const loc = getLocationById(content, payload.locationId);
+        return {
+          art: resolveLocationCardArt(loc),
+          label: `${loc?.name ?? payload.locationId} - Slot ${payload.slotIndex + 1}`,
+        };
+      }
+      case "mastermind-minion":
+        return minionFace(payload.instanceId);
+      case "mastermind-asset-card": {
+        const tpl = content.assets.find((a) => a.id === payload.assetId);
+        return { art: resolveAssetCardArt(tpl), label: tpl?.name ?? payload.assetId };
+      }
+    }
+  }
+
   function payloadToMissionTarget(payload: Exclude<AnyDragPayload, MissionDragPayload>): MissionTarget | null {
     if (payload.kind === "mastermind-location") {
       return { kind: "location", locationId: payload.locationId };
@@ -2059,25 +2107,29 @@ function initGameController(
     return true;
   }
 
-  /** Stages a location/asset/minion into the planner's target slot, replacing any prior pick. */
-  function applyTargetPayloadToPlanner(
+  /**
+   * The target a location/asset/minion payload would stage, or `null` when the planner would turn
+   * it away. No side effects, so the target slot's drop hint can ask the same question the drop
+   * does.
+   */
+  function stageableTarget(
     payload: Exclude<AnyDragPayload, MissionDragPayload>,
-  ): boolean {
+  ): MissionTarget | null {
     const m = selectedMissionTemplate();
     if (m?.targetType === "none") {
-      return false;
+      return null;
     }
     if (!targetPayloadMatchesPlannedMission(payload)) {
-      return false;
+      return null;
     }
     const mt = payloadToMissionTarget(payload);
     if (!mt) {
-      return false;
+      return null;
     }
     if (mt.kind === "location" || mt.kind === "asset") {
       const playable = new Set(runLocations().map((l) => l.id));
       if (!playable.has(mt.locationId)) {
-        return false;
+        return null;
       }
     }
     if (mt.kind === "asset") {
@@ -2085,18 +2137,31 @@ function initGameController(
       const slot = placement?.slots[mt.slotIndex];
       const intel = intelLevelAtLocation(state, mt.locationId);
       if (effectiveVisibilityOfSlot(slot, intel) !== mt.visibilityAtAssign) {
-        return false;
+        return null;
       }
     }
     if (mt.kind === "minion") {
       const busy = busyInstanceIds(state.activeMissions);
       const inst = state.player.minions.find((x) => x.instanceId === mt.instanceId);
       if (!inst || busy.has(mt.instanceId)) {
-        return false;
+        return null;
       }
       if (getAssignParticipantIds().includes(mt.instanceId)) {
-        return false;
+        return null;
       }
+    }
+    return mt;
+  }
+
+  /** Stages a location/asset/minion into the planner's target slot, replacing any prior pick. */
+  function applyTargetPayloadToPlanner(
+    payload: Exclude<AnyDragPayload, MissionDragPayload>,
+  ): boolean {
+    const mt = stageableTarget(payload);
+    if (!mt) {
+      return false;
+    }
+    if (mt.kind === "minion") {
       removeInstanceFromAllAssignSlots(mt.instanceId);
     }
     assignTarget = mt;
@@ -2106,11 +2171,21 @@ function initGameController(
     return true;
   }
 
-  /** Small reticle button pinned to a card's corner that stages it into the planner on click. */
+  /**
+   * Where an add-to-planner click sent its card: the drop slot it was meant for (its
+   * `wireDropSlot` key) and whether the slot took it. `null` when there was no slot to send it to.
+   */
+  type PlannerSend = { slot: string; staged: boolean } | null;
+
+  /**
+   * Small reticle button pinned to a card's corner that stages it into the planner on click. The
+   * card arrives the way a dropped one does — landing in its slot, or shaken off by it — so the
+   * button and the drag read as two ways of doing the same thing.
+   */
   function appendAddToPlannerButton(
     card: HTMLElement,
     ariaLabel: string,
-    onClick: () => void,
+    onClick: () => PlannerSend,
   ): void {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -2121,7 +2196,15 @@ function initGameController(
     btn.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      onClick();
+      const sent = onClick();
+      if (sent === null) {
+        return;
+      }
+      if (sent.staged) {
+        playLanding(sent.slot);
+      } else {
+        playRefusal(sent.slot);
+      }
     });
     btn.addEventListener("mousedown", (ev) => {
       ev.stopPropagation();
@@ -2179,38 +2262,37 @@ function initGameController(
     el: HTMLElement,
     kind: "mission" | "target",
   ): void {
-    el.addEventListener("dragenter", (e) => {
-      e.preventDefault();
-      el.classList.add("assign-minion-slot--dragover");
-    });
-    el.addEventListener("dragleave", () => {
-      el.classList.remove("assign-minion-slot--dragover");
-    });
-    el.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      const dt = e.dataTransfer;
-      if (dt) {
-        dt.dropEffect = "copy";
-      }
-    });
-    el.addEventListener("drop", (e) => {
-      e.preventDefault();
-      el.classList.remove("assign-minion-slot--dragover");
-      const raw = e.dataTransfer?.getData("text/plain")?.trim();
-      if (!raw) {
-        return;
-      }
+    if (kind === "mission") {
+      wireDropSlot(el, {
+        key: "mission",
+        accepts: ["mastermind-mission"],
+        isFilled: () => assignMissionTemplateId !== null,
+        onDrop: (raw) => {
+          const payload = parseDragPayload(raw);
+          return payload?.kind === "mastermind-mission" && applyMissionPayloadToPlanner(payload);
+        },
+      });
+      return;
+    }
+    /* Every target kind, narrowed per card by the same test the drop makes — which kind the
+     * planned mission wants, whether this site passes its filters, whether this minion is free —
+     * so a mission after a bank never lights the slot up for a minion or for a different site. */
+    const targetPayload = (raw: string): Exclude<AnyDragPayload, MissionDragPayload> | null => {
       const payload = parseDragPayload(raw);
-      if (!payload) {
-        return;
-      }
-      if (kind === "mission" && payload.kind === "mastermind-mission") {
-        applyMissionPayloadToPlanner(payload);
-        return;
-      }
-      if (kind === "target" && payload.kind !== "mastermind-mission") {
-        applyTargetPayloadToPlanner(payload);
-      }
+      return payload === null || payload.kind === "mastermind-mission" ? null : payload;
+    };
+    wireDropSlot(el, {
+      key: "target",
+      accepts: ["mastermind-location", "mastermind-asset", "mastermind-minion"],
+      canTake: (raw) => {
+        const payload = targetPayload(raw);
+        return payload !== null && stageableTarget(payload) !== null;
+      },
+      isFilled: () => assignTarget !== null,
+      onDrop: (raw) => {
+        const payload = targetPayload(raw);
+        return payload !== null && applyTargetPayloadToPlanner(payload);
+      },
     });
   }
 
@@ -2350,14 +2432,19 @@ function initGameController(
     return n;
   }
 
-  /** Puts one owned unit of `assetId` in required slot `slotIndex`, if the slot asks for it. */
-  function stageRequiredAssetSlot(slotIndex: number, assetId: string): boolean {
+  /** Whether required slot `slotIndex` asks for `assetId` and an owned unit of it is still free. */
+  function canStageRequiredAssetSlot(slotIndex: number, assetId: string): boolean {
     const req = selectedMissionTemplate()?.requiredAssetIds ?? [];
     if (req[slotIndex] !== assetId) {
       return false;
     }
     const owned = state.player.assets[assetId] ?? 0;
-    if (owned - stagedAssetUnits(assetId, { list: "required", index: slotIndex }) < 1) {
+    return owned - stagedAssetUnits(assetId, { list: "required", index: slotIndex }) >= 1;
+  }
+
+  /** Puts one owned unit of `assetId` in required slot `slotIndex`, if the slot asks for it. */
+  function stageRequiredAssetSlot(slotIndex: number, assetId: string): boolean {
+    if (!canStageRequiredAssetSlot(slotIndex, assetId)) {
       return false;
     }
     assignAssetSlotAssetIds[slotIndex] = assetId;
@@ -2366,14 +2453,19 @@ function initGameController(
     return true;
   }
 
-  /** Puts one owned unit of `assetId` in support slot `slotIndex`, if it is a support asset. */
-  function stageSupportAssetSlot(slotIndex: number, assetId: string): boolean {
+  /** Whether `assetId` is a support asset with an owned unit still free for slot `slotIndex`. */
+  function canStageSupportAssetSlot(slotIndex: number, assetId: string): boolean {
     const tpl = content.assets.find((a) => a.id === assetId);
     if (tpl === undefined || !isSupportAsset(tpl)) {
       return false;
     }
     const owned = state.player.assets[assetId] ?? 0;
-    if (owned - stagedAssetUnits(assetId, { list: "support", index: slotIndex }) < 1) {
+    return owned - stagedAssetUnits(assetId, { list: "support", index: slotIndex }) >= 1;
+  }
+
+  /** Puts one owned unit of `assetId` in support slot `slotIndex`, if it is a support asset. */
+  function stageSupportAssetSlot(slotIndex: number, assetId: string): boolean {
+    if (!canStageSupportAssetSlot(slotIndex, assetId)) {
       return false;
     }
     assignSupportAssetIds[slotIndex] = assetId;
@@ -2382,21 +2474,39 @@ function initGameController(
     return true;
   }
 
+  /** Drop-slot keys for the asset slots, shared by their wiring and the add-to-planner button. */
+  function requiredAssetSlotKey(slotIndex: number): string {
+    return `asset-${slotIndex}`;
+  }
+
+  function supportAssetSlotKey(slotIndex: number): string {
+    return `support-${slotIndex}`;
+  }
+
   /**
    * The asset card's add-to-planner action: fills the first empty required slot that asks for
    * this asset, else the first empty support slot. Never replaces an asset already staged.
    */
-  function applyAssetToPlanner(assetId: string): boolean {
+  function applyAssetToPlanner(assetId: string): PlannerSend {
     const req = selectedMissionTemplate()?.requiredAssetIds ?? [];
     const reqIndex = req.findIndex(
       (id, i) => id === assetId && (assignAssetSlotAssetIds[i] ?? null) === null,
     );
     if (reqIndex >= 0) {
-      return stageRequiredAssetSlot(reqIndex, assetId);
+      return {
+        slot: requiredAssetSlotKey(reqIndex),
+        staged: stageRequiredAssetSlot(reqIndex, assetId),
+      };
     }
     syncAssignSupportSlotArray();
     const supportIndex = assignSupportAssetIds.findIndex((id) => id === null);
-    return supportIndex >= 0 && stageSupportAssetSlot(supportIndex, assetId);
+    if (supportIndex < 0) {
+      return null;
+    }
+    return {
+      slot: supportAssetSlotKey(supportIndex),
+      staged: stageSupportAssetSlot(supportIndex, assetId),
+    };
   }
 
   function renderAssignAssetSlots(): void {
@@ -2419,34 +2529,24 @@ function initGameController(
       slot.className = "assign-minion-slot assign-asset-slot";
       slot.dataset.assetSlotIndex = String(slotIndex);
       slot.dataset.requiredAssetId = requiredId;
-      setDropAccepts(slot, ["mastermind-asset-card"]);
-
-      slot.addEventListener("dragenter", (e) => {
-        e.preventDefault();
-        slot.classList.add("assign-minion-slot--dragover");
-      });
-      slot.addEventListener("dragleave", () => {
-        slot.classList.remove("assign-minion-slot--dragover");
-      });
-      slot.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        const dt = e.dataTransfer;
-        if (dt) {
-          dt.dropEffect = "copy";
-        }
-      });
-      slot.addEventListener("drop", (e) => {
-        e.preventDefault();
-        slot.classList.remove("assign-minion-slot--dragover");
-        const raw = e.dataTransfer?.getData("text/plain")?.trim();
-        if (!raw) {
-          return;
-        }
-        const parsed = parseDragPayload(raw);
-        if (parsed?.kind !== "mastermind-asset-card") {
-          return;
-        }
-        stageRequiredAssetSlot(slotIndex, parsed.assetId);
+      wireDropSlot(slot, {
+        key: requiredAssetSlotKey(slotIndex),
+        accepts: ["mastermind-asset-card"],
+        canTake: (raw) => {
+          const parsed = parseDragPayload(raw);
+          return (
+            parsed?.kind === "mastermind-asset-card" &&
+            canStageRequiredAssetSlot(slotIndex, parsed.assetId)
+          );
+        },
+        isFilled: () => (assignAssetSlotAssetIds[slotIndex] ?? null) !== null,
+        onDrop: (raw) => {
+          const parsed = parseDragPayload(raw);
+          return (
+            parsed?.kind === "mastermind-asset-card" &&
+            stageRequiredAssetSlot(slotIndex, parsed.assetId)
+          );
+        },
       });
 
       const placed = assignAssetSlotAssetIds[slotIndex] ?? null;
@@ -2521,34 +2621,24 @@ function initGameController(
       const slot = document.createElement("div");
       slot.className = "assign-minion-slot assign-asset-slot assign-support-asset-slot";
       slot.dataset.supportSlotIndex = String(slotIndex);
-      setDropAccepts(slot, ["mastermind-asset-card"]);
-
-      slot.addEventListener("dragenter", (e) => {
-        e.preventDefault();
-        slot.classList.add("assign-minion-slot--dragover");
-      });
-      slot.addEventListener("dragleave", () => {
-        slot.classList.remove("assign-minion-slot--dragover");
-      });
-      slot.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        const dt = e.dataTransfer;
-        if (dt) {
-          dt.dropEffect = "copy";
-        }
-      });
-      slot.addEventListener("drop", (e) => {
-        e.preventDefault();
-        slot.classList.remove("assign-minion-slot--dragover");
-        const raw = e.dataTransfer?.getData("text/plain")?.trim();
-        if (!raw) {
-          return;
-        }
-        const parsed = parseDragPayload(raw);
-        if (parsed?.kind !== "mastermind-asset-card") {
-          return;
-        }
-        stageSupportAssetSlot(slotIndex, parsed.assetId);
+      wireDropSlot(slot, {
+        key: supportAssetSlotKey(slotIndex),
+        accepts: ["mastermind-asset-card"],
+        canTake: (raw) => {
+          const parsed = parseDragPayload(raw);
+          return (
+            parsed?.kind === "mastermind-asset-card" &&
+            canStageSupportAssetSlot(slotIndex, parsed.assetId)
+          );
+        },
+        isFilled: () => (assignSupportAssetIds[slotIndex] ?? null) !== null,
+        onDrop: (raw) => {
+          const parsed = parseDragPayload(raw);
+          return (
+            parsed?.kind === "mastermind-asset-card" &&
+            stageSupportAssetSlot(slotIndex, parsed.assetId)
+          );
+        },
       });
 
       const placed = assignSupportAssetIds[slotIndex] ?? null;
@@ -2700,32 +2790,6 @@ function initGameController(
     return chip;
   }
 
-  /**
-   * Keeps the target slot's drop hint honest: it lights up only for the kind of card the planned
-   * mission actually takes, so a mission after a location never shines for a minion. Mirrors the
-   * kind test in `targetPayloadMatchesPlannedMission` — the per-card filters that go with it
-   * (location type, intel, visibility) are finer than a slot can advertise, so the hint stops at
-   * the kind. With no mission staged yet nothing has been ruled out, so every target kind shines.
-   */
-  function syncAssignTargetDropAccepts(m: MissionTemplate | undefined): void {
-    if (!m) {
-      setDropAccepts(assignTargetSlotEl, [
-        "mastermind-location",
-        "mastermind-asset",
-        "mastermind-minion",
-      ]);
-      return;
-    }
-    const byTargetType: Record<MissionTargetType, readonly DragPayloadKind[]> = {
-      location: ["mastermind-location"],
-      asset_hidden: ["mastermind-asset"],
-      asset_revealed: ["mastermind-asset"],
-      minion: ["mastermind-minion"],
-      none: [],
-    };
-    setDropAccepts(assignTargetSlotEl, byTargetType[m.targetType]);
-  }
-
   function renderAssignPickSlots(): void {
     hideAssignPickPreview();
     assignMissionSlotEl.innerHTML = "";
@@ -2733,7 +2797,6 @@ function initGameController(
     updateAssignTargetFieldVisibility();
     const mainOnly = state.phase === "main";
     const mTpl = selectedMissionTemplate();
-    syncAssignTargetDropAccepts(mTpl);
     const hideTargetField = mTpl?.targetType === "none";
 
     const missionSlot = document.createElement("div");
@@ -3488,46 +3551,30 @@ function initGameController(
       const slot = document.createElement("div");
       slot.className = "assign-minion-slot";
       slot.dataset.slotIndex = String(slotIndex);
-      setDropAccepts(slot, ["mastermind-minion"]);
-
-      slot.addEventListener("dragenter", (e) => {
-        e.preventDefault();
-        slot.classList.add("assign-minion-slot--dragover");
-      });
-      slot.addEventListener("dragleave", () => {
-        slot.classList.remove("assign-minion-slot--dragover");
-      });
-      slot.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        const dt = e.dataTransfer;
-        if (dt) {
-          dt.dropEffect = dndDragSource?.kind === "slot" ? "move" : "copy";
-        }
-      });
-      slot.addEventListener("drop", (e) => {
-        e.preventDefault();
-        slot.classList.remove("assign-minion-slot--dragover");
-        const raw = e.dataTransfer?.getData("text/plain")?.trim();
-        if (!raw) {
-          return;
-        }
-        let resolvedId: string | null = null;
-        const parsed = parseDragPayload(raw);
-        if (parsed?.kind === "mastermind-minion") {
-          resolvedId = parsed.instanceId;
-        } else if (state.player.minions.some((m) => m.instanceId === raw)) {
-          resolvedId = raw;
-        }
-        if (!resolvedId) {
-          return;
-        }
-        const inst = state.player.minions.find((m) => m.instanceId === resolvedId);
-        if (!inst || busy.has(resolvedId)) {
-          return;
-        }
-        placeInstanceInSlot(resolvedId, slotIndex);
-        renderAssignMinionSlots();
-        onAssignSlotsChanged();
+      wireDropSlot(slot, {
+        key: `minion-${slotIndex}`,
+        accepts: ["mastermind-minion"],
+        isFilled: () => assignSlotInstanceIds[slotIndex] !== null,
+        onDrop: (raw) => {
+          let resolvedId: string | null = null;
+          const parsed = parseDragPayload(raw);
+          if (parsed?.kind === "mastermind-minion") {
+            resolvedId = parsed.instanceId;
+          } else if (state.player.minions.some((m) => m.instanceId === raw)) {
+            resolvedId = raw;
+          }
+          if (!resolvedId) {
+            return false;
+          }
+          const inst = state.player.minions.find((m) => m.instanceId === resolvedId);
+          if (!inst || busy.has(resolvedId)) {
+            return false;
+          }
+          placeInstanceInSlot(resolvedId, slotIndex);
+          renderAssignMinionSlots();
+          onAssignSlotsChanged();
+          return true;
+        },
       });
 
       const instanceId = assignSlotInstanceIds[slotIndex];
@@ -3689,14 +3736,16 @@ function initGameController(
     if (enableAssignDrag) {
       article.draggable = true;
       article.classList.add("assign-draggable-location");
+      setCardDragPayload(article, () => locationDragJson(loc.id));
       article.addEventListener("dragstart", (e) => {
         e.stopPropagation();
         beginCardDrag(e, locationDragJson(loc.id));
         e.dataTransfer!.effectAllowed = "copy";
       });
-      appendAddToPlannerButton(article, "Add location to planner", () => {
-        applyTargetPayloadToPlanner({ kind: "mastermind-location", locationId: loc.id });
-      });
+      appendAddToPlannerButton(article, "Add location to planner", () => ({
+        slot: "target",
+        staged: applyTargetPayloadToPlanner({ kind: "mastermind-location", locationId: loc.id }),
+      }));
     }
 
     const { meta, body } = appendCardHeroShell(article, resolveLocationCardArt(loc));
@@ -3819,6 +3868,7 @@ function initGameController(
         chip.appendChild(createAssetIconEl());
         chip.appendChild(document.createTextNode(displayValue));
         chip.title = `Drag to Plan mission target (slot ${si + 1})`;
+        setCardDragPayload(chip, () => assetDragJson(loc.id, si, targetVisibility));
         chip.addEventListener("dragstart", (e) => {
           e.stopPropagation();
           beginCardDrag(e, assetDragJson(loc.id, si, targetVisibility));
@@ -3935,6 +3985,8 @@ function initGameController(
       const isBusy = busy.has(inst.instanceId);
       const canDrag = mainOnly && !isBusy;
       card.draggable = canDrag;
+      /* The drag itself is started by the panel's delegated `dragstart`; this is only the hover. */
+      setCardDragPayload(card, () => minionDragJson(inst.instanceId));
       if (canDrag) {
         card.classList.add("assign-draggable-minion");
       }
@@ -4241,20 +4293,21 @@ function initGameController(
       const meta = dragMeta;
       article.draggable = true;
       article.classList.add("assign-draggable-mission");
+      const json = (): string =>
+        meta.source === "lair"
+          ? missionDragJson("lair", meta.missionTemplateId)
+          : meta.source === "event"
+            ? missionDragJson("event", meta.missionTemplateId)
+            : missionDragJson(
+                "omega",
+                meta.missionTemplateId,
+                meta.stageIndex,
+                meta.slotIndex,
+              );
+      setCardDragPayload(article, json);
       article.addEventListener("dragstart", (e) => {
         e.stopPropagation();
-        const json =
-          meta.source === "lair"
-            ? missionDragJson("lair", meta.missionTemplateId)
-            : meta.source === "event"
-              ? missionDragJson("event", meta.missionTemplateId)
-              : missionDragJson(
-                  "omega",
-                  meta.missionTemplateId,
-                  meta.stageIndex,
-                  meta.slotIndex,
-                );
-        beginCardDrag(e, json);
+        beginCardDrag(e, json());
         e.dataTransfer!.effectAllowed = "copy";
       });
       appendAddToPlannerButton(article, "Add mission to planner", () => {
@@ -4272,7 +4325,7 @@ function initGameController(
                 source: meta.source,
                 missionTemplateId: meta.missionTemplateId,
               };
-        applyMissionPayloadToPlanner(payload);
+        return { slot: "mission", staged: applyMissionPayloadToPlanner(payload) };
       });
     } else {
       article.draggable = false;
@@ -4500,6 +4553,7 @@ function initGameController(
       article.classList.add("asset-card--unavailable");
     }
     article.draggable = state.phase === "main" && available;
+    setCardDragPayload(article, () => assetCardDragJson(assetId));
     article.addEventListener("dragstart", (e) => {
       if (!article.draggable) {
         e.preventDefault();
@@ -4509,9 +4563,7 @@ function initGameController(
       e.dataTransfer!.effectAllowed = "copy";
     });
     if (article.draggable) {
-      appendAddToPlannerButton(article, "Add asset to planner", () => {
-        applyAssetToPlanner(assetId);
-      });
+      appendAddToPlannerButton(article, "Add asset to planner", () => applyAssetToPlanner(assetId));
     }
 
     const { meta, body } = appendCardHeroShell(article, resolveAssetCardArt(template));
@@ -6395,6 +6447,7 @@ Your lair`;
       pin.setAttribute("aria-label", tipLines.join(". "));
 
       pin.draggable = mainOnly;
+      setCardDragPayload(pin, () => locationDragJson(loc.id));
       pin.addEventListener("dragstart", (e) => {
         if (!pin.draggable) {
           e.preventDefault();
@@ -8191,6 +8244,7 @@ Your lair`;
   });
 
   ensureAssignPickSlotsWired();
+  setDragTokenFaces(dragTokenFace);
   renderAssignPickSlots();
   buildMapLayersPanel();
   refresh();
@@ -8221,3 +8275,5 @@ initStageScale();
 initGlobalTooltips();
 initDragFocus();
 initDropHints();
+initDragTether();
+initDragToken();
