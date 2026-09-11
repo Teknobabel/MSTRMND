@@ -5376,6 +5376,75 @@ body {
   box-shadow: 0 0 16px var(--red-glow-soft);
 }
 
+/* ---------------- Drop-target shine ---------------- */
+
+/*
+ * While a card is in hand, every mission planning slot that would take it runs a bright red shine
+ * around its own border — the far end of the drag, answering "where does this go?" before the
+ * player has to hunt for it. A filled slot shines exactly like an empty one: a drop onto a filled
+ * slot replaces what is in it, so it is just as much a destination. Which slots light up is
+ * decided in src/ui/dropHint.ts; this is only what the lit ones look like.
+ *
+ * The ring is one masked pseudo-element laid over the slot's own border: `inset: -1px` lands its
+ * border box on the slot's, and the two mask layers cancel each other everywhere but the band
+ * between them, so the shine travels the border instead of glowing out of the middle. Rotating
+ * the gradient's start angle is what moves it — a `transform` would carry the mask around with it
+ * and the ring would tilt off the slot.
+ *
+ * Angular speed is constant, which on a slot far wider than it is tall means the shine runs the
+ * long top and bottom edges and whips around the short ends. That is the right emphasis: the long
+ * edges are the ones the eye is on.
+ */
+
+@property --plan-slot-shine-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.plan-slot--drop-hint {
+  box-shadow: 0 0 14px var(--red-glow-soft);
+}
+
+/* Lower specificity than either --dragover rule above, so the slot actually under the cursor
+   still takes over the border and fill while the shine keeps running on top of it. */
+.plan-slot--drop-hint::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  /* Ring thickness: the mask below keeps the padding band and discards the content box. Two
+     pixels, not one — the whole stage is scaled down on shorter viewports (--ui-scale), and a
+     1px ring lands on a sub-pixel there and greys out to nothing. */
+  padding: 2px;
+  pointer-events: none;
+  /* A sharp leading edge at the start angle with the tail fading out behind it, so the band reads
+     as travelling in one direction rather than pulsing in place. */
+  background: conic-gradient(
+    from var(--plan-slot-shine-angle),
+    transparent 0deg,
+    transparent 250deg,
+    rgba(255, 43, 64, 0.3) 300deg,
+    var(--red-bright) 342deg,
+    #ffe3e7 354deg,
+    var(--red-bright) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: plan-slot-shine 1.5s linear infinite;
+}
+
+@keyframes plan-slot-shine {
+  to {
+    --plan-slot-shine-angle: 360deg;
+  }
+}
+
 .assign-minion-slot-placeholder {
   font-size: 0.78rem;
   letter-spacing: 0.04em;
@@ -5527,6 +5596,15 @@ body {
    */
   .map-telemetry__clock {
     display: none;
+  }
+
+  /*
+   * The drop shine's whole job is to be the moving thing at the edge of the player's eye. Frozen
+   * by the blanket rule above it would sit as an arbitrary arc on one edge, so it becomes a plain
+   * bright ring instead: the same "this slot takes the card" answer, held still.
+   */
+  .plan-slot--drop-hint::before {
+    background: var(--red-bright);
   }
 }
 
