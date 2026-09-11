@@ -2,8 +2,8 @@
  * Drag token: what the player carries while dragging a card. It stands in for the browser's own
  * drag image — a translucent snapshot of the whole card, which the page cannot restyle or animate
  * once the drag has begun, and which is big enough (a mission card is 514x433 stage pixels, a
- * roster minion 780 wide) that by the time the pointer reaches the planner it is hanging over the
- * very slots it is being aimed at.
+ * roster minion's portrait card nearly 600 tall) that by the time the pointer reaches the planner
+ * it is hanging over the very slots it is being aimed at.
  *
  * The token is the card folded into the chip it will become once staged — thumbnail and name —
  * lifted off with a tilt and a shadow, swaying a little with the pointer's sideways speed. It

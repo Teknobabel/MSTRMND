@@ -3,6 +3,7 @@
     "id": "static",
     "name": "Static",
     "description": "A teenage botnet wearing a hoodie. Firewalls file restraining orders against her.",
+    "cardArt": "/assets/cards/custom/minion-static.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "brilliant",
@@ -18,6 +19,7 @@
     "id": "glitch",
     "name": "Glitch",
     "description": "Doesn't hack systems so much as convince them to self-destruct out of spite.",
+    "cardArt": "/assets/cards/custom/minion-glitch.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "saboteur",
@@ -39,6 +41,7 @@
     "id": "knuckles",
     "name": "Knuckles",
     "description": "Retired pit fighter. Solves most problems with the same two tools.",
+    "cardArt": "/assets/cards/custom/minion-knuckles.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "tactician",
@@ -60,6 +63,7 @@
     "id": "tiny",
     "name": "Tiny",
     "description": "Two meters of quiet menace. Has never once needed to raise his voice.",
+    "cardArt": "/assets/cards/custom/minion-tiny.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "intimidating",
@@ -75,6 +79,7 @@
     "id": "fingers",
     "name": "Fingers",
     "description": "Once stole a judge's gavel mid-sentencing. Keeps it on her mantel.",
+    "cardArt": "/assets/cards/custom/minion-fingers.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "stealthy",
@@ -96,6 +101,7 @@
     "id": "gasket",
     "name": "Gasket",
     "description": "Builds doomsday devices out of vending machine parts. Warranty void everywhere.",
+    "cardArt": "/assets/cards/custom/minion-gasket.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "brilliant",
@@ -111,6 +117,7 @@
     "id": "fuse",
     "name": "Fuse",
     "description": "Believes every structural problem is three charges away from a structural solution.",
+    "cardArt": "/assets/cards/custom/minion-fuse.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "fearless",
@@ -126,6 +133,7 @@
     "id": "lanyard",
     "name": "Lanyard",
     "description": "Walks in through the front door with a laminated badge. The lamination is real; nothing else on it is.",
+    "cardArt": "/assets/cards/custom/minion-lanyard.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "magnetic",
@@ -141,6 +149,7 @@
     "id": "vents",
     "name": "Vents",
     "description": "Knows every building by its ductwork and has strong opinions about airflow codes. Doors are for guests.",
+    "cardArt": "/assets/cards/custom/minion-vents.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "swift",
@@ -156,6 +165,7 @@
     "id": "shim",
     "name": "Shim",
     "description": "Carries eleven kinds of tape and a soldering iron she calls a scalpel. Every prototype works exactly once, which is usually enough.",
+    "cardArt": "/assets/cards/custom/minion-shim.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "meticulous",
@@ -171,6 +181,7 @@
     "id": "magpie",
     "name": "Magpie",
     "description": "Cannot walk past anything that glitters. Her flat is a museum with no plaques and no insurance.",
+    "cardArt": "/assets/cards/custom/minion-magpie.webp",
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "swift",
@@ -186,6 +197,7 @@
     "id": "penny",
     "name": "Penny Dreadful",
     "description": "Keeps double books for triple agents. Her audits end careers, occasionally on purpose.",
+    "cardArt": "/assets/cards/custom/minion-penny.webp",
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "connected",
@@ -207,6 +219,7 @@
     "id": "milo",
     "name": "Smooth Milo",
     "description": "Could sell sand to a desert, and has — twice, to the same desert.",
+    "cardArt": "/assets/cards/custom/minion-milo.webp",
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "magnetic",
@@ -228,6 +241,7 @@
     "id": "madame_vex",
     "name": "Madame Vex",
     "description": "Attended nine embassy galas last year under nine different names. Was the guest of honor at three.",
+    "cardArt": "/assets/cards/custom/minion-madame-vex.webp",
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "stealthy",
@@ -250,6 +264,7 @@
     "id": "crater",
     "name": "Crater",
     "description": "Demolitions artist. Insists every explosion is 'load-bearing.'",
+    "cardArt": "/assets/cards/custom/minion-crater.webp",
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "fearless",
@@ -272,6 +287,7 @@
     "id": "sable",
     "name": "Sable",
     "description": "Steals reputations first, valuables second. Considers alarms a form of applause.",
+    "cardArt": "/assets/cards/custom/minion-sable.webp",
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "ruthless",
@@ -294,6 +310,7 @@
     "id": "torque",
     "name": "Torque",
     "description": "Rebuilds engines blindfolded and bridges without permits. Measures twice, detonates once.",
+    "cardArt": "/assets/cards/custom/minion-torque.webp",
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "meticulous",
@@ -316,6 +333,7 @@
     "id": "dr_helix",
     "name": "Dr. Helix",
     "description": "Lost his ethics board approval and considers it a promotion.",
+    "cardArt": "/assets/cards/custom/minion-dr-helix.webp",
     "hireCommandPoints": 4,
     "levelUpTraitOrder": [
       "brilliant",
@@ -332,6 +350,7 @@
     "id": "nightshade",
     "name": "Nightshade",
     "description": "Security footage of her exists only as a rumor other cameras whisper about.",
+    "cardArt": "/assets/cards/custom/minion-nightshade.webp",
     "hireCommandPoints": 4,
     "levelUpTraitOrder": [
       "stealthy",
@@ -349,6 +368,7 @@
     "id": "the_actuary",
     "name": "The Actuary",
     "description": "Calculated the exact insurance value of the world. Intends to collect.",
+    "cardArt": "/assets/cards/custom/minion-the-actuary.webp",
     "hireCommandPoints": 4,
     "levelUpTraitOrder": [
       "brilliant",
@@ -366,6 +386,7 @@
     "id": "baron_flux",
     "name": "Baron Von Flux",
     "description": "Disgraced nobility, twice-disgraced physicist. His lab coat has epaulettes.",
+    "cardArt": "/assets/cards/custom/minion-baron-flux.webp",
     "hireCommandPoints": 5,
     "levelUpTraitOrder": [
       "brilliant",
@@ -389,6 +410,7 @@
     "id": "the_duchess",
     "name": "The Duchess",
     "description": "Three governments have collapsed at her dinner parties. The canapés were excellent.",
+    "cardArt": "/assets/cards/custom/minion-the-duchess.webp",
     "hireCommandPoints": 5,
     "levelUpTraitOrder": [
       "connected",
@@ -406,6 +428,7 @@
     "id": "colonel_razor",
     "name": "Colonel Razor",
     "description": "Court-martialed for winning a war nobody authorized. Still salutes himself.",
+    "cardArt": "/assets/cards/custom/minion-colonel-razor.webp",
     "hireCommandPoints": 6,
     "levelUpTraitOrder": [
       "brutal",

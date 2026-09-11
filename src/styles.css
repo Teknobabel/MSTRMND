@@ -32,6 +32,8 @@
   /* Chamfer sizes for clipped / faked corner cuts */
   --cut: 12px;
   --cut-sm: 7px;
+  /* Width of a portrait minion card, in the drawer and as the planner's hover preview */
+  --minion-card-w: 15.5rem;
   /* Diagonal edge line drawn along a chamfered corner (transparent outside) */
   --edge-line: linear-gradient(
     135deg,
@@ -1486,6 +1488,25 @@ body {
 .drawer__panel .locations-panel-column,
 .drawer__panel .minions-panel-column {
   min-height: 0;
+}
+
+/*
+ * The Minions columns are as wide as their row of cards instead of splitting the drawer evenly,
+ * so the roster's cards and the hire offers read as one strip; the hire column takes whatever is
+ * left. Either gives way down to a single card's width, past which its row scrolls sideways.
+ */
+.drawer__panel .minions-panel-column {
+  flex: 0 1 auto;
+  min-width: var(--minion-card-w);
+}
+
+.drawer__panel .minions-panel-column--hire {
+  flex-grow: 1;
+}
+
+/* As tall as the Reroll button beside the hire heading, so both rows of cards start level. */
+.drawer__panel .minions-panel-column-title {
+  min-height: 28px;
 }
 
 .drawer__panel .lair-panel-column > .lair-panel-missions,
@@ -3153,7 +3174,8 @@ body {
   grid-column: 1 / -1;
 }
 
-.asset-card-description {
+.asset-card-description,
+.minions-card-description {
   margin: 0.35rem 0 0;
   font-size: 0.76rem;
   line-height: 1.4;
@@ -3187,26 +3209,13 @@ body {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.asset-card:hover > .card-art,
-.minions-card:hover > .card-art {
+.asset-card:hover > .card-art {
   border-color: var(--line-2);
   box-shadow: 0 0 10px var(--red-glow-soft);
 }
 
 .card-with-art > .card-body {
   flex: 1 1 auto;
-  min-width: 0;
-}
-
-.minions-card.card-with-art {
-  align-items: stretch;
-}
-
-.minions-card.card-with-art > .card-art {
-  width: 104px;
-  height: auto;
-  align-self: stretch;
-  flex-shrink: 1;
   min-width: 0;
 }
 
@@ -3296,6 +3305,29 @@ body {
 .card-hero__meta .minions-card-badge:hover,
 .card-hero__meta .minions-card-badge:focus-visible {
   background: rgba(44, 13, 17, 0.95);
+}
+
+/*
+ * Minion cards wear the same hero, turned upright: the portraits are authored 9:16, so the
+ * banner is drawn at that ratio and nothing of the figure is cropped. The body below stacks its
+ * lines and lets the hire button settle at the foot, so the buttons of a row of cards line up
+ * however many traits each one lists.
+ */
+.minions-card > .card-hero > .card-art {
+  aspect-ratio: 9 / 16;
+}
+
+.minions-card > .card-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* The trait row's `flex-basis: 100%` is for starting a new line in a wrapping stats row; down
+   this column it would be read as the whole height of the body. */
+.minions-card > .card-body > .card-trait-row {
+  flex: none;
 }
 
 .card-art--chip {
@@ -4838,14 +4870,19 @@ body {
   font-size: 0.58rem;
 }
 
+/*
+ * The cards stand side by side, one portrait-width column each, and scroll sideways past the
+ * edge rather than wrapping — a second row of cards this tall would start below the drawer. The
+ * row is as tall as its tallest card and every card stretches to it.
+ */
 .minions-panel-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--minion-card-w);
+  justify-content: start;
+  align-content: start;
   gap: 0.5rem;
-}
-
-.minions-card--roster {
-  padding-right: 2.35rem;
+  overflow-x: auto;
 }
 
 .minions-card--available {
@@ -4853,8 +4890,57 @@ body {
   opacity: 0.95;
 }
 
-.minions-card--available .minions-card-title {
-  padding-right: 4.8rem;
+/*
+ * An unfilled place in a Minions drawer row: a card's outline, dashed and empty, in the hatched
+ * fill the planner's empty slots use. It stretches to the height of the cards beside it; with
+ * none beside it, it stands as tall as a typical card — the portrait plus a few lines of body —
+ * so an empty roster still lines up with the hire offers next to it.
+ */
+.minions-card-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  box-sizing: border-box;
+  min-height: calc(var(--minion-card-w) * 16 / 9 + 8.5rem);
+  padding: 1rem;
+  border: 1px dashed var(--line-2);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(232, 17, 45, 0.03) 0 8px,
+      transparent 8px 16px
+    ),
+    rgba(6, 2, 3, 0.5);
+  color: var(--text-3);
+  text-align: center;
+}
+
+.minions-card-empty svg {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 0.2rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.6;
+}
+
+.minions-card-empty__label {
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.minions-card-empty__hint {
+  font-size: 0.76rem;
+  font-style: italic;
 }
 
 .minions-card--rehire {
@@ -5135,14 +5221,11 @@ body {
 }
 
 .minions-card-hire {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
-  flex-shrink: 0;
-  min-height: 28px;
-  padding: 0.2rem 0.6rem;
-  font-size: 0.58rem;
-  z-index: 2;
+  margin-top: auto;
+  width: 100%;
+  min-height: 30px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.62rem;
 }
 
 /* ============================================================
@@ -5247,6 +5330,13 @@ body {
   border: 1px solid var(--line-2);
   background: var(--panel-bg-solid);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75), 0 0 18px var(--red-glow-soft);
+}
+
+/* A minion's portrait is as tall as it is at the drawer's card width; any wider and it would
+   outgrow the screen. */
+.minions-card.assign-pick-preview-card {
+  width: var(--minion-card-w);
+  max-width: var(--minion-card-w);
 }
 
 .assign-pick-slot-clear,

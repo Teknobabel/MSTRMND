@@ -150,6 +150,7 @@ import {
   wireDropSlot,
 } from "./ui/dropHint";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
+import { freshRow, stableRow, type RowSlots } from "./ui/stableRow";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
   appendCardArtShell,
@@ -3511,7 +3512,46 @@ function initGameController(
   }
 
   /**
-   * The roster card for a staged minion, minus the fire button — the preview a collapsed
+   * The art-led minion card every minion surface shares. The portrait runs full-bleed down the
+   * top of the card with the name and CP/level/XP badges on its scrim; the flavour line and the
+   * trait pills follow under it. Returns the body for whatever the surface adds after the traits.
+   */
+  function fillMinionCard(
+    card: HTMLElement,
+    tpl: (typeof content.minions)[number] | undefined,
+    fallbackName: string,
+    stats: { cpCost: string | number; level: number; xp: number },
+    traits: { ids: string[]; dynamic: readonly DynamicTrait[] } | null,
+  ): HTMLDivElement {
+    const { meta, body } = appendCardHeroShell(card, resolveMinionCardArt(tpl));
+
+    const title = document.createElement("h4");
+    title.className = "minions-card-title";
+    title.textContent = tpl?.name ?? fallbackName;
+    meta.appendChild(title);
+    meta.appendChild(createMinionsCardStatsRow(stats));
+
+    const descText = tpl?.description?.trim();
+    if (descText) {
+      const desc = document.createElement("p");
+      desc.className = "minions-card-description";
+      desc.textContent = descText;
+      body.appendChild(desc);
+    }
+
+    /* The trait pills stay under the art: they wrap to any number of lines, which would push
+     * the name up the portrait. */
+    if (traits !== null) {
+      appendMinionTraits(body, content, traits.ids, {
+        roster: state.player.minions,
+        traits: traits.dynamic,
+      });
+    }
+    return body;
+  }
+
+  /**
+   * The roster card for a staged minion, minus its buttons — the preview a collapsed
    * participant chip floats on hover. Traits live here now rather than on the chip itself, which
    * is what keeps the Minions field to one line per slot.
    */
@@ -3519,24 +3559,52 @@ function initGameController(
     const tpl = inst ? content.minions.find((t) => t.id === inst.templateId) : undefined;
     const card = document.createElement("article");
     card.className = "minions-card assign-pick-preview-card";
-    const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
-    const title = document.createElement("h4");
-    title.className = "minions-card-title";
-    title.textContent = tpl?.name ?? instanceId;
-    body.appendChild(title);
-    const statsRow = createMinionsCardStatsRow({
-      cpCost: tpl?.hireCommandPoints ?? "-",
-      level: inst?.currentLevel ?? 0,
-      xp: inst?.currentExperience ?? 0,
-    });
-    if (inst !== undefined) {
-      appendMinionTraits(statsRow, content, inst.traitIds, {
-        roster: state.player.minions,
-        traits: inst.dynamicTraits,
-      });
-    }
-    body.appendChild(statsRow);
+    fillMinionCard(
+      card,
+      tpl,
+      instanceId,
+      {
+        cpCost: tpl?.hireCommandPoints ?? "-",
+        level: inst?.currentLevel ?? 0,
+        xp: inst?.currentExperience ?? 0,
+      },
+      inst === undefined ? null : { ids: inst.traitIds, dynamic: inst.dynamicTraits },
+    );
     return card;
+  }
+
+  function minionSlotKey(slotIndex: number): string {
+    return `minion-${slotIndex}`;
+  }
+
+  /** Puts hired minion `instanceId` in participant slot `slotIndex`, if it is free to go. */
+  function stageMinionSlot(slotIndex: number, instanceId: string): boolean {
+    const inst = state.player.minions.find((m) => m.instanceId === instanceId);
+    if (!inst || busyInstanceIds(state.activeMissions).has(instanceId)) {
+      return false;
+    }
+    placeInstanceInSlot(instanceId, slotIndex);
+    renderAssignMinionSlots();
+    onAssignSlotsChanged();
+    return true;
+  }
+
+  /**
+   * The roster card's add-to-planner action: puts the minion in the first empty participant slot
+   * the planned mission can use. A minion already staged is shaken off by the slot it is in rather
+   * than moved; with every usable slot taken there is nowhere to send it.
+   */
+  function applyMinionToPlanner(instanceId: string): PlannerSend {
+    const usable = assignSlotInstanceIds.slice(0, stagedParticipantCeiling());
+    const stagedIndex = usable.indexOf(instanceId);
+    if (stagedIndex >= 0) {
+      return { slot: minionSlotKey(stagedIndex), staged: false };
+    }
+    const emptyIndex = usable.indexOf(null);
+    if (emptyIndex < 0) {
+      return null;
+    }
+    return { slot: minionSlotKey(emptyIndex), staged: stageMinionSlot(emptyIndex, instanceId) };
   }
 
   function renderAssignMinionSlots(): void {
@@ -3552,28 +3620,18 @@ function initGameController(
       slot.className = "assign-minion-slot";
       slot.dataset.slotIndex = String(slotIndex);
       wireDropSlot(slot, {
-        key: `minion-${slotIndex}`,
+        key: minionSlotKey(slotIndex),
         accepts: ["mastermind-minion"],
         isFilled: () => assignSlotInstanceIds[slotIndex] !== null,
         onDrop: (raw) => {
-          let resolvedId: string | null = null;
           const parsed = parseDragPayload(raw);
-          if (parsed?.kind === "mastermind-minion") {
-            resolvedId = parsed.instanceId;
-          } else if (state.player.minions.some((m) => m.instanceId === raw)) {
-            resolvedId = raw;
-          }
-          if (!resolvedId) {
-            return false;
-          }
-          const inst = state.player.minions.find((m) => m.instanceId === resolvedId);
-          if (!inst || busy.has(resolvedId)) {
-            return false;
-          }
-          placeInstanceInSlot(resolvedId, slotIndex);
-          renderAssignMinionSlots();
-          onAssignSlotsChanged();
-          return true;
+          const resolvedId =
+            parsed?.kind === "mastermind-minion"
+              ? parsed.instanceId
+              : state.player.minions.some((m) => m.instanceId === raw)
+                ? raw
+                : null;
+          return resolvedId !== null && stageMinionSlot(slotIndex, resolvedId);
         },
       });
 
@@ -3967,16 +4025,48 @@ function initGameController(
     }
   }
 
-  function fillMinionsRosterInto(container: HTMLElement): void {
-    if (state.player.minions.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "minions-panel-empty";
-      empty.textContent = "None hired yet.";
-      container.appendChild(empty);
-      return;
+  /**
+   * A dashed placeholder the size of a minion card, standing in a Minions drawer row for a place
+   * nobody fills yet, so the row shows how much room it has rather than only what is in it.
+   */
+  function createEmptyMinionSlot(hint: string): HTMLElement {
+    const slot = document.createElement("div");
+    slot.className = "minions-card-empty";
+    slot.innerHTML = ICON_PERSON;
+    const label = document.createElement("span");
+    label.className = "minions-card-empty__label";
+    label.textContent = "Empty slot";
+    const hintEl = document.createElement("span");
+    hintEl.className = "minions-card-empty__hint";
+    hintEl.textContent = hint;
+    slot.append(label, hintEl);
+    return slot;
+  }
+
+  /**
+   * Draws a Minions drawer row: `cards`, keyed, with `emptyCount` empty slots among them. Laid
+   * out fresh when `held` is `null`; otherwise against `held`, the row as last drawn, so nothing
+   * that is still there moves (see `ui/stableRow.ts`). Returns the layout it drew.
+   */
+  function appendMinionRow(
+    container: HTMLElement,
+    cards: ReadonlyMap<string, HTMLElement>,
+    emptyCount: number,
+    emptyHint: string,
+    held: RowSlots | null,
+  ): RowSlots {
+    const keys = [...cards.keys()];
+    const slots = held === null ? freshRow(keys, emptyCount) : stableRow(held, keys, emptyCount);
+    for (const key of slots) {
+      container.appendChild(key === null ? createEmptyMinionSlot(emptyHint) : cards.get(key)!);
     }
+    return slots;
+  }
+
+  function fillMinionsRosterInto(container: HTMLElement, held: RowSlots | null): RowSlots {
     const busy = busyInstanceIds(state.activeMissions);
     const mainOnly = state.phase === "main";
+    const cards = new Map<string, HTMLElement>();
     for (const inst of state.player.minions) {
       const tpl = content.minions.find((m) => m.id === inst.templateId);
       const card = document.createElement("article");
@@ -3993,21 +4083,22 @@ function initGameController(
       if (isBusy) {
         card.classList.add("minions-card--busy");
       }
-      const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
-      const title = document.createElement("h4");
-      title.className = "minions-card-title";
-      title.textContent = tpl?.name ?? inst.templateId;
-      body.appendChild(title);
-      const statsRow = createMinionsCardStatsRow({
-        cpCost: tpl?.hireCommandPoints ?? "—",
-        level: inst.currentLevel,
-        xp: inst.currentExperience,
-      });
-      appendMinionTraits(statsRow, content, inst.traitIds, {
-        roster: state.player.minions,
-        traits: inst.dynamicTraits,
-      });
-      body.appendChild(statsRow);
+      if (canDrag) {
+        appendAddToPlannerButton(card, "Add minion to planner", () =>
+          applyMinionToPlanner(inst.instanceId),
+        );
+      }
+      const body = fillMinionCard(
+        card,
+        tpl,
+        inst.templateId,
+        {
+          cpCost: tpl?.hireCommandPoints ?? "—",
+          level: inst.currentLevel,
+          xp: inst.currentExperience,
+        },
+        { ids: inst.traitIds, dynamic: inst.dynamicTraits },
+      );
       const activeForMinion = state.activeMissions.find((am) =>
         am.participantInstanceIds.includes(inst.instanceId),
       );
@@ -4053,26 +4144,30 @@ function initGameController(
       });
       card.appendChild(fireBtn);
 
-      container.appendChild(card);
+      cards.set(inst.instanceId, card);
     }
+
+    const slots = appendMinionRow(
+      container,
+      cards,
+      state.player.maxRosterSize - state.player.minions.length,
+      "Hire a minion to fill",
+      held,
+    );
+    if (container.childElementCount === 0) {
+      const empty = document.createElement("p");
+      empty.className = "minions-panel-empty";
+      empty.textContent = "None hired yet.";
+      container.appendChild(empty);
+    }
+    return slots;
   }
 
-  function fillMinionsHireInto(container: HTMLElement): void {
+  function fillMinionsHireInto(container: HTMLElement, held: RowSlots | null): RowSlots {
     const eligibleRehires = state.minionRehireQueue.filter(
       (e) => state.turnNumber >= e.availableFromTurn,
     );
-    if (
-      state.availableMinionTemplateIds.length === 0 &&
-      eligibleRehires.length === 0
-    ) {
-      const empty = document.createElement("p");
-      empty.className = "minions-panel-empty";
-      empty.textContent =
-        content.minions.length === 0
-          ? "No minion templates in catalog."
-          : "No hire offers right now.";
-      container.appendChild(empty);
-    }
+    const cards = new Map<string, HTMLElement>();
     for (const templateId of state.availableMinionTemplateIds) {
       const tpl = content.minions.find((m) => m.id === templateId);
       if (!tpl) {
@@ -4080,25 +4175,17 @@ function initGameController(
       }
       const card = document.createElement("article");
       card.className = "minions-card minions-card--available";
-      const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
-      const title = document.createElement("h4");
-      title.className = "minions-card-title";
-      title.textContent = tpl.name;
-      body.appendChild(title);
-      const statsRow = createMinionsCardStatsRow({
-        cpCost: tpl.hireCommandPoints,
-        level: tpl.startingLevel ?? 1,
-        xp: 0,
-      });
-      const startingIds = tpl.startingTraitIds ?? [];
-      appendMinionTraits(statsRow, content, startingIds, {
-        roster: state.player.minions,
-        traits: previewHireDynamicTraits(state, content, tpl.id),
-      });
-      body.appendChild(statsRow);
+      const body = fillMinionCard(
+        card,
+        tpl,
+        tpl.id,
+        { cpCost: tpl.hireCommandPoints, level: tpl.startingLevel ?? 1, xp: 0 },
+        {
+          ids: tpl.startingTraitIds ?? [],
+          dynamic: previewHireDynamicTraits(state, content, tpl.id),
+        },
+      );
 
-      const actions = document.createElement("div");
-      actions.className = "minions-card-actions";
       const hireBtn = document.createElement("button");
       hireBtn.type = "button";
       hireBtn.className = "btn btn-primary minions-card-hire";
@@ -4125,29 +4212,28 @@ function initGameController(
         dispatch((s) => hireMinion(s, content, tpl.id, crypto.randomUUID()));
       });
 
-      card.appendChild(hireBtn);
-      container.appendChild(card);
+      body.appendChild(hireBtn);
+      cards.set(`offer:${tpl.id}`, card);
     }
 
     for (const { minion: rehireInst } of eligibleRehires) {
       const tpl = content.minions.find((m) => m.id === rehireInst.templateId);
       const card = document.createElement("article");
       card.className = "minions-card minions-card--available minions-card--rehire";
-      const body = appendCardArtShell(card, resolveMinionCardArt(tpl));
-      const title = document.createElement("h4");
-      title.className = "minions-card-title";
-      title.textContent = tpl?.name ?? rehireInst.templateId;
-      body.appendChild(title);
-      const statsRow = createMinionsCardStatsRow({
-        cpCost: tpl?.hireCommandPoints ?? "—",
-        level: rehireInst.currentLevel,
-        xp: rehireInst.currentExperience,
-      });
-      appendMinionTraits(statsRow, content, rehireInst.traitIds, {
-        roster: state.player.minions,
-        traits: previewRehireDynamicTraits(state, content, rehireInst),
-      });
-      body.appendChild(statsRow);
+      const body = fillMinionCard(
+        card,
+        tpl,
+        rehireInst.templateId,
+        {
+          cpCost: tpl?.hireCommandPoints ?? "—",
+          level: rehireInst.currentLevel,
+          xp: rehireInst.currentExperience,
+        },
+        {
+          ids: rehireInst.traitIds,
+          dynamic: previewRehireDynamicTraits(state, content, rehireInst),
+        },
+      );
 
       const hireBtn = document.createElement("button");
       hireBtn.type = "button";
@@ -4178,9 +4264,29 @@ function initGameController(
         dispatch((s) => rehireMinion(s, content, rehireInst.instanceId));
       });
 
-      card.appendChild(hireBtn);
-      container.appendChild(card);
+      body.appendChild(hireBtn);
+      cards.set(`rehire:${rehireInst.instanceId}`, card);
     }
+
+    /* Re-hires ride on top of the pool rather than taking a spot in it, so only the fresh offers
+     * count against `maxHireOffers`. The spots a hire vacates are redrawn at end of turn. */
+    const slots = appendMinionRow(
+      container,
+      cards,
+      state.player.maxHireOffers - state.availableMinionTemplateIds.length,
+      "Refills at end of turn",
+      held,
+    );
+    if (container.childElementCount === 0) {
+      const empty = document.createElement("p");
+      empty.className = "minions-panel-empty";
+      empty.textContent =
+        content.minions.length === 0
+          ? "No minion templates in catalog."
+          : "No hire offers right now.";
+      container.appendChild(empty);
+    }
+    return slots;
   }
 
   /**
@@ -4192,8 +4298,20 @@ function initGameController(
     withDeferredCardArt(openDrawer !== "minions", buildMinionsPanel);
   }
 
+  /**
+   * The Minions drawer's rows as last drawn, and the turn they were drawn on. While the drawer is
+   * open, each redraw holds its rows to these, so a hire or a fire leaves an empty slot where the
+   * card stood instead of sliding its neighbours along. Closed, or on a new turn, the rows are
+   * drawn fresh; the drawer is redrawn once it has gone down so it is back in order when reopened.
+   */
+  let minionRows: { turn: number; roster: RowSlots; hire: RowSlots } | null = null;
+
   function buildMinionsPanel(): void {
     minionsPanelEl.innerHTML = "";
+    const held =
+      openDrawer === "minions" && minionRows?.turn === state.turnNumber ? minionRows : null;
+    let rosterSlots: RowSlots = [];
+    let hireSlots: RowSlots = [];
     const p = state.player;
     const eligibleRehires = state.minionRehireQueue.filter(
       (e) => state.turnNumber >= e.availableFromTurn,
@@ -4214,14 +4332,14 @@ function initGameController(
       const list = document.createElement("div");
       list.id = "minions-roster-list";
       list.className = "minions-panel-list";
-      fillMinionsRosterInto(list);
+      rosterSlots = fillMinionsRosterInto(list, held?.roster ?? null);
       section.appendChild(list);
       return section;
     }
 
     function buildHireSection(): HTMLElement {
       const section = document.createElement("section");
-      section.className = "minions-panel-column";
+      section.className = "minions-panel-column minions-panel-column--hire";
       section.setAttribute("aria-label", "Minions available for hire");
 
       const headingRow = document.createElement("div");
@@ -4260,7 +4378,7 @@ function initGameController(
       const list = document.createElement("div");
       list.id = "minions-available-list";
       list.className = "minions-panel-list";
-      fillMinionsHireInto(list);
+      hireSlots = fillMinionsHireInto(list, held?.hire ?? null);
       section.appendChild(list);
       return section;
     }
@@ -4270,6 +4388,7 @@ function initGameController(
     columnsWrap.appendChild(buildRosterSection());
     columnsWrap.appendChild(buildHireSection());
     minionsPanelEl.appendChild(columnsWrap);
+    minionRows = { turn: state.turnNumber, roster: rosterSlots, hire: hireSlots };
   }
 
   type MissionCardDragMeta =
@@ -7391,7 +7510,12 @@ Your lair`;
       if (e.target === drawer.el && e.propertyName === "transform") {
         drawer.el.classList.remove("drawer--closing");
         /* Landed. A menu that has gone back down is off screen, so it lets go of its art here
-         * rather than holding the decoded images for a drawer nobody has open. */
+         * rather than holding the decoded images for a drawer nobody has open. The Minions
+         * drawer held its rows still while it was up; now nobody is looking, they go back in
+         * order, drawn with their art parked like any closed menu's. */
+        if (drawer.id === "minions" && openDrawer !== "minions") {
+          renderMinionsPanel();
+        }
         if (drawer.id !== openDrawer) {
           unloadCardArt(drawer.panelEl);
         }
