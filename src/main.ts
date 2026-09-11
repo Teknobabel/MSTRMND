@@ -138,6 +138,7 @@ import {
   type MapLayerState,
 } from "./ui/map/mapLayers";
 import { omegaPhaseTargetsByLocation } from "./ui/map/omegaTargets";
+import { initDragFocus } from "./ui/dragFocus";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
@@ -8150,3 +8151,4 @@ startRunFromMenu = initGameController(catalog, navigation, runSetup).startRun;
 
 initStageScale();
 initGlobalTooltips();
+initDragFocus();

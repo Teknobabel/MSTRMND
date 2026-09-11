@@ -3041,6 +3041,28 @@ body {
   transform: translateY(-1px);
 }
 
+/*
+ * Drag focus. While a card is in hand everything but the card, the panels it sits inside, and
+ * the planner it is headed for sits back behind a slight blur. Which elements those are is
+ * `src/ui/dragFocus.ts`'s to work out — a filter blurs an element's contents along with it, so
+ * the only way to blur *around* a card is to blur the siblings of every step down to it, and
+ * that is a walk, not a selector.
+ *
+ * The blur is added to whatever filter the element already carried rather than replacing it:
+ * `filter` is one property, so dragFocus.ts parks the computed value in `--ui-drag-blur-base`
+ * (a drawer's drop shadow, an unavailable asset card's desaturation) and it is re-applied here
+ * ahead of the blur. Elements with nothing to preserve fall through the empty fallback.
+ *
+ * Authored in stage pixels like the rest of the shell, so it scales with `--ui-scale`. It
+ * arrives and leaves with the drag rather than easing: a `transition` here would land on
+ * elements that are already transitioning something of their own — an inspector pane sliding
+ * between slots, a drawer riding up — and replace it mid-flight.
+ */
+.ui-drag-blurred {
+  --ui-drag-blur: 3px;
+  filter: var(--ui-drag-blur-base, ) blur(var(--ui-drag-blur));
+}
+
 .asset-card--unavailable {
   opacity: 0.5;
   filter: saturate(0.4);
