@@ -3,6 +3,7 @@
     "id": "mount_cinder",
     "name": "Mount Cinder Complex",
     "description": "A hollowed-out volcano fortress: lava-tube hangars, a caldera helipad, and excellent acoustics for monologuing.",
+    "cardArt": "/assets/cards/custom/lair-mount-cinder.webp",
     "availableMissionIds": [
       "smash_and_grab",
       "ghost_heist",

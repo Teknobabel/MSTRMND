@@ -16,13 +16,11 @@
  * previewable and testable without a game state behind it.
  */
 import { createCardArtImg } from "./cardArt";
+import { ICON_CLIPBOARD, ICON_CRATE, briefIcon, briefPlaceholder, briefSectionLabel } from "./cardBrief";
 
 /** Highest intel a site can reach; the meter draws this many pips. */
 const BRIEF_INTEL_PIPS = 3;
 
-const ICON_CLIPBOARD =
-  '<path d="M9 3h6v3H9z"/><path d="M15 4.5h3v16H6v-16h3"/><path d="M9 11h6M9 15h4"/>';
-const ICON_CRATE = '<path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z"/><path d="M2.5 9h19"/>';
 const ICON_SKULL =
   '<path d="M12 3c-4 0-7 2.9-7 6.6 0 2.3 1.2 4 2.8 5v2.9c0 .8.6 1.5 1.4 1.5h5.6c.8 0 1.4-.7 1.4-1.5v-2.9c1.6-1 2.8-2.7 2.8-5C19 5.9 16 3 12 3Z"/><circle cx="9.2" cy="10" r="1.3"/><circle cx="14.8" cy="10" r="1.3"/>';
 const ICON_LOCK =
@@ -30,16 +28,6 @@ const ICON_LOCK =
 /** The card's own intel sigil with a line struck through it — the same eye, switched off. */
 const ICON_EYE_OFF =
   '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path d="M3 21 21 3"/>';
-
-function briefIcon(paths: string, className: string): SVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  svg.setAttribute("class", className);
-  svg.innerHTML = paths;
-  return svg;
-}
 
 /**
  * A site's file number, shown in the brief header. Flavour rather than data — but it has to be
@@ -89,39 +77,6 @@ export interface LocationBriefModel {
   agentNote: HTMLElement | null;
 }
 
-function briefSectionLabel(
-  iconPaths: string,
-  text: string,
-  tally: string | null,
-): HTMLElement {
-  const h = document.createElement("h5");
-  h.className = "loc-brief__label";
-  h.appendChild(briefIcon(iconPaths, "loc-brief__label-icon"));
-  const span = document.createElement("span");
-  span.className = "loc-brief__label-text";
-  span.textContent = text;
-  h.appendChild(span);
-  if (tally !== null) {
-    const t = document.createElement("span");
-    t.className = "loc-brief__tally";
-    t.textContent = tally;
-    h.appendChild(t);
-  }
-  return h;
-}
-
-/** The "nothing here yet" line a section shows instead of collapsing, so the form reads as blank
- * rather than absent — the whole point of a brief that fills in. */
-function briefPlaceholder(text: string, tooltip?: string): HTMLElement {
-  const p = document.createElement("p");
-  p.className = "loc-brief__empty";
-  p.textContent = text;
-  if (tooltip !== undefined) {
-    p.title = tooltip;
-  }
-  return p;
-}
-
 function briefIntelMeter(intelLevel: number): HTMLElement {
   const meter = document.createElement("span");
   meter.className = "loc-brief__meter";
@@ -143,14 +98,14 @@ function briefIntelMeter(intelLevel: number): HTMLElement {
  */
 function briefSealedRow(code: string, tooltip: string): HTMLElement {
   const li = document.createElement("li");
-  li.className = "loc-brief__asset loc-brief__asset--sealed";
+  li.className = "card-brief__asset card-brief__asset--sealed";
   li.title = tooltip;
   const thumb = document.createElement("span");
-  thumb.className = "loc-brief__asset-thumb loc-brief__asset-thumb--sealed";
+  thumb.className = "card-brief__asset-thumb card-brief__asset-thumb--sealed";
   thumb.appendChild(briefIcon(ICON_LOCK, "loc-brief__sealed-icon"));
   li.appendChild(thumb);
   const code_ = document.createElement("span");
-  code_.className = "loc-brief__asset-code";
+  code_.className = "card-brief__asset-code";
   code_.textContent = code;
   li.appendChild(code_);
   const bar = document.createElement("span");
@@ -169,16 +124,16 @@ function briefAssetRow(row: LocationBriefAssetRow): HTMLElement {
   li.title = row.tooltip;
 
   if (row.knowledge === "empty") {
-    li.className = "loc-brief__asset loc-brief__asset--empty";
+    li.className = "card-brief__asset card-brief__asset--empty";
     const thumb = document.createElement("span");
-    thumb.className = "loc-brief__asset-thumb loc-brief__asset-thumb--empty";
+    thumb.className = "card-brief__asset-thumb card-brief__asset-thumb--empty";
     li.appendChild(thumb);
     const code = document.createElement("span");
-    code.className = "loc-brief__asset-code";
+    code.className = "card-brief__asset-code";
     code.textContent = manifestCode(row.slotIndex);
     li.appendChild(code);
     const name = document.createElement("span");
-    name.className = "loc-brief__asset-name";
+    name.className = "card-brief__asset-name";
     name.textContent = "Slot cleared";
     li.appendChild(name);
     return li;
@@ -186,30 +141,30 @@ function briefAssetRow(row: LocationBriefAssetRow): HTMLElement {
 
   const identified = row.knowledge === "identified";
   li.className = identified
-    ? "loc-brief__asset loc-brief__asset--revealed"
-    : "loc-brief__asset loc-brief__asset--hidden";
+    ? "card-brief__asset card-brief__asset--revealed"
+    : "card-brief__asset card-brief__asset--hidden";
 
   if (row.art !== null) {
-    const img = createCardArtImg(row.art, "loc-brief__asset-thumb");
+    const img = createCardArtImg(row.art, "card-brief__asset-thumb");
     li.appendChild(img);
   } else {
     const thumb = document.createElement("span");
-    thumb.className = "loc-brief__asset-thumb loc-brief__asset-thumb--sealed";
+    thumb.className = "card-brief__asset-thumb card-brief__asset-thumb--sealed";
     li.appendChild(thumb);
   }
 
   const code = document.createElement("span");
-  code.className = "loc-brief__asset-code";
+  code.className = "card-brief__asset-code";
   code.textContent = manifestCode(row.slotIndex);
   li.appendChild(code);
 
   const name = document.createElement("span");
-  name.className = "loc-brief__asset-name";
+  name.className = "card-brief__asset-name";
   name.textContent = identified ? row.name : "Unidentified";
   li.appendChild(name);
 
   if (row.wire !== undefined) {
-    li.classList.add("loc-brief__asset--draggable");
+    li.classList.add("card-brief__asset--draggable");
     row.wire(li);
   }
   return li;
@@ -256,7 +211,7 @@ function briefNoIntelPlate(): HTMLElement {
  */
 export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
   const root = document.createElement("div");
-  root.className = "loc-brief";
+  root.className = "card-brief";
   root.dataset.intel = String(model.intelLevel);
 
   if (!model.identified) {
@@ -268,7 +223,7 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
     if (known.length > 0) {
       root.appendChild(briefSectionLabel(ICON_CRATE, "Confirmed Assets", null));
       const list = document.createElement("ul");
-      list.className = "loc-brief__assets";
+      list.className = "card-brief__assets";
       for (const row of known) {
         list.appendChild(briefAssetRow(row));
       }
@@ -279,9 +234,9 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
 
   /* Header: what file this is, and how much of it has been filled in. */
   const head = document.createElement("div");
-  head.className = "loc-brief__head";
+  head.className = "card-brief__head";
   const stamp = document.createElement("span");
-  stamp.className = "loc-brief__stamp";
+  stamp.className = "card-brief__stamp";
   stamp.textContent = "Intelligence Brief";
   head.appendChild(stamp);
   const code = document.createElement("span");
@@ -292,19 +247,19 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
   root.appendChild(head);
 
   const cols = document.createElement("div");
-  cols.className = "loc-brief__cols";
+  cols.className = "card-brief__cols";
   root.appendChild(cols);
 
   /* ---- Left: mission requirements (site traits + security stack, as one list) ---- */
   const reqs = document.createElement("section");
-  reqs.className = "loc-brief__col loc-brief__col--reqs";
+  reqs.className = "card-brief__col card-brief__col--reqs";
   reqs.appendChild(briefSectionLabel(ICON_CLIPBOARD, "Mission Requirements", null));
 
   if (model.requirementPills.length === 0 && model.classifiedSecurityCount === 0) {
     reqs.appendChild(briefPlaceholder("No special requirements"));
   } else {
     const pills = document.createElement("div");
-    pills.className = "loc-brief__pills";
+    pills.className = "card-brief__pills";
     for (const pill of model.requirementPills) {
       pills.appendChild(pill);
     }
@@ -345,7 +300,7 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
 
   /* ---- Right: the asset manifest ---- */
   const assets = document.createElement("section");
-  assets.className = "loc-brief__col loc-brief__col--assets";
+  assets.className = "card-brief__col card-brief__col--assets";
 
   const confirmed = model.assets.filter((a) => a.knowledge === "identified").length;
   const listed = model.assets.filter((a) => a.knowledge !== "empty").length;
@@ -368,7 +323,7 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
     );
   } else {
     const list = document.createElement("ul");
-    list.className = "loc-brief__assets";
+    list.className = "card-brief__assets";
     for (const row of model.assets) {
       list.appendChild(briefAssetRow(row));
     }

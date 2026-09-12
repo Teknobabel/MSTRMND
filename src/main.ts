@@ -140,9 +140,15 @@ import { mapSiteSignals, type MapSiteSignal } from "./ui/map/siteSignals";
 import {
   MAP_LAYER_GROUPS,
   MAP_LAYER_PLOT_CLASSES,
+  MAP_OVERLAY_SCALE_MAX,
+  MAP_OVERLAY_SCALE_MIN,
+  MAP_OVERLAY_SCALE_STEP,
+  clampMapOverlayScale,
   loadMapLayers,
+  loadMapOverlayScale,
   mapLayerPlotClasses,
   saveMapLayers,
+  saveMapOverlayScale,
   type MapLayerKey,
   type MapLayerState,
 } from "./ui/map/mapLayers";
@@ -165,6 +171,7 @@ import {
   locationDesignation,
   type LocationBriefAssetRow,
 } from "./ui/locationBrief";
+import { buildMissionBrief, type MissionBriefAssetRow } from "./ui/missionBrief";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
   appendCardArtShell,
@@ -287,6 +294,8 @@ const UNKNOWN_ICON_SVG_PATHS =
   '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>';
 const SECURITY_ICON_SVG_PATHS =
   '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>';
+const LEVEL_ICON_SVG_PATHS =
+  '<polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/>';
 /* Site-category sigils. Each names what the player means to do to a place rather than what the
  * place is: an arsenal to arm from, a government to work on strings, a market to crash. Solid
  * silhouettes (filled parts carry their own `fill`, overriding the pin's stroked default) so they
@@ -999,6 +1008,34 @@ function requiredMissionRequirementPillsEl(
     ownedAssets,
   );
   return wrap;
+}
+
+/**
+ * The mission card's own asset manifest: one row per distinct required asset, aggregating
+ * duplicate ids in a mission's requirement list into a single row with a quantity — the brief
+ * lists what a mission needs, not how many times its authors happened to repeat an id.
+ */
+function missionRequiredAssetRows(
+  assetIds: readonly string[],
+  ownedAssets: Readonly<Record<string, number>>,
+  catalog: ReturnType<typeof loadContent>,
+): MissionBriefAssetRow[] {
+  const counts = new Map<string, number>();
+  for (const id of assetIds) {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  const rows: MissionBriefAssetRow[] = [];
+  for (const [assetId, quantity] of counts) {
+    const template = catalog.assets.find((a) => a.id === assetId);
+    rows.push({
+      name: template?.name ?? assetId,
+      art: resolveAssetCardArt(template),
+      quantity,
+      have: (ownedAssets[assetId] ?? 0) >= quantity,
+      tooltip: formatStaticAssetTooltip(template, assetId),
+    });
+  }
+  return rows;
 }
 
 /** Per required-asset slot: filled name or "—" for empty. */
@@ -3934,13 +3971,6 @@ function initGameController(
     title.textContent = mission?.name ?? missionId;
     meta.appendChild(title);
 
-    if (mission?.description) {
-      const desc = document.createElement("p");
-      desc.className = "asset-card-description";
-      desc.textContent = mission.description;
-      body.appendChild(desc);
-    }
-
     if (mission) {
       const siteFilters = missionTargetTypeTargetsLocation(mission.targetType)
         ? formatTargetLocationFilters(mission, targetLocationDisplayName)
@@ -3965,20 +3995,24 @@ function initGameController(
 
       meta.appendChild(statsRow);
 
-      /* Requirement pills stay under the art: they wrap to any number of lines, which would
-       * push the name off the top of a fixed-height banner. */
+      /* The brief — stamp, description, then Required Skills / Required Assets side by side —
+       * stays under the art like a location card's dossier: it wraps to any number of lines,
+       * which would push the name off the top of a fixed-height banner. */
       const traitIdsForDisplay =
         mergedRequiredTraitIdsForDisplay !== undefined
           ? mergedRequiredTraitIdsForDisplay
           : mission.requiredTraitIds;
       const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
-      appendRequiredMissionRequirementPills(
-        body,
-        content,
-        traitIdsForDisplay,
-        rosterTraitIds,
-        mission.requiredAssetIds,
-        state.player.assets,
+      const requirementPills = sortedTraitIdsForDisplay(content, traitIdsForDisplay).map((tid) =>
+        createTraitPillEl(content, tid, rosterTraitIds),
+      );
+
+      body.appendChild(
+        buildMissionBrief({
+          description: mission.description ?? null,
+          requirementPills,
+          assets: missionRequiredAssetRows(mission.requiredAssetIds, state.player.assets, content),
+        }),
       );
 
       const effectsEl = createMissionCardEffectsEl(mission, content);
@@ -3986,6 +4020,14 @@ function initGameController(
         body.appendChild(effectsEl);
       }
     } else {
+      const briefHead = document.createElement("div");
+      briefHead.className = "card-brief__head";
+      const briefStamp = document.createElement("span");
+      briefStamp.className = "card-brief__stamp";
+      briefStamp.textContent = "Mission Brief";
+      briefHead.appendChild(briefStamp);
+      body.appendChild(briefHead);
+
       const dl = document.createElement("dl");
       dl.className = "asset-card-stats";
       appendMinionStatRows(dl, [{ label: "Mission id", value: missionId }]);
@@ -4198,6 +4240,51 @@ function initGameController(
         agentNote,
       }),
     );
+    return article;
+  }
+
+  /**
+   * The lair's own location card — the same hero-art shell and stat-badge treatment a site gets,
+   * so the player's base reads as a place on the map rather than a bare name over the tab rail.
+   * A lair has no type, security or intel to badge, so its one stat is the upgrade ladder, which
+   * is the closest thing it has to a location's level.
+   */
+  function buildLairCardArticle(lair: (typeof content.lairs)[number]): HTMLElement {
+    const article = document.createElement("article");
+    article.className = "location-card lair-card";
+    const { meta, body } = appendCardHeroShell(article, resolveLairCardArt(lair));
+
+    const title = document.createElement("h4");
+    title.className = "location-card-title";
+    title.textContent = lair.name;
+    meta.appendChild(title);
+
+    const total = lairUpgradeLevels(state.activeLairId, content).length;
+    const current = currentLairUpgradeLevel(
+      state.activeLairId,
+      state.completedLairUpgradeMissionIds,
+      content,
+    );
+    const levelValue =
+      current !== null ? `${current.index + 1} / ${total}` : total === 0 ? "—" : "Complete";
+
+    const statsRow = document.createElement("div");
+    statsRow.className = "minions-card-stats-row";
+    const levelBadge = document.createElement("div");
+    levelBadge.className = "minions-card-badge minions-card-badge--level";
+    levelBadge.title = `Upgrade Level: ${levelValue}`;
+    levelBadge.tabIndex = 0;
+    levelBadge.setAttribute("aria-label", `Upgrade Level: ${levelValue}`);
+    levelBadge.innerHTML = `${MINION_STAT_ICON_LEVEL}<span class="minions-card-badge__value">${levelValue}</span>`;
+    statsRow.appendChild(levelBadge);
+    meta.appendChild(statsRow);
+
+    if (lair.description) {
+      const desc = document.createElement("p");
+      desc.className = "asset-card-description";
+      desc.textContent = lair.description;
+      body.appendChild(desc);
+    }
     return article;
   }
 
@@ -5914,6 +6001,16 @@ function initGameController(
   /** The panel's own checkboxes, so a state change can push itself back onto them. */
   const mapLayerInputs = new Map<MapLayerKey, HTMLInputElement>();
   /**
+   * How big the Overlays group's readouts draw once a toggle turns them on — the name label and
+   * the omega/level/security/intel/assets tag rail. A player preference alongside `mapLayers`,
+   * parked the same way and for the same reason.
+   */
+  let mapOverlayScale: number = loadMapOverlayScale(
+    typeof localStorage === "undefined" ? null : localStorage,
+  );
+  let mapOverlayScaleInput: HTMLInputElement | null = null;
+  let mapOverlayScaleValueEl: HTMLElement | null = null;
+  /**
    * The reticle that snaps to whatever the pointer is over, and the marker it is currently on.
    *
    * Held apart from `mapProjectedEls` because everything in that list is pinned to one marker
@@ -6386,6 +6483,34 @@ function initGameController(
   }
 
   /**
+   * Push `mapOverlayScale` onto the plot as a CSS variable, the same way `applyMapLayerClasses`
+   * pushes the toggles as classes — a style write rather than a rebuild, so dragging the slider
+   * costs no more than flipping a checkbox does.
+   */
+  function applyMapOverlayScale(): void {
+    if (mapPlotEl === null) {
+      return;
+    }
+    mapPlotEl.style.setProperty("--map-overlay-scale", String(mapOverlayScale));
+  }
+
+  function setMapOverlayScale(value: number): void {
+    const clamped = clampMapOverlayScale(value);
+    if (clamped === mapOverlayScale) {
+      return;
+    }
+    mapOverlayScale = clamped;
+    saveMapOverlayScale(typeof localStorage === "undefined" ? null : localStorage, mapOverlayScale);
+    if (mapOverlayScaleInput !== null && Number(mapOverlayScaleInput.value) !== clamped) {
+      mapOverlayScaleInput.value = String(clamped);
+    }
+    if (mapOverlayScaleValueEl !== null) {
+      mapOverlayScaleValueEl.textContent = `${clamped.toFixed(1)}x`;
+    }
+    applyMapOverlayScale();
+  }
+
+  /**
    * The Map Layers panel, built once at startup from {@link MAP_LAYER_GROUPS}.
    *
    * Built once rather than per render because it holds no run state: what it shows is the
@@ -6434,8 +6559,56 @@ function initGameController(
 
         fieldset.appendChild(row);
       }
+
+      if (group.label === "Overlays") {
+        fieldset.appendChild(buildMapOverlayScaleRow());
+      }
+
       mapLayersPanelEl.appendChild(fieldset);
     }
+  }
+
+  /**
+   * The Overlays group's own slider: how big the name label and tag rail read once one of the
+   * checkboxes above turns them on. Not a `MapLayerKey` itself — it has no on/off state to
+   * default or normalize, just a number the plot renders at — so it is built by hand rather than
+   * from {@link MAP_LAYER_GROUPS}.
+   */
+  function buildMapOverlayScaleRow(): HTMLElement {
+    const row = document.createElement("div");
+    row.className = "map-layers-scale";
+
+    const label = document.createElement("label");
+    label.className = "map-layers-scale__label";
+    label.textContent = "Icon size";
+    label.htmlFor = "map-overlay-scale-input";
+    row.appendChild(label);
+
+    const input = document.createElement("input");
+    input.id = "map-overlay-scale-input";
+    input.type = "range";
+    input.className = "map-layers-scale__input";
+    input.min = String(MAP_OVERLAY_SCALE_MIN);
+    input.max = String(MAP_OVERLAY_SCALE_MAX);
+    input.step = String(MAP_OVERLAY_SCALE_STEP);
+    input.value = String(mapOverlayScale);
+    input.setAttribute(
+      "aria-label",
+      "Overlay icon size. Scales the name label and the omega, level, security, intel, and assets readouts on every pin.",
+    );
+    input.addEventListener("input", () => {
+      setMapOverlayScale(Number.parseFloat(input.value));
+    });
+    mapOverlayScaleInput = input;
+    row.appendChild(input);
+
+    const value = document.createElement("span");
+    value.className = "map-layers-scale__value";
+    value.textContent = `${mapOverlayScale.toFixed(1)}x`;
+    mapOverlayScaleValueEl = value;
+    row.appendChild(value);
+
+    return row;
   }
 
   /**
@@ -6882,18 +7055,14 @@ Your lair`;
       if (omegaMissionIds.length > 0) {
         tags.appendChild(createMapMarkerTag("omega", null, "\u03A9"));
       }
-      /* Intel and security ride the rail as a pair — one says how much of the site the player
-       * can see, the other how hard it is to walk into, and reading either alone is misleading.
-       * Both are `x / max` in the pin's tooltip; the chip is the numerator, which is the part
-       * that moves. */
-      tags.appendChild(
-        createMapMarkerTag(
-          "intel",
-          createSvgPillIcon(UNKNOWN_ICON_SVG_PATHS, "map-marker__tag-icon"),
-          `${intel}`,
-        ),
-      );
       if (identified) {
+        tags.appendChild(
+          createMapMarkerTag(
+            "level",
+            createSvgPillIcon(LEVEL_ICON_SVG_PATHS, "map-marker__tag-icon"),
+            `${loc.locationLevel}`,
+          ),
+        );
         tags.appendChild(
           createMapMarkerTag(
             "security",
@@ -6902,6 +7071,16 @@ Your lair`;
           ),
         );
       }
+      /* Intel rides after level and security rather than beside them — it is the one reading
+       * identity itself does not gate, so it sits last of the three. `x / max` in the tooltip;
+       * the chip is the numerator, which is the part that moves. */
+      tags.appendChild(
+        createMapMarkerTag(
+          "intel",
+          createSvgPillIcon(UNKNOWN_ICON_SVG_PATHS, "map-marker__tag-icon"),
+          `${intel}`,
+        ),
+      );
       if (revealedAssetNames.length > 0) {
         tags.appendChild(
           createMapMarkerTag(
@@ -6945,6 +7124,7 @@ Your lair`;
     /* The pins carry every decoration they could show; this is what decides which of them the
      * player is looking at. Applied before the first paint, like the camera below it. */
     applyMapLayerClasses();
+    applyMapOverlayScale();
     /* Build the camera and place the pins before this frame paints, then let the observer keep
      * them honest; observing alone would flash the map flat with every marker stacked at the
      * plot's top-left corner for a frame. */
@@ -7357,20 +7537,28 @@ Your lair`;
       container.appendChild(empty);
       return;
     }
-    const header = document.createElement("div");
-    header.className = "lair-panel-header";
-    const headerBody = appendCardArtShell(header, resolveLairCardArt(lair));
-    const nameEl = document.createElement("p");
-    nameEl.className = "lair-panel-name";
-    nameEl.textContent = lair.name;
-    headerBody.appendChild(nameEl);
-    if (lair.description) {
-      const desc = document.createElement("p");
-      desc.className = "lair-panel-description";
-      desc.textContent = lair.description;
-      headerBody.appendChild(desc);
+    /* The drawer keeps its own compact header — a wide column of cards below it has room to
+     * spare, and a full hero card there would dwarf the columns beside it. The map inspector's
+     * narrow pane is exactly where a site's card lives, so the lair gets the same one there,
+     * with the tabbed sections that follow now describing the base rather than introducing it. */
+    if (layout.kind === "columns") {
+      const header = document.createElement("div");
+      header.className = "lair-panel-header";
+      const headerBody = appendCardArtShell(header, resolveLairCardArt(lair));
+      const nameEl = document.createElement("p");
+      nameEl.className = "lair-panel-name";
+      nameEl.textContent = lair.name;
+      headerBody.appendChild(nameEl);
+      if (lair.description) {
+        const desc = document.createElement("p");
+        desc.className = "lair-panel-description";
+        desc.textContent = lair.description;
+        headerBody.appendChild(desc);
+      }
+      container.appendChild(header);
+    } else {
+      container.appendChild(buildLairCardArticle(lair));
     }
-    container.appendChild(header);
 
     function missionNameForSort(mid: string): string {
       return content.missions.find((m) => m.id === mid)?.name ?? mid;

@@ -25,6 +25,7 @@ export type MapLayerKey =
   | "names"
   | "intel"
   | "security"
+  | "level"
   | "omega"
   | "assets";
 
@@ -50,6 +51,7 @@ export const MAP_LAYER_DEFAULTS: MapLayerState = {
   names: false,
   intel: false,
   security: false,
+  level: false,
   omega: true,
   assets: true,
 };
@@ -101,9 +103,14 @@ export const MAP_LAYER_GROUPS: readonly MapLayerGroup[] = [
         hint: "Show every site's name at all times instead of on hover.",
       },
       {
-        key: "intel",
-        label: "Intel",
-        hint: "Show each site's intel level on its pin.",
+        key: "omega",
+        label: "Omega targets",
+        hint: "Flag every site the active Omega phase's missions can be aimed at.",
+      },
+      {
+        key: "level",
+        label: "Site level",
+        hint: "Show each site's level on its pin.",
       },
       {
         key: "security",
@@ -111,9 +118,9 @@ export const MAP_LAYER_GROUPS: readonly MapLayerGroup[] = [
         hint: "Show each site's security level on its pin.",
       },
       {
-        key: "omega",
-        label: "Omega targets",
-        hint: "Flag every site the active Omega phase's missions can be aimed at.",
+        key: "intel",
+        label: "Intel",
+        hint: "Show each site's intel level on its pin.",
       },
       {
         key: "assets",
@@ -188,6 +195,57 @@ export function saveMapLayers(storage: MapLayerStorage | null, layers: MapLayerS
 }
 
 /**
+ * How far the Overlays slider can push the size of the per-pin readouts — the name label and
+ * the omega/level/security/intel/assets tag rail. Independent of a category being on at all;
+ * this only says how big it reads once it is.
+ */
+export const MAP_OVERLAY_SCALE_MIN = 0.5;
+export const MAP_OVERLAY_SCALE_MAX = 2;
+export const MAP_OVERLAY_SCALE_STEP = 0.1;
+export const MAP_OVERLAY_SCALE_DEFAULT = 1;
+
+/** Where the scale preference is parked between sessions. Its own key: it is not a layer toggle. */
+export const MAP_OVERLAY_SCALE_STORAGE_KEY = "mastermind.mapOverlayScale.v1";
+
+/** Pull any input — a slider event, a stale storage read — back into the slider's own range. */
+export function clampMapOverlayScale(value: number): number {
+  if (!Number.isFinite(value)) {
+    return MAP_OVERLAY_SCALE_DEFAULT;
+  }
+  return Math.min(MAP_OVERLAY_SCALE_MAX, Math.max(MAP_OVERLAY_SCALE_MIN, value));
+}
+
+/** Read the parked scale. Same failure handling as {@link loadMapLayers}: a preference is not
+ * worth an exception. */
+export function loadMapOverlayScale(storage: MapLayerStorage | null): number {
+  if (storage === null) {
+    return MAP_OVERLAY_SCALE_DEFAULT;
+  }
+  try {
+    const text = storage.getItem(MAP_OVERLAY_SCALE_STORAGE_KEY);
+    if (text === null) {
+      return MAP_OVERLAY_SCALE_DEFAULT;
+    }
+    const parsed = Number.parseFloat(text);
+    return clampMapOverlayScale(parsed);
+  } catch {
+    return MAP_OVERLAY_SCALE_DEFAULT;
+  }
+}
+
+/** Park the scale. Silent on failure, for the reasons {@link loadMapLayers} gives. */
+export function saveMapOverlayScale(storage: MapLayerStorage | null, scale: number): void {
+  if (storage === null) {
+    return;
+  }
+  try {
+    storage.setItem(MAP_OVERLAY_SCALE_STORAGE_KEY, String(scale));
+  } catch {
+    /* A preference that cannot be parked is still a preference for this session. */
+  }
+}
+
+/**
  * Every class this module can put on the plot. `renderMapPanel` clears the lot before applying
  * {@link mapLayerPlotClasses}, so the list has to stay exhaustive.
  */
@@ -196,6 +254,7 @@ export const MAP_LAYER_PLOT_CLASSES: readonly string[] = [
   "map-plot--names",
   "map-plot--intel",
   "map-plot--security",
+  "map-plot--level",
   "map-plot--omega",
   "map-plot--assets",
 ];
@@ -222,6 +281,9 @@ export function mapLayerPlotClasses(layers: MapLayerState): string[] {
   }
   if (layers.security) {
     classes.push("map-plot--security");
+  }
+  if (layers.level) {
+    classes.push("map-plot--level");
   }
   if (layers.omega) {
     classes.push("map-plot--omega");

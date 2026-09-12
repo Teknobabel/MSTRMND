@@ -3527,41 +3527,47 @@ body {
 }
 
 /* ============================================================
-   Location intelligence brief
+   Card brief: two-column dossier under a card's art
    ------------------------------------------------------------
-   Everything a location card says under its art (`ui/locationBrief.ts`). The idea the styling
-   has to carry is that this is a *form*, and that the form is only as filled in as the player's
-   intel: a ruled header, two ruled columns, section labels stamped in the display face, and
-   blacked-out bars wherever the file is still sealed. Nothing collapses when it is unknown — an
-   empty section says so in its own space — so a card at intel 0 and the same card at intel 3
-   are recognisably the same page with more typed onto it.
+   Shared by the location card's Intelligence Brief (`ui/locationBrief.ts`) and the mission
+   card's Mission Brief (`ui/missionBrief.ts`): a ruled header, two ruled columns, section labels
+   stamped in the display face, and boxed rows for whatever a column is listing. The idea the
+   styling has to carry for a location is that this is a *form*, and that the form is only as
+   filled in as the player's intel: blacked-out bars wherever the file is still sealed, and
+   nothing collapsing when a section is empty — a card at intel 0 and the same card at intel 3
+   are recognisably the same page with more typed onto it. A mission has nothing to seal (its
+   requirements are public the moment it is offered), so it only ever draws the plain
+   header/columns/rows underneath that.
    ============================================================ */
 
-.loc-brief {
+.card-brief {
   /* Out to the card's padding box on both sides, so the header rule and the column divider run
      the full width of the card the way they would on a printed form. */
-  margin: 0.1rem -0.55rem -0.5rem;
+  margin: 0.5rem -0.55rem -0.5rem;
   padding: 0 0.55rem 0.45rem;
   font-family: var(--font-body);
   /* The halves stack on a narrow card (an inspector pane is a quarter of the map wide). Sized
      against the brief itself rather than the viewport — the same card is drawn at two widths on
      the same screen, so a media query cannot tell them apart. */
   container-type: inline-size;
-  container-name: loc-brief;
+  container-name: card-brief;
 }
 
-/* ---- Header strip: file number on the left, how much of it is filled in on the right ---- */
+/* ---- Header strip: file number on the left, how much of it is filled in on the right ----
+ * `.card-brief__head`/`.card-brief__stamp` are shared with the mission card's own "Mission
+ * Brief" stamp (`buildMissionCatalogArticle` in main.ts) — a mission has no code or intel meter
+ * to go with it, so it uses the stamp alone, but the ruled strip and tick read as the same mark. */
 
-.loc-brief__head {
+.card-brief__head {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0.18rem 0 0.22rem;
   border-bottom: 1px solid var(--line-1);
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.55rem;
 }
 
-.loc-brief__stamp {
+.card-brief__stamp {
   position: relative;
   padding-left: 0.6rem;
   font-family: var(--font-display);
@@ -3575,7 +3581,7 @@ body {
 
 /* The tick before the stamp: the same slanted edge the cards cut their corners with, stood up,
    so the brief is marked with the console's own mark rather than with a bullet. */
-.loc-brief__stamp::before {
+.card-brief__stamp::before {
   content: "";
   position: absolute;
   left: 0;
@@ -3626,23 +3632,24 @@ body {
 
 /* ---- The two halves ---- */
 
-.loc-brief__cols {
+.card-brief__cols {
   display: flex;
   align-items: stretch;
-  gap: 0.5rem;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
 }
 
-.loc-brief__col {
+.card-brief__col {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.22rem;
+  gap: 0.45rem;
 }
 
 /* The manifest gets the wider half: its lines are art plus a code plus a catalog name, where
    the requirements half wraps short pills and gives its slack back. */
-.loc-brief__col--assets {
+.card-brief__col--assets {
   flex-grow: 1.3;
   padding-left: 0.5rem;
   border-left: 1px solid var(--line-0);
@@ -3650,15 +3657,15 @@ body {
 
 /* Too narrow to rule down the middle: the halves become a stack and the divider turns into the
    rule between them. */
-@container loc-brief (max-width: 19rem) {
-  .loc-brief__cols {
+@container card-brief (max-width: 19rem) {
+  .card-brief__cols {
     display: block;
   }
 
-  .loc-brief__col--assets {
+  .card-brief__col--assets {
     padding-left: 0;
-    padding-top: 0.35rem;
-    margin-top: 0.35rem;
+    padding-top: 0.45rem;
+    margin-top: 0.45rem;
     border-left: 0;
     border-top: 1px solid var(--line-0);
   }
@@ -3666,7 +3673,7 @@ body {
 
 /* ---- Section labels ---- */
 
-.loc-brief__label {
+.card-brief__label {
   display: flex;
   align-items: center;
   gap: 0.28rem;
@@ -3679,11 +3686,11 @@ body {
   color: var(--text-2);
 }
 
-.loc-brief__label:not(:first-child) {
-  margin-top: 0.3rem;
+.card-brief__label:not(:first-child) {
+  margin-top: 0.55rem;
 }
 
-.loc-brief__label-icon {
+.card-brief__label-icon {
   width: 0.72rem;
   height: 0.72rem;
   flex: none;
@@ -3694,7 +3701,7 @@ body {
   stroke-linejoin: round;
 }
 
-.loc-brief__label-text {
+.card-brief__label-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3703,8 +3710,8 @@ body {
 /* Tight enough that "Mission Requirements" would clip (an inspector pane is a quarter of the
    map wide): the section labels give up their tracking before they give up their words. The
    ellipsis above is the last-resort guard behind this, not the working answer. */
-@container loc-brief (max-width: 26rem) {
-  .loc-brief__label {
+@container card-brief (max-width: 26rem) {
+  .card-brief__label {
     font-size: 0.52rem;
     letter-spacing: 0.05em;
   }
@@ -3712,7 +3719,7 @@ body {
 
 /* The count of what is confirmed out of what is listed — the one number that says how much of
    this half is still guesswork. */
-.loc-brief__tally {
+.card-brief__tally {
   margin-left: auto;
   padding: 0 0.22rem;
   flex: none;
@@ -3725,8 +3732,8 @@ body {
 }
 
 /* A section with nothing in it yet. Dotted rather than absent: the form keeps its shape. */
-.loc-brief__empty {
-  margin: 0.05rem 0 0;
+.card-brief__empty {
+  margin: 0;
   padding: 0.16rem 0.3rem;
   border: 1px dotted var(--line-1);
   font-size: 0.68rem;
@@ -3734,13 +3741,24 @@ body {
   color: var(--text-3);
 }
 
-/* ---- Requirements half ---- */
+/* ---- Requirements half ----
+ * Skills and traits read as the manifest's own family now: one column, full-width rows sized to
+ * the same footprint as `.card-brief__asset` — a wrap of little chips was quick to scan for one
+ * or two, but the asset list already proved a stacked column reads faster once there are more. */
 
-.loc-brief__pills {
+.card-brief__pills {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.22rem;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.card-brief__pills > .minions-trait-pill {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 24px;
+  padding: 0.2rem 0.3rem 0.2rem 0.4rem;
+  border-left-width: 2px;
+  font-size: 0.7rem;
 }
 
 /* A security measure the site has not had to show yet: it takes a pill's shape, so the player
@@ -3781,7 +3799,7 @@ body {
 .loc-brief__agents {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.3rem;
   font-size: 0.72rem;
   color: var(--text-1);
 }
@@ -3792,21 +3810,22 @@ body {
 
 /* ---- Asset manifest ---- */
 
-.loc-brief__assets {
+.card-brief__assets {
   display: flex;
   flex-direction: column;
-  gap: 0.18rem;
-  margin: 0.05rem 0 0;
+  gap: 0.3rem;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 /*
- * One line of the manifest: thumbnail, slot code, name. A grid rather than a flex row so the
- * codes line up down the column however long the names run — a manifest that does not line up
- * does not read as a manifest.
+ * One line of the manifest: thumbnail, code, name. A grid rather than a flex row so the codes
+ * line up down the column however long the names run — a manifest that does not line up does
+ * not read as a manifest. The mission brief reuses this row for its own required-assets list
+ * (`ui/missionBrief.ts`), with a unit count standing in for the location's slot code.
  */
-.loc-brief__asset {
+.card-brief__asset {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
@@ -3820,7 +3839,7 @@ body {
   transition: border-color 0.15s, background-color 0.15s;
 }
 
-.loc-brief__asset-thumb {
+.card-brief__asset-thumb {
   width: 34px;
   height: 24px;
   flex: none;
@@ -3833,8 +3852,8 @@ body {
 
 /* Slots the player knows the shape of but not the contents get a plate with a lock on it rather
    than a picture, so a sealed line reads at a glance against a photographed one. */
-.loc-brief__asset-thumb--sealed,
-.loc-brief__asset-thumb--empty {
+.card-brief__asset-thumb--sealed,
+.card-brief__asset-thumb--empty {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3851,7 +3870,7 @@ body {
   stroke-linejoin: round;
 }
 
-.loc-brief__asset-code {
+.card-brief__asset-code {
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -3859,54 +3878,54 @@ body {
   white-space: nowrap;
 }
 
-.loc-brief__asset-name {
+.card-brief__asset-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-0);
 }
 
-.loc-brief__asset--revealed {
+.card-brief__asset--revealed {
   border-left-color: var(--line-2);
 }
 
-.loc-brief__asset--hidden {
+.card-brief__asset--hidden {
   border-style: dashed;
 }
 
 /* The static standing in for an unidentified slot is a bright noise field at any size. Knocked
    back and tinted so a row of them reads as *absence* beside the photographed ones rather than
    as the brightest thing on the card. */
-.loc-brief__asset--hidden .loc-brief__asset-thumb {
+.card-brief__asset--hidden .card-brief__asset-thumb {
   filter: grayscale(1) brightness(0.5) contrast(0.85) opacity(0.6);
   border-style: dashed;
 }
 
-.loc-brief__asset--hidden .loc-brief__asset-name,
-.loc-brief__asset--sealed .loc-brief__asset-name {
+.card-brief__asset--hidden .card-brief__asset-name,
+.card-brief__asset--sealed .card-brief__asset-name {
   color: var(--text-3);
   letter-spacing: 0.08em;
 }
 
 /* An emptied slot is the one line that is finished rather than pending: the player already took
    what was here, so it is struck out rather than blacked out. */
-.loc-brief__asset--empty {
+.card-brief__asset--empty {
   border-style: dotted;
   background: transparent;
 }
 
-.loc-brief__asset--empty .loc-brief__asset-code,
-.loc-brief__asset--empty .loc-brief__asset-name {
+.card-brief__asset--empty .card-brief__asset-code,
+.card-brief__asset--empty .card-brief__asset-name {
   color: var(--text-3);
   text-decoration: line-through;
   text-decoration-color: var(--line-2);
 }
 
-.loc-brief__asset--sealed .loc-brief__asset-code {
+.card-brief__asset--sealed .card-brief__asset-code {
   color: var(--text-3);
 }
 
-.loc-brief__asset--sealed .loc-brief__redacted {
+.card-brief__asset--sealed .loc-brief__redacted {
   justify-self: start;
   padding: 0 0.2rem;
   font-size: 0.58rem;
@@ -3914,18 +3933,32 @@ body {
 }
 
 /* A manifest line the player can drag into the planner as a mission target. */
-.loc-brief__asset--draggable {
+.card-brief__asset--draggable {
   cursor: grab;
 }
 
-.loc-brief__asset--draggable:hover {
+.card-brief__asset--draggable:hover {
   border-color: var(--line-2);
   border-left-color: var(--red);
   background: rgba(44, 13, 17, 0.6);
 }
 
-.loc-brief__asset--draggable:active {
+.card-brief__asset--draggable:active {
   cursor: grabbing;
+}
+
+/* The mission brief's own pair: a required asset is always known, so there is nothing to
+   identify — only whether the player currently holds enough of it. */
+.card-brief__asset--have {
+  border-left-color: var(--line-2);
+}
+
+.card-brief__asset--missing {
+  border-style: dashed;
+}
+
+.card-brief__asset--missing .card-brief__asset-name {
+  color: var(--text-3);
 }
 
 /* ---- Intel 0: no file to read ---- */
@@ -4019,19 +4052,19 @@ body {
 }
 
 /* The `Confirmed Assets` tail: slots uncovered by play, which survive the blackout. */
-.loc-brief--nointel .loc-brief__label {
+.loc-brief--nointel .card-brief__label {
   margin-top: 0.3rem;
   padding-top: 0.35rem;
   border-top: 1px solid var(--line-0);
 }
 
-.loc-brief--nointel .loc-brief__label-icon {
+.loc-brief--nointel .card-brief__label-icon {
   stroke: var(--text-3);
 }
 
 /* The headline gives up size before it gives up its line, in two steps: an inspector-width card
    keeps "No Intel Available" on one line at this size, and the planner's hover preview below. */
-@container loc-brief (max-width: 26rem) {
+@container card-brief (max-width: 26rem) {
   .loc-brief__nointel-title {
     font-size: 1.12rem;
   }
@@ -4041,7 +4074,7 @@ body {
   }
 }
 
-@container loc-brief (max-width: 19rem) {
+@container card-brief (max-width: 19rem) {
   .loc-brief__nointel {
     gap: 0.55rem;
     padding: 0.5rem 0.1rem;
@@ -4096,19 +4129,22 @@ body {
    Mission card outcome effects
    ============================================================ */
 
+/* Laid out as the same two-column brief the skills/assets half above uses (see `.card-brief__cols`
+   in the shared "Card brief" rules) — success on the left, failure on the right, under a ruled
+   header rather than the block's own separately-styled panel. */
 .mission-card-effects {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.35rem;
-  padding-top: 0.35rem;
-  border-top: 1px dashed var(--line-1);
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line-1);
 }
 
 .mission-card-effects__group {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.45rem;
   min-width: 0;
 }
 
@@ -4143,13 +4179,21 @@ body {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.3rem;
 }
 
+/* One outcome line, boxed the same way `.card-brief__asset` and the requirement rows above it
+   are — same border, background and left accent — so a mission card reads as one continuous
+   sheet of equally-sized rows from Required Skills all the way down to On Failure. */
 .mission-card-effects__item {
   position: relative;
-  padding-left: 0.8rem;
-  font-size: 0.74rem;
+  padding: 0.2rem 0.3rem 0.2rem 0.95rem;
+  min-height: 24px;
+  box-sizing: border-box;
+  border: 1px solid var(--line-0);
+  border-left-width: 2px;
+  background: rgba(10, 4, 5, 0.4);
+  font-size: 0.7rem;
   line-height: 1.35;
   color: var(--text-1);
   word-break: break-word;
@@ -4158,7 +4202,8 @@ body {
 .mission-card-effects__item::before {
   content: "•";
   position: absolute;
-  left: 0.05rem;
+  left: 0.32rem;
+  top: 0.2rem;
   font-size: 0.75rem;
   line-height: 1.35;
   color: var(--text-3);
@@ -4166,24 +4211,26 @@ body {
 
 .mission-card-effects__item--good {
   color: var(--text-0);
+  border-left-color: var(--good-dim);
 }
 
 .mission-card-effects__item--good::before {
   content: "▲";
   font-size: 0.5rem;
   line-height: 1.7;
-  color: var(--good-dim);
+  color: var(--good);
 }
 
 .mission-card-effects__item--bad {
   color: var(--text-1);
+  border-left-color: var(--red-deep);
 }
 
 .mission-card-effects__item--bad::before {
   content: "▼";
   font-size: 0.5rem;
   line-height: 1.7;
-  color: var(--red-deep);
+  color: var(--red-bright);
 }
 
 /* Infamy, Heat, Intel level and Security level read as their icon inside an effect line;
@@ -4666,6 +4713,7 @@ body {
 
 /* Stretch the art to the panel so markers as % of the plot stay glued to the painted land. */
 .map-plot {
+  --map-overlay-scale: 1;
   position: absolute;
   inset: 0;
 }
@@ -5099,7 +5147,11 @@ body {
   position: absolute;
   left: 50%;
   top: 1.05rem;
-  transform: translateX(-50%);
+  /* Scaled from the top edge, closest to the pin, so growing the readout pushes it further
+   * down the map rather than up into the dot it is labelling. Set on `.map-plot` by the
+   * Overlays slider (see `mapLayers.ts`); the fallback covers a plot painted before JS runs. */
+  transform: translateX(-50%) scale(var(--map-overlay-scale, 1));
+  transform-origin: 50% 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -5152,6 +5204,7 @@ body {
 
 .map-plot--intel .map-marker__tag--intel,
 .map-plot--security .map-marker__tag--security,
+.map-plot--level .map-marker__tag--level,
 .map-plot--omega .map-marker__tag--omega,
 .map-plot--assets .map-marker__tag--assets {
   display: inline-flex;
@@ -5624,6 +5677,40 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The Overlays group's own control: how big the name label and tag rail read once a toggle
+   above turns them on. Sits under the checkboxes it applies to, set off with a rule so it does
+   not read as one more of them. */
+.map-layers-scale {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+  padding: 0.3rem 0.05rem 0.05rem;
+  border-top: 1px solid var(--line-1);
+}
+
+.map-layers-scale__label {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  color: var(--text-1);
+}
+
+.map-layers-scale__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--red);
+  cursor: pointer;
+}
+
+.map-layers-scale__value {
+  flex: 0 0 auto;
+  min-width: 2.4em;
+  text-align: right;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  color: var(--text-2);
 }
 
 
