@@ -2224,6 +2224,13 @@ body {
   white-space: nowrap;
 }
 
+/* An Unknown target's note is the one time this line is telling the player something they
+ * need to act on rather than just reading off a number, so it earns the weight. */
+.plan-chance__note strong {
+  font-weight: 700;
+  color: var(--text-0);
+}
+
 /* Live states. Empty (no number yet) and a true 0% both stay grey — there is nothing to sell. */
 .plan-chance--live .plan-chance__note {
   color: var(--text-1);
@@ -3519,6 +3526,547 @@ body {
   color: var(--red-bright);
 }
 
+/* ============================================================
+   Location intelligence brief
+   ------------------------------------------------------------
+   Everything a location card says under its art (`ui/locationBrief.ts`). The idea the styling
+   has to carry is that this is a *form*, and that the form is only as filled in as the player's
+   intel: a ruled header, two ruled columns, section labels stamped in the display face, and
+   blacked-out bars wherever the file is still sealed. Nothing collapses when it is unknown — an
+   empty section says so in its own space — so a card at intel 0 and the same card at intel 3
+   are recognisably the same page with more typed onto it.
+   ============================================================ */
+
+.loc-brief {
+  /* Out to the card's padding box on both sides, so the header rule and the column divider run
+     the full width of the card the way they would on a printed form. */
+  margin: 0.1rem -0.55rem -0.5rem;
+  padding: 0 0.55rem 0.45rem;
+  font-family: var(--font-body);
+  /* The halves stack on a narrow card (an inspector pane is a quarter of the map wide). Sized
+     against the brief itself rather than the viewport — the same card is drawn at two widths on
+     the same screen, so a media query cannot tell them apart. */
+  container-type: inline-size;
+  container-name: loc-brief;
+}
+
+/* ---- Header strip: file number on the left, how much of it is filled in on the right ---- */
+
+.loc-brief__head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.18rem 0 0.22rem;
+  border-bottom: 1px solid var(--line-1);
+  margin-bottom: 0.4rem;
+}
+
+.loc-brief__stamp {
+  position: relative;
+  padding-left: 0.6rem;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+  white-space: nowrap;
+}
+
+/* The tick before the stamp: the same slanted edge the cards cut their corners with, stood up,
+   so the brief is marked with the console's own mark rather than with a bullet. */
+.loc-brief__stamp::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 0.3rem;
+  height: 0.62rem;
+  transform: translateY(-50%) skewX(-20deg);
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red-glow);
+}
+
+.loc-brief__code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+}
+
+/* Intel meter: one pip per level, lit up to the site's current intel. The same three steps the
+   card's intel badge counts, drawn as a bar because here it reads as "how much of this page is
+   filled in" rather than as a stat. */
+.loc-brief__meter {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  cursor: help;
+}
+
+.loc-brief__pip {
+  width: 0.6rem;
+  height: 0.3rem;
+  border: 1px solid var(--line-1);
+  background: rgba(10, 4, 5, 0.6);
+  transform: skewX(-20deg);
+}
+
+.loc-brief__pip--lit {
+  border-color: var(--red);
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red-glow);
+}
+
+/* ---- The two halves ---- */
+
+.loc-brief__cols {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.loc-brief__col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+/* The manifest gets the wider half: its lines are art plus a code plus a catalog name, where
+   the requirements half wraps short pills and gives its slack back. */
+.loc-brief__col--assets {
+  flex-grow: 1.3;
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--line-0);
+}
+
+/* Too narrow to rule down the middle: the halves become a stack and the divider turns into the
+   rule between them. */
+@container loc-brief (max-width: 19rem) {
+  .loc-brief__cols {
+    display: block;
+  }
+
+  .loc-brief__col--assets {
+    padding-left: 0;
+    padding-top: 0.35rem;
+    margin-top: 0.35rem;
+    border-left: 0;
+    border-top: 1px solid var(--line-0);
+  }
+}
+
+/* ---- Section labels ---- */
+
+.loc-brief__label {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.loc-brief__label:not(:first-child) {
+  margin-top: 0.3rem;
+}
+
+.loc-brief__label-icon {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: none;
+  fill: none;
+  stroke: var(--red-bright);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.loc-brief__label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tight enough that "Mission Requirements" would clip (an inspector pane is a quarter of the
+   map wide): the section labels give up their tracking before they give up their words. The
+   ellipsis above is the last-resort guard behind this, not the working answer. */
+@container loc-brief (max-width: 26rem) {
+  .loc-brief__label {
+    font-size: 0.52rem;
+    letter-spacing: 0.05em;
+  }
+}
+
+/* The count of what is confirmed out of what is listed — the one number that says how much of
+   this half is still guesswork. */
+.loc-brief__tally {
+  margin-left: auto;
+  padding: 0 0.22rem;
+  flex: none;
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  border: 1px solid var(--line-0);
+  background: rgba(10, 4, 5, 0.45);
+}
+
+/* A section with nothing in it yet. Dotted rather than absent: the form keeps its shape. */
+.loc-brief__empty {
+  margin: 0.05rem 0 0;
+  padding: 0.16rem 0.3rem;
+  border: 1px dotted var(--line-1);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
+/* ---- Requirements half ---- */
+
+.loc-brief__pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+/* A security measure the site has not had to show yet: it takes a pill's shape, so the player
+   can see how much longer this list is going to get, but the name is blacked out. */
+.loc-brief__pill-sealed {
+  border-style: dashed;
+  border-color: var(--line-1);
+  background: rgba(10, 4, 5, 0.5);
+  color: var(--text-3);
+  cursor: help;
+}
+
+.loc-brief__pill-sealed:hover {
+  border-color: var(--line-2);
+  background: rgba(10, 4, 5, 0.5);
+}
+
+/* Every sealed pill blacks out to the same length, whatever word is under the bar — a redaction
+   whose width tracked the hidden word would be a hint. */
+.loc-brief__pill-sealed .loc-brief__redacted {
+  width: 2.6rem;
+  overflow: hidden;
+}
+
+/* Redacted text: the words stay in the DOM for screen readers, struck out under a bar the
+   colour of the ink. */
+.loc-brief__redacted {
+  color: transparent;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(120, 20, 28, 0.55) 0 6px,
+    rgba(70, 12, 18, 0.55) 6px 12px
+  );
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  user-select: none;
+}
+
+.loc-brief__agents {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--text-1);
+}
+
+.loc-brief__agents .location-agent-chip {
+  margin-right: 0;
+}
+
+/* ---- Asset manifest ---- */
+
+.loc-brief__assets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  margin: 0.05rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * One line of the manifest: thumbnail, slot code, name. A grid rather than a flex row so the
+ * codes line up down the column however long the names run — a manifest that does not line up
+ * does not read as a manifest.
+ */
+.loc-brief__asset {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.22rem 0.12rem 0.12rem;
+  border: 1px solid var(--line-0);
+  border-left-width: 2px;
+  background: rgba(10, 4, 5, 0.4);
+  font-size: 0.7rem;
+  line-height: 1.25;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.loc-brief__asset-thumb {
+  width: 34px;
+  height: 24px;
+  flex: none;
+  display: block;
+  object-fit: cover;
+  border: 1px solid var(--line-1);
+  background: rgba(6, 3, 4, 0.9);
+  filter: saturate(0.8) contrast(1.05);
+}
+
+/* Slots the player knows the shape of but not the contents get a plate with a lock on it rather
+   than a picture, so a sealed line reads at a glance against a photographed one. */
+.loc-brief__asset-thumb--sealed,
+.loc-brief__asset-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+}
+
+.loc-brief__sealed-icon {
+  width: 0.62rem;
+  height: 0.62rem;
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.loc-brief__asset-code {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--red);
+  white-space: nowrap;
+}
+
+.loc-brief__asset-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-0);
+}
+
+.loc-brief__asset--revealed {
+  border-left-color: var(--line-2);
+}
+
+.loc-brief__asset--hidden {
+  border-style: dashed;
+}
+
+/* The static standing in for an unidentified slot is a bright noise field at any size. Knocked
+   back and tinted so a row of them reads as *absence* beside the photographed ones rather than
+   as the brightest thing on the card. */
+.loc-brief__asset--hidden .loc-brief__asset-thumb {
+  filter: grayscale(1) brightness(0.5) contrast(0.85) opacity(0.6);
+  border-style: dashed;
+}
+
+.loc-brief__asset--hidden .loc-brief__asset-name,
+.loc-brief__asset--sealed .loc-brief__asset-name {
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+}
+
+/* An emptied slot is the one line that is finished rather than pending: the player already took
+   what was here, so it is struck out rather than blacked out. */
+.loc-brief__asset--empty {
+  border-style: dotted;
+  background: transparent;
+}
+
+.loc-brief__asset--empty .loc-brief__asset-code,
+.loc-brief__asset--empty .loc-brief__asset-name {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--line-2);
+}
+
+.loc-brief__asset--sealed .loc-brief__asset-code {
+  color: var(--text-3);
+}
+
+.loc-brief__asset--sealed .loc-brief__redacted {
+  justify-self: start;
+  padding: 0 0.2rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+}
+
+/* A manifest line the player can drag into the planner as a mission target. */
+.loc-brief__asset--draggable {
+  cursor: grab;
+}
+
+.loc-brief__asset--draggable:hover {
+  border-color: var(--line-2);
+  border-left-color: var(--red);
+  background: rgba(44, 13, 17, 0.6);
+}
+
+.loc-brief__asset--draggable:active {
+  cursor: grabbing;
+}
+
+/* ---- Intel 0: no file to read ---- */
+
+/*
+ * An Unknown site drops the two-column brief entirely (see `briefNoIntelPlate`). A form with
+ * every field blank reads as a card that failed to load; this reads as a locked file, which is
+ * what it is. So the plate is given the whole space the brief would have had and the type is
+ * sized to be the thing the eye lands on after the art.
+ */
+.loc-brief--nointel {
+  padding-top: 0.45rem;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 7px,
+    rgba(73, 18, 22, 0.16) 7px 8px
+  );
+}
+
+.loc-brief__nointel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.2rem;
+}
+
+/*
+ * Reticle brackets round the sigil: four corners drawn as eight gradients on one element, which
+ * is the only way to get corner ticks that do not close into a box. Sized off `--tick`, so the
+ * whole mark scales with the plate.
+ */
+.loc-brief__nointel-badge {
+  --tick: 11px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(var(--red), var(--red)), linear-gradient(var(--red), var(--red)),
+    linear-gradient(var(--red), var(--red)), linear-gradient(var(--red), var(--red)),
+    linear-gradient(var(--red), var(--red)), linear-gradient(var(--red), var(--red)),
+    linear-gradient(var(--red), var(--red)), linear-gradient(var(--red), var(--red));
+  background-size:
+    var(--tick) 2px, 2px var(--tick),
+    var(--tick) 2px, 2px var(--tick),
+    var(--tick) 2px, 2px var(--tick),
+    var(--tick) 2px, 2px var(--tick);
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+}
+
+.loc-brief__nointel-icon {
+  width: 1.85rem;
+  height: 1.85rem;
+  fill: none;
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.loc-brief__nointel-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.loc-brief__nointel-title {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  color: var(--text-0);
+  text-shadow: 0 0 18px rgba(0, 0, 0, 0.8);
+}
+
+.loc-brief__nointel-note {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  letter-spacing: 0.035em;
+  color: var(--text-2);
+}
+
+/* The `Confirmed Assets` tail: slots uncovered by play, which survive the blackout. */
+.loc-brief--nointel .loc-brief__label {
+  margin-top: 0.3rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--line-0);
+}
+
+.loc-brief--nointel .loc-brief__label-icon {
+  stroke: var(--text-3);
+}
+
+/* The headline gives up size before it gives up its line, in two steps: an inspector-width card
+   keeps "No Intel Available" on one line at this size, and the planner's hover preview below. */
+@container loc-brief (max-width: 26rem) {
+  .loc-brief__nointel-title {
+    font-size: 1.12rem;
+  }
+
+  .loc-brief__nointel-note {
+    font-size: 0.72rem;
+  }
+}
+
+@container loc-brief (max-width: 19rem) {
+  .loc-brief__nointel {
+    gap: 0.55rem;
+    padding: 0.5rem 0.1rem;
+  }
+
+  .loc-brief__nointel-badge {
+    --tick: 8px;
+    width: 2.4rem;
+    height: 2.4rem;
+  }
+
+  .loc-brief__nointel-icon {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+
+  .loc-brief__nointel-title {
+    font-size: 1.02rem;
+  }
+
+  .loc-brief__nointel-note {
+    font-size: 0.7rem;
+  }
+}
+
 /* Global Tooltip */
 .app-global-tooltip {
   display: none;
@@ -4432,14 +4980,15 @@ body {
 
 /*
  * The one mark on the map that belongs to the player rather than being a target of theirs, so
- * it is deliberately unlike a site pin: bigger, inert (no pointer, no focus, no drag), wearing
- * the omega the HUD flies over the plan, and named all the time instead of on hover.
+ * it is deliberately unlike a site pin: inert (no pointer, no focus, no drag), wearing the
+ * omega the HUD flies over the plan, and named all the time instead of on hover. Sized the same
+ * as a known site's pin — never smaller than the biggest thing on the map, whatever intel does.
  * Position is authored per lair in `content/lairs.json` — see `LairTemplate.mapPosition`.
  */
 .map-marker--lair {
-  width: 1.6rem;
-  height: 1.6rem;
-  margin: -0.8rem 0 0 -0.8rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  margin: -1.3rem 0 0 -1.3rem;
   z-index: 2;
 }
 
@@ -4470,7 +5019,7 @@ body {
   align-items: center;
   justify-content: center;
   font-family: var(--font-display);
-  font-size: 0.85rem;
+  font-size: 1.4rem;
   font-weight: 900;
   line-height: 1;
   color: var(--red-bright);
@@ -4479,7 +5028,7 @@ body {
 
 /* Fifteen site names would collide; one base name is an anchor, so it never hides. */
 .map-marker--lair .map-marker__label {
-  top: 1.35rem;
+  top: 2.1rem;
   opacity: 1;
   color: var(--red-bright);
   border-color: var(--line-2);
@@ -5616,15 +6165,9 @@ body {
   display: none !important;
 }
 
-.location-asset-pills {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-  vertical-align: middle;
-}
-
-.location-asset-drag-chip,
+/* The one survivor of the old location-card asset chips: the planner's staged-asset preview
+   card still names its site on a line of its own. Location cards themselves now list assets in
+   the intelligence brief (see "Location intelligence brief" below). */
 .location-asset-static {
   display: inline-flex;
   align-items: center;
@@ -5632,66 +6175,6 @@ body {
   vertical-align: middle;
 }
 
-.location-asset-drag-chip,
-.location-asset-pills .location-asset-static {
-  padding: 0.08rem 0.35rem;
-  border: 1px dashed var(--line-2);
-  background: rgba(46, 13, 17, 0.5);
-  color: var(--text-1);
-}
-
-.location-asset-drag-chip {
-  cursor: grab;
-}
-
-.location-asset-drag-chip--revealed,
-.location-asset-static--revealed {
-  border-style: solid;
-}
-
-.location-asset-drag-chip--hidden,
-.location-asset-static--hidden,
-.location-asset-drag-chip--empty,
-.location-asset-static--empty {
-  border-style: dashed;
-}
-
-.location-asset-drag-chip--unknown,
-.location-asset-static--unknown {
-  border-style: dotted;
-  border-color: var(--text-3);
-  background: transparent;
-  color: var(--text-3);
-}
-
-.location-asset-drag-chip:hover {
-  border-color: var(--red-bright);
-  color: var(--text-0);
-}
-
-.location-asset-drag-chip[draggable="false"] {
-  cursor: default;
-}
-
-.location-asset-drag-chip[draggable="false"]:hover,
-.location-asset-drag-chip[draggable="false"]:active {
-  border-color: var(--line-2);
-  color: var(--text-1);
-  cursor: default;
-}
-
-.location-asset-drag-chip--unknown[draggable="false"]:hover,
-.location-asset-drag-chip--unknown[draggable="false"]:active,
-.location-asset-static--unknown:hover,
-.location-asset-static--unknown:active {
-  border-color: var(--text-3);
-  color: var(--text-3);
-  background: transparent;
-}
-
-.location-asset-drag-chip:active {
-  cursor: grabbing;
-}
 
 .assign-minion-slots {
   display: flex;

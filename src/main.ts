@@ -160,6 +160,11 @@ import {
 } from "./ui/dropHint";
 import { initRunSetup, type RunSetupApi } from "./ui/runSetup";
 import { freshRow, stableRow, type RowSlots } from "./ui/stableRow";
+import {
+  buildLocationBrief,
+  locationDesignation,
+  type LocationBriefAssetRow,
+} from "./ui/locationBrief";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
   appendCardArtShell,
@@ -175,6 +180,7 @@ import {
   resolvePlayerLocationCardArt,
   resolveMinionCardArt,
   resolveUnknownCardArt,
+  resolveUnknownCardArtThumb,
   resolveOmegaPlanCardArt,
 } from "./ui/cardArt";
 
@@ -340,10 +346,6 @@ function createSecurityIconEl(): SVGElement {
 
 function createAssetIconEl(): SVGElement {
   return createSvgPillIcon(ASSET_ICON_SVG_PATHS);
-}
-
-function createUnknownIntelIconEl(): SVGElement {
-  return createSvgPillIcon(UNKNOWN_ICON_SVG_PATHS);
 }
 
 function statBlockHtml(
@@ -2057,11 +2059,25 @@ function initGameController(
           art: siteCardArt(payload.locationId),
           label: siteDisplayName(payload.locationId),
         };
-      case "mastermind-asset":
+      case "mastermind-asset": {
+        /* Mirrors the staged target preview (see the `targetPick.kind === "asset"` branch
+         * below): a hidden asset is not the player's to see yet, so the token they carry stays
+         * the same sealed card it dropped in as, rather than flashing the site's own art and
+         * name — which would read as the asset revealing itself mid-drag. */
+        if (payload.visibility !== "revealed") {
+          return { art: resolveUnknownCardArt(), label: "Hidden Asset" };
+        }
+        const placement = state.locationAssetSlots.find((p) => p.locationId === payload.locationId);
+        const slot = placement?.slots[payload.slotIndex];
+        const tpl =
+          slot !== undefined && isOccupiedAssetSlot(slot)
+            ? content.assets.find((a) => a.id === slot.assetId)
+            : undefined;
         return {
-          art: siteCardArt(payload.locationId),
-          label: `${siteDisplayName(payload.locationId)} - Slot ${payload.slotIndex + 1}`,
+          art: resolveAssetCardArt(tpl),
+          label: tpl?.name ?? `${siteDisplayName(payload.locationId)} - Slot ${payload.slotIndex + 1}`,
         };
+      }
       case "mastermind-minion":
         return minionFace(payload.instanceId);
       case "mastermind-asset-card": {
@@ -3312,6 +3328,36 @@ function initGameController(
     items: PlanRequirement[];
   };
 
+  /**
+   * Location id the currently staged target resolves to — for a location target that location,
+   * for an asset target the site holding it — or null while there is no mission, no target the
+   * mission would actually accept, or a mission with no location-resolving target type at all.
+   */
+  function stagedTargetLocationId(): string | null {
+    const mission =
+      assignMissionTemplateId === null
+        ? undefined
+        : findMissionOrEventTemplate(assignMissionTemplateId);
+    if (mission === undefined || mission.targetType === "none" || assignTarget === null) {
+      return null;
+    }
+    if (
+      !missionTargetMatchesTemplate(mission.targetType, assignTarget) ||
+      !targetPassesMissionLocationFilters(mission, assignTarget)
+    ) {
+      return null;
+    }
+    return getMissionTargetLocationId(assignTarget);
+  }
+
+  /** Whether the staged plan targets a site (directly or via an asset on it) the player has not
+   * identified yet — intel below {@link INTEL_SITE_IDENTITY}, so its traits and security are not
+   * something the player can see, let alone plan around. */
+  function isStagedTargetUnknown(): boolean {
+    const lid = stagedTargetLocationId();
+    return lid !== null && !isSiteIdentified(lid);
+  }
+
   function stagedRequirementGroups(): PlanRequirementGroup[] | null {
     const mission =
       assignMissionTemplateId === null
@@ -3330,15 +3376,12 @@ function initGameController(
     const ignoreSecurity = hasSupportAbility(supportAbilities, "ignore_security_traits");
     const ignoreChallenge = hasSupportAbility(supportAbilities, "ignore_agent_challenge_traits");
 
-    /* Site-derived groups only apply once the target is one the mission would actually accept,
-     * which is the same gate stagedSuccessChance() uses before it will quote a number. */
-    const targetOk =
-      mission.targetType === "none"
-        ? false
-        : assignTarget !== null &&
-          missionTargetMatchesTemplate(mission.targetType, assignTarget) &&
-          targetPassesMissionLocationFilters(mission, assignTarget);
-    const lid = targetOk && assignTarget !== null ? getMissionTargetLocationId(assignTarget) : null;
+    /* Site-derived groups only apply once the target is one the mission would actually accept
+     * (the same gate stagedSuccessChance() uses before it will quote a number) *and* is a site
+     * the player has identified — an Unknown site's traits and security are not information the
+     * player has, so they cannot be requirements the planner shows them. */
+    const targetLid = stagedTargetLocationId();
+    const lid = targetLid !== null && isSiteIdentified(targetLid) ? targetLid : null;
 
     const traitItem = (
       id: string,
@@ -3452,13 +3495,20 @@ function initGameController(
       !groups.some((g) => g.label !== ""),
     );
 
+    /* An Unknown target may be hiding site or security requirements the planner cannot see, so
+     * a real tally would understate what is actually being staged against — the tally reads as
+     * unknown too rather than quietly promising a count that is not the whole story. */
+    const targetUnknown = isStagedTargetUnknown();
     const scored = groups.flatMap((g) => g.items).filter((i) => i.counts);
     const met = scored.filter((i) => i.met).length;
-    assignRequirementsTallyEl.textContent =
-      scored.length === 0 ? "" : String(met) + "/" + String(scored.length) + " met";
+    assignRequirementsTallyEl.textContent = targetUnknown
+      ? "?/? met"
+      : scored.length === 0
+        ? ""
+        : String(met) + "/" + String(scored.length) + " met";
     assignRequirementsTallyEl.classList.toggle(
       "plan-reqs__tally--all",
-      scored.length > 0 && met === scored.length,
+      !targetUnknown && scored.length > 0 && met === scored.length,
     );
 
     for (const group of groups) {
@@ -3515,9 +3565,13 @@ function initGameController(
    */
   function syncAssignChanceGauge(): void {
     const staged = state.phase === "main" ? stagedSuccessChance() : null;
-    const pct = staged === null ? 0 : staged.breakdown.finalPercent;
+    /* An Unknown target may be hiding site or security terms the formula above never saw, so a
+     * real percentage would be reporting arithmetic the player cannot actually check — the whole
+     * gauge goes to "unknown" instead of quietly narrowing to what little is visible. */
+    const targetUnknown = staged !== null && isStagedTargetUnknown();
+    const pct = staged === null || targetUnknown ? 0 : staged.breakdown.finalPercent;
     assignChanceEl.style.setProperty("--chance", String(pct));
-    assignChanceEl.classList.toggle("plan-chance--live", staged !== null);
+    assignChanceEl.classList.toggle("plan-chance--live", staged !== null && !targetUnknown);
     assignChanceEl.classList.toggle("plan-chance--warn", pct > 0 && pct < 40);
     assignChanceEl.classList.toggle("plan-chance--mid", pct >= 40 && pct < 70);
     assignChanceEl.classList.toggle("plan-chance--good", pct >= 70);
@@ -3525,6 +3579,15 @@ function initGameController(
       assignChanceValueEl.textContent = "--";
       assignChanceNoteEl.textContent = "No plan staged";
       assignChanceEl.title = "Stage a mission, target and minions to see the odds.";
+      return;
+    }
+    if (targetUnknown) {
+      assignChanceValueEl.textContent = "??%";
+      const note = document.createElement("strong");
+      note.textContent = "Target defenses unknown";
+      assignChanceNoteEl.replaceChildren(note);
+      assignChanceEl.title =
+        "This site has not been identified yet — its traits, security, and true odds stay unknown until intel is gathered.";
       return;
     }
     /* The digits carry the reading, so they get the size; the sign rides along small enough
@@ -3991,167 +4054,150 @@ function initGameController(
     );
     meta.appendChild(statsRow);
 
-    /* The trait pills stay under the art: they wrap to any number of lines, which would push
-     * the name off the top of a fixed-height banner. */
+    /*
+     * The intelligence brief. Everything below the art is one block now (`ui/locationBrief.ts`):
+     * requirements on the left, the asset manifest on the right, and both drawn as a form that
+     * is only as filled in as the player's intel. What this function still owns is the *data* —
+     * which traits are revealed, what each slot is worth knowing, and the drag payloads — since
+     * all of that is catalog and game state the brief has no business reaching for.
+     */
+    const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
+    const securityTraitIds = locationSecurityTraitIds;
+    const revealedSecCount = Math.min(securityLevel ?? 0, securityTraitIds.length);
+    const revealedSecIds = securityTraitIds.slice(0, revealedSecCount);
+
+    const requirementPills: HTMLElement[] = [];
     if (identified) {
-      const revealedSecIds = locationSecurityTraitIds.slice(
-        0,
-        Math.min(securityLevel ?? 0, locationSecurityTraitIds.length),
-      );
-      appendLocationRequirementPills(
-        body,
-        content,
-        siteRequiredTraitIds,
-        revealedSecIds,
-        unionParticipantTraitIds(state.player.minions),
-      );
+      for (const tid of sortedTraitIdsForDisplay(content, siteRequiredTraitIds)) {
+        requirementPills.push(createTraitPillEl(content, tid, rosterTraitIds, "trait"));
+      }
+      for (const tid of sortedTraitIdsForDisplay(content, revealedSecIds)) {
+        requirementPills.push(createTraitPillEl(content, tid, rosterTraitIds, "security"));
+      }
     }
 
-    const dl = document.createElement("dl");
-    dl.className = "location-card-stats";
     /* Agents the player has not uncovered (by play or by intel 3) are omitted entirely —
      * listing them at all would leak that the site is occupied. */
+    const agentChips: HTMLElement[] = [];
+    let agentNote: HTMLElement | null = null;
     const visibleAgents = playerVisibleOpposingAgentsAtLocation(state, loc.id);
-    if (visibleAgents.length > 0) {
-      const dt = document.createElement("dt");
-      dt.textContent = "Agents";
-      const dd = document.createElement("dd");
-      for (const a of visibleAgents) {
-        const template = getAgentTemplateById(content, a.templateId);
-        const name = template?.name ?? a.templateId;
-        const chip = document.createElement("span");
-        chip.className = "location-agent-chip";
-        chip.appendChild(createCardArtImg(resolveAgentCardArt(template), "card-art--chip"));
-        chip.appendChild(document.createTextNode(name));
-        const chipTitle: string[] = [];
-        if (a.challengeTraitIds.length > 0) {
-          chipTitle.push(
-            `Challenge traits: ${traitDisplayNames(content, a.challengeTraitIds)} — each one no participant matches costs -${content.balance.agentChallengeTraitPenalty}% success here.`,
-          );
-        }
-        for (const abilityId of a.abilityIds) {
-          const def = agentAbilityDef(abilityId);
-          if (def !== undefined) {
-            chipTitle.push(`${def.name} (${def.kind}): ${def.description}`);
-          }
-        }
-        if (chipTitle.length > 0) {
-          chip.title = chipTitle.join("\n");
-        }
-        if (a.abilityIds.length > 0) {
-          const abilities = document.createElement("span");
-          abilities.className = "location-agent-abilities";
-          abilities.textContent = a.abilityIds.map((id) => agentAbilityName(id)).join(" · ");
-          chip.appendChild(abilities);
-        }
-        dd.appendChild(chip);
+    for (const a of visibleAgents) {
+      const template = getAgentTemplateById(content, a.templateId);
+      const name = template?.name ?? a.templateId;
+      const chip = document.createElement("span");
+      chip.className = "location-agent-chip";
+      chip.appendChild(createCardArtImg(resolveAgentCardArt(template), "card-art--chip"));
+      chip.appendChild(document.createTextNode(name));
+      const chipTitle: string[] = [];
+      if (a.challengeTraitIds.length > 0) {
+        chipTitle.push(
+          `Challenge traits: ${traitDisplayNames(content, a.challengeTraitIds)} — each one no participant matches costs -${content.balance.agentChallengeTraitPenalty}% success here.`,
+        );
       }
+      for (const abilityId of a.abilityIds) {
+        const def = agentAbilityDef(abilityId);
+        if (def !== undefined) {
+          chipTitle.push(`${def.name} (${def.kind}): ${def.description}`);
+        }
+      }
+      if (chipTitle.length > 0) {
+        chip.title = chipTitle.join("\n");
+      }
+      if (a.abilityIds.length > 0) {
+        const abilities = document.createElement("span");
+        abilities.className = "location-agent-abilities";
+        abilities.textContent = a.abilityIds.map((id) => agentAbilityName(id)).join(" · ");
+        chip.appendChild(abilities);
+      }
+      agentChips.push(chip);
+    }
+    if (visibleAgents.length > 0) {
       const siteChallenges = challengeTraitIdsForAgents(visibleAgents);
       if (siteChallenges.length > 0) {
         const note = document.createElement("span");
         note.className = "location-agent-challenge-note";
         note.textContent = `Challenge: ${traitDisplayNames(content, siteChallenges)}`;
         note.title = `Each distinct challenge trait costs -${content.balance.agentChallengeTraitPenalty}% success on missions here unless a participant has the matching trait.`;
-        dd.appendChild(note);
+        agentNote = note;
       }
-      dl.appendChild(dt);
-      dl.appendChild(dd);
     }
 
-    const knownAssetChips: HTMLElement[] = [];
+    const assetRows: LocationBriefAssetRow[] = [];
+    let assetCountUnknown = false;
     for (let si = 0; si < assetSlots.length; si += 1) {
       const slot = assetSlots[si]!;
       const knowledge = assetSlotKnowledge(slot, intelLevel);
       if (knowledge === "unknown") {
-        /* Intel 0: the player cannot even count the assets stored here. */
+        /* Intel 0: the player cannot even count the assets stored here, so the slot does not get
+         * a line of its own — only the sealed tail at the foot of the manifest. */
+        assetCountUnknown = true;
         continue;
       }
-      if (slot.kind === "empty") {
-        if (enableAssignDrag) {
-          const chip = document.createElement("span");
-          chip.className = "location-asset-drag-chip location-asset-drag-chip--empty";
-          chip.draggable = false;
-          chip.textContent = "—";
-          chip.title = "Empty slot";
-          knownAssetChips.push(chip);
-        } else {
-          const chip = document.createElement("span");
-          chip.className = "location-asset-static";
-          chip.textContent = "—";
-          knownAssetChips.push(chip);
-        }
-        continue;
-      }
-      const displayValue =
-        knowledge === "identified"
-          ? (assetNameById.get(slot.assetId) ?? slot.assetId)
-          : "Hidden";
-      if (enableAssignDrag) {
-        const targetVisibility = knowledge === "identified" ? "revealed" : "hidden";
-        const chip = document.createElement("span");
-        chip.className =
-          knowledge === "identified"
-            ? "location-asset-drag-chip location-asset-drag-chip--revealed"
-            : "location-asset-drag-chip location-asset-drag-chip--hidden";
-        chip.draggable = true;
-        chip.appendChild(createAssetIconEl());
-        chip.appendChild(document.createTextNode(displayValue));
-        chip.title = `Drag to Plan mission target (slot ${si + 1})`;
-        setCardDragPayload(chip, () => assetDragJson(loc.id, si, targetVisibility));
-        chip.addEventListener("dragstart", (e) => {
-          e.stopPropagation();
-          beginCardDrag(e, assetDragJson(loc.id, si, targetVisibility));
-          e.dataTransfer!.effectAllowed = "copy";
+      if (!isOccupiedAssetSlot(slot)) {
+        assetRows.push({
+          slotIndex: si,
+          knowledge: "empty",
+          name: "",
+          art: null,
+          tooltip: "Empty slot — whatever was stored here is already gone.",
         });
-        knownAssetChips.push(chip);
+        continue;
+      }
+      const identifiedSlot = knowledge === "identified";
+      const template = identifiedSlot
+        ? content.assets.find((a) => a.id === slot.assetId)
+        : undefined;
+      const name = identifiedSlot ? (assetNameById.get(slot.assetId) ?? slot.assetId) : "";
+      const targetVisibility = identifiedSlot ? "revealed" : "hidden";
+      const tooltipLines: string[] = [];
+      if (identifiedSlot) {
+        tooltipLines.push(name);
+        if (template?.description !== undefined && template.description !== "") {
+          tooltipLines.push(template.description);
+        }
       } else {
-        const wrap = document.createElement("span");
-        wrap.className =
-          knowledge === "identified"
-            ? "location-asset-static location-asset-static--revealed"
-            : "location-asset-static location-asset-static--hidden";
-        wrap.appendChild(createAssetIconEl());
-        wrap.appendChild(document.createTextNode(displayValue));
-        knownAssetChips.push(wrap);
+        tooltipLines.push(
+          "Something is stored in this slot. Intel 2 here identifies what it is.",
+        );
       }
+      if (enableAssignDrag) {
+        tooltipLines.push(`Drag to Plan mission target (slot ${si + 1}).`);
+      }
+      assetRows.push({
+        slotIndex: si,
+        knowledge: identifiedSlot ? "identified" : "existence",
+        name,
+        art: identifiedSlot ? resolveAssetCardArt(template) : resolveUnknownCardArtThumb(),
+        tooltip: tooltipLines.join("\n"),
+        wire: enableAssignDrag
+          ? (el) => {
+              el.draggable = true;
+              setCardDragPayload(el, () => assetDragJson(loc.id, si, targetVisibility));
+              el.addEventListener("dragstart", (e) => {
+                e.stopPropagation();
+                beginCardDrag(e, assetDragJson(loc.id, si, targetVisibility));
+                e.dataTransfer!.effectAllowed = "copy";
+              });
+            }
+          : undefined,
+      });
     }
 
-    if (knownAssetChips.length === 0) {
-      const countUnknown = assetSlots.some(
-        (slot) => assetSlotKnowledge(slot, intelLevel) === "unknown",
-      );
-      if (countUnknown) {
-        const chip = document.createElement("span");
-        chip.className = enableAssignDrag
-          ? "location-asset-drag-chip location-asset-drag-chip--unknown"
-          : "location-asset-static location-asset-static--unknown";
-        chip.draggable = false;
-        chip.appendChild(createUnknownIntelIconEl());
-        chip.appendChild(document.createTextNode("No intel available"));
-        chip.title = "Raise intel at this site to learn how many assets are stored here.";
-        knownAssetChips.push(chip);
-      }
-    }
-
-    if (knownAssetChips.length > 0) {
-      const dt = document.createElement("dt");
-      dt.className = "location-card-stats__assets-dt";
-      dt.textContent = "Assets";
-      const dd = document.createElement("dd");
-      dd.className = "location-card-stats__assets-dd";
-      const container = document.createElement("span");
-      container.className = "location-asset-pills";
-      for (const chip of knownAssetChips) {
-        container.appendChild(chip);
-      }
-      dd.appendChild(container);
-      dl.appendChild(dt);
-      dl.appendChild(dd);
-    }
-
-    if (dl.children.length > 0) {
-      body.appendChild(dl);
-    }
+    body.appendChild(
+      buildLocationBrief({
+        intelLevel,
+        identified,
+        designation: locationDesignation(loc.id),
+        requirementPills,
+        classifiedSecurityCount: identified
+          ? securityTraitIds.length - revealedSecCount
+          : 0,
+        assets: assetRows,
+        assetCountUnknown,
+        agents: agentChips,
+        agentNote,
+      }),
+    );
     return article;
   }
 

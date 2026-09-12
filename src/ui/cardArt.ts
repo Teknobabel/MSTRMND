@@ -63,6 +63,16 @@ export function resolveUnknownCardArt(): string {
   return prefersReducedMotion() ? UNKNOWN_LOCATION_CARD_ART_STILL : UNKNOWN_LOCATION_CARD_ART;
 }
 
+/**
+ * The same static at thumbnail size — always the held frame. A location card's brief can list
+ * several unidentified slots and a drawer can hold a column of those cards, so the animated
+ * variant would have dozens of independent SVG animations running for a mark 26px wide that
+ * reads identically either way.
+ */
+export function resolveUnknownCardArtThumb(): string {
+  return UNKNOWN_LOCATION_CARD_ART_STILL;
+}
+
 /** The art the player gets to see: static until the site is identified (see `intel.ts`). */
 export function resolvePlayerLocationCardArt(
   loc: LocationTemplate | undefined,
