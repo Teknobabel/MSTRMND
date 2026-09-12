@@ -114,6 +114,12 @@ import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation, type NavigationApi } from "./navigation";
 import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
 import {
+  INBOUND_CALLOUT_CLASS,
+  playDispatchSequence,
+  revealInboundCallout,
+  type DispatchRow,
+} from "./ui/dispatchSequence";
+import {
   createFlatProjector,
   createMatrixProjector,
   flatMapMatrix,
@@ -168,6 +174,7 @@ import {
   resolveMissionCardArt,
   resolvePlayerLocationCardArt,
   resolveMinionCardArt,
+  resolveUnknownCardArt,
   resolveOmegaPlanCardArt,
 } from "./ui/cardArt";
 
@@ -1249,6 +1256,7 @@ function initGameController(
   const assignSupportAssetsFieldset = req<HTMLElement>("assign-support-assets-fieldset");
   const assignSupportAssetsLabel = req<HTMLElement>("assign-support-assets-label");
   const assignSupportAssetsList = req<HTMLElement>("assign-support-assets-list");
+  const planColumnPanelEl = req<HTMLElement>("plan-column-panel-plan");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
   const assignSubmitWrapEl = req<HTMLElement>("assign-submit-wrap");
   const assignBlockedAlertEl = req<HTMLElement>("assign-blocked-alert");
@@ -1362,6 +1370,14 @@ function initGameController(
   let assignOmegaStageIndex: number | null = null;
   let assignOmegaSlotIndex: number | null = null;
   let assignTarget: MissionTarget | null = null;
+  /**
+   * Missions whose dispatch packet is still crossing the screen. Assigning applies immediately,
+   * so their callouts would otherwise show the crew standing at the target before the upload
+   * carrying them lands; while an id is in here its callout renders held back (see
+   * `createMissionCalloutEl`), and the sequence's arrival is what lets it up. Purely cosmetic —
+   * nothing reads this to decide anything about the run.
+   */
+  const missionsInFlight = new Set<string>();
   /** Why Submit is disabled, in short "flash on a click" form — null when it is not. Set by
    * `applyAssignButtonEnabled`, read by the click handler that cannot reach a disabled button
    * any other way (see `.btn-submit-mission-wrap` in styles.css). */
@@ -1375,18 +1391,30 @@ function initGameController(
     | null = null;
 
   /**
-   * What a map marker stands for. Every marker but one is a site; the odd one out is the
-   * player's own lair, which has no location id to be known by and shows the Lair tile's
-   * contents rather than a location card.
+   * What an inspector pane stands for. Most stand for a map marker: every marker but one is a
+   * site, the odd one out being the player's own lair, which has no location id to be known by
+   * and shows the Lair tile's contents rather than a location card. The global event offer is
+   * the one subject with no marker behind it at all — the run puts it in the corner pane
+   * itself rather than the player pointing at anything — so it draws no leader line.
    */
-  type MapSubject = { readonly kind: "site"; readonly locationId: string } | { readonly kind: "lair" };
+  type MapSubject =
+    | { readonly kind: "site"; readonly locationId: string }
+    | { readonly kind: "lair" }
+    | { readonly kind: "event" };
 
   /** A subject flattened to something comparable, and the key its marker is cached under. */
   function mapSubjectKey(subject: MapSubject | null): string | null {
     if (subject === null) {
       return null;
     }
-    return subject.kind === "lair" ? "lair" : `site:${subject.locationId}`;
+    switch (subject.kind) {
+      case "site":
+        return `site:${subject.locationId}`;
+      case "lair":
+        return "lair";
+      case "event":
+        return "event";
+    }
   }
 
   /**
@@ -1415,6 +1443,21 @@ function initGameController(
 
   function findMissionOrEventTemplate(id: string): MissionTemplate | undefined {
     return content.missions.find((m) => m.id === id) ?? content.events.find((e) => e.id === id);
+  }
+
+  /**
+   * The global event offer on the table, or null when there is none to show: none drawn yet,
+   * the offer already taken (its mission is out), or the slot cooling down. An id with no
+   * template behind it in the catalog counts as none.
+   */
+  function currentEventOfferId(): string | null {
+    const id = state.currentEventTemplateId;
+    return id !== null && content.events.some((e) => e.id === id) ? id : null;
+  }
+
+  /** Whether the event the player took is still out; the offer slot stays empty until it lands. */
+  function eventMissionRunning(): boolean {
+    return state.activeMissions.some((am) => am.missionSource === "event");
   }
 
   function renderMissionEffectItemEls(
@@ -3032,33 +3075,47 @@ function initGameController(
       const slot = placement?.slots[targetPick.slotIndex];
       const siteIdentified = isSiteIdentified(targetPick.locationId);
       const siteName = siteDisplayName(targetPick.locationId);
+      const targetIntel = intelLevelAtLocation(state, targetPick.locationId);
+      /*
+       * The staged card is the *asset*, not the site holding it — the site is a stat row on it.
+       * A hidden asset has no name or art the player has earned yet, so it wears the Unknown
+       * site's static: the same "aiming at something you cannot see" read the map already gives.
+       */
+      const revealedSlot =
+        slot !== undefined &&
+        isOccupiedAssetSlot(slot) &&
+        effectiveVisibilityOfSlot(slot, targetIntel) === "revealed"
+          ? slot
+          : null;
+      const assetTemplate =
+        revealedSlot !== null
+          ? content.assets.find((a) => a.id === revealedSlot.assetId)
+          : undefined;
+      /* An emptied slot is a stage that went stale — the asset was taken out from under the plan
+       * between staging and now. Submit already refuses it; the card just says so plainly. */
+      const assetGone = slot === undefined || slot.kind === "empty";
+      const assetName =
+        revealedSlot !== null
+          ? (assetTemplate?.name ?? revealedSlot.assetId)
+          : assetGone
+            ? "Empty Slot"
+            : "Hidden Asset";
+      const assetArt =
+        revealedSlot !== null ? resolveAssetCardArt(assetTemplate) : resolveUnknownCardArt();
       const wrap = document.createElement("div");
       wrap.className = "assign-pick-slot-card-wrap";
       const article = document.createElement("article");
       article.className = "assign-pick-preview-card location-card assign-target-asset-card";
-      if (!siteIdentified) {
+      if (revealedSlot === null) {
         article.classList.add("location-card--unknown");
       }
-      const { meta, body } = appendCardHeroShell(article, siteCardArt(targetPick.locationId));
+      const { meta, body } = appendCardHeroShell(article, assetArt);
       const title = document.createElement("h4");
       title.className = "location-card-title";
-      title.textContent = siteName;
+      title.textContent = assetName;
       meta.appendChild(title);
       const dl = document.createElement("dl");
       dl.className = "location-card-stats";
-      const visLabel = targetPick.visibilityAtAssign === "hidden" ? "Hidden" : "Revealed";
-      const targetIntel = intelLevelAtLocation(state, targetPick.locationId);
-      let assetLabel = "Asset";
-      if (slot?.kind === "empty") {
-        assetLabel = "—";
-      } else if (
-        slot &&
-        isOccupiedAssetSlot(slot) &&
-        effectiveVisibilityOfSlot(slot, targetIntel) === "revealed"
-      ) {
-        assetLabel =
-          content.assets.find((a) => a.id === slot.assetId)?.name ?? slot.assetId;
-      }
       const siteIds = state.locationRequiredTraits[targetPick.locationId] ?? [];
       const secLevel = state.locationSecurityStates.find(
         (s) => s.locationId === targetPick.locationId,
@@ -3068,22 +3125,23 @@ function initGameController(
         0,
         Math.min(secLevel ?? 0, securityTraitIds.length),
       );
-      const assetRowValue = `${visLabel} (${assetLabel})`;
-      const assetWrap = document.createElement("span");
-      assetWrap.className = "location-asset-static";
-      if (slot && isOccupiedAssetSlot(slot)) {
-        assetWrap.appendChild(createAssetIconEl());
-      }
-      assetWrap.appendChild(document.createTextNode(assetRowValue));
+      const siteRowValue = `${siteName} - Slot ${targetPick.slotIndex + 1}`;
+      const siteWrap = document.createElement("span");
+      siteWrap.className = "location-asset-static";
+      siteWrap.appendChild(createAssetIconEl());
+      siteWrap.appendChild(document.createTextNode(siteRowValue));
       appendMinionStatRows(dl, [
         {
-          label: "Assets",
-          value: assetRowValue,
-          valueEl: assetWrap,
+          label: "Site",
+          value: siteRowValue,
+          valueEl: siteWrap,
           dtClass: "location-card-stats__assets-dt",
           ddClass: "location-card-stats__assets-dd",
         },
-        { label: "Slot", value: String(targetPick.slotIndex + 1) },
+        {
+          label: "Status",
+          value: revealedSlot !== null ? "Revealed" : assetGone ? "Gone" : "Hidden",
+        },
         {
           label: "Intel level",
           value: String(targetIntel),
@@ -3104,13 +3162,7 @@ function initGameController(
         body.appendChild(reqPillsEl);
       }
       wrap.appendChild(
-        buildAssignPickChip(
-          siteCardArt(targetPick.locationId),
-          `${siteName} - Slot ${targetPick.slotIndex + 1}`,
-          article,
-          mainOnly,
-          setDragDataForTarget,
-        ),
+        buildAssignPickChip(assetArt, assetName, article, mainOnly, setDragDataForTarget),
       );
       appendClearTarget(wrap);
       targetSlot.appendChild(wrap);
@@ -5241,6 +5293,40 @@ function initGameController(
   }
 
   /**
+   * The global event offer as a mission-list entry: which card, whether it can be dragged into
+   * the planner, and the chip in its corner. Both surfaces that show the offer build their card
+   * from this — the Missions menu's Event Offer group and the dashboard's Event pane — so the
+   * two cannot drift on what the offer currently allows.
+   */
+  function eventOfferEntry(): AvailableMissionEntry | null {
+    const offerId = currentEventOfferId();
+    if (offerId === null) {
+      return null;
+    }
+    const running = eventMissionRunning();
+    const left = state.currentEventTurnsRemaining;
+    return {
+      missionTemplateId: offerId,
+      dragMeta:
+        state.phase === "main" && !running
+          ? { draggable: true, source: "event", missionTemplateId: offerId }
+          : undefined,
+      status: running
+        ? { label: "In Progress", kind: "inprogress" }
+        : { label: `${left} ${left === 1 ? "Turn" : "Turns"} Left`, kind: "pending" },
+    };
+  }
+
+  /** One entry as a card: the mission's own article, plus the status chip when it carries one. */
+  function buildMissionEntryCard(entry: AvailableMissionEntry): HTMLElement {
+    const card = omegaPlanMissionCard(entry.missionTemplateId, entry.dragMeta);
+    if (entry.status) {
+      appendMissionCardBadge(card, entry.status);
+    }
+    return card;
+  }
+
+  /**
    * Every mission the run has unlocked and could still be started from, grouped by source.
    * Mirrors what `assignMission` accepts: the lair pool, pending lair upgrades, and the global
    * event offer. The active omega phase's own unfinished slots are the Omega Plan panel's to
@@ -5271,32 +5357,13 @@ function initGameController(
       });
     }
 
-    const eventOfferId = state.currentEventTemplateId;
-    const eventMissionRunning = state.activeMissions.some((am) => am.missionSource === "event");
-    const eventEntries: AvailableMissionEntry[] = [];
-    if (eventOfferId !== null) {
-      eventEntries.push({
-        missionTemplateId: eventOfferId,
-        dragMeta:
-          mainOnly && !eventMissionRunning
-            ? { draggable: true, source: "event", missionTemplateId: eventOfferId }
-            : undefined,
-        status: eventMissionRunning
-          ? { label: "In Progress", kind: "inprogress" }
-          : {
-              label: `${state.currentEventTurnsRemaining} ${
-                state.currentEventTurnsRemaining === 1 ? "Turn" : "Turns"
-              } Left`,
-              kind: "pending",
-            },
-      });
-    }
+    const eventEntry = eventOfferEntry();
     groups.push({
       label: "Event Offer",
-      emptyText: eventMissionRunning
+      emptyText: eventMissionRunning()
         ? "The event you took is under way."
         : "No event on the table.",
-      entries: eventEntries,
+      entries: eventEntry === null ? [] : [eventEntry],
     });
 
     return groups;
@@ -5343,11 +5410,7 @@ function initGameController(
       const list = document.createElement("div");
       list.className = "missions-available-list";
       for (const entry of group.entries) {
-        const card = omegaPlanMissionCard(entry.missionTemplateId, entry.dragMeta);
-        if (entry.status) {
-          appendMissionCardBadge(card, entry.status);
-        }
-        list.appendChild(card);
+        list.appendChild(buildMissionEntryCard(entry));
       }
       container.appendChild(list);
     }
@@ -5676,6 +5739,11 @@ function initGameController(
     const tipLines = missionCalloutTooltipLines(am);
     callout.title = tipLines.join("\n");
     callout.setAttribute("aria-label", tipLines.join(". "));
+    /* Held back until the mission's packet gets here. Re-applied on every render rather than set
+     * once, so a redraw mid-flight cannot land the crew ahead of the upload. */
+    if (missionsInFlight.has(am.id)) {
+      callout.classList.add(INBOUND_CALLOUT_CLASS);
+    }
 
     const crew = missionCalloutParticipants(am);
     if (crew.length === 0) {
@@ -5691,6 +5759,33 @@ function initGameController(
           createCardArtImg(resolveMinionCardArt(tpl), "map-callout__portrait"),
         );
       }
+    }
+    return callout;
+  }
+
+  /**
+   * The idle roster's answer to {@link createMissionCalloutEl}: not attached to a mission, but
+   * shown at the lair the same way an operation's crew shows at its target — so a minion sitting
+   * out a turn still reads as "there", not simply absent from the map. Always one callout, unlike
+   * missions, since idling is one state rather than one per operation.
+   */
+  function createIdleMinionsCalloutEl(idle: readonly MinionInstance[]): HTMLElement {
+    const callout = document.createElement("div");
+    callout.className = "map-callout";
+    callout.tabIndex = 0;
+    callout.setAttribute("role", "img");
+    const names = idle.map(
+      (inst) => content.minions.find((t) => t.id === inst.templateId)?.name ?? inst.templateId,
+    );
+    const tipLines = [
+      `Idle: ${idle.length} minion${idle.length === 1 ? "" : "s"}`,
+      `Crew: ${names.join(", ")}`,
+    ];
+    callout.title = tipLines.join("\n");
+    callout.setAttribute("aria-label", tipLines.join(". "));
+    for (const inst of idle) {
+      const tpl = content.minions.find((t) => t.id === inst.templateId);
+      callout.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "map-callout__portrait"));
     }
     return callout;
   }
@@ -6344,6 +6439,26 @@ Your lair`;
     home.appendChild(label);
 
     plot.appendChild(home);
+
+    /* A minion nobody has staged this turn is not doing nothing — it is home. Shown the same
+     * way an operation's crew is shown at its target, just pinned to the lair instead. */
+    const busy = busyInstanceIds(state.activeMissions);
+    const idle = state.player.minions.filter((m) => !busy.has(m.instanceId));
+    if (idle.length > 0) {
+      const stack = document.createElement("div");
+      stack.className = "map-callout-stack";
+      mapProjectedEls.push({ el: stack, marker: at });
+      if (at.y < 22) {
+        stack.classList.add("map-callout-stack--below");
+      }
+      if (at.x < 15) {
+        stack.classList.add("map-callout-stack--right");
+      } else if (at.x > 85) {
+        stack.classList.add("map-callout-stack--left");
+      }
+      stack.appendChild(createIdleMinionsCalloutEl(idle));
+      plot.appendChild(stack);
+    }
   }
 
   /**
@@ -6796,24 +6911,55 @@ Your lair`;
    * The card the inspector is showing, or null when it should be down. A pinned site that has
    * dropped off the run's map (a plan swap between renders) is forgotten rather than shown.
    */
-  /** Whether a subject still exists to be shown: sites leave with a plan swap, lairs get given up. */
+  /**
+   * Whether a subject still exists to be shown: sites leave with a plan swap, lairs get given
+   * up, and the event offer goes the moment it expires or the player takes it.
+   */
   function mapSubjectAlive(subject: MapSubject | null): boolean {
     if (subject === null) {
       return false;
     }
-    return subject.kind === "lair"
-      ? state.activeLairId !== null
-      : runLocations().some((l) => l.id === subject.locationId);
+    switch (subject.kind) {
+      case "lair":
+        return state.activeLairId !== null;
+      case "event":
+        return currentEventOfferId() !== null;
+      case "site":
+        return runLocations().some((l) => l.id === subject.locationId);
+    }
+  }
+
+  /**
+   * How many panes the player's selections are free to fill. A global event offer owns the
+   * corner pane outright — it is not a selection and there is no closing it — so while one is
+   * on the table it comes off the top of what the selections can claim.
+   */
+  function inspectorPinCapacity(): number {
+    return MAX_INSPECTOR_CARDS - (currentEventOfferId() !== null ? 1 : 0);
+  }
+
+  /**
+   * Drops selections past the cap, oldest first — the same end of the row the cap has always
+   * taken them from, so an offer arriving on a full row pushes a card off the corner rather
+   * than stealing the one the player selected last.
+   */
+  function trimPinnedMapSubjects(): void {
+    const capacity = inspectorPinCapacity();
+    if (pinnedMapSubjects.length > capacity) {
+      pinnedMapSubjects = pinnedMapSubjects.slice(pinnedMapSubjects.length - capacity);
+    }
   }
 
   /**
    * Which subject each slot holds, nearest the map's right corner first.
    *
-   * The selections fill from slot 0 leftward in the order they were made. A hover goes in the
-   * next slot along — to the left of the whole stack, so every selected card and its leader
-   * line stay exactly where they are while the map is browsed around them — and only if the
-   * stack has left room for it. Hovering something already selected adds nothing: its card is
-   * on screen already.
+   * A global event offer takes the corner slot first and holds it for as long as it is on the
+   * table, so it never slides out from under the eye and nothing the player does can cover it.
+   * The selections fill from the first free slot leftward in the order they were made. A hover
+   * goes in the next slot along — to the left of the whole stack, so every selected card and
+   * its leader line stay exactly where they are while the map is browsed around them — and
+   * only if the stack has left room for it. Hovering something already selected adds nothing:
+   * its card is on screen already.
    */
   function inspectorSlotSubjects(): (MapSubject | null)[] {
     const slots: (MapSubject | null)[] = Array.from(
@@ -6825,17 +6971,24 @@ Your lair`;
     if (openDrawer !== null) {
       return slots;
     }
+    const hasEventOffer = currentEventOfferId() !== null;
+    if (hasEventOffer) {
+      slots[0] = { kind: "event" };
+    }
+    /* Where the selections start: past the offer's corner when there is one. */
+    const first = hasEventOffer ? 1 : 0;
     pinnedMapSubjects = pinnedMapSubjects.filter((s) => mapSubjectAlive(s));
+    trimPinnedMapSubjects();
     pinnedMapSubjects.forEach((subject, i) => {
-      slots[i] = subject;
+      slots[first + i] = subject;
     });
     const hovered = mapSubjectAlive(hoveredMapSubject) ? hoveredMapSubject : null;
     if (
       hovered !== null &&
       !isPinnedMapSubject(hovered) &&
-      pinnedMapSubjects.length < MAX_INSPECTOR_CARDS
+      pinnedMapSubjects.length < inspectorPinCapacity()
     ) {
-      slots[pinnedMapSubjects.length] = hovered;
+      slots[first + pinnedMapSubjects.length] = hovered;
     }
     return slots;
   }
@@ -6912,12 +7065,17 @@ Your lair`;
     }
 
     /* Only the selected pane takes the pointer: see the click-through note in the CSS. Its X
-     * is the only one that could do anything, so the preview's is not offered. */
+     * is the only one that could do anything, so the preview's is not offered. The Event pane
+     * takes the pointer too — the offer on it drags into the planner — but never shows an X:
+     * the offer is the run's to put up and take away, not the player's to close. */
+    const isEvent = subject.kind === "event";
     const isPinned = isPinnedMapSubject(subject);
     pane.el.classList.toggle("game-panel--site-inspector--pinned", isPinned);
-    pane.closeEl.hidden = !isPinned;
+    pane.el.classList.toggle("game-panel--site-inspector--event", isEvent);
+    pane.closeEl.hidden = isEvent || !isPinned;
 
-    pane.titleEl.textContent = subject.kind === "lair" ? "Lair" : "Site Detail";
+    pane.titleEl.textContent =
+      subject.kind === "lair" ? "Lair" : subject.kind === "event" ? "Event" : "Site Detail";
     pane.el.classList.toggle(
       "game-panel--site-inspector--lair",
       subject.kind === "lair",
@@ -6928,6 +7086,15 @@ Your lair`;
       /* The drawer's contents folded into tabs, under a per-pane id prefix — several tablists
        * can be up at once, and shared tab ids would leave every `aria-labelledby` ambiguous. */
       renderLairPanelInto(pane.bodyEl, { kind: "tabs", idPrefix: `${pane.el.id}-lair` });
+      return;
+    }
+    if (subject.kind === "event") {
+      /* The same card the Missions menu files under Event Offer, chip and drag and all — the
+       * offer is only being shown in a second place, not restated in a second form. */
+      const entry = eventOfferEntry();
+      if (entry !== null) {
+        pane.bodyEl.appendChild(buildMissionEntryCard(entry));
+      }
       return;
     }
     const loc = getLocationById(content, subject.locationId);
@@ -7037,14 +7204,8 @@ Your lair`;
     if (isPinnedMapSubject(subject)) {
       return;
     }
-    while (pinnedMapSubjects.length >= MAX_INSPECTOR_CARDS) {
-      const evicted = pinnedMapSubjects[0];
-      if (evicted === undefined) {
-        break;
-      }
-      dropPinnedMapSubject(evicted);
-    }
     pinnedMapSubjects = [...pinnedMapSubjects, subject];
+    trimPinnedMapSubjects();
     renderSiteInspector();
   }
 
@@ -8350,6 +8511,34 @@ Your lair`;
     }
   });
 
+  /**
+   * Where the staged chips are standing, top of the planner down — the rows the dispatch
+   * animation compiles into its payload. Measured rather than handed over as elements, because
+   * applying the plan clears the planner on the same tick and a chip measured after that is
+   * detached and reads as zero. DOM order is the order the slots ignite in, so the collapse
+   * runs the same way down the column. Asset chips carry `.assign-minion-chip` too, so the two
+   * selectors between them cover every slot that can be filled.
+   */
+  function stagedPlannerRowRects(): DispatchRow[] {
+    return Array.from(
+      planColumnPanelEl.querySelectorAll<HTMLElement>(".assign-pick-chip, .assign-minion-chip"),
+    ).map((chip) => {
+      const r = chip.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, width: r.width };
+    });
+  }
+
+  /** The map pin a staged target sits on, or null when nothing on the map represents it. */
+  function missionTargetPinEl(target: MissionTarget): HTMLElement | null {
+    const locationId = getMissionTargetLocationId(target);
+    if (locationId === null || mapPlotEl === null) {
+      return null;
+    }
+    return mapPlotEl.querySelector<HTMLElement>(
+      `.map-marker[data-location-id="${CSS.escape(locationId)}"]`,
+    );
+  }
+
   btnAssign.addEventListener("click", () => {
     if (state.phase !== "main") {
       return;
@@ -8380,12 +8569,21 @@ Your lair`;
     const supportAssetIds = stagedSupportAssetIds();
     const missionTemplateId = assignMissionTemplateId;
     const missionSource = assignMissionSource;
-    dispatch(
+    /* Held rather than generated inline: the dispatch animation needs to know which mission it
+     * is carrying, so it can let that mission's crew up at the target when it arrives. */
+    const activeMissionId = crypto.randomUUID();
+    /* Where the staged chips are standing, read before `dispatch` applies the plan and clears
+     * the planner out from under them. */
+    const stagedRows = stagedPlannerRowRects();
+    /* Marked in flight before the state change, so the very first render of the new callout
+     * already holds the crew back. */
+    missionsInFlight.add(activeMissionId);
+    const launched = dispatch(
       (s) =>
         assignMission(
           s,
           content,
-          crypto.randomUUID(),
+          activeMissionId,
           missionTemplateId,
           targetPayload,
           missionSource,
@@ -8402,6 +8600,32 @@ Your lair`;
         },
       },
     );
+    if (!launched) {
+      missionsInFlight.delete(activeMissionId);
+      return;
+    }
+    /* Planning is over, so the menu that was being planned from goes back down. Without this the
+     * packet flies to a pin behind an open drawer and bursts against the back of it — and the
+     * drawer sliding away as the payload climbs out hands the map back at the right moment. Drop
+     * this line to leave the drawer where the player left it. */
+    setOpenDrawer(null);
+    playDispatchSequence({
+      rows: stagedRows,
+      origin: btnAssign,
+      /* A target-less operation has no pin to fly to, so it goes to Execute Plan — which is
+       * where it will actually resolve. */
+      destination: missionTargetPinEl(targetPayload) ?? btnExec,
+      onArrive: () => {
+        missionsInFlight.delete(activeMissionId);
+        const callout = mapPlotEl?.querySelector<HTMLElement>(
+          `.map-callout[data-active-mission-id="${activeMissionId}"]`,
+        );
+        /* Gone already — cancelled, or the map redrew to a state without it. Nothing to let up. */
+        if (callout) {
+          revealInboundCallout(callout);
+        }
+      },
+    });
   });
 
   btnExec.addEventListener("click", () => {

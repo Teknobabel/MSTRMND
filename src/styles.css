@@ -1020,8 +1020,10 @@ body {
   }
 }
 
-/* The selection reads as the one in front, whichever pane happens to be holding it. */
-.omega-body--floating .game-panel--site-inspector--pinned {
+/* The selection reads as the one in front, whichever pane happens to be holding it — and so
+   does the event offer, which sits in the corner and is nobody's to cover. */
+.omega-body--floating .game-panel--site-inspector--pinned,
+.omega-body--floating .game-panel--site-inspector--event {
   z-index: 3;
 }
 
@@ -1030,8 +1032,19 @@ body {
   min-height: 0;
 }
 
-.game-panel--site-inspector:not(.game-panel--site-inspector--pinned) {
+/* A pane only previewing a hover stays click-through (see the note above). A selected one takes
+   the pointer for its X, and the Event pane for the offer that drags off it. */
+.game-panel--site-inspector:not(.game-panel--site-inspector--pinned):not(
+    .game-panel--site-inspector--event
+  ) {
   pointer-events: none;
+}
+
+/* The offer is the run talking, not a card the player went and opened, so its pane is lit
+   rather than left to sit in the same near-black as the sites around it. */
+.omega-body--floating .game-panel--site-inspector--event {
+  --panel-bg: rgba(36, 11, 15, 0.94);
+  border-color: var(--line-2);
 }
 
 .site-inspector-body {
@@ -4741,8 +4754,8 @@ body {
 }
 
 .map-callout__portrait.card-art {
-  width: 20px;
-  height: 20px;
+  width: 40px;
+  height: 40px;
   object-fit: cover;
   border: 1px solid var(--line-1);
   background: rgba(10, 4, 5, 0.8);
@@ -4753,7 +4766,7 @@ body {
   padding: 0 0.35rem;
   font-family: var(--font-display);
   font-size: 0.6rem;
-  line-height: 20px;
+  line-height: 40px;
   color: var(--text-2);
 }
 
@@ -6392,6 +6405,141 @@ body {
 
 .activity-event::marker {
   color: var(--red);
+}
+
+
+/* ============================================================
+   Dispatch sequence — starting a mission
+   ============================================================ */
+
+/*
+ * The overlay every beat of the launch is drawn into, over the whole window rather than inside
+ * the planner: a packet crossing from the plan column to a map pin passes over two panels, and
+ * anything mounted inside either of them would be clipped at the first border it met. Same
+ * reasoning, and the same place, as the drag token. Inert when nothing is in flight.
+ * Driven by src/ui/dispatchSequence.ts.
+ */
+.dispatch-fx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  /* Above the panels and the map, below the drag token and the modals. */
+  z-index: 60;
+}
+
+.dispatch-fx__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/*
+ * Beat 1: a staged chip flattened to a bar of light. Bright in the middle and falling away at
+ * both ends, so a row reads as a line of data rather than as a solid block sliding down the
+ * column. The chips themselves are gone by the time these appear — see the module header.
+ */
+.dispatch-fx__row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 5px;
+  margin-top: -2.5px;
+  will-change: transform, opacity;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--red-bright) 18%,
+    #ffe3e7 50%,
+    var(--red-bright) 82%,
+    transparent
+  );
+  box-shadow: 0 0 10px var(--red-glow);
+}
+
+/*
+ * Beat 2: the compiled payload in flight. Chamfered like every other card in the console, with
+ * its glyphs rerolling as it travels so the thing being carried reads as data and not as a
+ * token. Centred on its own transform, which is what the flight math positions.
+ */
+.dispatch-fx__packet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 58px;
+  height: 17px;
+  margin: -8.5px 0 0 -29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  will-change: transform;
+  background: linear-gradient(180deg, #5a0d18, #22050a);
+  border: 1px solid var(--red-bright);
+  box-shadow: 0 0 16px var(--red-glow);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.02em;
+  color: #ffe3e7;
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
+}
+
+/* The transmission line behind the packet. Dashed and scrolling, like the drag tether, because
+   a solid line would read as a drawn path rather than as something being sent along it. */
+.dispatch-fx__trail {
+  fill: none;
+  stroke: var(--red-bright);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  opacity: 0.75;
+}
+
+/*
+ * Beat 3's marks. All three are authored around the SVG origin and carried to the site by their
+ * own transform, so `transform-box` and `transform-origin` are pinned here — the browser default
+ * would scale a mark about the middle of the whole plot and throw the arrival off the pin.
+ */
+.dispatch-fx__flash,
+.dispatch-fx__ring,
+.dispatch-fx__bracket {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+.dispatch-fx__flash {
+  fill: #ffe3e7;
+}
+
+.dispatch-fx__ring {
+  fill: none;
+  stroke: var(--red-bright);
+  stroke-width: 2;
+}
+
+.dispatch-fx__bracket {
+  fill: none;
+  stroke: var(--red-bright);
+  stroke-width: 1.6;
+}
+
+/* Every collapsed row landing kicks the button, so the stack arrives with some weight behind it
+   instead of the payload simply appearing once the rows have gone. */
+.btn-submit-mission--struck {
+  box-shadow:
+    0 0 22px var(--red-bright),
+    inset 0 0 18px rgba(255, 60, 80, 0.45);
+}
+
+/*
+ * A mission whose packet is still in the air. State commits the moment Submit is clicked, so
+ * without this the crew would be standing at the target before the upload carrying them arrived.
+ * Re-applied on every map render while the mission is in flight, so a redraw mid-flight cannot
+ * reveal them early; src/ui/dispatchSequence.ts lifts it as the packet lands.
+ */
+.map-callout--inbound {
+  opacity: 0;
 }
 
 /* ============================================================

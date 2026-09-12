@@ -55,6 +55,14 @@ export function resolveLocationCardArt(loc: LocationTemplate | undefined): strin
   return loc?.cardArt ?? DEFAULT_LOCATION_CARD_ART;
 }
 
+/**
+ * The static that stands in for anything the player has not identified — an Unknown site, or a
+ * hidden asset staged as a mission target. Animated unless the player asked for less motion.
+ */
+export function resolveUnknownCardArt(): string {
+  return prefersReducedMotion() ? UNKNOWN_LOCATION_CARD_ART_STILL : UNKNOWN_LOCATION_CARD_ART;
+}
+
 /** The art the player gets to see: static until the site is identified (see `intel.ts`). */
 export function resolvePlayerLocationCardArt(
   loc: LocationTemplate | undefined,
@@ -63,7 +71,7 @@ export function resolvePlayerLocationCardArt(
   if (identified) {
     return resolveLocationCardArt(loc);
   }
-  return prefersReducedMotion() ? UNKNOWN_LOCATION_CARD_ART_STILL : UNKNOWN_LOCATION_CARD_ART;
+  return resolveUnknownCardArt();
 }
 
 export function resolveLairCardArt(lair: LairTemplate | undefined): string {
