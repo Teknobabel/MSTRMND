@@ -407,7 +407,9 @@ body {
   z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  /* Status bar, then the map/drawers body taking whatever is left, then the bottom nav bar —
+     one row per direct child now that the ticker bar above the status bar is gone. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.5rem;
   padding: 0.4rem 0.6rem 0.5rem;
 }
@@ -904,6 +906,127 @@ body {
   position: absolute;
   inset: 0;
   z-index: 0;
+}
+
+/*
+ * The glitch layer: ambient digital corruption over the map. Driven by `ui/glitchDirector`
+ * from `ui/glitch`'s schedule, which is a pure function of the clock and reads no game state —
+ * see that file for why that is load-bearing rather than merely tidy.
+ *
+ * Sits at z-index 1, which is the entire reason it can exist. The map is 0 and the floating
+ * panels are 2, so corruption washes over the live art and passes *under* every panel the
+ * player reads from: a tear can never land across the mission requirements or the success
+ * chance. That is a stronger guarantee than tuning opacity until the text seemed legible,
+ * because it does not depend on how the effect is tuned later.
+ *
+ * Inert to the pointer, and inside `.omega-shell` on purpose — the shell carries the stage
+ * scale and the portrait 90-degree rotation, so the layer inherits both and needs none of the
+ * `:root.stage-rotated` special-casing the outer CRT overlay does.
+ */
+.glitch-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+  /* Rounded off the map's own corners; a shard squaring off the panel edge would read as
+     furniture rather than as something happening to the picture. */
+  border-radius: inherit;
+}
+
+/*
+ * One shard of corruption. Positioned and sized entirely from custom properties the director
+ * writes, so a step costs six property assignments per shard and no layout read.
+ *
+ * `backdrop-filter` is what makes the digital modes land. An opaque rectangle painted over the
+ * map is just a rectangle, and reads as a UI element nobody asked for; the same rectangle
+ * filtering the map's *own* pixels shows the real coastlines with the channels wrong, which is
+ * the thing a person recognizes as data gone bad. The modes below differ only in which filter
+ * they run — see `ShardMode` in `ui/glitch.ts`.
+ */
+.glitch-shard {
+  position: absolute;
+  left: var(--gs-u, 0%);
+  top: var(--gs-v, 0%);
+  width: var(--gs-w, 100%);
+  height: var(--gs-h, 1%);
+  opacity: var(--gs-alpha, 1);
+  /* The red tint the bright modes end on; see the note above `[data-mode="invert"]`. */
+  --gs-redshift: sepia(1) hue-rotate(-50deg) saturate(12);
+  /*
+   * The chroma fringe. Two hard inset shadows, red pushed one way and cyan the other, so the
+   * shard's edges separate into channels the way a botched decode does. Inset rather than outer
+   * so the fringe stays inside the shard's own box and cannot bleed onto clean picture around
+   * it — a burst must leave no trace outside the rectangles the schedule authorized.
+   */
+  box-shadow:
+    inset var(--gs-chroma, 0px) 0 0 rgba(255, 24, 72, 0.55),
+    inset calc(-1 * var(--gs-chroma, 0px)) 0 0 rgba(0, 226, 255, 0.45);
+  /*
+   * No transition, and no animation. This is the stylesheet's half of the quantization
+   * `MIN_STEPS` sets up: a shard must snap from one wrong state to the next wrong state with
+   * nothing in between. Any easing here would smear the steps back into the smooth analog
+   * slide the whole effect is defined against.
+   */
+  transition: none;
+}
+
+/*
+ * Tints a grayscale filter result bright red, for the modes that would otherwise flash white.
+ *
+ * A filter chain cannot multiply by a colour, so the red is reached the long way round: sepia
+ * pushes neutral grey onto a warm axis, `hue-rotate` swings that from sepia's brown to red, and
+ * a heavy `saturate` drives the result out to the edge of the gamut. The numbers are not
+ * eyeballed — the chain is linear, so it was solved for the target: at the darkest map
+ * luminance this lands on rgb(255, 29, 39), within a couple of points of the console's own
+ * `--red-bright`, and it stays monotonic, so brighter source pixels still come out darker red
+ * and the corrupted detail survives the tint.
+ *
+ * The leading `brightness()` at each call site is load-bearing rather than taste. Filter
+ * channels clamp at 1, and sepia's red row sums to 1.35 — hand it white and every channel
+ * pins at the top, so the "tint" comes back as white again and nothing downstream can recover
+ * the hue. Halving the input first keeps the whole chain inside the gamut where the maths holds.
+ */
+
+/*
+ * The hardest of the modes. The map is mostly dark, so inverting it sends nearly all of the
+ * shard bright — which is where the white came from. Grayscale first so the tint has a neutral
+ * signal to work on and does not fight whatever hue the art happened to have there.
+ */
+.glitch-shard[data-mode="invert"] {
+  -webkit-backdrop-filter: invert(1) grayscale(1) brightness(0.5) var(--gs-redshift);
+  backdrop-filter: invert(1) grayscale(1) brightness(0.5) var(--gs-redshift);
+}
+
+/* Wrong colour, intact detail — the codec look. Left on its own hue rotation: this one never
+   went white, and pushing it red too would collapse three distinct modes into one. */
+.glitch-shard[data-mode="hue"] {
+  -webkit-backdrop-filter: hue-rotate(155deg) saturate(2.2) contrast(1.25);
+  backdrop-filter: hue-rotate(155deg) saturate(2.2) contrast(1.25);
+}
+
+/*
+ * Data that decoded to garbage: the backdrop crushed to high contrast, with the shell's own
+ * noise texture over it offset by the shard's shift so neighbouring shards do not show the
+ * same grain. `--noise` is the same tile the CRT overlay composites, which keeps the grain
+ * consistent with the rest of the console even while it is being misused here.
+ *
+ * Crushed first, then tinted. The contrast is what makes this read as garbage rather than as a
+ * dimmed copy, and running it before the redshift means the blown highlights it creates are
+ * what gets tinted — so this mode goes bright red exactly where it used to go bright white.
+ */
+.glitch-shard[data-mode="static"] {
+  -webkit-backdrop-filter: contrast(2.6) grayscale(1) brightness(0.62) var(--gs-redshift);
+  backdrop-filter: contrast(2.6) grayscale(1) brightness(0.62) var(--gs-redshift);
+  background-image: var(--noise);
+  background-position: var(--gs-shift, 0%) 0;
+  background-blend-mode: overlay;
+}
+
+/* A row the signal never delivered. The one mode with no backdrop filter — there is nothing to
+   corrupt, that is the point, and the near-black reads as absent rather than as painted. */
+.glitch-shard[data-mode="flat"] {
+  background: rgba(4, 1, 2, 0.92);
 }
 
 .omega-body--floating .game-panel--plan-column,
@@ -2253,147 +2376,6 @@ body {
   filter: drop-shadow(0 0 5px var(--chance-accent));
 }
 
-/* ---------------- Ticker bar ---------------- */
-
-.omega-ticker-bar {
-  position: relative;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 0.5rem;
-  min-height: 2.5rem;
-  border: 1px solid var(--line-1);
-  background:
-    linear-gradient(180deg, rgba(30, 9, 12, 0.6), transparent 55%),
-    var(--panel-bg);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.omega-ticker-bar::before {
-  content: "";
-  position: absolute;
-  left: 10%;
-  right: 10%;
-  bottom: -1px;
-  height: 1px;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(232, 17, 45, 0.6) 40%,
-    rgba(232, 17, 45, 0.6) 60%,
-    transparent
-  );
-}
-
-.omega-ticker__label {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 1rem;
-  flex-shrink: 0;
-  font-family: var(--font-display);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--red-bright);
-  border-right: 1px solid var(--line-1);
-  background: linear-gradient(180deg, rgba(60, 14, 19, 0.5), rgba(22, 7, 9, 0.6));
-  white-space: nowrap;
-}
-
-.omega-ticker__signal {
-  position: relative;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--red-bright);
-  box-shadow: 0 0 8px var(--red-glow);
-  animation: signal-blink 1.4s ease-in-out infinite;
-}
-
-@keyframes signal-blink {
-  0%,
-  100% {
-    opacity: 1;
-    box-shadow: 0 0 10px var(--red-glow);
-  }
-  50% {
-    opacity: 0.35;
-    box-shadow: 0 0 3px var(--red-glow-soft);
-  }
-}
-
-.omega-ticker {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
-}
-
-.omega-ticker__track {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 3rem;
-  padding-left: 1rem;
-  white-space: nowrap;
-  width: max-content;
-  animation: ticker-scroll 45s linear infinite;
-}
-
-.omega-ticker:hover .omega-ticker__track {
-  animation-play-state: paused;
-}
-
-@keyframes ticker-scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-.ticker-item {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 0.55rem;
-}
-
-.ticker-item__marker {
-  color: var(--red);
-  font-size: 0.7rem;
-}
-
-.ticker-item__title {
-  font-family: var(--font-display);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-0);
-}
-
-.ticker-item__detail {
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--text-2);
-}
-
-.omega-ticker__empty {
-  padding-left: 1rem;
-  font-size: 0.82rem;
-  font-style: italic;
-  color: var(--text-3);
-}
-
 .btn-execute {
   grid-column: 2;
   align-self: stretch;
@@ -3476,10 +3458,13 @@ body {
   gap: 0.4rem;
 }
 
-/* The trait row's `flex-basis: 100%` is for starting a new line in a wrapping stats row; down
-   this column it would be read as the whole height of the body. */
-.minions-card > .card-body > .card-trait-row {
-  flex: none;
+/* `.card-brief`'s negative bottom margin is written for a block-flow body where it collapses
+   against whatever margin follows — but a minion card's body is a flex column (above), where
+   margins between items never collapse, so that negative margin would just as literally overlap
+   the Status row or Hire button that follows the bio. Zeroed here; the column's own `gap` plus
+   the brief's bottom padding are enough space between them. */
+.minions-card > .card-body > .card-brief {
+  margin-bottom: 0;
 }
 
 .card-art--chip {
@@ -3639,6 +3624,13 @@ body {
   margin-top: 0.5rem;
 }
 
+/* The minion bio's Skills section is a lone `.card-brief__col` with no `.card-brief__cols` wrapper
+   around it (`ui/minionBrief.ts`) — full width instead of one half of two — so it needs its own
+   copy of that wrapper's top margin to open the same gap under the header/description. */
+.card-brief > .card-brief__col {
+  margin-top: 0.5rem;
+}
+
 .card-brief__col {
   flex: 1 1 0;
   min-width: 0;
@@ -3678,6 +3670,10 @@ body {
   align-items: center;
   gap: 0.28rem;
   margin: 0;
+  /* A label with a `.card-brief__tally` badge stands taller than a bare icon + text one — held
+     to the badge's own height so every column's label reserves the same space and the row below
+     it starts at the same line, whether or not that column happens to carry a tally. */
+  min-height: 0.875rem;
   font-family: var(--font-display);
   font-size: 0.56rem;
   font-weight: 700;
@@ -3731,8 +3727,14 @@ body {
   background: rgba(10, 4, 5, 0.45);
 }
 
-/* A section with nothing in it yet. Dotted rather than absent: the form keeps its shape. */
+/* A section with nothing in it yet. Dotted rather than absent: the form keeps its shape — and
+   held to the same row height as `.card-brief__asset`/the skill pills so an empty column reads
+   as a peer of the filled one beside it rather than a shorter, different-shaped box. */
 .card-brief__empty {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-height: calc(26px + 0.24rem);
   margin: 0;
   padding: 0.16rem 0.3rem;
   border: 1px dotted var(--line-1);
@@ -3752,10 +3754,13 @@ body {
   gap: 0.3rem;
 }
 
+/* Held to the exact box `.card-brief__asset-thumb` renders at — 24px image plus its own 1px
+   border, top and bottom — so a skill row and an asset row are the same height and the two
+   columns' rows land level with each other line for line, not just at the shared header. */
 .card-brief__pills > .minions-trait-pill {
   box-sizing: border-box;
   width: 100%;
-  min-height: 24px;
+  min-height: calc(26px + 0.24rem);
   padding: 0.2rem 0.3rem 0.2rem 0.4rem;
   border-left-width: 2px;
   font-size: 0.7rem;
@@ -3823,7 +3828,7 @@ body {
  * One line of the manifest: thumbnail, code, name. A grid rather than a flex row so the codes
  * line up down the column however long the names run — a manifest that does not line up does
  * not read as a manifest. The mission brief reuses this row for its own required-assets list
- * (`ui/missionBrief.ts`), with a unit count standing in for the location's slot code.
+ * (`ui/missionBrief.ts`), where the code column carries a unit count.
  */
 .card-brief__asset {
   display: grid;
@@ -3870,6 +3875,20 @@ body {
   stroke-linejoin: round;
 }
 
+/*
+ * A row with no code column: thumbnail then name, two tracks instead of three.
+ *
+ * Every row in a location's manifest is one of these. The slot codes they used to carry (`A-01`,
+ * `A-02`, and `A-??` on the sealed tail) were flavour with nothing behind them — no other
+ * surface refers to a slot by code, the planner names assets outright — so they were spending
+ * the widest part of a narrow row on a label that could not be looked up anywhere. Dropping the
+ * track as well as the text matters: left in place, an empty `auto` column still pays the grid's
+ * gap, and the names would sit indented from a column header that is no longer there.
+ */
+.card-brief__asset--uncoded {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
 .card-brief__asset-code {
   font-size: 0.58rem;
   font-weight: 700;
@@ -3914,15 +3933,10 @@ body {
   background: transparent;
 }
 
-.card-brief__asset--empty .card-brief__asset-code,
 .card-brief__asset--empty .card-brief__asset-name {
   color: var(--text-3);
   text-decoration: line-through;
   text-decoration-color: var(--line-2);
-}
-
-.card-brief__asset--sealed .card-brief__asset-code {
-  color: var(--text-3);
 }
 
 .card-brief__asset--sealed .loc-brief__redacted {
@@ -3947,6 +3961,30 @@ body {
   cursor: grabbing;
 }
 
+/*
+ * A row that floats the asset's full card on hover (`attachAssetRowPreview`). It lights the same
+ * way a draggable row does, because the answer to "is this row worth pointing at" should not
+ * depend on which of the two things it happens to do — and on a location's manifest an
+ * identified row is usually both at once.
+ *
+ * `help` rather than `pointer`: hovering reveals, but there is nothing here to click, and a hand
+ * cursor over a row that ignores clicks is a promise the row does not keep.
+ */
+.card-brief__asset--previewable {
+  cursor: help;
+}
+
+.card-brief__asset--previewable:hover {
+  border-color: var(--line-2);
+  border-left-color: var(--red);
+  background: rgba(44, 13, 17, 0.6);
+}
+
+/* Dragging is the stronger affordance where a row carries both, so it keeps its own cursor. */
+.card-brief__asset--draggable.card-brief__asset--previewable {
+  cursor: grab;
+}
+
 /* The mission brief's own pair: a required asset is always known, so there is nothing to
    identify — only whether the player currently holds enough of it. */
 .card-brief__asset--have {
@@ -3959,6 +3997,17 @@ body {
 
 .card-brief__asset--missing .card-brief__asset-name {
   color: var(--text-3);
+}
+
+/* An asset an effect hands over rather than one a mission asks for: no have/missing question,
+   only whether the gain happens on success or on failure — the same pair `.mission-card-effects`
+   colours its lines with. */
+.card-brief__asset--good {
+  border-left-color: var(--good-dim);
+}
+
+.card-brief__asset--bad {
+  border-left-color: var(--red-deep);
 }
 
 /* ---- Intel 0: no file to read ---- */
@@ -4129,66 +4178,37 @@ body {
    Mission card outcome effects
    ============================================================ */
 
-/* Laid out as the same two-column brief the skills/assets half above uses (see `.card-brief__cols`
-   in the shared "Card brief" rules) — success on the left, failure on the right, under a ruled
-   header rather than the block's own separately-styled panel. */
+/* This is the same `.card-brief__cols` two-column brief the skills/assets half above uses —
+ * success's column plain, failure's carrying `.card-brief__col--assets` (added in
+ * `createMissionCardEffectsEl`) for the same wider-half-plus-divider treatment the Required
+ * Assets column gets — so the divider lands on the same line and both rows read as one sheet
+ * rather than two independently-measured blocks. */
 .mission-card-effects {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
   margin-top: 0.6rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--line-1);
 }
 
-.mission-card-effects__group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
-.mission-card-effects__group--success {
-  grid-column: 1;
-}
-
-.mission-card-effects__group--failure {
-  grid-column: 2;
-}
-
-.mission-card-effects__label {
-  font-family: var(--font-display);
-  font-size: 0.56rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-
-.mission-card-effects__group--success .mission-card-effects__label {
+.mission-card-effects__group--success .card-brief__label {
   color: var(--good);
 }
 
-.mission-card-effects__group--failure .mission-card-effects__label {
+.mission-card-effects__group--failure .card-brief__label {
   color: var(--red-bright);
-}
-
-.mission-card-effects__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
 }
 
 /* One outcome line, boxed the same way `.card-brief__asset` and the requirement rows above it
    are — same border, background and left accent — so a mission card reads as one continuous
-   sheet of equally-sized rows from Required Skills all the way down to On Failure. */
+   sheet of equally-sized rows from Required Skills all the way down to On Failure. The tone's
+   border colour carries success/failure on its own; there is no separate arrow glyph to repeat it. */
 .mission-card-effects__item {
-  position: relative;
-  padding: 0.2rem 0.3rem 0.2rem 0.95rem;
-  min-height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0.2rem 0.3rem;
+  /* Matches `.card-brief__asset-thumb`'s own rendered box, same as the skill rows above — a
+     gained-asset row sits in this same list (see `missionEffectAssetRow`), so every row in it
+     needs to agree on one height. */
+  min-height: calc(26px + 0.24rem);
   box-sizing: border-box;
   border: 1px solid var(--line-0);
   border-left-width: 2px;
@@ -4199,38 +4219,14 @@ body {
   word-break: break-word;
 }
 
-.mission-card-effects__item::before {
-  content: "•";
-  position: absolute;
-  left: 0.32rem;
-  top: 0.2rem;
-  font-size: 0.75rem;
-  line-height: 1.35;
-  color: var(--text-3);
-}
-
 .mission-card-effects__item--good {
   color: var(--text-0);
   border-left-color: var(--good-dim);
 }
 
-.mission-card-effects__item--good::before {
-  content: "▲";
-  font-size: 0.5rem;
-  line-height: 1.7;
-  color: var(--good);
-}
-
 .mission-card-effects__item--bad {
   color: var(--text-1);
   border-left-color: var(--red-deep);
-}
-
-.mission-card-effects__item--bad::before {
-  content: "▼";
-  font-size: 0.5rem;
-  line-height: 1.7;
-  color: var(--red-bright);
 }
 
 /* Infamy, Heat, Intel level and Security level read as their icon inside an effect line;
@@ -4302,17 +4298,6 @@ body {
   font-weight: 700;
   color: var(--text-0);
   word-break: break-word;
-}
-
-/* Assets named by an effect wear the same icon + name pill they wear on mission requirements
-   and minion cards, so an asset reads as an asset wherever it turns up. Lines that are nothing
-   but pills lay them out as a wrapping row, keeping the tone marker on the first row. */
-.mission-card-effects__item--assets {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: 0.35rem;
-  row-gap: 0.2rem;
 }
 
 /* Active mission cards */
@@ -6097,12 +6082,27 @@ body {
   color: var(--text-3);
 }
 
+/*
+ * Hire sits in the top-right corner of the card's hero art, the same corner `.minions-card-fire`
+ * claims on a roster card — so the one button that acts on a minion is in the same place whether
+ * the card is offering one or holding one.
+ *
+ * Safe to put there because `.card-hero__meta` is anchored to the *bottom* of the art: the name
+ * and the CP/level row can grow to any number of lines without ever reaching this corner. Unlike
+ * Fire it does not wait for a hover to appear — Hire is the whole reason a For Hire card is on
+ * screen, and a primary action that has to be discovered by sweeping the pointer over the card
+ * is a worse trade than one small button always showing.
+ */
 .minions-card-hire {
-  margin-top: auto;
-  width: 100%;
-  min-height: 30px;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.62rem;
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 2;
+  margin: 0;
+  width: auto;
+  min-height: 0;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.6rem;
 }
 
 /* ============================================================
@@ -7125,8 +7125,21 @@ body {
     transition-duration: 0.01ms !important;
   }
 
-  .omega-ticker__track {
-    animation: none;
+  /*
+   * The glitch layer is off entirely here, not held still.
+   *
+   * The blanket rule above cannot reach it: the corruption is stepped from the frame loop in
+   * JS, not by a keyframe, so there is no duration to zero out. `ui/glitch` is gated on the
+   * same preference for that reason and this rule is the belt to its braces — but the
+   * distinction is worth stating, because "frozen" is the wrong answer twice over. A shard
+   * stopped mid-burst is a permanent inverted bar across the map, which reads as a broken
+   * renderer rather than as motion politely declined; and a burst is a tenth of a second of
+   * hard, unpredictable flashing, which is the precise thing this preference is often set to
+   * avoid. Atmosphere is the entire feature, so dropping it costs the player nothing they
+   * needed.
+   */
+  .glitch-layer {
+    display: none;
   }
 
   /*

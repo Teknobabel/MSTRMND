@@ -47,8 +47,6 @@ export function locationDesignation(locationId: string): string {
 
 /** One line of the asset manifest. `knowledge` mirrors `intel.ts`'s `AssetSlotKnowledge`. */
 export interface LocationBriefAssetRow {
-  /** Index into the site's slot array; shown as the manifest code (`A-01`). */
-  slotIndex: number;
   knowledge: "identified" | "existence" | "empty";
   /** Catalog name when identified; ignored otherwise. */
   name: string;
@@ -57,6 +55,13 @@ export interface LocationBriefAssetRow {
   tooltip: string;
   /** Called with the row element so the caller can hang its drag payload on it. */
   wire?: (el: HTMLElement) => void;
+  /**
+   * Called with the row element so the caller can float the asset's full card beside it on
+   * hover. Only set for rows the player has identified — an existence-only row has no card to
+   * show yet, which is the whole point of it. When it is given, the row drops its `title`; see
+   * `briefAssetRow`.
+   */
+  preview?: (el: HTMLElement) => void;
 }
 
 export interface LocationBriefModel {
@@ -96,18 +101,14 @@ function briefIntelMeter(intelLevel: number): HTMLElement {
  * coming, but neither can be read yet. Drawn as a redacted bar rather than a word so the player
  * can see how much of the page is still blacked out.
  */
-function briefSealedRow(code: string, tooltip: string): HTMLElement {
+function briefSealedRow(tooltip: string): HTMLElement {
   const li = document.createElement("li");
-  li.className = "card-brief__asset card-brief__asset--sealed";
+  li.className = "card-brief__asset card-brief__asset--sealed card-brief__asset--uncoded";
   li.title = tooltip;
   const thumb = document.createElement("span");
   thumb.className = "card-brief__asset-thumb card-brief__asset-thumb--sealed";
   thumb.appendChild(briefIcon(ICON_LOCK, "loc-brief__sealed-icon"));
   li.appendChild(thumb);
-  const code_ = document.createElement("span");
-  code_.className = "card-brief__asset-code";
-  code_.textContent = code;
-  li.appendChild(code_);
   const bar = document.createElement("span");
   bar.className = "loc-brief__redacted";
   bar.textContent = "CLASSIFIED";
@@ -115,23 +116,21 @@ function briefSealedRow(code: string, tooltip: string): HTMLElement {
   return li;
 }
 
-function manifestCode(slotIndex: number): string {
-  return `A-${String(slotIndex + 1).padStart(2, "0")}`;
-}
-
 function briefAssetRow(row: LocationBriefAssetRow): HTMLElement {
   const li = document.createElement("li");
-  li.title = row.tooltip;
+  /* The floating card carries the name and the description the tooltip was spelling out, and
+   * more besides, so a row that has one does not also get a text bubble sliding out over it a
+   * second later. Rows without a preview — anything the player has not identified — keep the
+   * tooltip, which is where the "raise intel to read this" line lives. */
+  if (row.preview === undefined) {
+    li.title = row.tooltip;
+  }
 
   if (row.knowledge === "empty") {
-    li.className = "card-brief__asset card-brief__asset--empty";
+    li.className = "card-brief__asset card-brief__asset--empty card-brief__asset--uncoded";
     const thumb = document.createElement("span");
     thumb.className = "card-brief__asset-thumb card-brief__asset-thumb--empty";
     li.appendChild(thumb);
-    const code = document.createElement("span");
-    code.className = "card-brief__asset-code";
-    code.textContent = manifestCode(row.slotIndex);
-    li.appendChild(code);
     const name = document.createElement("span");
     name.className = "card-brief__asset-name";
     name.textContent = "Slot cleared";
@@ -141,8 +140,8 @@ function briefAssetRow(row: LocationBriefAssetRow): HTMLElement {
 
   const identified = row.knowledge === "identified";
   li.className = identified
-    ? "card-brief__asset card-brief__asset--revealed"
-    : "card-brief__asset card-brief__asset--hidden";
+    ? "card-brief__asset card-brief__asset--revealed card-brief__asset--uncoded"
+    : "card-brief__asset card-brief__asset--hidden card-brief__asset--uncoded";
 
   if (row.art !== null) {
     const img = createCardArtImg(row.art, "card-brief__asset-thumb");
@@ -153,11 +152,6 @@ function briefAssetRow(row: LocationBriefAssetRow): HTMLElement {
     li.appendChild(thumb);
   }
 
-  const code = document.createElement("span");
-  code.className = "card-brief__asset-code";
-  code.textContent = manifestCode(row.slotIndex);
-  li.appendChild(code);
-
   const name = document.createElement("span");
   name.className = "card-brief__asset-name";
   name.textContent = identified ? row.name : "Unidentified";
@@ -166,6 +160,10 @@ function briefAssetRow(row: LocationBriefAssetRow): HTMLElement {
   if (row.wire !== undefined) {
     li.classList.add("card-brief__asset--draggable");
     row.wire(li);
+  }
+  if (row.preview !== undefined) {
+    li.classList.add("card-brief__asset--previewable");
+    row.preview(li);
   }
   return li;
 }
@@ -331,10 +329,7 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
      * "here is what I have, and there is more" rather than hiding the known behind the unknown. */
     if (model.assetCountUnknown) {
       list.appendChild(
-        briefSealedRow(
-          "A-??",
-          "Raise intel at this site to learn how many assets are stored here.",
-        ),
+        briefSealedRow("Raise intel at this site to learn how many assets are stored here."),
       );
     }
     assets.appendChild(list);

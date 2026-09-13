@@ -18,6 +18,9 @@ import { ICON_CLIPBOARD, ICON_CRATE, briefPlaceholder, briefSectionLabel } from 
 
 /** One line of the required-assets manifest. */
 export interface MissionBriefAssetRow {
+  /** Catalog id of the asset this row is for. Not drawn — it is what a caller wiring `preview`
+   * needs in order to build the right card, without re-deriving it from the row's position. */
+  assetId: string;
   name: string;
   /** Thumbnail art URL — always present, since a required asset is always known. */
   art: string;
@@ -27,6 +30,12 @@ export interface MissionBriefAssetRow {
   /** Whether the player currently holds at least `quantity` of it. */
   have: boolean;
   tooltip: string;
+  /**
+   * Called with the row element so the caller can float the asset's full card beside it on
+   * hover. Optional so the module stays previewable without a game state behind it; when it is
+   * given, the row drops its `title` — see `missionAssetRow`.
+   */
+  preview?: (el: HTMLElement) => void;
 }
 
 export interface MissionBriefModel {
@@ -38,7 +47,12 @@ export interface MissionBriefModel {
 
 function missionAssetRow(row: MissionBriefAssetRow): HTMLElement {
   const li = document.createElement("li");
-  li.title = row.tooltip;
+  /* The floating card carries the name and the description the tooltip was spelling out, and
+   * more besides, so a row that has one does not also get a text bubble sliding out over it a
+   * second later. Rows without a preview keep the tooltip as their only long form. */
+  if (row.preview === undefined) {
+    li.title = row.tooltip;
+  }
   li.className = row.have
     ? "card-brief__asset card-brief__asset--have"
     : "card-brief__asset card-brief__asset--missing";
@@ -54,6 +68,11 @@ function missionAssetRow(row: MissionBriefAssetRow): HTMLElement {
   name.className = "card-brief__asset-name";
   name.textContent = row.name;
   li.appendChild(name);
+
+  if (row.preview !== undefined) {
+    li.classList.add("card-brief__asset--previewable");
+    row.preview(li);
+  }
 
   return li;
 }

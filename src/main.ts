@@ -153,6 +153,7 @@ import {
   type MapLayerState,
 } from "./ui/map/mapLayers";
 import { omegaPhaseTargetsByLocation } from "./ui/map/omegaTargets";
+import { createGlitchDirector } from "./ui/glitchDirector";
 import { initDragFocus } from "./ui/dragFocus";
 import { initDragTether } from "./ui/dragTether";
 import { initDragToken, setDragTokenFaces, type DragTokenFace } from "./ui/dragToken";
@@ -172,6 +173,7 @@ import {
   type LocationBriefAssetRow,
 } from "./ui/locationBrief";
 import { buildMissionBrief, type MissionBriefAssetRow } from "./ui/missionBrief";
+import { buildMinionBrief } from "./ui/minionBrief";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
   appendCardArtShell,
@@ -668,24 +670,21 @@ function cardTraitRow(container: HTMLElement): HTMLElement {
   return row;
 }
 
-function appendMinionTraits(
-  container: HTMLElement,
+/** The pills for a minion's Skills section (`ui/minionBrief.ts`): its catalog traits, then
+ * whatever dynamic traits play has hung on this instance. */
+function minionSkillPillEls(
   catalog: ReturnType<typeof loadContent>,
   traitIds: string[],
   dynamic?: { roster: MinionInstance[]; traits: readonly DynamicTrait[] },
-): void {
+): HTMLElement[] {
   const rosterTraits = dynamic?.traits ?? [];
   const roster = dynamic?.roster ?? [];
-  if (traitIds.length === 0 && rosterTraits.length === 0) {
-    return;
-  }
-  const row = cardTraitRow(container);
+  const pills: HTMLElement[] = [];
 
   for (const tid of sortedTraitIdsForDisplay(catalog, traitIds)) {
-    row.appendChild(createTraitPillEl(catalog, tid));
+    pills.push(createTraitPillEl(catalog, tid));
   }
-  for (let j = 0; j < rosterTraits.length; j += 1) {
-    const dtrait = rosterTraits[j]!;
+  for (const dtrait of rosterTraits) {
     const span = document.createElement("span");
     span.className = "minions-trait-pill minions-trait-pill--trait";
     span.tabIndex = 0;
@@ -695,8 +694,9 @@ function appendMinionTraits(
     text.className = "minions-trait-pill__label";
     text.textContent = dynamicTraitDisplayLabel(catalog, roster, dtrait);
     span.appendChild(text);
-    row.appendChild(span);
+    pills.push(span);
   }
+  return pills;
 }
 
 function createMinionsCardStatsRow(stats: {
@@ -1028,6 +1028,7 @@ function missionRequiredAssetRows(
   for (const [assetId, quantity] of counts) {
     const template = catalog.assets.find((a) => a.id === assetId);
     rows.push({
+      assetId,
       name: template?.name ?? assetId,
       art: resolveAssetCardArt(template),
       quantity,
@@ -1323,7 +1324,6 @@ function initGameController(
   const btnRunEndContinue = req<HTMLButtonElement>("btn-run-end-continue");
   const hudShort = req<HTMLElement>("game-hud-short");
   const threatLevelEl = req<HTMLElement>("threat-level");
-  const globalTickerEl = req<HTMLElement>("global-events-ticker");
   const omegaPlanPanelEl = req<HTMLElement>("omega-plan-panel");
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const missionsPanelRootEl = req<HTMLElement>("missions-panel-root");
@@ -1499,6 +1499,33 @@ function initGameController(
     return state.activeMissions.some((am) => am.missionSource === "event");
   }
 
+  /**
+   * One asset an effect gains, drawn as the same manifest row `missionAssetRow` (in
+   * `ui/missionBrief.ts`) uses for the Required Assets column — thumbnail, blank code, name —
+   * so an asset reads the same wherever a mission card names one. Tone stands in for that row's
+   * have/missing pair: there is nothing to hold here, only whether the gain happens on success
+   * or on failure.
+   */
+  function missionEffectAssetRow(
+    catalog: ReturnType<typeof loadContent>,
+    assetId: string,
+    tone: "good" | "bad",
+  ): HTMLElement {
+    const template = catalog.assets.find((a) => a.id === assetId);
+    const li = document.createElement("li");
+    li.className = `card-brief__asset card-brief__asset--${tone}`;
+    li.title = formatStaticAssetTooltip(template, assetId);
+    li.appendChild(createCardArtImg(resolveAssetCardArt(template), "card-brief__asset-thumb"));
+    const code = document.createElement("span");
+    code.className = "card-brief__asset-code";
+    li.appendChild(code);
+    const name = document.createElement("span");
+    name.className = "card-brief__asset-name";
+    name.textContent = template?.name ?? assetId;
+    li.appendChild(name);
+    return li;
+  }
+
   function renderMissionEffectItemEls(
     effect: MissionEffect,
     catalog: ReturnType<typeof loadContent>,
@@ -1508,14 +1535,10 @@ function initGameController(
       tone === "good" ? "mission-card-effects__item--good" : "mission-card-effects__item--bad";
 
     if (effect.kind === "gain_assets") {
-      // The asset speaks for itself: no "Gain asset:" lead-in, just the same pill assets wear
-      // everywhere else, with the line's tone marker saying it is gained.
-      return effect.assetIds.map((id: string) => {
-        const item = document.createElement("li");
-        item.className = `mission-card-effects__item ${toneClass} mission-card-effects__item--assets`;
-        item.appendChild(createAssetPillEl(catalog, id));
-        return item;
-      });
+      // The asset speaks for itself: no "Gain asset:" lead-in, just a manifest row formatted the
+      // same way the Required Assets column above draws one — thumbnail and name — so an asset
+      // reads as the same object whether the mission wants it or hands it over.
+      return effect.assetIds.map((id: string) => missionEffectAssetRow(catalog, id, tone));
     }
 
     if (effect.kind === "exchange_assets") {
@@ -1613,6 +1636,35 @@ function initGameController(
     return items;
   }
 
+  /**
+   * One outcome column — its `card-brief__label` and a `card-brief__assets` list of rows. Built
+   * the same way `buildMissionBrief`'s Required Skills / Required Assets columns are, so the two
+   * rows of the card share one set of column classes and land on the same divider.
+   */
+  function missionEffectsColumn(
+    heading: string,
+    effects: readonly MissionEffect[],
+    catalog: ReturnType<typeof loadContent>,
+    tone: "good" | "bad",
+    toneClass: string,
+  ): HTMLElement {
+    const group = document.createElement("section");
+    group.className = `card-brief__col mission-card-effects__group ${toneClass}`;
+
+    const label = document.createElement("h5");
+    label.className = "card-brief__label";
+    label.textContent = heading;
+    group.appendChild(label);
+
+    const list = document.createElement("ul");
+    list.className = "card-brief__assets";
+    for (const item of missionEffectListItemEls(effects, catalog, tone)) {
+      list.appendChild(item);
+    }
+    group.appendChild(list);
+    return group;
+  }
+
   function createMissionCardEffectsEl(
     mission: MissionTemplate | undefined,
     catalog: ReturnType<typeof loadContent>,
@@ -1629,40 +1681,40 @@ function initGameController(
     const container = document.createElement("div");
     container.className = "mission-card-effects";
 
+    const cols = document.createElement("div");
+    cols.className = "card-brief__cols";
+    container.appendChild(cols);
+
+    const groups: HTMLElement[] = [];
     if (successEffects.length > 0) {
-      const group = document.createElement("div");
-      group.className = "mission-card-effects__group mission-card-effects__group--success";
-
-      const label = document.createElement("div");
-      label.className = "mission-card-effects__label";
-      label.textContent = "On Success";
-      group.appendChild(label);
-
-      const list = document.createElement("ul");
-      list.className = "mission-card-effects__list";
-      for (const item of missionEffectListItemEls(successEffects, catalog, "good")) {
-        list.appendChild(item);
-      }
-      group.appendChild(list);
-      container.appendChild(group);
+      groups.push(
+        missionEffectsColumn(
+          "On Success",
+          successEffects,
+          catalog,
+          "good",
+          "mission-card-effects__group--success",
+        ),
+      );
     }
-
     if (failureEffects.length > 0) {
-      const group = document.createElement("div");
-      group.className = "mission-card-effects__group mission-card-effects__group--failure";
-
-      const label = document.createElement("div");
-      label.className = "mission-card-effects__label";
-      label.textContent = "On Failure";
-      group.appendChild(label);
-
-      const list = document.createElement("ul");
-      list.className = "mission-card-effects__list";
-      for (const item of missionEffectListItemEls(failureEffects, catalog, "bad")) {
-        list.appendChild(item);
-      }
-      group.appendChild(list);
-      container.appendChild(group);
+      groups.push(
+        missionEffectsColumn(
+          "On Failure",
+          failureEffects,
+          catalog,
+          "bad",
+          "mission-card-effects__group--failure",
+        ),
+      );
+    }
+    /* The divider between columns only makes sense with two of them — a mission with only one
+     * outcome's worth of effects gets a single full-width column, not a stray rule on its edge. */
+    if (groups.length === 2) {
+      groups[1]!.classList.add("card-brief__col--assets");
+    }
+    for (const group of groups) {
+      cols.appendChild(group);
     }
 
     return container;
@@ -2923,6 +2975,28 @@ function initGameController(
   }
 
   /**
+   * `attachAssignPickPreview` for a manifest row, building the card only once it is first
+   * hovered.
+   *
+   * The planner can afford to build its preview eagerly: there are at most a handful of chips
+   * staged at once. These rows are on every mission and location card in a list — a full drawer
+   * is dozens of cards with a few required assets each, so eager construction would build
+   * hundreds of detached card trees per render, nearly all of them never looked at. Built on
+   * demand and then kept, so a row the player keeps returning to pays for it once.
+   */
+  function attachAssetRowPreview(row: HTMLElement, assetId: string): void {
+    let card: HTMLElement | null = null;
+    row.addEventListener("mouseenter", () => {
+      card ??= buildAssetPreviewArticle(assetId);
+      showAssignPickPreview(row, card);
+    });
+    row.addEventListener("mouseleave", hideAssignPickPreview);
+    /* A row that is also a drag handle for the planner target must not leave its card floating
+     * over the drag it just started. */
+    row.addEventListener("dragstart", hideAssignPickPreview);
+  }
+
+  /**
    * The collapsed form of a staged mission or target. It takes over the drag affordance the
    * embedded card used to carry, and reveals `card` on hover or keyboard focus.
    */
@@ -3767,8 +3841,9 @@ function initGameController(
 
   /**
    * The art-led minion card every minion surface shares. The portrait runs full-bleed down the
-   * top of the card with the name and CP/level/XP badges on its scrim; the flavour line and the
-   * trait pills follow under it. Returns the body for whatever the surface adds after the traits.
+   * top of the card with the name and CP/level/XP badges on its scrim; the Bio brief — flavour
+   * line, then a full-width Skills list — follows under it. Returns the body for whatever the
+   * surface adds after the brief.
    */
   function fillMinionCard(
     card: HTMLElement,
@@ -3785,22 +3860,18 @@ function initGameController(
     meta.appendChild(title);
     meta.appendChild(createMinionsCardStatsRow(stats));
 
-    const descText = tpl?.description?.trim();
-    if (descText) {
-      const desc = document.createElement("p");
-      desc.className = "minions-card-description";
-      desc.textContent = descText;
-      body.appendChild(desc);
-    }
-
-    /* The trait pills stay under the art: they wrap to any number of lines, which would push
-     * the name up the portrait. */
-    if (traits !== null) {
-      appendMinionTraits(body, content, traits.ids, {
-        roster: state.player.minions,
-        traits: traits.dynamic,
-      });
-    }
+    body.appendChild(
+      buildMinionBrief({
+        description: tpl?.description?.trim() ?? null,
+        skillPills:
+          traits === null
+            ? null
+            : minionSkillPillEls(content, traits.ids, {
+                roster: state.player.minions,
+                traits: traits.dynamic,
+              }),
+      }),
+    );
     return body;
   }
 
@@ -4011,7 +4082,16 @@ function initGameController(
         buildMissionBrief({
           description: mission.description ?? null,
           requirementPills,
-          assets: missionRequiredAssetRows(mission.requiredAssetIds, state.player.assets, content),
+          /* Every required asset is named the moment the mission is offered, so every row here
+           * can show its card — nothing to gate, unlike a location's manifest. */
+          assets: missionRequiredAssetRows(
+            mission.requiredAssetIds,
+            state.player.assets,
+            content,
+          ).map((row) => ({
+            ...row,
+            preview: (el: HTMLElement) => attachAssetRowPreview(el, row.assetId),
+          })),
         }),
       );
 
@@ -4177,7 +4257,6 @@ function initGameController(
       }
       if (!isOccupiedAssetSlot(slot)) {
         assetRows.push({
-          slotIndex: si,
           knowledge: "empty",
           name: "",
           art: null,
@@ -4206,11 +4285,14 @@ function initGameController(
         tooltipLines.push(`Drag to Plan mission target (slot ${si + 1}).`);
       }
       assetRows.push({
-        slotIndex: si,
         knowledge: identifiedSlot ? "identified" : "existence",
         name,
         art: identifiedSlot ? resolveAssetCardArt(template) : resolveUnknownCardArtThumb(),
         tooltip: tooltipLines.join("\n"),
+        /* Only once the slot is identified. Below that the player has earned the knowledge that
+         * something is in there and nothing else, and there is no card to show — floating the
+         * real asset's would hand over the intel the slot is still withholding. */
+        preview: identifiedSlot ? (el) => attachAssetRowPreview(el, slot.assetId) : undefined,
         wire: enableAssignDrag
           ? (el) => {
               el.draggable = true;
@@ -4479,7 +4561,7 @@ function initGameController(
       }
       const card = document.createElement("article");
       card.className = "minions-card minions-card--available";
-      const body = fillMinionCard(
+      fillMinionCard(
         card,
         tpl,
         tpl.id,
@@ -4516,7 +4598,10 @@ function initGameController(
         dispatch((s) => hireMinion(s, content, tpl.id, crypto.randomUUID()));
       });
 
-      body.appendChild(hireBtn);
+      /* On the card, not in its body: the button is positioned into the hero art's corner (see
+       * `.minions-card-hire`), so it belongs to the card box the way Fire does and not to the
+       * text flow underneath it. */
+      card.appendChild(hireBtn);
       cards.set(`offer:${tpl.id}`, card);
     }
 
@@ -4524,7 +4609,7 @@ function initGameController(
       const tpl = content.minions.find((m) => m.id === rehireInst.templateId);
       const card = document.createElement("article");
       card.className = "minions-card minions-card--available minions-card--rehire";
-      const body = fillMinionCard(
+      fillMinionCard(
         card,
         tpl,
         rehireInst.templateId,
@@ -4568,7 +4653,10 @@ function initGameController(
         dispatch((s) => rehireMinion(s, content, rehireInst.instanceId));
       });
 
-      body.appendChild(hireBtn);
+      /* On the card, not in its body: the button is positioned into the hero art's corner (see
+       * `.minions-card-hire`), so it belongs to the card box the way Fire does and not to the
+       * text flow underneath it. */
+      card.appendChild(hireBtn);
       cards.set(`rehire:${rehireInst.instanceId}`, card);
     }
 
@@ -4989,6 +5077,21 @@ function initGameController(
       appendAddToPlannerButton(article, "Add asset to planner", () => applyAssetToPlanner(assetId));
     }
 
+    fillAssetCard(article, assetId, template);
+    return article;
+  }
+
+  /**
+   * Everything an asset card says — art, name, description, support line — with none of the
+   * behaviour. Split out of `buildAssetCardArticle` so a preview can reuse the card's whole face
+   * without inheriting its drag payload or its Add-to-planner button, the same split
+   * `fillMinionCard` / `buildMinionPreviewArticle` already runs on.
+   */
+  function fillAssetCard(
+    article: HTMLElement,
+    assetId: string,
+    template: Asset | undefined,
+  ): void {
     const { meta, body } = appendCardHeroShell(article, resolveAssetCardArt(template));
 
     const title = document.createElement("h4");
@@ -5012,7 +5115,26 @@ function initGameController(
       ]);
       body.appendChild(dl);
     }
+  }
 
+  /**
+   * The full asset card as a hover preview, for the manifest rows on mission and location cards.
+   *
+   * A manifest row is a 34px thumbnail and a name — enough to find an asset in a list, not
+   * enough to decide anything about it. This is the same card the Assets drawer shows, floated
+   * beside the row on hover by `attachAssignPickPreview`, so a required asset can be read in
+   * full from the card that asks for it. Inert by construction: the preview layer is
+   * `pointer-events: none`, and the card is built without a drag payload or a planner button so
+   * there is nothing on it that looks clickable but is not.
+   */
+  function buildAssetPreviewArticle(assetId: string): HTMLElement {
+    const template = content.assets.find((a) => a.id === assetId);
+    const article = document.createElement("article");
+    article.className = "asset-card assign-pick-preview-card";
+    if (template !== undefined && isSupportAsset(template)) {
+      article.classList.add("asset-card--support");
+    }
+    fillAssetCard(article, assetId, template);
     return article;
   }
 
@@ -5490,34 +5612,15 @@ function initGameController(
       });
     }
 
-    const eventEntry = eventOfferEntry();
-    groups.push({
-      label: "Event Offer",
-      emptyText: eventMissionRunning()
-        ? "The event you took is under way."
-        : "No event on the table.",
-      entries: eventEntry === null ? [] : [eventEntry],
-    });
-
+    /* No Event Offer group here. The offer has its own pane on the dashboard, lit and in the
+     * corner where the run puts it (`.game-panel--site-inspector--event`), and `eventOfferEntry`
+     * still builds that card — so listing it again at the foot of this menu was the same offer
+     * twice, with the duplicate being the copy nobody is looking at. */
     return groups;
   }
 
   function fillAvailableMissionsInto(container: HTMLElement): void {
     const groups = collectAvailableMissionGroups();
-    const total = groups.reduce((sum, group) => sum + group.entries.length, 0);
-
-    const summary = document.createElement("p");
-    summary.className = "active-missions-summary";
-    summary.textContent = `${total} mission${total === 1 ? "" : "s"} unlocked`;
-    container.appendChild(summary);
-
-    const hint = document.createElement("p");
-    hint.className = "assets-panel-empty";
-    hint.textContent =
-      state.phase === "main"
-        ? "Drag a mission onto the Plan Mission slot to start it."
-        : "Missions can only be started during the Main Phase.";
-    container.appendChild(hint);
 
     for (const group of groups) {
       const heading = document.createElement("h3");
@@ -6223,10 +6326,16 @@ function initGameController(
    */
   function drawMapFrame(timeMs: number): void {
     if (mapRenderer === null || currentPlotSize() === null) {
+      /* Whatever was corrupting when the frames stopped would otherwise stay on screen until
+       * they resume — and for a run with no map art, forever. The schedule is pure, so there is
+       * nothing to restore on the way back in: the next frame asks for the state at its own
+       * time and gets it. */
+      glitchDirector.clear();
       return;
     }
     if (reducedMotion.matches) {
       /* Still needs the one draw that a resize or a re-render asks for, but no clock. */
+      glitchDirector.clear();
       return;
     }
     mapEpochMs ??= timeMs;
@@ -6243,6 +6352,11 @@ function initGameController(
     );
     updateMapCamera();
     syncMapProjection();
+
+    /* Derived from the clock rather than kept as state, for the same reasons the ambient
+     * traffic is: nothing to advance, nothing to reset when the panel is rebuilt. Between
+     * bursts this is one integer comparison and no DOM work at all. */
+    glitchDirector.frame(mapTimeSeconds);
 
     /* One text write a second rather than one a frame. The clock is the only per-frame DOM work
      * on the panel that is not a transform, and a `textContent` assignment that changes nothing
@@ -6319,6 +6433,23 @@ function initGameController(
       syncMapProjection();
     }
   });
+
+  /**
+   * Ambient corruption over the map. Mounted on the floating body rather than inside
+   * `#map-panel`, because `renderMapPanel` empties that on every state change and would throw
+   * the pool away mid-burst; the body is static markup and outlives every render.
+   *
+   * Driven from `drawMapFrame` below, which is doing three jobs for it at once: it hands over
+   * the same clock the camera and the ambient traffic run on, it is already gated on the panel
+   * being visible, and it is already gated on `prefers-reduced-motion`. Nothing here needs to
+   * re-derive any of the three.
+   */
+  const glitchDirector = createGlitchDirector(
+    document.querySelector<HTMLElement>(".omega-body--floating") ??
+      (() => {
+        throw new Error("No floating body in the markup to host the glitch layer");
+      })(),
+  );
 
   /* The shell's own loop drives the map; see `mapFrameHook`. */
   mapFrameHook = drawMapFrame;
@@ -8221,106 +8352,6 @@ Your lair`;
     threatLevelEl.appendChild(skulls);
   }
 
-  function tickerItemForEvent(
-    ev: GameState["activityLog"][number]["events"][number],
-  ): { title: string; detail: string } | null {
-    const missionNameOf = (id: string): string =>
-      content.missions.find((m) => m.id === id)?.name ??
-      content.events.find((e) => e.id === id)?.name ??
-      id;
-    const minionNameOf = (id: string): string =>
-      content.minions.find((m) => m.id === id)?.name ?? id;
-    const assetNameOf = (id: string): string =>
-      content.assets.find((a) => a.id === id)?.name ?? id;
-    switch (ev.kind) {
-      case "mission_completed":
-        return {
-          title:
-            ev.result === "success"
-              ? "Mission success"
-              : ev.result === "compromised"
-                ? "Mission compromised"
-                : "Mission failed",
-          detail: ev.missionName,
-        };
-      case "mission_started":
-        return { title: "Operation launched", detail: missionNameOf(ev.missionTemplateId) };
-      case "mission_cancelled":
-        return { title: "Operation aborted", detail: missionNameOf(ev.missionTemplateId) };
-      case "minion_hired":
-      case "minion_rehired":
-        return {
-          title: "Recruitment",
-          detail: `${minionNameOf(ev.templateId)} joined ${state.organizationName}`,
-        };
-      case "minion_fired":
-        return { title: "Termination", detail: `${minionNameOf(ev.templateId)} removed` };
-      case "asset_gained":
-        return { title: "Asset acquired", detail: `${assetNameOf(ev.assetId)} ×${ev.quantity}` };
-      case "asset_lost":
-        return { title: "Asset lost", detail: `${assetNameOf(ev.assetId)} ×${ev.quantity}` };
-      case "minion_leveled_up":
-        return {
-          title: "Power rising",
-          detail: `${minionNameOf(ev.templateId)} reached level ${ev.newLevel}`,
-        };
-      case "event_rotated_in":
-        return { title: "Global event", detail: missionNameOf(ev.eventTemplateId) };
-      case "event_expired":
-        return { title: "Event expired", detail: missionNameOf(ev.eventTemplateId) };
-      default:
-        return null;
-    }
-  }
-
-  function renderGlobalTicker(): void {
-    globalTickerEl.innerHTML = "";
-    const items: { title: string; detail: string }[] = [];
-    if (state.currentEventTemplateId !== null) {
-      const et = content.events.find((e) => e.id === state.currentEventTemplateId);
-      if (et) {
-        const left = state.currentEventTurnsRemaining;
-        items.push({
-          title: et.special === "lair_raid" ? "LAIR UNDER SIEGE" : "Incoming event",
-          detail:
-            et.special === "lair_raid"
-              ? `${et.name} — answer in ${left} ${left === 1 ? "turn" : "turns"} or the run ends`
-              : `${et.name} — ${left} ${left === 1 ? "turn" : "turns"} to act`,
-        });
-      }
-    }
-    for (const entry of state.activityLog.slice(-2)) {
-      for (const ev of entry.events.slice(-8)) {
-        const item = tickerItemForEvent(ev);
-        if (item) {
-          items.push(item);
-        }
-      }
-    }
-    if (items.length === 0) {
-      items.push(
-        { title: "Surveillance active", detail: "No global events detected" },
-        { title: "Omega directive", detail: "Advance the plan. All will kneel." },
-      );
-    }
-    /* Track scrolls -50%; duplicate items so the loop is seamless. */
-    for (const it of [...items, ...items]) {
-      const wrap = document.createElement("span");
-      wrap.className = "ticker-item";
-      const marker = document.createElement("span");
-      marker.className = "ticker-item__marker";
-      marker.textContent = "◢";
-      const title = document.createElement("span");
-      title.className = "ticker-item__title";
-      title.textContent = it.title;
-      const detail = document.createElement("span");
-      detail.className = "ticker-item__detail";
-      detail.textContent = it.detail;
-      wrap.append(marker, title, detail);
-      globalTickerEl.appendChild(wrap);
-    }
-  }
-
   /* ---------------------------------------------------------------------------------------
    * End-of-turn report: one Mission Results modal per mission that finished, then the Turn
    * Summary. The turn only advances (`advanceToNextTurn`) when the summary is dismissed, so
@@ -8694,7 +8725,6 @@ Your lair`;
     playerProfilePicEl.alt = `${state.playerName} profile`;
     renderStatusBar();
     renderThreatMeter();
-    renderGlobalTicker();
     hudShort.textContent = `Turn ${state.turnNumber}`;
 
     const mainOnly = state.phase === "main";
