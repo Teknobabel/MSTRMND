@@ -201,6 +201,25 @@ export function appendCardHeroShell(
 }
 
 /**
+ * Lays an effect layer over a hero banner's art: a full-bleed div that sits above the picture
+ * but below the name plate, for grades no CSS `filter` on the image can express — the scanline
+ * comb a thinly-scouted site wears, say.
+ *
+ * It takes the `meta` returned by {@link appendCardHeroShell} rather than the card, because
+ * `meta` is what fixes the layer's place in the stack: inserted just before the name plate, the
+ * layer paints over the art (which a `filter` has already made its own stacking context) and
+ * under the title, which has to stay readable through whatever is laid on the picture. A
+ * pseudo-element on the hero could only land on one side of *both*.
+ */
+export function appendCardHeroOverlay(meta: HTMLElement, className: string): HTMLDivElement {
+  const layer = document.createElement("div");
+  layer.className = className;
+  layer.setAttribute("aria-hidden", "true");
+  meta.before(layer);
+  return layer;
+}
+
+/**
  * Adds `.card-with-art`, a thumbnail `img`, and a `.card-body` wrapper; returns the body for text/stats.
  */
 export function appendCardArtShell(article: HTMLElement, src: string): HTMLDivElement {

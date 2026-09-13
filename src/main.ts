@@ -88,6 +88,7 @@ import { agentAbilityDef, agentAbilityName } from "./game/agentAbility";
 import {
   assetSlotKnowledge,
   effectiveVisibilityOfSlot,
+  INTEL_SITE_IDENTITY,
   intelLevelAtLocation,
   isLocationIdentifiedByPlayer,
   isOpposingAgentMoveVisibleToPlayer,
@@ -184,6 +185,7 @@ import { buildMinionBrief } from "./ui/minionBrief";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
   appendCardArtShell,
+  appendCardHeroOverlay,
   appendCardHeroShell,
   createCardArtImg,
   loadCardArt,
@@ -4342,6 +4344,17 @@ function initGameController(
       article,
       resolvePlayerLocationCardArt(loc, identified),
     );
+
+    /* Intel 1: the site has a name and a picture, but the picture is all the player has managed
+     * to pull off it — so it is shown as the degraded surveillance still it is, drained of
+     * colour and combed by scanlines. Intel 2 is what buys the clean plate, which makes the
+     * grade the visible difference between knowing *what* a place is and being able to see
+     * inside it. The comb is its own layer rather than a filter because no filter draws lines;
+     * it rides under the name plate so the title stays readable (see `appendCardHeroOverlay`). */
+    if (identified && intelLevel === INTEL_SITE_IDENTITY) {
+      article.classList.add("location-card--thin-intel");
+      appendCardHeroOverlay(meta, "card-hero__scan");
+    }
 
     const title = document.createElement("h4");
     title.className = "location-card-title";
