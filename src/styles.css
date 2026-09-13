@@ -3883,6 +3883,53 @@ body {
 }
 
 /*
+ * Intel 1 (see `buildLocationCardArticle`): the site has been identified, but its picture is a
+ * frame scraped off a feed rather than a plate the player owns. Drained of colour and pushed to
+ * a hard, dim contrast so it reads as monitor output; intel 2 is what buys the clean art back,
+ * which makes this grade the visible difference between knowing what a place is and being able
+ * to see inside it.
+ */
+.location-card--thin-intel > .card-hero > .card-art {
+  filter: grayscale(1) contrast(1.26) brightness(0.92);
+}
+
+/* The hover lift the other heroes get returns saturation, which here would say the player just
+   learned something. This one only brightens — the feed is still the same feed. */
+.location-card--thin-intel:hover > .card-hero > .card-art {
+  filter: grayscale(1) contrast(1.28) brightness(0.98);
+}
+
+/*
+ * The comb. Heavier than the console-wide scanlines (`.screen-game::after`, 0.16 alpha) on
+ * purpose: at 1px in 3 and near-opaque it has to be legible as *this card's* signal being poor,
+ * standing beside fully scouted cards wearing the global pass. Fixed pixel lines rather than
+ * anything proportional, because a CRT line does not scale with the picture.
+ *
+ * The second gradient is the interlace beat — a soft wide band every 9px that keeps the comb
+ * from reading as flat hatching — and the inset shadow is the tube's falloff at the glass.
+ * A DOM layer rather than a pseudo-element: it has to paint over art that a `filter` has made
+ * its own stacking context, and under the name plate (see `appendCardHeroOverlay`).
+ */
+.card-hero__scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.62) 0 1px,
+      rgba(0, 0, 0, 0.14) 1px 2px,
+      rgba(0, 0, 0, 0) 2px 3px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.14) 0 4px,
+      rgba(0, 0, 0, 0) 4px 9px
+    );
+  box-shadow: inset 0 0 1.2rem rgba(6, 2, 3, 0.45);
+}
+
+/*
  * The name plate. The gradient is the scrim: it has to carry white display type and the stat
  * badges over whatever the art happens to be behind them, so it runs from clear at the top to
  * near-opaque at the baseline rather than flat-tinting the whole banner.
