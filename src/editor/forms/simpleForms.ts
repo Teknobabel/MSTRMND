@@ -82,6 +82,17 @@ export function renderTraitForm(container: HTMLElement, ctx: FormCtx): void {
   container.appendChild(
     hint("primary/secondary traits are eligible for site requirement & security rolls; status traits only modify mission success."),
   );
+  container.appendChild(
+    artFieldRow(ctx, "icon", {
+      optional: true,
+      suggestedName: `trait-${str(ctx.row, "id")}`,
+    }),
+  );
+  container.appendChild(
+    hint(
+      "icon — the glyph on every pill naming this trait. Drawn at ~13px, so a simple silhouette on a transparent background reads best. Leave it empty and the trait keeps the generic tag glyph.",
+    ),
+  );
 }
 
 /** Player-facing gist of each support ability, for the editor picker. */

@@ -358,6 +358,29 @@ function createTraitIconEl(): SVGElement {
   return createSvgPillIcon(TRAIT_ICON_SVG_PATHS);
 }
 
+/**
+ * The glyph a pill wears for one catalog trait: the trait's own icon where it has been given
+ * one, else the generic mark this pill has always drawn — `kind` picks which generic, since a
+ * trait listed as a site's security is marked with the shield rather than the tag.
+ *
+ * A trait that has an icon uses it in both places. The icon is the trait's identity, and the
+ * pill still says which list it is in through its own colour and border.
+ */
+function createTraitPillIconEl(
+  trait: Trait | undefined,
+  kind: "trait" | "security",
+): Element {
+  if (trait?.icon !== undefined) {
+    const img = document.createElement("img");
+    img.className = "minions-trait-pill__icon minions-trait-pill__icon--art";
+    img.src = trait.icon;
+    img.alt = "";
+    img.decoding = "async";
+    return img;
+  }
+  return kind === "security" ? createSecurityIconEl() : createTraitIconEl();
+}
+
 function createSecurityIconEl(): SVGElement {
   return createSvgPillIcon(SECURITY_ICON_SVG_PATHS);
 }
@@ -594,7 +617,7 @@ function createTraitPillEl(
   }
   span.tabIndex = 0;
   span.title = formatStaticTraitTooltip(trait, traitId);
-  span.appendChild(iconKind === "security" ? createSecurityIconEl() : createTraitIconEl());
+  span.appendChild(createTraitPillIconEl(trait, iconKind));
   const text = document.createElement("span");
   text.className = "minions-trait-pill__label";
   text.textContent = trait?.name ?? traitId;
@@ -1286,6 +1309,7 @@ function initGameController(
   const assignSupportAssetsFieldset = req<HTMLElement>("assign-support-assets-fieldset");
   const assignSupportAssetsList = req<HTMLElement>("assign-support-assets-list");
   const planColumnPanelEl = req<HTMLElement>("plan-column-panel-plan");
+  const planColumnEl = req<HTMLElement>("plan-column");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
   const assignSubmitWrapEl = req<HTMLElement>("assign-submit-wrap");
   const assignBlockedAlertEl = req<HTMLElement>("assign-blocked-alert");
@@ -3653,7 +3677,7 @@ function initGameController(
   }
 
   /**
-   * The requirements checklist above the gauge. It exists to make the number legible: every pill
+   * The requirements checklist under the gauge. It exists to make the number legible: every pill
    * here is a term in the success arithmetic, lit once the staged minions and assets cover it.
    */
   function renderAssignRequirements(): void {
@@ -3668,13 +3692,6 @@ function initGameController(
       return;
     }
     assignRequirementsEl.hidden = false;
-
-    /* The label column is only worth reserving when something is actually named in it —
-     * otherwise a mission with no site groups reads as indented for no reason. */
-    assignRequirementsListEl.classList.toggle(
-      "plan-reqs__list--unlabelled",
-      !groups.some((g) => g.label !== ""),
-    );
 
     /* An Unknown target may be hiding site or security requirements the planner cannot see, so
      * a real tally would understate what is actually being staged against — the tally reads as
@@ -3696,13 +3713,16 @@ function initGameController(
       const row = document.createElement("div");
       row.className = "plan-reqs__group";
 
-      const label = document.createElement("span");
-      label.className = "plan-reqs__group-label";
+      /* An unnamed group — the mission's own traits, and the asset slots — heads nothing and
+       * gets no heading. The label is a line above the rows now rather than a column beside
+       * them, so an empty one would open a blank line instead of quietly reserving a gutter. */
       if (group.label !== "") {
+        const label = document.createElement("span");
+        label.className = "plan-reqs__group-label";
         label.textContent = group.label;
         label.title = group.hint;
+        row.appendChild(label);
       }
-      row.appendChild(label);
 
       const pills = document.createElement("div");
       pills.className = "plan-reqs__pills";
@@ -3740,9 +3760,9 @@ function initGameController(
   }
 
   /**
-   * The success-chance gauge above Submit. Unlike the old in-button badge it never hides: with no
-   * staged plan it holds a grey, empty ring so the player knows where the number will appear. A
-   * real 0% reads the same grey — there is nothing to sell either way.
+   * The success-chance gauge at the head of Assessment. Unlike the old in-button badge it never
+   * hides: with no staged plan it holds a grey, empty ring so the player knows where the number
+   * will appear. A real 0% reads the same grey — there is nothing to sell either way.
    */
   function syncAssignChanceGauge(): void {
     const staged = state.phase === "main" ? stagedSuccessChance() : null;
@@ -3786,6 +3806,101 @@ function initGameController(
       staged.dynamicEntries,
       state.player.minions,
     ).join("\n");
+  }
+
+  /**
+   * The planner is as tall as the plan in it, and travels between sizes rather than snapping.
+   *
+   * The height has to be written in pixels because `auto` does not interpolate — that is the
+   * whole reason this is in JS at all. Everything else is still the stylesheet's: the resting
+   * size is whatever the sections come to, the ceiling is `max-height: 100%` (the map's own
+   * height), and past that ceiling the page inside goes on scrolling exactly as it did. The
+   * number here is free to exceed the ceiling; `max-height` clamps it and the panel simply stops
+   * growing, which is what turns the last of the growth into a scroll.
+   *
+   * Called from `refresh` and from an observer on the sections, because most of what resizes this
+   * panel never goes through a render — a card picked up, an asset slot filling, a requirement
+   * lighting up.
+   */
+  let planColumnHeightArmed = false;
+
+  function syncPlanColumnHeight(): void {
+    /* Minimized to its header. The collapse rule already says `height: auto`, and an inline
+     * height would outrank it and hold the panel open at the size of a plan nobody can see. */
+    if (planColumnEl.classList.contains("game-panel--collapsed")) {
+      planColumnEl.style.height = "";
+      planColumnEl.classList.remove("plan-column--sized");
+      planColumnHeightArmed = false;
+      return;
+    }
+    /* The plan's own height, taken from the sections themselves — first section's top to last
+     * section's bottom, so the gaps between them come along for free.
+     *
+     * Not `scrollHeight`, which is the obvious reach and is wrong here: it reports whichever is
+     * larger of the content and the box it is in, so once the panel is big enough it just echoes
+     * back the height we last gave it. Measured that way the panel can grow and never shrink.
+     * The sections are what the panel is meant to fit, so they are what gets measured.
+     *
+     * And measured through `offsetTop`/`offsetHeight` rather than `getBoundingClientRect`,
+     * because the whole shell is a scaled canvas (`ui/stageScale`). A rect is in *visual*
+     * pixels, with the stage's scale already multiplied in; `offset*` and the `chrome` below are
+     * in *layout* pixels, which is also what the height we are about to write is read as. Mixing
+     * the two writes a height that is off by the stage scale — a panel too short on a small
+     * window, and one carrying a band of dead space on a large one. All three sections share an
+     * offsetParent (the panel, the nearest positioned ancestor), so their offsets are directly
+     * comparable. */
+    const sections = [...planColumnPanelEl.children].filter(
+      (el): el is HTMLElement => el instanceof HTMLElement && !el.hidden,
+    );
+    const first = sections[0];
+    const last = sections[sections.length - 1];
+    const content =
+      first === undefined || last === undefined
+        ? 0
+        : last.offsetTop + last.offsetHeight - first.offsetTop;
+    /* Not on screen — the menu is up, or the run has not started. Everything measures 0 there,
+     * and pinning that would collapse the panel to its chrome. The observer fires again with
+     * real numbers the moment it is shown, which is what makes this safe to simply skip. */
+    if (content <= 0) {
+      return;
+    }
+    /* The page is the one flex child that absorbs the panel's slack, so whatever the panel has
+     * that the page does not is exactly the chrome: header, footer, padding, borders, gaps.
+     * Taken as a difference rather than summed from parts, so it needs no updating when the
+     * footer changes, and it holds mid-animation.
+     *
+     * It holds only while the panel's height is definite, though. A flex column sized by its own
+     * contents collapses `flex: 1 1 0` children to nothing, and the footer sits inside the stack
+     * that collapses — so the difference comes back short by the whole Deploy bar. The
+     * stylesheet's fallback is `height: 100%` for that reason; this pins it before the first
+     * measurement in case that ever changes, since the symptom is a panel quietly one footer too
+     * short rather than anything that looks like a bug in here. */
+    if (planColumnEl.style.height === "") {
+      planColumnEl.style.height = "100%";
+    }
+    const chrome = planColumnEl.offsetHeight - planColumnPanelEl.clientHeight;
+    planColumnEl.style.height = `${String(Math.ceil(chrome + content))}px`;
+    if (!planColumnHeightArmed) {
+      planColumnHeightArmed = true;
+      /* A frame later, so the first height — the one that just took over from the stylesheet's
+       * fallback — lands without animating. There is nothing to show the player yet at that
+       * point; the travel is only worth watching once they are the ones causing it. */
+      requestAnimationFrame(() => {
+        planColumnEl.classList.add("plan-column--sized");
+      });
+    }
+  }
+
+  /* The sections and the footer are the only things in the panel whose height is not fixed, and
+   * they outlive every render — their bodies are rebuilt, the frames themselves are not — so
+   * they can be observed once here rather than re-wired on each pass. */
+  const planColumnResizeObserver = new ResizeObserver(() => {
+    syncPlanColumnHeight();
+  });
+  for (const el of planColumnEl.querySelectorAll<HTMLElement>(
+    ".plan-section, .plan-column-footer",
+  )) {
+    planColumnResizeObserver.observe(el);
   }
 
   function syncAssignButtonState(): void {
@@ -8158,6 +8273,10 @@ Your lair`;
       const name = panel.querySelector(".game-panel-title")?.textContent?.trim() ?? "panel";
       button.setAttribute("aria-label", `${collapsed ? "Expand" : "Minimize"} ${name} panel`);
     }
+    /* In the same breath as the class, not a frame later when the observer gets round to it: the
+     * planner's inline height outranks the collapse rule, so a beat between the two would fold
+     * the panel to its header and leave it standing a plan tall. */
+    syncPlanColumnHeight();
   }
 
   for (const button of panelMinimizeButtons) {
@@ -8200,6 +8319,11 @@ Your lair`;
         unloadCardArt(drawer.panelEl);
       }
     }
+    /* The map stands back while a menu is up — the plot scales down behind a veil, on the same
+     * curve and duration as the slide, so the two read as one movement. Which drawer is open
+     * makes no difference; the class rides `#map-panel`, which survives `renderMapPanel`'s
+     * teardown of everything inside it, so a redraw mid-slide cannot drop the effect. */
+    mapPanelEl.classList.toggle("map-panel--receded", openDrawer !== null);
   }
 
   /**
@@ -9107,6 +9231,9 @@ Your lair`;
     }
     applyPanelCollapse();
     applyDrawerState();
+    /* Last, once everything above has settled: the panel can only be measured against the plan
+     * that is actually in it. The observer catches the changes that happen between refreshes. */
+    syncPlanColumnHeight();
   }
 
   /**

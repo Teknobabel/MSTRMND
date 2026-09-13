@@ -1366,15 +1366,33 @@ body {
 }
 
 /*
- * The planner is one fixed size and rides the middle of the map's left edge. It used to be as
- * tall as its contents, so it grew and re-centred every time a mission, a required-asset slot,
- * or a line of requirements came or went — the panel jumping under the card the player was about
- * to drop. 40rem is the height it had with nothing staged (header, the empty slots with room to
- * drop into under them, and the footer), so an empty plan looks exactly as it did, and nothing
- * staged moves its edges or its footer. The slot body takes whatever the header and footer leave
- * (the docked layout's `flex: 1 1 0` on the stack and page, see "Plan column stack") and scrolls
- * once a plan outgrows it. Held between `top: 0` and `bottom: 0`, `margin-block: auto` is what
- * centres it; `max-height` keeps it inside the frame.
+ * The planner rides the middle of the map's left edge, as tall as the plan in it.
+ *
+ * It is sized to its own contents, so an empty plan is exactly the three empty sections and
+ * nothing more — no reserve of blank panel under the last one waiting to be filled. As the plan
+ * grows (a target slot opening, required-asset slots appearing, a long requirements list) the
+ * panel grows with it, and shrinks back as it empties.
+ *
+ * It was a flat 40rem before this, because growing on its own used to mean *snapping* — the
+ * panel jumping under the card the player was about to drop. The animation is what makes the
+ * growth affordable: the edges travel, so the player's eye can follow the slot it was on rather
+ * than having to re-find it. `syncPlanColumnHeight` in main.ts writes the height in pixels (auto
+ * does not interpolate) and arms the transition below once it has measured.
+ *
+ * `height: 100%` is what holds until that first measurement, and it is not an arbitrary
+ * placeholder: `syncPlanColumnHeight` measures the panel's chrome as the difference between the
+ * panel and the scrolling page inside it, and that difference is only the chrome while the
+ * panel's height is *definite*. Size this panel by its contents instead (`fit-content`) and the
+ * stack's `flex: 1 1 0` collapses to nothing, taking the footer down with it — the chrome then
+ * reads back short by the height of the Deploy bar, and the panel settles a Deploy bar too
+ * small. Full height is the one fallback that is both definite and a sane place to be left if
+ * the script never runs.
+ *
+ * `max-height` is the end of the growth: at the full height of the map the panel stops, and the
+ * plan starts scrolling inside it instead (the docked layout's `flex: 1 1 0` on the stack and
+ * page hands the overflow to the page — see "Plan column stack"). Held between `top: 0` and
+ * `bottom: 0`, `margin-block: auto` is what centres it, so it opens from the middle in both
+ * directions and stays centred at every size.
  *
  * `left` insets it off the map by the same 0.6rem the outer `.omega-shell` pads every edge
  * with — the gap that shows on the right of the Omega Plan drawer when it is open — so the
@@ -1387,9 +1405,21 @@ body {
   top: 0;
   bottom: 0;
   width: calc(18.5rem - 0.6rem);
-  height: 40rem;
+  height: 100%;
   max-height: 100%;
   margin-block: auto;
+}
+
+/* Armed a frame after the first measurement, so the panel's arrival at its resting size is not
+   itself an animation — only the changes the player causes after it. Slower than the drawers'
+   slide: this one moves both edges at once, under a card the player may be holding.
+   `transition` is one property, so `.game-panel`'s own pair is restated here rather than
+   replaced — dropping them would cost the panel its hover glow on the way in. */
+.omega-body--floating .game-panel--plan-column.plan-column--sized {
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    height 0.34s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /*
@@ -2107,6 +2137,11 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
+  /* Never squashed to fit. Once the panel has grown as far as the map allows, the plan is meant
+     to overflow and scroll — a section that quietly compressed instead would take the room out
+     of the drop slots, which are the one thing in here that has to stay the size of the card
+     being dragged onto them. It is also what lets the panel be measured from these boxes. */
+  flex-shrink: 0;
   gap: 0.4rem;
   padding: 0.4rem 0.5rem 0.5rem;
   border: 1px solid var(--line-0);
@@ -2272,11 +2307,11 @@ body {
 }
 
 /*
- * The planner is a fixed height, so a long plan scrolls inside it — and a scroll the player cannot
- * see is a slot they never find. A scrollbar would say so, but a classic one takes 10px of layout
- * the moment the plan overflows and every slot narrows under the player's hand, which is the very
- * content-driven resize the fixed height is there to stop (and the floating panels hide theirs
- * anyway). So the cue is a fade instead: whichever edge has more plan beyond it dissolves, driven
+ * A plan that has grown the panel all the way to the map's height scrolls inside it — and a
+ * scroll the player cannot see is a slot they never find. A scrollbar would say so, but a classic
+ * one takes 10px of layout the moment the plan overflows, narrowing every slot under the
+ * player's hand at the exact moment the panel has stopped being able to grow for them (and the
+ * floating panels hide theirs anyway). So the cue is a fade instead: whichever edge has more plan beyond it dissolves, driven
  * by the body's own scroll position. With nothing to scroll the timeline is inactive, both fades
  * stay at 0, and the mask is a no-op. Browsers without scroll-driven animations skip the
  * `@supports` block and simply scroll without the cue — the fades never run on a clock there.
@@ -2563,7 +2598,9 @@ body {
    means they do not. It used to cap its own height and scroll, back when it sat in the pinned
    footer and a requirement-heavy mission could push the gauge off the bottom of the column.
    Assessment scrolls with the other two sections now, so the list just runs as long as it is —
-   a scroll inside a scroll is a worse way to reach the last pill than scrolling the column. */
+   a scroll inside a scroll is a worse way to reach the last pill than scrolling the column.
+   It sits under the gauge: the number is the headline and this is the working behind it, so the
+   read is the figure first and then what went into it. */
 .plan-reqs {
   display: flex;
   flex-direction: column;
@@ -2605,22 +2642,28 @@ body {
   color: #8df0b2;
 }
 
+/* Wider than the gap between rows inside a group, so a heading reads as belonging to the rows
+   under it rather than floating between two stacks that look equally far away. */
 .plan-reqs__list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.45rem;
 }
 
+/* A group heads its own rows rather than sitting in a label column beside them. The column of
+   full-width rows below needs the whole width to be worth having, and a fixed label gutter took
+   a chunk of it from every group — including the unlabelled ones, which paid for a column they
+   never wrote in. Stacked, "Site" / "Security" / "Agents" read as headings over their lists the
+   way `.card-brief__label` does over the mission card's. */
 .plan-reqs__group {
   display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 0.35rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  min-width: 0;
 }
 
 .plan-reqs__group-label {
-  flex: 0 0 3.1rem;
-  padding-top: 0.14rem;
   font-family: var(--font-display);
   font-size: 0.5rem;
   font-weight: 500;
@@ -2630,16 +2673,35 @@ body {
   cursor: help;
 }
 
-.plan-reqs__list--unlabelled .plan-reqs__group-label {
-  display: none;
-}
-
+/*
+ * One requirement per line, full width — the same column of stacked rows the mission card's
+ * Required Skills draws (`.card-brief__pills`), so a requirement reads the same in the planner
+ * as it does on the card it came from.
+ *
+ * Wrapped chips were fine at two or three, but this list runs long: mission traits, then the
+ * site's, then security, then the agents standing on it. At that length a wrap gives every row
+ * a different shape and a different left edge, and the eye has to re-find the start of each
+ * name. A column gives them one edge to run down and one tick mark per line to check off.
+ */
 .plan-reqs__pills {
   display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.2rem;
   min-width: 0;
+}
+
+/* Pills are inline chips by default, sized to their own text. Here they are rows. */
+.plan-reqs__pills > .minions-trait-pill {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.16rem 0.35rem;
+  border-left-width: 2px;
+}
+
+.plan-reqs__pills > .minions-trait-pill > .minions-trait-pill__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* An unmet challenge trait is not a missing bonus, it is an active subtraction — so it reads as
@@ -2663,7 +2725,7 @@ body {
 
 /* ---------------- Plan success-chance gauge ---------------- */
 
-/* Success chance of the staged plan, at the foot of the Assessment section. Drawn even with
+/* Success chance of the staged plan, heading the Assessment section. Drawn even with
    nothing staged: it reads grey and empty until the plan is complete enough to have a number, so
    the player learns where to look before there is anything to look at. `--chance` (0-100) drives
    both the ring and the tint. */
@@ -5121,6 +5183,52 @@ body {
   --map-overlay-scale: 1;
   position: absolute;
   inset: 0;
+  /* Paired with the drawers' own slide, so the map settles back exactly as a menu lands rather
+     than finishing early and leaving the tail of the slide to play over a map already still. */
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * The map giving way to a menu. A drawer coming up takes the foreground, so the plot steps back
+ * a little: the picture scales down off the panel's edges and lifts slightly, which leaves a
+ * black margin around it and reads as depth rather than as the map having been resized.
+ *
+ * It is the plot that moves, never the panel. The frame — the panel's corner brackets and the
+ * edges everything else on the dashboard is docked against — is the console's furniture and
+ * must stay nailed down; a frame that breathed with the menus would unmoor the whole layout.
+ *
+ * A transform, not a layout change: nothing here re-runs the map's own sizing. The pins are
+ * placed in the plot's layout pixels by `syncMapProjection` and the GL backing store is sized
+ * from the plot's content box, and a transform leaves both untouched — so the scaled picture
+ * stays glued together and the renderer never sees a resize, which is what keeps this free.
+ * The lift is a percentage of the plot, so it tracks whatever the stage scale is.
+ */
+.map-panel--receded .map-plot {
+  transform: translateY(-1.4%) scale(0.945);
+}
+
+/*
+ * The veil that dims the map underneath. A sheet over the plot rather than a `filter` on it:
+ * the map is a live surface that goes on drawing behind the menu, and a brightness filter would
+ * re-composite that whole surface every frame for as long as the drawer stayed up. This is one
+ * rectangle the compositor fades and then leaves alone.
+ *
+ * Above the pins, which carry a `z-index` of their own, and inert to the pointer — the map
+ * stays clickable through it wherever the open menu does not cover it.
+ */
+.map-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(3, 1, 2, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.map-panel--receded::after {
+  opacity: 1;
 }
 
 .map-plot__art {
@@ -6446,6 +6554,16 @@ body {
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* A trait's own uploaded glyph in place of the generic mark. Slightly larger than the stroked
+   SVG, which reads bigger than a silhouette at the same box, and still inside the pill's line
+   box so a row of pills stays one height whether or not the traits in it have icons. */
+.minions-trait-pill__icon--art {
+  width: 0.82rem;
+  height: 0.82rem;
+  object-fit: contain;
+  stroke: none;
 }
 
 .minions-trait-pill__label {

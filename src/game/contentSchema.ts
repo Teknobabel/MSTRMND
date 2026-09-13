@@ -145,6 +145,7 @@ export const traitSchema: z.ZodType<Trait> = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   type: traitTypeSchema,
+  icon: z.string().min(1).optional(),
 });
 
 export const startingDynamicTraitSchema: z.ZodType<StartingDynamicTrait> = z.discriminatedUnion(

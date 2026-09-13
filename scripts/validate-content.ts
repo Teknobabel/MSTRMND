@@ -53,6 +53,11 @@ for (const [slice, entities] of withCardArt) {
 for (const p of catalog.playerProfiles) {
   artRefs.push({ where: `[playerProfiles] ${p.name} profilePic`, path: p.profilePic });
 }
+for (const t of catalog.traits) {
+  if (t.icon !== undefined) {
+    artRefs.push({ where: `[traits] ${t.id} icon`, path: t.icon });
+  }
+}
 
 const missingArt = artRefs.filter(
   ({ path }) => !path.startsWith("/") || !existsSync(join(root, "public", path)),

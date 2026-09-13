@@ -2,37 +2,44 @@
   {
     "id": "hacker",
     "name": "Hacker",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-hacker.webp"
   },
   {
     "id": "infiltrator",
     "name": "Infiltrator",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-infiltrator.webp"
   },
   {
     "id": "enforcer",
     "name": "Enforcer",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-enforcer.webp"
   },
   {
     "id": "scientist",
     "name": "Mad Scientist",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-scientist.webp"
   },
   {
     "id": "engineer",
     "name": "Gadgeteer",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-engineer.webp"
   },
   {
     "id": "thief",
     "name": "Master Thief",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-thief.webp"
   },
   {
     "id": "manipulator",
     "name": "Manipulator",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-manipulator.webp"
   },
   {
     "id": "tactician",
@@ -42,12 +49,14 @@
   {
     "id": "saboteur",
     "name": "Saboteur",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-saboteur.webp"
   },
   {
     "id": "financier",
     "name": "Financier",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-financier.webp"
   },
   {
     "id": "stealthy",

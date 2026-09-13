@@ -4,6 +4,12 @@ export type Trait = {
   id: string;
   name: string;
   type: TraitType;
+  /**
+   * Site-root path to this trait's own glyph, worn by every pill that names it. Optional: a
+   * trait without one keeps the generic tag the pills have always drawn, so authoring an icon
+   * is per-trait and never all-or-nothing.
+   */
+  icon?: string;
 };
 
 /** Runtime-only relationship traits (not catalog `Trait` ids). */

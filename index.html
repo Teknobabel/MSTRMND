@@ -95,7 +95,11 @@
           </div>
 
           <div class="omega-body omega-body--floating">
-            <aside class="omega-sidebar game-panel game-panel--plan-column" aria-label="Mission planning">
+            <aside
+              id="plan-column"
+              class="omega-sidebar game-panel game-panel--plan-column"
+              aria-label="Mission planning"
+            >
               <header class="game-panel-head">
                 <h2 id="plan-panel-title" class="game-panel-title">Mission Planning</h2>
                 <button
@@ -174,17 +178,6 @@
                       <span class="plan-section__note">Running analysis</span>
                     </header>
                     <div class="plan-section__body">
-                      <section
-                        id="assign-requirements"
-                        class="plan-reqs"
-                        aria-labelledby="assign-requirements-label"
-                      >
-                        <div class="plan-reqs__head">
-                          <span id="assign-requirements-label" class="plan-reqs__label">Requirements</span>
-                          <span id="assign-requirements-tally" class="plan-reqs__tally"></span>
-                        </div>
-                        <div id="assign-requirements-list" class="plan-reqs__list"></div>
-                      </section>
                       <div
                         id="assign-chance"
                         class="plan-chance"
@@ -203,6 +196,17 @@
                           <span id="assign-chance-note" class="plan-chance__note">No plan staged</span>
                         </div>
                       </div>
+                      <section
+                        id="assign-requirements"
+                        class="plan-reqs"
+                        aria-labelledby="assign-requirements-label"
+                      >
+                        <div class="plan-reqs__head">
+                          <span id="assign-requirements-label" class="plan-reqs__label">Requirements</span>
+                          <span id="assign-requirements-tally" class="plan-reqs__tally"></span>
+                        </div>
+                        <div id="assign-requirements-list" class="plan-reqs__list"></div>
+                      </section>
                     </div>
                   </section>
                 </div>
