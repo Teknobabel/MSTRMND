@@ -47,6 +47,23 @@
   --cut-sm: 7px;
   /* Width of a portrait minion card, in the drawer and as the planner's hover preview */
   --minion-card-w: 15.5rem;
+  /*
+   * The brief's row system. Every row in a mission or location brief is one thumbnail tall — a
+   * required skill, a manifest line, an outcome, an empty section's placeholder — which is what
+   * makes the two columns land level with each other line for line rather than only at their
+   * headers. Gained-asset rows are drawn straight into the outcome list too (see
+   * `missionEffectAssetRow`), so those two shapes have to agree on a height as well.
+   *
+   * They agree because they all derive it from here: the thumbnail's box, its own 1px border,
+   * and the row padding around it. Raising `--brief-thumb-h` raises every row type together and
+   * hands the extra space to the pictures — the asset photo and the trait glyph both — instead
+   * of to empty air.
+   */
+  --brief-thumb-h: 34px;
+  /* The photos are landscape crops; this keeps the 1.41 ratio the 34x24 box had. */
+  --brief-thumb-w: 48px;
+  --brief-row-pad: 0.12rem;
+  --brief-row-h: calc(var(--brief-thumb-h) + 2px + var(--brief-row-pad) * 2);
   /* Diagonal edge line drawn along a chamfered corner (transparent outside) */
   --edge-line: linear-gradient(
     135deg,
@@ -2690,11 +2707,14 @@ body {
   min-width: 0;
 }
 
-/* Pills are inline chips by default, sized to their own text. Here they are rows. */
+/* Pills are inline chips by default, sized to their own text. Here they are rows — and a row
+   that already spans the column can afford a larger mark than a chip that has to share a line
+   with three others, so it takes one. */
 .plan-reqs__pills > .minions-trait-pill {
+  --trait-icon: 1.15rem;
   box-sizing: border-box;
   width: 100%;
-  padding: 0.16rem 0.35rem;
+  padding: 0.2rem 0.35rem;
   border-left-width: 2px;
 }
 
@@ -4216,7 +4236,7 @@ body {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  min-height: calc(26px + 0.24rem);
+  min-height: var(--brief-row-h);
   margin: 0;
   padding: 0.16rem 0.3rem;
   border: 1px dotted var(--line-1);
@@ -4236,16 +4256,94 @@ body {
   gap: 0.3rem;
 }
 
-/* Held to the exact box `.card-brief__asset-thumb` renders at — 24px image plus its own 1px
-   border, top and bottom — so a skill row and an asset row are the same height and the two
-   columns' rows land level with each other line for line, not just at the shared header. */
+/* Held to the same row box `.card-brief__asset` renders at (`--brief-row-h`), so a skill row and
+   a manifest row are the same height and the two columns land level line for line, not just at
+   the shared header. The glyph takes the thumbnail's height, so the two columns agree on the
+   size of their pictures as well — raising one raises both, from the one knob in `:root`. */
 .card-brief__pills > .minions-trait-pill {
+  --trait-icon: var(--brief-thumb-h);
   box-sizing: border-box;
   width: 100%;
-  min-height: calc(26px + 0.24rem);
+  min-height: var(--brief-row-h);
   padding: 0.2rem 0.3rem 0.2rem 0.4rem;
   border-left-width: 2px;
   font-size: 0.7rem;
+}
+
+/* ---- Skills as a grid of chips (the minion bio only) ----
+ *
+ * A mission's Required Skills is a checklist — one line per requirement, read top to bottom
+ * against the assets column beside it — so it stays a stack of rows. A minion's skills are not
+ * a checklist; they are what the minion *is*, the thing the player is choosing between when
+ * three cards are open side by side. That reads faster as a set of marks than as a column of
+ * text, so here the same pills are laid out as square chips with the glyph carrying the weight
+ * and the name underneath confirming it.
+ *
+ * Three across is what the card width affords: at `--minion-card-w` the chips land at 72.6px,
+ * enough for a 44px glyph — nearly twice the row layout's 24px — plus two lines of name. Minions
+ * carry one to six catalog traits plus whatever relationships play hangs on them, so three
+ * columns also means the usual card spends one or two rows on this section.
+ */
+.card-brief__pills--grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+/* Undoes the row shape `.card-brief__pills > .minions-trait-pill` gives these same pills: full
+   width, a fixed row height, and the 2px left accent that marks a row's start. A chip is sized
+   by the grid track and squared by `aspect-ratio`, and its accent would point at nothing. */
+.card-brief__pills--grid > .minions-trait-pill {
+  /* ~61% of the chip's height. The square's budget is fixed, so every bit of it the name is not
+     using belongs to the glyph: the padding, the gap and the label are all as tight as they go
+     precisely so this number can be as big as it is. */
+  --trait-icon: 2.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: auto;
+  min-height: 0;
+  aspect-ratio: 1;
+  padding: 0.2rem 0.18rem 0.18rem;
+  gap: 0.12rem;
+  border-left-width: 1px;
+  font-size: 0.5rem;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+/* The glyph's negative block margin exists to keep it from driving the height of a *row* pill,
+   where block is the cross axis. In a column it is the main axis, and the same margin would
+   pull the name up over the icon instead.
+ *
+ * `aspect-ratio` makes the chip's height the grid track's width, not the sum of what is inside
+ * it, so the contents have a fixed budget to fit in rather than one they can push out. The
+ * glyph is the part that gives: it shrinks a little before the square breaks or the name gets
+ * squeezed. `flex: none` on the label keeps the shrinking on this side of the gap. */
+.card-brief__pills--grid .minions-trait-pill__icon {
+  margin-block: 0;
+  flex: 0 1 auto;
+  min-height: 0;
+  /* Every minion surface draws its card at `--minion-card-w`, so the chip is 72.6px and the
+     glyph's fixed box fits with room to spare. This is the guard for the day one of them is
+     not: the glyph gives width as well as height rather than pushing out of its chip. */
+  max-width: 100%;
+}
+
+/* Two lines, reserved whether or not the name needs them, so every chip puts its glyph at the
+   same height and a row of them reads as one band rather than a ragged one. Names that outrun
+   two lines — the relationship traits, "Friend of Penny Dreadful" — clip to the tooltip the
+   pill already carries. */
+.card-brief__pills--grid .minions-trait-pill__label {
+  flex: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-height: calc(2 * 1.1em);
+  overflow: hidden;
+  width: 100%;
 }
 
 /* A security measure the site has not had to show yet: it takes a pill's shape, so the player
@@ -4317,7 +4415,7 @@ body {
   grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
   gap: 0.3rem;
-  padding: 0.12rem 0.22rem 0.12rem 0.12rem;
+  padding: var(--brief-row-pad) 0.22rem var(--brief-row-pad) var(--brief-row-pad);
   border: 1px solid var(--line-0);
   border-left-width: 2px;
   background: rgba(10, 4, 5, 0.4);
@@ -4327,8 +4425,8 @@ body {
 }
 
 .card-brief__asset-thumb {
-  width: 34px;
-  height: 24px;
+  width: var(--brief-thumb-w);
+  height: var(--brief-thumb-h);
   flex: none;
   display: block;
   object-fit: cover;
@@ -4348,8 +4446,8 @@ body {
 }
 
 .loc-brief__sealed-icon {
-  width: 0.62rem;
-  height: 0.62rem;
+  width: 0.85rem;
+  height: 0.85rem;
   fill: none;
   stroke: var(--text-3);
   stroke-width: 1.8;
@@ -4687,10 +4785,10 @@ body {
   display: flex;
   align-items: center;
   padding: 0.2rem 0.3rem;
-  /* Matches `.card-brief__asset-thumb`'s own rendered box, same as the skill rows above — a
+  /* Matches `.card-brief__asset`'s own rendered box, same as the skill rows above — a
      gained-asset row sits in this same list (see `missionEffectAssetRow`), so every row in it
      needs to agree on one height. */
-  min-height: calc(26px + 0.24rem);
+  min-height: var(--brief-row-h);
   box-sizing: border-box;
   border: 1px solid var(--line-0);
   border-left-width: 2px;
@@ -6519,12 +6617,21 @@ body {
   color: var(--text-3);
 }
 
-/* Trait pills */
+/* Trait pills
+ *
+ * `--trait-icon` is the glyph's box, declared here and re-declared by the contexts below that
+ * have more vertical room than an inline chip does. The icon is the part of a pill a player
+ * actually recognises at a glance — the label is the confirmation — so it is sized to the room
+ * the pill is standing in rather than to the text beside it, and it is allowed to run taller
+ * than that text (see `.minions-trait-pill__icon`). The vertical padding here is the only
+ * height this change spends: two thirds of the glyph's growth comes out of the padding and the
+ * line box it already had. */
 .minions-trait-pill {
+  --trait-icon: 1.08rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.22rem;
-  padding: 0.08rem 0.35rem;
+  gap: 0.26rem;
+  padding: 0.17rem 0.36rem;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -6545,9 +6652,24 @@ body {
   outline: none;
 }
 
+/*
+ * The glyph overhangs the label's line box instead of stretching the pill around itself. The
+ * negative block margin is exactly the overhang, so the icon's *outer* height is still 1.2em —
+ * the line box the label draws — and a pill is as tall as its text and padding whether the
+ * glyph in it is 12px or 24px. That is what lets the icon grow without the pill following it.
+ *
+ * `1.2em` is the pill's own `line-height: 1.2` resolved against whatever font-size the context
+ * set, so the sum holds in the two contexts below that shrink the text. `min(0px, …)` keeps the
+ * margin from turning positive and padding the icon out if a context ever sizes it under the
+ * line box.
+ */
 .minions-trait-pill__icon {
-  width: 0.72rem;
-  height: 0.72rem;
+  /* The stroked marks read a size bigger than a filled silhouette at the same box, so the
+     generic glyphs sit just under the art's box rather than level with it. */
+  --icon-box: calc(var(--trait-icon) * 0.88);
+  width: var(--icon-box);
+  height: var(--icon-box);
+  margin-block: min(0px, calc((1.2em - var(--icon-box)) / 2));
   flex-shrink: 0;
   fill: none;
   stroke: currentColor;
@@ -6556,12 +6678,9 @@ body {
   stroke-linejoin: round;
 }
 
-/* A trait's own uploaded glyph in place of the generic mark. Slightly larger than the stroked
-   SVG, which reads bigger than a silhouette at the same box, and still inside the pill's line
-   box so a row of pills stays one height whether or not the traits in it have icons. */
+/* A trait's own uploaded glyph in place of the generic mark. */
 .minions-trait-pill__icon--art {
-  width: 0.82rem;
-  height: 0.82rem;
+  --icon-box: var(--trait-icon);
   object-fit: contain;
   stroke: none;
 }

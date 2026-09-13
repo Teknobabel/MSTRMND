@@ -44,7 +44,8 @@
   {
     "id": "tactician",
     "name": "Tactician",
-    "type": "primary"
+    "type": "primary",
+    "icon": "/assets/cards/custom/trait-tactician.webp"
   },
   {
     "id": "saboteur",
@@ -66,32 +67,38 @@
   {
     "id": "brutal",
     "name": "Brutal",
-    "type": "secondary"
+    "type": "secondary",
+    "icon": "/assets/cards/custom/trait-brutal.webp"
   },
   {
     "id": "swift",
     "name": "Swift",
-    "type": "secondary"
+    "type": "secondary",
+    "icon": "/assets/cards/custom/trait-swift.webp"
   },
   {
     "id": "brilliant",
     "name": "Brilliant",
-    "type": "secondary"
+    "type": "secondary",
+    "icon": "/assets/cards/custom/trait-brilliant.webp"
   },
   {
     "id": "magnetic",
     "name": "Magnetic",
-    "type": "secondary"
+    "type": "secondary",
+    "icon": "/assets/cards/custom/trait-magnetic.webp"
   },
   {
     "id": "fearless",
     "name": "Fearless",
-    "type": "secondary"
+    "type": "secondary",
+    "icon": "/assets/cards/custom/trait-fearless.webp"
   },
   {
     "id": "connected",
     "name": "Connected",
-    "type": "secondary"
+    "type": "secondary",
+    "icon": "/assets/cards/custom/trait-connected.webp"
   },
   {
     "id": "intimidating",
