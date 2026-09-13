@@ -516,6 +516,149 @@ body {
   animation: emblem-glow 3s ease-in-out infinite;
 }
 
+/* ---------------- Bottombar telemetry rail ---------------- */
+
+/*
+ * The map's corner telemetry, extended along the bottom of the shell.
+ *
+ * The status bar and the plot were reading as two different products: one a console with a
+ * live uplink in its corner, the other plain UI wrapped around it. This is the seam between
+ * them — same family as `.map-telemetry` and deliberately so, sharing its font, its scale, its
+ * muted red and its habit of saying nothing.
+ *
+ * A different subsystem to the map's, though, and the label matters: a second readout also
+ * called UPLINK reads as the same one drawn twice rather than as another part of the same
+ * machine. The bus pairs with OMEGA OS at the far end of the bar instead.
+ *
+ * That last part is the rule and not a stylistic choice. Everything here is constant or a
+ * clock, for the reason `ui/glitch` sets out at length: chrome that moved with the run would be
+ * a readout, and a rather legible one, reporting something no rule ever agreed to publish.
+ *
+ * It fills the grid's third track — the empty one that exists to keep the execute button
+ * centred against the brand block opposite. `min-width: 0` so it can never widen that track and
+ * push the button off centre, which is the one way this furniture could damage the layout.
+ */
+.omega-telemetry {
+  grid-column: 3;
+  justify-self: end;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(232, 17, 45, 0.55);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+}
+
+.omega-telemetry__label {
+  white-space: nowrap;
+}
+
+.omega-telemetry__ticks {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.13rem;
+  height: 0.5rem;
+}
+
+/*
+ * Four channel ticks on four periods, none of them a multiple of another and none dividing into
+ * the 3s emblem or the 2.6s execute pulse either side of them. Ticks that shared a period would
+ * blink in step and read as one four-wide element flashing, which is the failure `.map-telemetry`
+ * already records for its own sweep. The negative delays start each one part-way into its cycle,
+ * so the rank is mid-pattern on the first frame rather than lighting up together.
+ */
+.omega-telemetry__tick {
+  width: 2px;
+  background: currentColor;
+  animation: telemetry-tick var(--tick-period, 3s) steps(1, end) infinite;
+  animation-delay: var(--tick-phase, 0s);
+}
+
+.omega-telemetry__tick:nth-child(1) {
+  height: 40%;
+  --tick-period: 2.9s;
+  --tick-phase: -0.4s;
+}
+
+.omega-telemetry__tick:nth-child(2) {
+  height: 70%;
+  --tick-period: 4.3s;
+  --tick-phase: -2.6s;
+}
+
+.omega-telemetry__tick:nth-child(3) {
+  height: 55%;
+  --tick-period: 3.7s;
+  --tick-phase: -1.1s;
+}
+
+.omega-telemetry__tick:nth-child(4) {
+  height: 100%;
+  --tick-period: 5.1s;
+  --tick-phase: -3.3s;
+}
+
+/* Stepped, not faded: a channel is carrying or it is not. Same reasoning as `telemetry-blink`. */
+@keyframes telemetry-tick {
+  0%,
+  58% {
+    opacity: 1;
+  }
+  59%,
+  100% {
+    opacity: 0.18;
+  }
+}
+
+/*
+ * The sweep, longer and slower than the map's 3.1s so the two never pulse together — they are
+ * in view at the same time, at opposite corners of the screen, and matching periods would tie
+ * them into one blinking object spanning the whole shell.
+ */
+.omega-telemetry__rail {
+  position: relative;
+  width: 2.75rem;
+  height: 2px;
+  overflow: hidden;
+  background: rgba(232, 17, 45, 0.16);
+}
+
+.omega-telemetry__rail::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  background: linear-gradient(90deg, transparent, var(--red-bright), transparent);
+  animation: telemetry-rail 5.3s ease-in-out infinite;
+}
+
+@keyframes telemetry-rail {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(263%);
+  }
+}
+
+/* The link indicator, on its own period again — 4.7s against the map dot's 2.6s. */
+.omega-telemetry__dot {
+  width: 0.28rem;
+  height: 0.28rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--red-bright);
+  box-shadow: 0 0 6px var(--red-glow);
+  animation: telemetry-blink 4.7s steps(1, end) infinite;
+}
+
 @keyframes emblem-glow {
   0%,
   100% {
@@ -609,14 +752,40 @@ body {
   stroke-linejoin: round;
 }
 
-/* Heat reads as the stat to keep DOWN: amber instead of the red accent. */
+/*
+ * Heat reads as the stat to keep DOWN: amber instead of the red accent.
+ *
+ * It is also the one readout with a standing intensity rather than only a reaction. `--heat` is
+ * the 0..1 pressure `ui/statDelta` derives from the authored 0-100 scale, set on `#game-stats`
+ * and inherited down; the glow widens with it and the breath below quickens. A run under
+ * pressure therefore looks it on a quiet turn, which a number alone cannot do.
+ */
 .stat-block--heat .stat-block__icon {
   color: var(--warn);
-  filter: drop-shadow(0 0 5px rgba(255, 176, 32, 0.22));
+  filter: drop-shadow(
+    0 0 calc(5px + var(--heat, 0) * 9px) rgba(255, 176, 32, calc(0.22 + var(--heat, 0) * 0.4))
+  );
+  animation: heat-breath calc(4.4s - var(--heat, 0) * 2.5s) ease-in-out infinite;
+}
+
+/*
+ * Amplitude scales with the pressure that sets the period, which is what keeps this honest at
+ * the bottom of the scale: at heat 0 both keyframes resolve to the same opacity and the icon is
+ * simply still, so there is no idle pulse implying a threat that does not exist yet.
+ */
+@keyframes heat-breath {
+  0%,
+  100% {
+    opacity: calc(1 - var(--heat, 0) * 0.3);
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .stat-block--heat .stat-block__value {
-  text-shadow: 0 0 10px rgba(255, 176, 32, 0.25);
+  text-shadow: 0 0 calc(10px + var(--heat, 0) * 12px)
+    rgba(255, 176, 32, calc(0.25 + var(--heat, 0) * 0.38));
 }
 
 .stat-block__icon--text {
@@ -655,6 +824,83 @@ body {
   font-size: 0.66rem;
   font-weight: 500;
   color: var(--text-2);
+  /* The `/ max` tail used to be separated by a literal space in the markup string. The row is
+     built from elements now, so the gap is stated here rather than depending on a text node. */
+  margin-left: 0.25em;
+}
+
+/*
+ * The rolling half of a readout.
+ *
+ * Tabular figures are not cosmetic here: a count from 8 to 12 changes digit count mid-roll, and
+ * proportional numerals would shove the whole status bar sideways on the frame it happens.
+ * `inline-block` is unconditional for the same reason — it is what the lift below transforms,
+ * and switching display when a count starts would relayout the row at exactly the wrong moment.
+ */
+.stat-block__num {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-block__unit {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * How a number that just moved is marked.
+ *
+ * `--stat-flash` runs 1 to 0 across the count, written each frame by `renderStatusBar`'s roll
+ * driver rather than by a keyframe of its own. That is the whole trick: the highlight cannot
+ * outlive the number it belongs to, because both are reading the same clock. A CSS animation
+ * with its own duration would drift out of step with a count whose length varies by distance.
+ *
+ * Direction is styled, not just timed. A gain brightens toward white-hot and lifts; a loss
+ * drains toward the dim text colour and sinks. Losing command points and gaining infamy are
+ * opposite events and should not share a flash.
+ */
+.stat-block[data-stat-move] .stat-block__num {
+  /* Mixed from `currentColor` — the colour this number would have had — rather than from a
+     named token, because the readouts do not share one. The Omega percentage is red where the
+     rest of the row is `--text-0`, and mixing from a constant would have flipped it to pale
+     text for the length of its count and snapped it back at the end. */
+  color: color-mix(
+    in srgb,
+    currentColor,
+    var(--stat-move-tint) calc(var(--stat-flash, 0) * 100%)
+  );
+  text-shadow: 0 0 calc(10px + var(--stat-flash, 0) * var(--stat-move-glow, 0) * 16px)
+    rgba(232, 17, 45, calc(0.25 + var(--stat-flash, 0) * var(--stat-move-glow, 0) * 0.5));
+  transform: translateY(calc(var(--stat-flash, 0) * var(--stat-move-rise, 0) * -0.14em));
+}
+
+.stat-block[data-stat-move="up"] {
+  --stat-move-tint: #fff2f4;
+  --stat-move-glow: 1;
+  --stat-move-rise: 1;
+}
+
+/* A loss gets no added glow: brightening on the way down would read as a reward. */
+.stat-block[data-stat-move="down"] {
+  --stat-move-tint: var(--text-2);
+  --stat-move-glow: 0;
+  --stat-move-rise: -1;
+}
+
+/* Omega's percentage sits at a larger size with a wider glow of its own. Scale that rather
+   than overriding it with the row's, which would make a count read as the number shrinking. */
+.stat-block--progress[data-stat-move] .stat-block__num {
+  text-shadow: 0 0 calc(18px + var(--stat-flash, 0) * 16px) var(--red-glow);
+}
+
+/* Heat inverts the reading, so its flash does too — a rise is the bad news and takes the amber
+   burn, a fall is relief and simply dims. */
+.stat-block--heat[data-stat-move="up"] {
+  --stat-move-tint: #ffd98a;
+}
+
+.stat-block--heat[data-stat-move="up"] .stat-block__num {
+  text-shadow: 0 0 calc(10px + var(--stat-flash, 0) * 16px)
+    rgba(255, 176, 32, calc(0.25 + var(--stat-flash, 0) * 0.55));
 }
 
 .stat-block--progress .stat-block__value {
@@ -776,6 +1022,48 @@ body {
   50% {
     filter: drop-shadow(0 0 10px var(--red-glow));
     transform: scale(1.12);
+  }
+}
+
+/*
+ * The moment a notch is taken.
+ *
+ * A skull lighting up is the largest escalation in the game and it used to simply be there on
+ * the next render, because the meter was rebuilt from scratch every time and nothing survived
+ * to animate. `renderThreatMeter` keeps its skulls now, and this is the one-shot that plays on
+ * the ones that just lit.
+ *
+ * Same family as `plan-slot-ignite` deliberately — an overshoot that lands rather than a fade,
+ * so it reads as a thing arriving. It is heavier than the planner's version because the planner
+ * ignites eight slots at once and this fires on one element, once, at a genuine turning point.
+ *
+ * Equal specificity to `.threat-skull--latest` and placed after it, so the ignition owns
+ * `filter` and `transform` for its half second and `skull-pulse` resumes when the class comes
+ * off on `animationend`.
+ */
+.threat-skull--igniting {
+  animation: threat-skull-ignite 0.62s cubic-bezier(0.2, 1.45, 0.4, 1);
+}
+
+@keyframes threat-skull-ignite {
+  0% {
+    color: #3a2326;
+    filter: drop-shadow(0 0 0 var(--red-glow));
+    transform: scale(0.7);
+  }
+  35% {
+    color: #ffe3e7;
+    filter: drop-shadow(0 0 18px var(--red-bright));
+    transform: scale(1.35);
+  }
+  70% {
+    color: var(--red-bright);
+    transform: scale(0.96);
+  }
+  100% {
+    color: var(--red-bright);
+    filter: drop-shadow(0 0 5px var(--red-glow));
+    transform: scale(1);
   }
 }
 
@@ -7176,6 +7464,70 @@ body {
   /* The ping is nothing but motion; frozen, it would be a stray circle round the tether's end. */
   .drag-tether__ping {
     display: none;
+  }
+
+  /*
+   * The status bar's counts are declined in JS, not here, and the distinction matters more than
+   * usual. The blanket rule above collapses an animation's *duration*, but a count is driven by
+   * a frame loop writing `textContent`: shortened to nothing it would still run, just faster,
+   * and a roll cut off partway prints a number that is simply **wrong** — worse than no motion
+   * at all, because a readout is a factual claim. `renderStatusBar` therefore skips the diff
+   * entirely under this preference and writes every value straight out, so nothing here needs
+   * to hold a count still. `--stat-flash` is likewise never written and its rules never match,
+   * since `data-stat-move` is only set alongside a roll.
+   *
+   * Threat escalation is declined the same way, in `renderThreatMeter`.
+   */
+
+  /*
+   * Heat keeps its intensity and loses its breath. The pressure is information — how close the
+   * run is to the top of the scale — and it is carried by the glow width, which is a static
+   * `calc` off `--heat` and survives untouched. Only the pulse goes. Stated rather than left to
+   * the blanket rule because the keyframe's resting opacity is dimmed by `--heat`, so an
+   * animation zeroed rather than removed could leave a high-heat icon sitting faded.
+   */
+  .stat-block--heat .stat-block__icon {
+    animation: none;
+    opacity: 1;
+  }
+
+  /*
+   * Both telemetry rails keep their shape and lose their traffic.
+   *
+   * The sweeps have to go rather than be held still, and this is the one case in this block
+   * where the blanket rule above actively makes things worse. It collapses an animation's
+   * duration but does not give it a fill, so a finished sweep reverts to its *base* style —
+   * `transform: none`, which for these bands is `translateX(0)`. Each one therefore parks flush
+   * left, a bright gradient blob filling the first third of a rail that is meant to read as a
+   * channel with something crossing it. Held still it looks like a renderer that gave up
+   * halfway, which is the one thing ambient furniture must never do: motion politely declined
+   * should read as stillness, never as breakage.
+   *
+   * The rails themselves stay. They are lines, not animations, and the console still wants its
+   * furniture.
+   *
+   * Both corners are governed here together deliberately. The map's bar carried this artifact
+   * on its own for a while precisely because it was the only one of its kind and nothing in the
+   * stylesheet pointed at it; one rule covering both is what stops the pair drifting apart the
+   * next time either is touched.
+   */
+  .omega-telemetry__rail::after,
+  .map-telemetry__bar::after {
+    display: none;
+  }
+
+  /*
+   * The indicators hold lit rather than at their stepped-down opacity, so a rank reads as
+   * channels carrying rather than channels that have dropped out. The map's dot already landed
+   * on `opacity: 1` by way of the same base-style revert that strands the sweeps above — it is
+   * stated rather than left to that accident, since the behaviour it depends on is the one this
+   * very block exists to work around.
+   */
+  .omega-telemetry__tick,
+  .omega-telemetry__dot,
+  .map-telemetry__dot {
+    animation: none;
+    opacity: 1;
   }
 }
 

@@ -478,6 +478,23 @@
             <button type="button" class="btn btn-primary btn-execute" id="btn-execute-plan">
               Execute Turn <span class="btn-execute__chev" aria-hidden="true">&#9656;</span>
             </button>
+
+            <!-- The map's console chrome, carried into the shell. Fills the grid's third track,
+                 the empty one that exists to balance the brand block opposite, so the execute
+                 button keeps the centre it was given. Constant text and clock-driven motion
+                 only, on the same rule `.map-telemetry` states: it says nothing about the run,
+                 so there is nothing here a player can misread as a signal the rules back. -->
+            <div class="omega-telemetry" aria-hidden="true">
+              <span class="omega-telemetry__label">Sys Bus</span>
+              <span class="omega-telemetry__ticks">
+                <span class="omega-telemetry__tick"></span>
+                <span class="omega-telemetry__tick"></span>
+                <span class="omega-telemetry__tick"></span>
+                <span class="omega-telemetry__tick"></span>
+              </span>
+              <span class="omega-telemetry__rail"></span>
+              <span class="omega-telemetry__dot"></span>
+            </div>
           </footer>
         </div>
 

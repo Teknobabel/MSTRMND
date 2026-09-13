@@ -138,6 +138,13 @@ import { ambientTracks } from "./ui/map/ambientTraffic";
 import { formatMapCoordinates } from "./ui/map/coordinates";
 import { mapSiteSignals, type MapSiteSignal } from "./ui/map/siteSignals";
 import {
+  diffReadouts,
+  heatPressure,
+  rollDurationSeconds,
+  rolledValue,
+  type StatChange,
+} from "./ui/statDelta";
+import {
   MAP_LAYER_GROUPS,
   MAP_LAYER_PLOT_CLASSES,
   MAP_OVERLAY_SCALE_MAX,
@@ -357,23 +364,6 @@ function createSecurityIconEl(): SVGElement {
 
 function createAssetIconEl(): SVGElement {
   return createSvgPillIcon(ASSET_ICON_SVG_PATHS);
-}
-
-function statBlockHtml(
-  iconHtml: string,
-  label: string,
-  valueHtml: string,
-  extraClass = "",
-): string {
-  const cls = extraClass === "" ? "stat-block" : `stat-block ${extraClass}`;
-  return `
-    <div class="${cls}">
-      <span class="stat-block__icon">${iconHtml}</span>
-      <div class="stat-block__main">
-        <span class="stat-block__label">${label}</span>
-        <span class="stat-block__value">${valueHtml}</span>
-      </div>
-    </div>`;
 }
 
 const catalog = loadContent();
@@ -8246,8 +8236,223 @@ Your lair`;
     }
   });
 
+  /* ---------------------------------------------------------------------------------------
+   * The status bar's readouts.
+   *
+   * Built once and then written in place, which is a correctness requirement rather than an
+   * optimization. The row used to be reassembled with `innerHTML` on every render, and an
+   * element destroyed and recreated between two frames cannot animate between them — no
+   * transition fires, no count can be driven, and the readouts were structurally incapable of
+   * showing a change as anything except a different number having appeared. `ui/glitchDirector`
+   * keeps its shard pool for the same reason.
+   *
+   * The motion itself is `ui/statDelta`'s to decide; this half knows only how to print.
+   * ------------------------------------------------------------------------------------- */
+
+  interface StatRoll {
+    readonly from: number;
+    readonly to: number;
+    readonly startMs: number;
+    readonly durationMs: number;
+  }
+
+  interface StatCell {
+    readonly blockEl: HTMLElement;
+    readonly numEl: HTMLElement;
+    /** The `/ max` tail, for the readouts that have a ceiling. */
+    readonly tailEl: HTMLElement | null;
+    /** The count currently running, if any. */
+    roll: StatRoll | null;
+    /** What is printed right now, so an unchanged frame writes nothing. */
+    shown: number | null;
+    shownTail: string | null;
+  }
+
+  interface StatBlockSpec {
+    readonly key: string;
+    readonly icon: string;
+    readonly label: string;
+    /** The icon is a glyph rather than an SVG — the Omega mark. */
+    readonly iconText?: boolean;
+    readonly blockClass?: string;
+    /** A fixed unit printed at full size after the number, rather than a `/ max` tail. */
+    readonly unit?: string;
+    /** This readout prints `value / max` and owns a trailing `<small>`. */
+    readonly suffix?: boolean;
+    /** This readout carries the segmented plan bar beneath it. */
+    readonly segments?: boolean;
+  }
+
+  const STAT_BLOCKS: readonly StatBlockSpec[] = [
+    {
+      key: "omega",
+      icon: "Ω",
+      label: "Omega Plan",
+      iconText: true,
+      blockClass: "stat-block--progress",
+      unit: "%",
+      segments: true,
+    },
+    { key: "command", icon: ICON_BOLT, label: "Command", suffix: true },
+    { key: "infamy", icon: ICON_STAR, label: "Infamy" },
+    { key: "heat", icon: ICON_FLAME, label: "Heat", blockClass: "stat-block--heat" },
+    { key: "minions", icon: ICON_PERSON, label: "Minions", suffix: true },
+    { key: "agents", icon: ICON_CROSSHAIR, label: "Agents" },
+  ];
+
+  const statCells = new Map<string, StatCell>();
+  const omegaSegEls: HTMLElement[] = [];
+  let omegaBarEl: HTMLElement | null = null;
+  /** Last render's numbers, so the next one can say what moved. */
+  let statReadout: ReadonlyMap<string, number> = new Map();
+  let statRollRaf: number | null = null;
+
+  function buildStatRow(): void {
+    statsEl.textContent = "";
+    for (const spec of STAT_BLOCKS) {
+      const block = document.createElement("div");
+      block.className =
+        spec.blockClass === undefined ? "stat-block" : `stat-block ${spec.blockClass}`;
+
+      const icon = document.createElement("span");
+      if (spec.iconText === true) {
+        icon.className = "stat-block__icon stat-block__icon--text";
+        icon.textContent = spec.icon;
+      } else {
+        icon.className = "stat-block__icon";
+        icon.innerHTML = spec.icon;
+      }
+      block.appendChild(icon);
+
+      const main = document.createElement("div");
+      main.className = "stat-block__main";
+
+      const label = document.createElement("span");
+      label.className = "stat-block__label";
+      label.textContent = spec.label;
+      main.appendChild(label);
+
+      const value = document.createElement("span");
+      value.className = "stat-block__value";
+      const num = document.createElement("span");
+      num.className = "stat-block__num";
+      value.appendChild(num);
+      let tailEl: HTMLElement | null = null;
+      if (spec.unit !== undefined) {
+        const unit = document.createElement("span");
+        unit.className = "stat-block__unit";
+        unit.textContent = spec.unit;
+        value.appendChild(unit);
+      } else if (spec.suffix === true) {
+        tailEl = document.createElement("small");
+        value.appendChild(tailEl);
+      }
+      main.appendChild(value);
+
+      if (spec.segments === true) {
+        omegaBarEl = document.createElement("div");
+        omegaBarEl.className = "omega-progress";
+        main.appendChild(omegaBarEl);
+      }
+
+      block.appendChild(main);
+      statsEl.appendChild(block);
+      statCells.set(spec.key, {
+        blockEl: block,
+        numEl: num,
+        tailEl,
+        roll: null,
+        shown: null,
+        shownTail: null,
+      });
+    }
+  }
+
+  function writeStatNumber(cell: StatCell, value: number): void {
+    if (cell.shown === value) {
+      return;
+    }
+    cell.shown = value;
+    cell.numEl.textContent = String(value);
+  }
+
+  function writeStatTail(key: string, tail: string): void {
+    const cell = statCells.get(key);
+    if (cell === undefined || cell.tailEl === null || cell.shownTail === tail) {
+      return;
+    }
+    cell.shownTail = tail;
+    cell.tailEl.textContent = tail;
+  }
+
+  /** Put a cell back in its resting state — no count running, no highlight. */
+  function settleStatCell(cell: StatCell): void {
+    cell.roll = null;
+    cell.blockEl.style.removeProperty("--stat-flash");
+    delete cell.blockEl.dataset.statMove;
+  }
+
+  function stepStatRolls(nowMs: number): void {
+    let running = false;
+    for (const cell of statCells.values()) {
+      const roll = cell.roll;
+      if (roll === null) {
+        continue;
+      }
+      const progress = roll.durationMs <= 0 ? 1 : (nowMs - roll.startMs) / roll.durationMs;
+      writeStatNumber(cell, rolledValue(roll.from, roll.to, progress));
+      if (progress >= 1) {
+        settleStatCell(cell);
+        continue;
+      }
+      /* The highlight fades on the count's own clock rather than on a keyframe of its own, so
+       * the two always end on the same frame. A readout still burning after its number has
+       * settled reads as a second, unrelated event. */
+      cell.blockEl.style.setProperty("--stat-flash", (1 - progress).toFixed(3));
+      running = true;
+    }
+    statRollRaf = running ? requestAnimationFrame(stepStatRolls) : null;
+  }
+
+  /**
+   * Start counting the readouts that moved.
+   *
+   * Transient, so it gets its own `requestAnimationFrame` rather than a hook on the shell's
+   * loop — the same shape as the inspector slide, and for the same reason: it runs for well
+   * under a second and then stops, where `mapFrameHook` exists to avoid a *second permanent*
+   * loop waking the device for the whole run.
+   */
+  function startStatRolls(changes: readonly StatChange[]): void {
+    if (changes.length === 0) {
+      return;
+    }
+    const nowMs = performance.now();
+    for (const change of changes) {
+      const cell = statCells.get(change.key);
+      if (cell === undefined) {
+        continue;
+      }
+      /* From what is on screen, not from what the last render computed. If a turn resolves
+       * while an earlier count is still running, the number has to carry on from where the
+       * player can see it rather than snapping back to start the new leg. */
+      const from = cell.shown ?? change.from;
+      cell.roll = {
+        from,
+        to: change.to,
+        startMs: nowMs,
+        durationMs: rollDurationSeconds(from, change.to) * 1000,
+      };
+      cell.blockEl.dataset.statMove = change.direction;
+      cell.blockEl.style.setProperty("--stat-flash", "1");
+    }
+    statRollRaf ??= requestAnimationFrame(stepStatRolls);
+  }
+
   function renderStatusBar(): void {
     const p = state.player;
+    if (statCells.size === 0) {
+      buildStatRow();
+    }
     /* Segment count tracks the plan's required missions, which may be fewer than the 3x3 grid. */
     const statusPlan =
       state.activeOmegaPlanId !== null
@@ -8277,79 +8482,156 @@ Your lair`;
         ),
     );
     const omegaPct = omegaTotal > 0 ? Math.round((omegaFilled / omegaTotal) * 100) : 0;
-    let segs = "";
-    for (let i = 0; i < omegaTotal; i += 1) {
-      const mod =
-        i < omegaFilled
-          ? " omega-progress__seg--filled"
-          : i === omegaFilled
-            ? " omega-progress__seg--current"
-            : "";
-      segs += `<span class="omega-progress__seg${mod}"></span>`;
+
+    /* The bar is only rebuilt when the plan changes how many missions it wants; the ordinary
+     * case is a class toggle on segments that are already there. */
+    if (omegaBarEl !== null) {
+      if (omegaSegEls.length !== omegaTotal) {
+        omegaBarEl.textContent = "";
+        omegaSegEls.length = 0;
+        for (let i = 0; i < omegaTotal; i += 1) {
+          const seg = document.createElement("span");
+          seg.className = "omega-progress__seg";
+          omegaBarEl.appendChild(seg);
+          omegaSegEls.push(seg);
+        }
+      }
+      for (let i = 0; i < omegaSegEls.length; i += 1) {
+        const seg = omegaSegEls[i]!;
+        seg.classList.toggle("omega-progress__seg--filled", i < omegaFilled);
+        seg.classList.toggle("omega-progress__seg--current", i === omegaFilled);
+      }
     }
-    const omegaBlock = `
-      <div class="stat-block stat-block--progress">
-        <span class="stat-block__icon stat-block__icon--text">&Omega;</span>
-        <div class="stat-block__main">
-          <span class="stat-block__label">Omega Plan</span>
-          <span class="stat-block__value">${omegaPct}%</span>
-          <div class="omega-progress">${segs}</div>
-        </div>
-      </div>`;
-    statsEl.innerHTML =
-      omegaBlock +
-      statBlockHtml(
-        ICON_BOLT,
-        "Command",
-        `${p.commandPoints} <small>/ ${p.maxCommandPoints}</small>`,
-      ) +
-      statBlockHtml(ICON_STAR, "Infamy", String(p.infamy)) +
-      statBlockHtml(ICON_FLAME, "Heat", String(p.heat), "stat-block--heat") +
-      statBlockHtml(
-        ICON_PERSON,
-        "Minions",
-        `${p.minions.length} <small>/ ${p.maxRosterSize}</small>`,
-      ) +
-      statBlockHtml(
-        ICON_CROSSHAIR,
-        "Agents",
-        String(totalPlayerVisibleOpposingAgents(state)),
-      );
+
+    writeStatTail("command", `/ ${p.maxCommandPoints}`);
+    writeStatTail("minions", `/ ${p.maxRosterSize}`);
+
+    /* Heat is the one readout carrying a standing intensity as well as a change: the glow and
+     * its breath come from the value itself, so a run under pressure looks it even on a turn
+     * where nothing moved. Reading state is legitimate here in a way it is not in `ui/glitch` —
+     * this restates a number already printed two inches to the left rather than inventing a
+     * readout the rules never agreed to publish. */
+    statsEl.style.setProperty("--heat", heatPressure(p.heat).toFixed(3));
+
+    const next = new Map<string, number>([
+      ["omega", omegaPct],
+      ["command", p.commandPoints],
+      ["infamy", p.infamy],
+      ["heat", p.heat],
+      ["minions", p.minions.length],
+      ["agents", totalPlayerVisibleOpposingAgents(state)],
+    ]);
+
+    const changes = reducedMotion.matches ? [] : diffReadouts(statReadout, next);
+    statReadout = next;
+
+    /* Everything not being counted is written straight out. That covers the first render of a
+     * run, a reduced-motion session, and any readout that simply did not move. */
+    const rolling = new Set(changes.map((change) => change.key));
+    for (const [key, value] of next) {
+      const cell = statCells.get(key);
+      if (cell === undefined || rolling.has(key)) {
+        continue;
+      }
+      /* A count already on its way to this value is left alone to finish.
+       *
+       * This is the case that makes the whole feature work, and it is not obvious: the status
+       * bar is redrawn on every state change, so a render lands within a frame or two of the
+       * one that started the count — and by then the readout *has* no change to report, since
+       * `statReadout` already holds the destination. Settling here would snap the number to its
+       * end a few frames in, which is every count in the game. */
+      if (cell.roll !== null && cell.roll.to === value) {
+        continue;
+      }
+      settleStatCell(cell);
+      writeStatNumber(cell, value);
+    }
+    startStatRolls(changes);
   }
 
-  function renderThreatMeter(): void {
-    threatLevelEl.innerHTML = "";
-    const tiers = catalog.wantedLevels;
-    const tierName = wantedTierAtIndex(catalog, state.wantedLevelTierIndex)?.name ?? "—";
-    const activeCount = Math.min(tiers.length, state.wantedLevelTierIndex + 1);
+  /**
+   * The threat meter, built once for the catalog's tier count.
+   *
+   * Kept for the same reason the stat row is: a skull that is recreated on every render can
+   * never animate the moment it lights, and that moment is the largest single escalation the
+   * game has. The tier count is fixed by content, so there is nothing here to rebuild.
+   */
+  const threatSkullEls: HTMLElement[] = [];
+  let threatTierEl: HTMLElement | null = null;
+  /** How many skulls were lit last render; -1 until the first, which never ignites. */
+  let threatShownCount = -1;
+
+  function buildThreatMeter(): void {
+    threatLevelEl.textContent = "";
 
     const text = document.createElement("div");
     text.className = "threat-meter__text";
     const label = document.createElement("span");
     label.className = "threat-meter__label";
     label.textContent = "Threat Level";
-    const tier = document.createElement("span");
-    tier.className = "threat-meter__tier";
-    tier.textContent = tierName;
+    threatTierEl = document.createElement("span");
+    threatTierEl.className = "threat-meter__tier";
     text.appendChild(label);
-    text.appendChild(tier);
+    text.appendChild(threatTierEl);
     threatLevelEl.appendChild(text);
 
     const skulls = document.createElement("div");
     skulls.className = "threat-meter__skulls";
-    for (let i = 0; i < tiers.length; i += 1) {
+    for (let i = 0; i < catalog.wantedLevels.length; i += 1) {
       const skull = document.createElement("span");
       skull.className = "threat-skull";
-      if (i < activeCount) {
-        skull.classList.add("threat-skull--active");
-      }
-      if (i === activeCount - 1) {
-        skull.classList.add("threat-skull--latest");
-      }
       skull.innerHTML = ICON_SKULL_FILLED;
       skulls.appendChild(skull);
+      threatSkullEls.push(skull);
     }
     threatLevelEl.appendChild(skulls);
+  }
+
+  /**
+   * Light a skull with a one-shot ignition.
+   *
+   * The class is dropped on `animationend` rather than by the next render, because renders can
+   * land in quick succession and one arriving mid-burst would cut the ignition off a few frames
+   * in. The wanted tier is monotonic, so a given skull ignites at most once in a run and there
+   * is no re-fire to arrange.
+   */
+  function igniteThreatSkull(skull: HTMLElement): void {
+    skull.classList.add("threat-skull--igniting");
+    skull.addEventListener(
+      "animationend",
+      () => {
+        skull.classList.remove("threat-skull--igniting");
+      },
+      { once: true },
+    );
+  }
+
+  function renderThreatMeter(): void {
+    if (threatSkullEls.length === 0) {
+      buildThreatMeter();
+    }
+    const tierName = wantedTierAtIndex(catalog, state.wantedLevelTierIndex)?.name ?? "—";
+    const activeCount = Math.min(threatSkullEls.length, state.wantedLevelTierIndex + 1);
+    if (threatTierEl !== null && threatTierEl.textContent !== tierName) {
+      threatTierEl.textContent = tierName;
+    }
+
+    /* An escalation, not the opening render and not a re-render at the same tier. */
+    const escalated =
+      threatShownCount >= 0 && activeCount > threatShownCount && !reducedMotion.matches;
+
+    for (let i = 0; i < threatSkullEls.length; i += 1) {
+      const skull = threatSkullEls[i]!;
+      skull.classList.toggle("threat-skull--active", i < activeCount);
+      skull.classList.toggle("threat-skull--latest", i === activeCount - 1);
+      /* Only the skulls that just lit, so a jump of two notches ignites both and the rank
+       * already burning stays as it was. Re-lighting the whole row would read as the meter
+       * resetting rather than as more of it being taken. */
+      if (escalated && i >= threatShownCount && i < activeCount) {
+        igniteThreatSkull(skull);
+      }
+    }
+    threatShownCount = activeCount;
   }
 
   /* ---------------------------------------------------------------------------------------

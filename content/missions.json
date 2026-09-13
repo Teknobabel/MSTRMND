@@ -125,6 +125,7 @@
     "id": "pen_test",
     "name": "Pen Test",
     "description": "Rattle an unscouted site's network until something gives. Nobody reads the intrusion logs anyway.",
+    "cardArt": "/assets/cards/custom/mission-pen-test.webp",
     "durationTurns": 1,
     "onFailureEffects": [
       {
@@ -386,6 +387,7 @@
     "id": "upg_ops_center",
     "name": "Operations Nerve Center",
     "description": "A wall of screens, a better chair, and the capacity to run one more scheme at a time.",
+    "cardArt": "/assets/cards/custom/mission-upg-ops-center.webp",
     "durationTurns": 1,
     "onFailureEffects": [
       {
@@ -414,6 +416,7 @@
     "id": "upg_barracks",
     "name": "Excavated Barracks",
     "description": "Blast out the east lava tube. Bunks for a bigger, louder family.",
+    "cardArt": "/assets/cards/custom/mission-upg-barracks.webp",
     "durationTurns": 1,
     "onFailureEffects": [
       {
@@ -442,6 +445,7 @@
     "id": "upg_workshop",
     "name": "Fabrication Workshop",
     "description": "Lathes, lasers, and a gadget bench. Every op leaves with one more toy.",
+    "cardArt": "/assets/cards/custom/mission-upg-workshop.webp",
     "durationTurns": 1,
     "onFailureEffects": [
       {
