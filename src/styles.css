@@ -1527,13 +1527,18 @@ body {
 /* ---------------- Panels ---------------- */
 
 .game-panel {
+  /* The panel's own inset, as a variable because the header strip and the plan column's footer
+     both have to reach back out through it to run edge to edge. A panel that needs more room
+     for its contents than the default gutter leaves (the planner) lowers it here rather than
+     re-deriving those negative margins. */
+  --panel-pad-x: 0.75rem;
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0.7rem 0.75rem;
+  padding: 0.7rem var(--panel-pad-x);
   border: 1px solid var(--line-1);
   clip-path: polygon(
     0 0,
@@ -1565,6 +1570,11 @@ body {
 /* Subtle per-column tint variation so panels read as grouped modules */
 .game-panel--plan-column {
   --panel-bg: rgba(19, 6, 9, 0.92);
+  /* A narrower gutter than the other panels get. Every other panel holds cards that are only
+     read; this one holds drop slots that have to be hit, and the three section frames add a
+     second inset inside the first — so the width the default gutter would spend on a double
+     margin goes to the slots instead. */
+  --panel-pad-x: 0.4rem;
   overflow: hidden;
 }
 
@@ -1623,8 +1633,8 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin: -0.7rem -0.75rem 0.1rem;
-  padding: 0.5rem 0.75rem 0.4rem;
+  margin: -0.7rem calc(-1 * var(--panel-pad-x)) 0.1rem;
+  padding: 0.5rem var(--panel-pad-x) 0.4rem;
   background: linear-gradient(180deg, rgba(26, 8, 11, 0.97), rgba(16, 6, 8, 0.94));
   border-bottom: 1px solid var(--red-deep);
   border-image: linear-gradient(90deg, var(--red), rgba(232, 17, 45, 0.35) 45%, transparent 92%) 1;
@@ -2041,7 +2051,10 @@ body {
  */
 .game-panel.game-panel--plan-column > .plan-column-stack,
 .game-panel--plan-column .missions-panel-page {
-  --plan-slot-bleed: 10px;
+  /* Has to stay inside `--panel-pad-x`: reach out further than the panel insets itself and the
+     panel's own `overflow: hidden` takes the clip back over, which is what this is here to
+     avoid. */
+  --plan-slot-bleed: 6px;
   margin-inline: calc(-1 * var(--plan-slot-bleed));
   padding-inline: var(--plan-slot-bleed);
 }
@@ -2061,17 +2074,135 @@ body {
   top: auto;
 }
 
+/* Submit's own bar, held below the scrolling sections on the panel's own ground. The one control
+   in the column that has to be reachable from anywhere in the plan, so it is the one thing that
+   does not scroll away. */
 .plan-column-footer {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  margin: 0.2rem -0.75rem -0.7rem;
-  padding: 0.45rem 0.75rem 0.7rem;
+  margin: 0.2rem calc(-1 * var(--panel-pad-x)) -0.7rem;
+  padding: 0.45rem var(--panel-pad-x) 0.7rem;
   background: linear-gradient(180deg, rgba(19, 6, 9, 0.92), rgba(16, 5, 8, 0.98));
   border-top: 1px solid var(--line-0);
   box-shadow: 0 -8px 16px -6px rgba(0, 0, 0, 0.6);
   z-index: 2;
+}
+
+/* ---------------- Plan sections: Operation / Deployment / Assessment ---------------- */
+
+/*
+ * The planner is one long column of drop slots, and a column of slots all alike gives the player
+ * no read on what order to fill them in. These three frames say it: Operation is what the play
+ * is, Deployment is who runs it, Assessment is what the console makes of it — the same order the
+ * plan is built in, top to bottom.
+ *
+ * The frame is the panel's own chrome at section scale: the chamfer notch `.plan-reqs` and
+ * `.plan-chance` already draw in their top-right corner, plus the red corner brackets from
+ * `.game-panel`. Brackets on the left edge rather than the panel's opposing pair, so the marks
+ * line up down the side the titles start on and a stack of three sections reads as one rail.
+ */
+.plan-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem 0.5rem;
+  border: 1px solid var(--line-0);
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    linear-gradient(180deg, rgba(48, 14, 19, 0.4), transparent 45%),
+    rgba(12, 4, 6, 0.45);
+}
+
+.plan-section::before,
+.plan-section::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  width: 7px;
+  height: 7px;
+  pointer-events: none;
+  border-left: 2px solid var(--red);
+}
+
+.plan-section::before {
+  top: -1px;
+  border-top: 2px solid var(--red);
+}
+
+.plan-section::after {
+  bottom: -1px;
+  border-bottom: 2px solid var(--red);
+}
+
+/* Assessment is the one section nothing is dragged into, so it sits on a darker ground than the
+   lifted card fill the two staging sections wear — read, not filled in. */
+.plan-section--assessment {
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    rgba(8, 3, 4, 0.5);
+}
+
+/* Title on the left, what the section is for on the right, with the rule running between them —
+   the same ruled strip `.game-controls-heading` draws over a menu column, with the caption
+   riding the far end of the line. */
+.plan-section__head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.plan-section__title {
+  flex: 0 0 auto;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+  text-shadow: 0 0 8px var(--red-glow-soft);
+  white-space: nowrap;
+}
+
+/* The console's own mark for a section, as distinct from the panel title's ◆ and the menu
+   heading's ▸ — three marks, three scales of heading. */
+.plan-section__title::before {
+  content: "// ";
+  color: var(--red);
+}
+
+/* The rule is what gives way when the head is tight: it takes the whole gap when there is room
+   and shrinks to nothing before either piece of text starts dropping characters. */
+.plan-section__rule {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line-1), var(--line-2));
+}
+
+.plan-section__note {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.plan-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 /* ---------------- Tabs ---------------- */
@@ -2429,19 +2560,19 @@ body {
 
 /* Every pill here is a term in the success arithmetic. Filled + solid border (the shared
    .minions-trait-pill--req-have) means the staged minions and assets cover it; hollow + dotted
-   means they do not. Scrolls on its own so a requirement-heavy mission cannot push the gauge
-   or Submit off the bottom of the column. */
+   means they do not. It used to cap its own height and scroll, back when it sat in the pinned
+   footer and a requirement-heavy mission could push the gauge off the bottom of the column.
+   Assessment scrolls with the other two sections now, so the list just runs as long as it is —
+   a scroll inside a scroll is a worse way to reach the last pill than scrolling the column. */
 .plan-reqs {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  max-height: 8.5rem;
   padding: 0.35rem 0.5rem 0.4rem;
   border: 1px solid var(--line-1);
   background:
     var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
     rgba(20, 7, 10, 0.55);
-  overflow-y: auto;
 }
 
 .plan-reqs__head {
@@ -2532,9 +2663,10 @@ body {
 
 /* ---------------- Plan success-chance gauge ---------------- */
 
-/* Success chance of the staged plan, pinned above Submit. Always on screen: it reads grey and
-   empty until the plan is complete enough to have a number, so the player learns where to look
-   before there is anything to look at. `--chance` (0-100) drives both the ring and the tint. */
+/* Success chance of the staged plan, at the foot of the Assessment section. Drawn even with
+   nothing staged: it reads grey and empty until the plan is complete enough to have a number, so
+   the player learns where to look before there is anything to look at. `--chance` (0-100) drives
+   both the ring and the tint. */
 .plan-chance {
   --chance: 0;
   --chance-accent: var(--text-3);
@@ -6470,7 +6602,6 @@ body {
 }
 
 .assign-pick-chip-label {
-  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7143,6 +7274,9 @@ body {
 }
 
 .assign-minion-slot-placeholder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   color: var(--text-3);
@@ -7178,9 +7312,117 @@ body {
 }
 
 .assign-minion-chip-main {
-  flex: 1 1 auto;
-  min-width: 0;
   padding-right: 0.15rem;
+}
+
+/* ---------------- Slot rows: reticle or thumbnail, the slot's tag, what is in it ----------------
+ *
+ * Every slot in the planner draws the same row whether it is empty or filled, so a card landing
+ * in one swaps the reticle for its art and the name in under the tag — nothing else in the row
+ * moves, and the column does not re-lay itself out under the player's hand mid-drag. */
+
+.plan-slot-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-width: 0;
+}
+
+/*
+ * An empty slot is also the way in to the menu that fills it — clicking one pulls that drawer
+ * up. So the empty state is a real button filling the slot, stripped back to the row it already
+ * was: keyboard reach and a focus ring for free, and the slot keeps its own border and fill.
+ */
+.plan-slot-empty--opens {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan-slot-empty--opens:focus-visible {
+  outline: 2px solid var(--red-bright);
+  outline-offset: 2px;
+}
+
+/* Hovered, the slot answers the way a lit drop target does, a step down from it: the rim warms
+   and the hatch behind it comes up, so "this is live" is the same signal in both gestures. */
+.assign-pick-slot:has(.plan-slot-empty--opens:hover),
+.assign-pick-slot:has(.plan-slot-empty--opens:focus-visible),
+.assign-minion-slot:has(.plan-slot-empty--opens:hover),
+.assign-minion-slot:has(.plan-slot-empty--opens:focus-visible) {
+  border-color: var(--red);
+  background:
+    repeating-linear-gradient(-45deg, rgba(232, 17, 45, 0.07) 0 8px, transparent 8px 16px),
+    rgba(26, 8, 11, 0.85);
+  box-shadow: 0 0 12px var(--red-glow-soft), inset 0 0 18px rgba(232, 17, 45, 0.07);
+}
+
+/* The reticle closes on the empty space it is standing in, the way the map's does on a site. */
+.plan-slot-empty--opens:hover .plan-slot-ghost,
+.plan-slot-empty--opens:focus-visible .plan-slot-ghost {
+  border-style: solid;
+  border-color: var(--red);
+  background: rgba(232, 17, 45, 0.16);
+  color: var(--red-bright);
+  box-shadow: 0 0 10px var(--red-glow-soft);
+}
+
+.plan-slot-empty--opens:hover .assign-minion-slot-placeholder,
+.plan-slot-empty--opens:focus-visible .assign-minion-slot-placeholder {
+  color: var(--text-1);
+}
+
+.plan-slot-empty--opens:hover .plan-slot-tag,
+.plan-slot-empty--opens:focus-visible .plan-slot-tag {
+  color: var(--red-bright);
+}
+
+/* Stands exactly where a staged card's thumbnail will, at the same 28px `.card-art--chip` is. */
+.plan-slot-ghost {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px dashed var(--line-2);
+  background: rgba(232, 17, 45, 0.05);
+  color: var(--red);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 0 8px var(--red-glow-soft);
+  transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.plan-slot-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.plan-slot-tag {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 0.48rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  color: var(--text-2);
 }
 
 .assign-minion-chip[draggable="true"] {

@@ -1284,7 +1284,6 @@ function initGameController(
   const assignAssetSlotsFieldset = req<HTMLElement>("assign-asset-slots-fieldset");
   const assignAssetSlotsList = req<HTMLElement>("assign-asset-slots-list");
   const assignSupportAssetsFieldset = req<HTMLElement>("assign-support-assets-fieldset");
-  const assignSupportAssetsLabel = req<HTMLElement>("assign-support-assets-label");
   const assignSupportAssetsList = req<HTMLElement>("assign-support-assets-list");
   const planColumnPanelEl = req<HTMLElement>("plan-column-panel-plan");
   const btnAssign = req<HTMLButtonElement>("btn-assign-mission");
@@ -1982,7 +1981,7 @@ function initGameController(
    * can stay the plain "Target" it is in the markup.
    */
   function assignTargetPlaceholderText(): string {
-    const generic = "Drag location, asset slot, or minion";
+    const generic = "Drag a target here";
     const m = selectedMissionTemplate();
     if (!m || m.targetType === "none") {
       return generic;
@@ -2748,20 +2747,21 @@ function initGameController(
         },
       });
 
+      const slotTag = req.length > 1 ? `Required ${String(slotIndex + 1)}` : "Required";
       const placed = assignAssetSlotAssetIds[slotIndex] ?? null;
       if (placed === null) {
-        const ph = document.createElement("span");
-        ph.className = "assign-minion-slot-placeholder";
+        /* No article: asset names are as often plural ("Mercenary Contracts") as singular, and
+         * the slot's own tag already says this one is required. */
         const name = content.assets.find((a) => a.id === requiredId)?.name ?? requiredId;
-        ph.textContent = `Drag a ${name}`;
-        slot.appendChild(ph);
+        fillEmptyPlanSlot(slot, slotTag, `Drag ${name} here`, "lair");
       } else {
         const tpl = content.assets.find((a) => a.id === placed);
         const chip = document.createElement("div");
         chip.className = "assign-minion-chip assign-asset-chip";
         chip.appendChild(createCardArtImg(resolveAssetCardArt(tpl), "card-art--chip"));
         const chipMain = document.createElement("div");
-        chipMain.className = "assign-minion-chip-main";
+        chipMain.className = "plan-slot-main assign-minion-chip-main";
+        chipMain.appendChild(createPlanSlotTag(slotTag));
         const chipLabel = document.createElement("span");
         chipLabel.className = "assign-minion-chip-label";
         chipLabel.textContent = tpl?.name ?? placed;
@@ -2811,7 +2811,6 @@ function initGameController(
       return;
     }
     assignSupportAssetsFieldset.hidden = false;
-    assignSupportAssetsLabel.textContent = "Support";
     const mainOnly = state.phase === "main";
     const wrap = document.createElement("div");
     wrap.className = "assign-minion-slots assign-asset-slots assign-support-asset-slots";
@@ -2840,19 +2839,18 @@ function initGameController(
         },
       });
 
+      const slotTag = cap > 1 ? `Support ${String(slotIndex + 1)}` : "Support";
       const placed = assignSupportAssetIds[slotIndex] ?? null;
       if (placed === null) {
-        const ph = document.createElement("span");
-        ph.className = "assign-minion-slot-placeholder";
-        ph.textContent = "Drag a support asset";
-        slot.appendChild(ph);
+        fillEmptyPlanSlot(slot, slotTag, "Drag a support asset here", "lair");
       } else {
         const tpl = content.assets.find((a) => a.id === placed);
         const chip = document.createElement("div");
         chip.className = "assign-minion-chip assign-asset-chip";
         chip.appendChild(createCardArtImg(resolveAssetCardArt(tpl), "card-art--chip"));
         const chipMain = document.createElement("div");
-        chipMain.className = "assign-minion-chip-main";
+        chipMain.className = "plan-slot-main assign-minion-chip-main";
+        chipMain.appendChild(createPlanSlotTag(slotTag));
         const chipLabel = document.createElement("span");
         chipLabel.className = "assign-minion-chip-label";
         chipLabel.textContent = tpl?.name ?? placed;
@@ -2987,11 +2985,95 @@ function initGameController(
   }
 
   /**
+   * What a slot is for, printed in the slot's own row above whatever is standing in it.
+   *
+   * The planner's three sections carry the headings now, so a label stacked over every slot as
+   * well would be headings over headings down the whole column. Inside the row it rides with the
+   * name instead, and an empty slot keeps it in exactly the place a filled one does — the row
+   * does not re-lay itself out the moment a card lands.
+   */
+  function createPlanSlotTag(text: string): HTMLElement {
+    const tag = document.createElement("span");
+    tag.className = "plan-slot-tag";
+    tag.textContent = text;
+    return tag;
+  }
+
+  /** A drawer's name, read off the tab in the markup so the two never drift apart. */
+  function drawerLabel(id: DrawerId): string {
+    const drawer = menuDrawers.find((d) => d.id === id);
+    return drawer?.tabEl.querySelector(".drawer-tab__label")?.textContent?.trim() ?? id;
+  }
+
+  /**
+   * Which menu fills this slot: the one holding the cards it takes. The target slot's answer
+   * depends on the staged mission, since what counts as a target is the mission's to say — and
+   * with no mission staged yet a site is the overwhelmingly likely answer, so that is the one
+   * offered rather than nothing.
+   */
+  function targetSlotMenu(): DrawerId {
+    return selectedMissionTemplate()?.targetType === "minion" ? "minions" : "locations";
+  }
+
+  /**
+   * An empty slot's contents: the reticle standing where the thumbnail will be, the slot's tag,
+   * and what to drag into it. Every slot in the planner draws its empty state through here, so
+   * the four kinds stay one row.
+   *
+   * `menu` makes the row a button that pulls up the drawer holding the cards this slot takes.
+   * Dragging is the gesture the planner is built around, but it only works for a player who has
+   * already found the menu with the card in it — so the empty slot is also the way *to* that
+   * menu, which is the one thing a player stuck at an empty slot is looking for. It stands down
+   * outside the main phase, along with the rest of the planner's interactivity.
+   */
+  function fillEmptyPlanSlot(
+    host: HTMLElement,
+    tag: string,
+    hint: string,
+    menu: DrawerId | null,
+  ): void {
+    const opens = menu !== null && state.phase === "main";
+    const row = document.createElement(opens ? "button" : "div");
+    row.className = opens ? "plan-slot-empty plan-slot-empty--opens" : "plan-slot-empty";
+    if (row instanceof HTMLButtonElement && menu !== null) {
+      row.type = "button";
+      const label = drawerLabel(menu);
+      row.setAttribute("aria-label", `${tag} slot: ${hint}. Opens the ${label} menu.`);
+      /* The hint gets one line beside the tag, and an asset's can be longer than that — the line
+       * ellipses, so the whole of it plus what the click does is on the hover. */
+      row.title = `${hint}, or click to open ${label}`;
+      row.addEventListener("click", () => {
+        setOpenDrawer(menu);
+      });
+    } else {
+      row.title = hint;
+    }
+
+    const ghost = document.createElement("span");
+    ghost.className = "plan-slot-ghost";
+    ghost.setAttribute("aria-hidden", "true");
+    ghost.textContent = "+";
+    row.appendChild(ghost);
+
+    const main = document.createElement("div");
+    main.className = "plan-slot-main";
+    main.appendChild(createPlanSlotTag(tag));
+    const ph = document.createElement("span");
+    ph.className = "assign-minion-slot-placeholder";
+    ph.textContent = hint;
+    main.appendChild(ph);
+    row.appendChild(main);
+
+    host.appendChild(row);
+  }
+
+  /**
    * The collapsed form of a staged mission or target. It takes over the drag affordance the
    * embedded card used to carry, and reveals `card` on hover or keyboard focus.
    */
   function buildAssignPickChip(
     artSrc: string,
+    tag: string,
     label: string,
     card: HTMLElement,
     canDrag: boolean,
@@ -3003,10 +3085,14 @@ function initGameController(
     chip.draggable = canDrag;
     chip.addEventListener("dragstart", onDragStart);
     chip.appendChild(createCardArtImg(artSrc, "card-art--chip"));
+    const main = document.createElement("div");
+    main.className = "plan-slot-main assign-pick-chip-main";
+    main.appendChild(createPlanSlotTag(tag));
     const name = document.createElement("span");
     name.className = "assign-pick-chip-label";
     name.textContent = label;
-    chip.appendChild(name);
+    main.appendChild(name);
+    chip.appendChild(main);
     attachAssignPickPreview(chip, card);
     return chip;
   }
@@ -3023,10 +3109,7 @@ function initGameController(
     const missionSlot = document.createElement("div");
     missionSlot.className = "assign-pick-slot-inner";
     if (assignMissionTemplateId === null) {
-      const ph = document.createElement("span");
-      ph.className = "assign-minion-slot-placeholder";
-      ph.textContent = "Drag a mission";
-      missionSlot.appendChild(ph);
+      fillEmptyPlanSlot(missionSlot, "Mission", "Drag a mission here", "missions");
     } else {
       const wrap = document.createElement("div");
       wrap.className = "assign-pick-slot-card-wrap";
@@ -3045,6 +3128,7 @@ function initGameController(
       wrap.appendChild(
         buildAssignPickChip(
           resolveMissionCardArt(missionTpl),
+          "Mission",
           missionTpl?.name ?? assignMissionTemplateId,
           article,
           mainOnly,
@@ -3141,17 +3225,11 @@ function initGameController(
 
     const targetPick = assignTarget;
     if (targetPick === null) {
-      const ph = document.createElement("span");
-      ph.className = "assign-minion-slot-placeholder";
-      ph.textContent = assignTargetPlaceholderText();
-      targetSlot.appendChild(ph);
+      fillEmptyPlanSlot(targetSlot, "Target", assignTargetPlaceholderText(), targetSlotMenu());
     } else if (targetPick.kind === "location") {
       const loc = content.locations.find((l) => l.id === targetPick.locationId);
       if (!loc) {
-        const ph = document.createElement("span");
-        ph.className = "assign-minion-slot-placeholder";
-        ph.textContent = "Unknown location";
-        targetSlot.appendChild(ph);
+        fillEmptyPlanSlot(targetSlot, "Target", "Unknown location", targetSlotMenu());
       } else {
         const securityByLocationId = new Map(
           state.locationSecurityStates.map((s) => [s.locationId, s.securityLevel]),
@@ -3178,6 +3256,7 @@ function initGameController(
         wrap.appendChild(
           buildAssignPickChip(
             siteCardArt(loc.id),
+            "Target",
             siteDisplayName(loc.id),
             article,
             mainOnly,
@@ -3279,7 +3358,7 @@ function initGameController(
         body.appendChild(reqPillsEl);
       }
       wrap.appendChild(
-        buildAssignPickChip(assetArt, assetName, article, mainOnly, setDragDataForTarget),
+        buildAssignPickChip(assetArt, "Target", assetName, article, mainOnly, setDragDataForTarget),
       );
       appendClearTarget(wrap);
       targetSlot.appendChild(wrap);
@@ -3293,6 +3372,7 @@ function initGameController(
       wrap.appendChild(
         buildAssignPickChip(
           resolveMinionCardArt(tpl),
+          "Target",
           tpl?.name ?? targetPick.instanceId,
           buildMinionPreviewArticle(inst, targetPick.instanceId),
           mainOnly,
@@ -3950,12 +4030,10 @@ function initGameController(
         },
       });
 
+      const slotTag = `Minion ${String(slotIndex + 1)}`;
       const instanceId = assignSlotInstanceIds[slotIndex];
       if (instanceId === null) {
-        const ph = document.createElement("span");
-        ph.className = "assign-minion-slot-placeholder";
-        ph.textContent = "Drag a minion";
-        slot.appendChild(ph);
+        fillEmptyPlanSlot(slot, slotTag, "Drag a minion here", "minions");
       } else {
         const inst = state.player.minions.find((m) => m.instanceId === instanceId);
         const tpl = inst
@@ -3970,7 +4048,8 @@ function initGameController(
         chip.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "card-art--chip"));
 
         const chipMain = document.createElement("div");
-        chipMain.className = "assign-minion-chip-main";
+        chipMain.className = "plan-slot-main assign-minion-chip-main";
+        chipMain.appendChild(createPlanSlotTag(slotTag));
 
         const chipLabel = document.createElement("span");
         chipLabel.className = "assign-minion-chip-label";

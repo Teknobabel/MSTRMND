@@ -110,80 +110,106 @@
                   </svg>
                 </button>
               </header>
+              <!-- The plan reads as three steps down the column: what the play is (Operation),
+                   who runs it (Deployment), and what the console makes of it (Assessment). Each
+                   is a `.plan-section` frame — the panel's own corner-bracket-and-notch chrome at
+                   section scale — so a slot belongs to a visible group instead of floating in one
+                   long list of fields. All three scroll together as one list, so Assessment is
+                   read where it is arrived at — the end of the plan — rather than hanging over
+                   it. Only Submit stays pinned in the footer below them. -->
               <div class="plan-column-stack">
                 <div
                   id="plan-column-panel-plan"
                   class="missions-panel-page"
                   aria-labelledby="plan-panel-title"
                 >
-                  <div class="game-controls">
-                    <div class="game-controls-section">
-                      <label class="game-field">
-                        <span class="game-field-label">Mission</span>
-                        <div
-                          id="assign-mission-slot"
-                          class="assign-pick-slot"
-                          data-assign-pick="mission"
-                          aria-label="Mission slot, drag a mission card here"
-                        ></div>
-                      </label>
-                      <label class="game-field" id="assign-target-field">
-                        <span class="game-field-label" id="assign-target-label">Target</span>
+                  <section class="plan-section" aria-labelledby="plan-section-operation-title">
+                    <header class="plan-section__head">
+                      <h3 id="plan-section-operation-title" class="plan-section__title">Operation</h3>
+                      <span class="plan-section__rule" aria-hidden="true"></span>
+                      <span class="plan-section__note">Define the play</span>
+                    </header>
+                    <div class="plan-section__body">
+                      <div
+                        id="assign-mission-slot"
+                        class="assign-pick-slot"
+                        data-assign-pick="mission"
+                        aria-label="Mission slot, drag a mission card here"
+                      ></div>
+                      <div id="assign-target-field">
                         <div
                           id="assign-target-slot"
                           class="assign-pick-slot"
                           data-assign-pick="target"
                           aria-label="Mission target slot"
                         ></div>
-                      </label>
-                      <div id="assign-minions" class="game-field">
-                        <span class="game-field-label">Minions</span>
-                        <div id="assign-minions-list"></div>
                       </div>
-                      <div id="assign-support-assets-fieldset" class="game-field" hidden>
-                        <span class="game-field-label" id="assign-support-assets-label">Support</span>
+                    </div>
+                  </section>
+
+                  <section class="plan-section" aria-labelledby="plan-section-deployment-title">
+                    <header class="plan-section__head">
+                      <h3 id="plan-section-deployment-title" class="plan-section__title">Deployment</h3>
+                      <span class="plan-section__rule" aria-hidden="true"></span>
+                      <span class="plan-section__note">Assign assets</span>
+                    </header>
+                    <div class="plan-section__body">
+                      <div id="assign-minions-list"></div>
+                      <div id="assign-support-assets-fieldset" hidden>
                         <div id="assign-support-assets-list"></div>
                       </div>
-                      <div id="assign-asset-slots-fieldset" class="game-field" hidden>
-                        <span class="game-field-label">Required Assets</span>
+                      <div id="assign-asset-slots-fieldset" hidden>
                         <div id="assign-asset-slots-list"></div>
                       </div>
                     </div>
-                  </div>
+                  </section>
+
+                  <section
+                    class="plan-section plan-section--assessment"
+                    aria-labelledby="plan-section-assessment-title"
+                  >
+                    <header class="plan-section__head">
+                      <h3 id="plan-section-assessment-title" class="plan-section__title">Assessment</h3>
+                      <span class="plan-section__rule" aria-hidden="true"></span>
+                      <span class="plan-section__note">Running analysis</span>
+                    </header>
+                    <div class="plan-section__body">
+                      <section
+                        id="assign-requirements"
+                        class="plan-reqs"
+                        aria-labelledby="assign-requirements-label"
+                      >
+                        <div class="plan-reqs__head">
+                          <span id="assign-requirements-label" class="plan-reqs__label">Requirements</span>
+                          <span id="assign-requirements-tally" class="plan-reqs__tally"></span>
+                        </div>
+                        <div id="assign-requirements-list" class="plan-reqs__list"></div>
+                      </section>
+                      <div
+                        id="assign-chance"
+                        class="plan-chance"
+                        role="group"
+                        aria-label="Mission success chance"
+                      >
+                        <div class="plan-chance__dial">
+                          <svg class="plan-chance__ring" viewBox="0 0 44 44" aria-hidden="true">
+                            <circle class="plan-chance__ring-track" cx="22" cy="22" r="19" />
+                            <circle class="plan-chance__ring-fill" cx="22" cy="22" r="19" />
+                          </svg>
+                          <span id="assign-chance-value" class="plan-chance__value">--</span>
+                        </div>
+                        <div class="plan-chance__text">
+                          <span class="plan-chance__label">Success Chance</span>
+                          <span id="assign-chance-note" class="plan-chance__note">No plan staged</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
                 </div>
                 <div class="plan-column-footer">
-                  <section
-                    id="assign-requirements"
-                    class="plan-reqs"
-                    aria-labelledby="assign-requirements-label"
-                  >
-                    <div class="plan-reqs__head">
-                      <span id="assign-requirements-label" class="plan-reqs__label">Requirements</span>
-                      <span id="assign-requirements-tally" class="plan-reqs__tally"></span>
-                    </div>
-                    <div id="assign-requirements-list" class="plan-reqs__list"></div>
-                  </section>
-                  <div
-                    id="assign-chance"
-                    class="plan-chance"
-                    role="group"
-                    aria-label="Mission success chance"
-                  >
-                    <div class="plan-chance__dial">
-                      <svg class="plan-chance__ring" viewBox="0 0 44 44" aria-hidden="true">
-                        <circle class="plan-chance__ring-track" cx="22" cy="22" r="19" />
-                        <circle class="plan-chance__ring-fill" cx="22" cy="22" r="19" />
-                      </svg>
-                      <span id="assign-chance-value" class="plan-chance__value">--</span>
-                    </div>
-                    <div class="plan-chance__text">
-                      <span class="plan-chance__label">Success Chance</span>
-                      <span id="assign-chance-note" class="plan-chance__note">No plan staged</span>
-                    </div>
-                  </div>
                   <div class="btn-submit-mission-wrap" id="assign-submit-wrap">
                     <button type="button" class="btn btn-submit-mission" id="btn-assign-mission">
-                      <span>Submit</span>
+                      <span>Deploy</span>
                     </button>
                     <span
                       id="assign-blocked-alert"
