@@ -2707,18 +2707,69 @@ body {
   min-width: 0;
 }
 
-/* Pills are inline chips by default, sized to their own text. Here they are rows — and a row
-   that already spans the column can afford a larger mark than a chip that has to share a line
-   with three others, so it takes one. */
+/*
+ * Built from the same materials as a mission card's requirement slot — the near-black ground, the
+ * solid hairline, the 2px leading edge, and the rule between the glyph and the name — because
+ * this list *is* that card's Required Skills, restated against the plan the player is staging.
+ * A requirement should not change shape on the way from the card to the planner.
+ *
+ * What it does not copy is the card's scale. A card is browsed one at a time; this column is a
+ * checklist read top to bottom in a sidebar, and it is the one that runs long — the mission's own
+ * traits, then the site's, then its security, then the agents standing on it. At the card's 34px
+ * glyph each row is 39.8px and a full list outgrows the panel; at 22.4px it is 30.2px and the
+ * list still reads as a list. Same pattern, this surface's density.
+ */
 .plan-reqs__pills > .minions-trait-pill {
-  --trait-icon: 1.15rem;
+  --trait-icon: 1.4rem;
   box-sizing: border-box;
   width: 100%;
-  padding: 0.2rem 0.35rem;
+  padding: 0.18rem 0.35rem;
+  gap: 0.4rem;
+  border: 1px solid var(--line-0);
   border-left-width: 2px;
+  background: rgba(10, 4, 5, 0.4);
+  color: var(--text-1);
 }
 
+.plan-reqs__pills > .minions-trait-pill--req-have {
+  border-left-color: var(--line-2);
+  color: var(--text-0);
+}
+
+.plan-reqs__pills > .minions-trait-pill--req-missing {
+  color: var(--text-2);
+}
+
+/* Restated here for the same reason as on the card: `.minions-trait-pill:hover` is a class
+   shallower than the rule above and no longer reaches these rows. */
+.plan-reqs__pills > .minions-trait-pill:hover,
+.plan-reqs__pills > .minions-trait-pill:focus-visible {
+  border-color: var(--line-2);
+  background: rgba(28, 11, 13, 0.75);
+  outline: none;
+}
+
+.plan-reqs__pills > .minions-trait-pill > .minions-trait-pill__icon {
+  stroke: var(--text-2);
+}
+
+.plan-reqs__pills > .minions-trait-pill > .minions-trait-pill__icon--art {
+  filter: brightness(0.5);
+}
+
+/*
+ * The divider takes its height from `line-height` rather than from `align-self: stretch` as it
+ * does on the card. Stretch measures the flex line, which here is only as tall as the text —
+ * these rows have no `min-height` forcing a taller content box — so the rule would come out
+ * shorter than the glyph beside it. Setting the line box to the glyph's own size instead makes
+ * the two exactly equal, and leaves the label a block, which is what `text-overflow` needs:
+ * names in a 235px sidebar column have to clip to one line rather than wrap.
+ */
 .plan-reqs__pills > .minions-trait-pill > .minions-trait-pill__label {
+  min-width: 0;
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--line-1);
+  line-height: var(--trait-icon);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4317,95 +4368,119 @@ body {
   font-size: 0.7rem;
 }
 
-/* ---- Skills as a grid of chips (the minion bio only) ----
+/*
+ * A requirement slot is built like the outcome slots under it (`.mission-card-effects__item`)
+ * and the manifest rows beside it (`.card-brief__asset`): the same near-black ground, the same
+ * solid hairline, the same 2px left accent carrying the state. Those three are the whole brief,
+ * so a mission card now reads as one sheet of identically-built slots from Required Skills down
+ * to On Failure, instead of the requirements half alone being drawn as hollow chips.
  *
- * A mission's Required Skills is a checklist — one line per requirement, read top to bottom
- * against the assets column beside it — so it stays a stack of rows. A minion's skills are not
- * a checklist; they are what the minion *is*, the thing the player is choosing between when
- * three cards are open side by side. That reads faster as a set of marks than as a column of
- * text, so here the same pills are laid out as square chips with the glyph carrying the weight
- * and the name underneath confirming it.
- *
- * Three across is what the card width affords: at `--minion-card-w` the chips land at 72.6px,
- * enough for a 44px glyph — nearly twice the row layout's 24px — plus two lines of name. Minions
- * carry one to six catalog traits plus whatever relationships play hangs on them, so three
- * columns also means the usual card spends one or two rows on this section.
+ * `:not(--grid)` because the minion bio's chips (below) are the one place these pills are not a
+ * row in a brief, and they keep their own ground.
  */
-.card-brief__pills--grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.3rem;
+.card-brief__pills > .minions-trait-pill {
+  border: 1px solid var(--line-0);
+  border-left-width: 2px;
+  background: rgba(10, 4, 5, 0.4);
+  color: var(--text-1);
+  /* Room for the divider below to sit in, clear of both the glyph and the name. */
+  gap: 0.4rem;
 }
 
-/* Undoes the row shape `.card-brief__pills > .minions-trait-pill` gives these same pills: full
-   width, a fixed row height, and the 2px left accent that marks a row's start. A chip is sized
-   by the grid track and squared by `aspect-ratio`, and its accent would point at nothing. */
-.card-brief__pills--grid > .minions-trait-pill {
-  /* ~61% of the chip's height. The square's budget is fixed, so every bit of it the name is not
-     using belongs to the glyph: the padding, the gap and the label are all as tight as they go
-     precisely so this number can be as big as it is. */
-  --trait-icon: 2.75rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: auto;
-  min-height: 0;
-  aspect-ratio: 1;
-  padding: 0.2rem 0.18rem 0.18rem;
-  gap: 0.12rem;
-  border-left-width: 1px;
-  font-size: 0.5rem;
-  line-height: 1.1;
-  letter-spacing: 0.02em;
-  text-align: center;
+/*
+ * Have / missing used to be carried by the border's *style* and the presence of a background —
+ * dotted and hollow for a requirement the roster cannot meet. With every slot on the same solid
+ * ground that reads as flimsy rather than as unmet, so the signal moves to where the manifest
+ * column already keeps it (`.card-brief__asset--have`): the left accent lights up and the name
+ * comes up to full strength when the requirement is met, and stays dim when it is not.
+ */
+.card-brief__pills > .minions-trait-pill--req-have {
+  border-left-color: var(--line-2);
+  color: var(--text-0);
 }
 
-/* The glyph's negative block margin exists to keep it from driving the height of a *row* pill,
-   where block is the cross axis. In a column it is the main axis, and the same margin would
-   pull the name up over the icon instead.
+.card-brief__pills > .minions-trait-pill--req-missing {
+  color: var(--text-2);
+}
+
+/*
+ * A temporary status — Injured, Lucky — is the one trait in a minion's list that is not simply
+ * what the minion is, so it keeps its green / red. On the shared ground that signal is carried by
+ * the border and the name rather than by tinting the whole slot a different colour from the ones
+ * above and below it, the same move `--req-have` makes. Restated at this depth because the plain
+ * `.minions-trait-pill--status-*` rules are a class shallower than the slot rule above and would
+ * otherwise be overridden by it without a word.
+ */
+.card-brief__pills > .minions-trait-pill--status-positive {
+  border-color: var(--good-dim);
+  color: #8df0b2;
+}
+
+.card-brief__pills > .minions-trait-pill--status-negative {
+  border-color: var(--red-deep);
+  color: #ff9aa6;
+}
+
+/* These slots carry a tooltip, so they still have to answer the pointer. `.minions-trait-pill`'s
+   own hover is a class less specific than the rules above and no longer reaches them, so it is
+   restated here — lifted off the new darker ground rather than the old red-tinted one. */
+.card-brief__pills > .minions-trait-pill:hover,
+.card-brief__pills > .minions-trait-pill:focus-visible {
+  border-color: var(--line-2);
+  background: rgba(28, 11, 13, 0.75);
+  outline: none;
+}
+
+/*
+ * The glyph is the slot's identity mark, not its loudest element: white line art on a near-black
+ * ground was reading brighter than the name it belongs to. Both kinds come down to the tone the
+ * section labels above them use (`.card-brief__label`, `--text-2`), so a column of slots reads
+ * as one grey family with the met/unmet signal carried by the name and the left accent alone.
  *
- * `aspect-ratio` makes the chip's height the grid track's width, not the sum of what is inside
- * it, so the contents have a fixed budget to fit in rather than one they can push out. The
- * glyph is the part that gives: it shrinks a little before the square breaks or the name gets
- * squeezed. `flex: none` on the label keeps the shrinking on this side of the gap. */
-.card-brief__pills--grid .minions-trait-pill__icon {
-  margin-block: 0;
-  flex: 0 1 auto;
-  min-height: 0;
-  /* Every minion surface draws its card at `--minion-card-w`, so the chip is 72.6px and the
-     glyph's fixed box fits with room to spare. This is the guard for the day one of them is
-     not: the glyph gives width as well as height rather than pushing out of its chip. */
-  max-width: 100%;
+ * The stroked marks can just take the colour. The uploaded glyphs are images, with no
+ * `currentColor` to set — but they are white, so a flat multiplier is enough: brightness(0.5)
+ * puts white at rgb(128, 128, 128), which is the relative luminance of `--text-2` (#91797b).
+ * Matched by weight rather than by hue, the way `.card-brief__asset--hidden`'s thumbnail is.
+ */
+.card-brief__pills > .minions-trait-pill > .minions-trait-pill__icon {
+  stroke: var(--text-2);
 }
 
-/* Two lines, reserved whether or not the name needs them, so every chip puts its glyph at the
-   same height and a row of them reads as one band rather than a ragged one. Names that outrun
-   two lines — the relationship traits, "Friend of Penny Dreadful" — clip to the tooltip the
-   pill already carries. */
-.card-brief__pills--grid .minions-trait-pill__label {
-  flex: none;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  min-height: calc(2 * 1.1em);
-  overflow: hidden;
-  width: 100%;
+.card-brief__pills > .minions-trait-pill > .minions-trait-pill__icon--art {
+  filter: brightness(0.5);
+}
+
+/*
+ * A rule between the glyph and the name, so the slot reads as two cells rather than as a word
+ * pushed up against a picture. It is the label's own left border rather than a separate element:
+ * `align-self: stretch` runs it the height of the slot's content box, which is what makes it a
+ * divider rather than a dash floating beside the text.
+ */
+.card-brief__pills > .minions-trait-pill > .minions-trait-pill__label {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-width: 0;
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--line-1);
 }
 
 /* A security measure the site has not had to show yet: it takes a pill's shape, so the player
-   can see how much longer this list is going to get, but the name is blacked out. */
-.loc-brief__pill-sealed {
+   can see how much longer this list is going to get, but the name is blacked out.
+ *
+ * Selector carries the slot scope so it outranks the requirement-slot rules above, which would
+ * otherwise hand this row the same solid border a known requirement gets. It keeps their ground
+ * — it is one of the same slots — but stays dashed, the mark the assets column beside it already
+ * uses for a row whose contents the player has not uncovered yet. */
+.card-brief__pills > .minions-trait-pill.loc-brief__pill-sealed {
   border-style: dashed;
   border-color: var(--line-1);
-  background: rgba(10, 4, 5, 0.5);
   color: var(--text-3);
   cursor: help;
 }
 
-.loc-brief__pill-sealed:hover {
+.card-brief__pills > .minions-trait-pill.loc-brief__pill-sealed:hover {
   border-color: var(--line-2);
-  background: rgba(10, 4, 5, 0.5);
 }
 
 /* Every sealed pill blacks out to the same length, whatever word is under the bar — a redaction
@@ -4524,10 +4599,16 @@ body {
   white-space: nowrap;
 }
 
+/* Same type as a requirement slot's label (`.minions-trait-pill__label`) — the two columns sit
+   side by side at the same size, so the semibold weight and the tracking have to agree or the
+   manifest reads as a lighter, looser list than the requirements beside it. The redacted and
+   emptied states below re-track their own names on purpose and still override this. */
 .card-brief__asset-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   color: var(--text-0);
 }
 
@@ -4622,8 +4703,10 @@ body {
   border-style: dashed;
 }
 
+/* Matched to `.minions-trait-pill--req-missing` in the column beside it: unmet is dimmer than
+   met, but still has to be readable, so it sits one step down rather than two. */
 .card-brief__asset--missing .card-brief__asset-name {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* An asset an effect hands over rather than one a mission asks for: no have/missing question,

@@ -48,10 +48,9 @@ export function buildMinionBrief(model: MinionBriefModel): HTMLElement {
       section.appendChild(briefPlaceholder("No skills"));
     } else {
       const pills = document.createElement("div");
-      // A minion's skills are the card's identity, not a checklist against a job the way the
-      // mission card's Required Skills column is — so they get the grid of square chips rather
-      // than the shared stack of rows. Same pills either way; only the container differs.
-      pills.className = "card-brief__pills card-brief__pills--grid";
+      // The same stack of rows the mission card's Required Skills column draws, run full width:
+      // a skill reads as glyph, rule, name whichever card it is on.
+      pills.className = "card-brief__pills";
       for (const pill of model.skillPills) {
         pills.appendChild(pill);
       }
