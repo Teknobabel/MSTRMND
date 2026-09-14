@@ -424,9 +424,9 @@ body {
   z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  /* Status bar, then the map/drawers body taking whatever is left, then the bottom nav bar —
-     one row per direct child now that the ticker bar above the status bar is gone. */
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Ticker bar, status bar, then the map/drawers body taking whatever is left, then the bottom
+     nav bar — one row per direct child. */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0.5rem;
   padding: 0.4rem 0.6rem 0.5rem;
 }
@@ -1373,13 +1373,20 @@ body {
 
 /* Docks: the planner down the left edge; everything else lives right of it. `--dock-w` is a
    quarter of that space (an inspector card's width), and `--dock-h` is the lower part of the
-   map the panels hung from the top stop short of, which keeps them off the drawer tabs. */
+   map the panels hung from the top stop short of, which keeps them off an *open* drawer — the
+   map-layers panel stays up through one (see `.game-panel--map-layers`), so it needs the room
+   the drawer's full open height actually takes.
+ *
+ * `--drawer-tab-h` lives here rather than on `.drawer-cabinet` below, which only reads it, so a
+   sibling — the site inspector's own max-height — can clear the same closed-drawer tab row
+   without redeclaring its height. */
 .omega-body--floating {
   --dock-gap: 0.5rem;
   /* Planner width (18.5rem) + the gap after it. */
   --dock-left: 19rem;
   --dock-h: 58%;
   --dock-w: calc((100% - var(--dock-left) - var(--dock-gap) * 3) / 4);
+  --drawer-tab-h: 2.6rem;
 }
 
 /*
@@ -1465,11 +1472,21 @@ body {
  * appeared over it, and the two would flicker against each other. So a pane stays
  * click-through until it is the selected one.
  */
+/*
+ * `max-height` here used to share `--dock-h` with Map Layers — the room an *open* drawer takes
+ * up — but a site pane never actually needs to clear one: opening any drawer hides every
+ * inspector pane outright (`renderInspectorPane` sets `pane.el.hidden`), so the two never share
+ * the screen. The only thing a pane has to clear while it is up is the closed-drawer tab row
+ * always sitting along the bottom, `--drawer-tab-h` tall. Capping it to `--dock-h` regardless
+ * left a plain site card scrolling internally past a couple of asset rows on an ordinary
+ * mission-capable site — well short of the map's actual bottom edge. This gives the card the
+ * headroom the tab row actually leaves it, so it grows to fit instead of hiding a scrollbar.
+ */
 .omega-body--floating .game-panel--site-inspector {
   top: 0;
   right: 0;
   width: var(--dock-w);
-  max-height: calc(100% - var(--dock-h) - var(--dock-gap));
+  max-height: calc(100% - var(--drawer-tab-h) - var(--dock-gap));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1779,9 +1796,9 @@ body {
  * take it back.
  */
 .drawer-cabinet {
-  --drawer-tab-h: 2.6rem;
-  /* Trailing room at the end of a menu's scroll, so its last card can be brought up clear of
-     the tab row it otherwise runs down behind. */
+  /* `--drawer-tab-h` comes from `.omega-body--floating` above. Trailing room at the end of a
+     menu's scroll, so its last card can be brought up clear of the tab row it otherwise runs
+     down behind. */
   --drawer-floor: calc(var(--drawer-tab-h) + 0.7rem);
   --drawer-gap: 0.5rem;
   --drawer-count: 5;
@@ -2929,6 +2946,141 @@ body {
   filter: drop-shadow(0 0 5px var(--chance-accent));
 }
 
+/* ---------------- Ticker bar ---------------- */
+
+.omega-ticker-bar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  border: 1px solid var(--line-1);
+  background:
+    linear-gradient(180deg, rgba(30, 9, 12, 0.6), transparent 55%),
+    var(--panel-bg);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.omega-ticker-bar::before {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(232, 17, 45, 0.6) 40%,
+    rgba(232, 17, 45, 0.6) 60%,
+    transparent
+  );
+}
+
+.omega-ticker__label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+  border-right: 1px solid var(--line-1);
+  background: linear-gradient(180deg, rgba(60, 14, 19, 0.5), rgba(22, 7, 9, 0.6));
+  white-space: nowrap;
+}
+
+.omega-ticker__signal {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red-bright);
+  box-shadow: 0 0 8px var(--red-glow);
+  animation: signal-blink 1.4s ease-in-out infinite;
+}
+
+@keyframes signal-blink {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 10px var(--red-glow);
+  }
+  50% {
+    opacity: 0.35;
+    box-shadow: 0 0 3px var(--red-glow-soft);
+  }
+}
+
+.omega-ticker {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+}
+
+.omega-ticker__track {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3rem;
+  padding-left: 1rem;
+  white-space: nowrap;
+  width: max-content;
+  animation: ticker-scroll 45s linear infinite;
+}
+
+/* Hovering holds the feed still so a line that has already scrolled past can be read. */
+.omega-ticker:hover .omega-ticker__track {
+  animation-play-state: paused;
+}
+
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-item {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.ticker-item__marker {
+  color: var(--red);
+  font-size: 0.7rem;
+}
+
+.ticker-item__title {
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-0);
+}
+
+.ticker-item__detail {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
 .btn-execute {
   grid-column: 2;
   align-self: stretch;
@@ -3998,6 +4150,24 @@ body {
       rgba(0, 0, 0, 0) 4px 9px
     );
   box-shadow: inset 0 0 1.2rem rgba(6, 2, 3, 0.45);
+  animation: card-hero-scan-roll 4s linear infinite;
+}
+
+/* Both gradients are moved by 9px — the interlace beat's full period, and three cycles of the
+ * 3px comb — so each loops back to its own start at once and the seam never shows. A creep,
+ * not a flicker: this is the still drifting under an unlocked vertical hold, not a signal
+ * problem, so it reads as continuous output rather than a glitch. */
+@keyframes card-hero-scan-roll {
+  from {
+    background-position:
+      0 0,
+      0 0;
+  }
+  to {
+    background-position:
+      0 9px,
+      0 9px;
+  }
 }
 
 /*
@@ -8020,6 +8190,12 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* Zeroing the duration would park the track at -50%, hiding the first half of the feed.
+     Off outright leaves every item where it was authored, readable and still. */
+  .omega-ticker__track {
+    animation: none;
   }
 
   /*

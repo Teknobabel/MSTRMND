@@ -58,6 +58,16 @@
       <section id="screen-game" class="screen screen-game" hidden aria-hidden="true">
         <canvas id="game-canvas" class="game-canvas" aria-label="Game canvas"></canvas>
         <div class="omega-shell">
+          <div class="omega-ticker-bar" aria-label="Global events">
+            <div class="omega-ticker__label">
+              <span class="omega-ticker__signal" aria-hidden="true"></span>
+              Global Events
+            </div>
+            <div class="omega-ticker" aria-live="off">
+              <div id="global-events-ticker" class="omega-ticker__track"></div>
+            </div>
+          </div>
+
           <div class="omega-statusbar" aria-label="Player status and turn">
             <header class="game-player-profile" aria-label="Player and organization">
               <img

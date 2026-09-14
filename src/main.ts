@@ -1339,6 +1339,7 @@ function initGameController(
   const btnRunEndContinue = req<HTMLButtonElement>("btn-run-end-continue");
   const hudShort = req<HTMLElement>("game-hud-short");
   const threatLevelEl = req<HTMLElement>("threat-level");
+  const globalTickerEl = req<HTMLElement>("global-events-ticker");
   const omegaPlanPanelEl = req<HTMLElement>("omega-plan-panel");
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const missionsPanelRootEl = req<HTMLElement>("missions-panel-root");
@@ -8020,6 +8021,117 @@ Your lair`;
     container.appendChild(list);
   }
 
+  /**
+   * One activity event as a ticker line: a short headline and a shorter subject.
+   *
+   * Deliberately not `formatActivityEvent` — that writes the full sentence the Activity Log
+   * reads back, rolls and deltas included, which is far too long to scroll past once. Anything
+   * this does not have a headline for returns null and simply never reaches the feed, so a new
+   * event kind is quiet here rather than wrong.
+   */
+  function tickerItemForEvent(ev: ActivityEvent): { title: string; detail: string } | null {
+    const missionNameOf = (id: string): string =>
+      content.missions.find((m) => m.id === id)?.name ??
+      content.events.find((e) => e.id === id)?.name ??
+      id;
+    const minionNameOf = (id: string): string =>
+      content.minions.find((m) => m.id === id)?.name ?? id;
+    const assetNameOf = (id: string): string =>
+      content.assets.find((a) => a.id === id)?.name ?? id;
+    switch (ev.kind) {
+      case "mission_completed":
+        return {
+          title:
+            ev.result === "success"
+              ? "Mission success"
+              : ev.result === "compromised"
+                ? "Mission compromised"
+                : "Mission failed",
+          detail: ev.missionName,
+        };
+      case "mission_started":
+        return { title: "Operation launched", detail: missionNameOf(ev.missionTemplateId) };
+      case "mission_cancelled":
+        return { title: "Operation aborted", detail: missionNameOf(ev.missionTemplateId) };
+      case "minion_hired":
+      case "minion_rehired":
+        return {
+          title: "Recruitment",
+          detail: `${minionNameOf(ev.templateId)} joined ${state.organizationName}`,
+        };
+      case "minion_fired":
+        return { title: "Termination", detail: `${minionNameOf(ev.templateId)} removed` };
+      case "asset_gained":
+        return { title: "Asset acquired", detail: `${assetNameOf(ev.assetId)} ×${ev.quantity}` };
+      case "asset_lost":
+        return { title: "Asset lost", detail: `${assetNameOf(ev.assetId)} ×${ev.quantity}` };
+      case "minion_leveled_up":
+        return {
+          title: "Power rising",
+          detail: `${minionNameOf(ev.templateId)} reached level ${ev.newLevel}`,
+        };
+      case "event_rotated_in":
+        return { title: "Global event", detail: missionNameOf(ev.eventTemplateId) };
+      case "event_expired":
+        return { title: "Event expired", detail: missionNameOf(ev.eventTemplateId) };
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * The scrolling feed across the top of the shell: the live event offer first, then the last
+   * couple of turns of activity. Rebuilt whole on every refresh — the track is a CSS loop with
+   * no per-item state to preserve, so patching it would only risk a seam.
+   */
+  function renderGlobalTicker(): void {
+    globalTickerEl.innerHTML = "";
+    const items: { title: string; detail: string }[] = [];
+    if (state.currentEventTemplateId !== null) {
+      const et = content.events.find((e) => e.id === state.currentEventTemplateId);
+      if (et) {
+        const left = state.currentEventTurnsRemaining;
+        items.push({
+          title: et.special === "lair_raid" ? "LAIR UNDER SIEGE" : "Incoming event",
+          detail:
+            et.special === "lair_raid"
+              ? `${et.name} — answer in ${left} ${left === 1 ? "turn" : "turns"} or the run ends`
+              : `${et.name} — ${left} ${left === 1 ? "turn" : "turns"} to act`,
+        });
+      }
+    }
+    for (const entry of state.activityLog.slice(-2)) {
+      for (const ev of entry.events.slice(-8)) {
+        const item = tickerItemForEvent(ev);
+        if (item) {
+          items.push(item);
+        }
+      }
+    }
+    if (items.length === 0) {
+      items.push(
+        { title: "Surveillance active", detail: "No global events detected" },
+        { title: "Omega directive", detail: "Advance the plan. All will kneel." },
+      );
+    }
+    /* Track scrolls -50%; duplicate items so the loop is seamless. */
+    for (const it of [...items, ...items]) {
+      const wrap = document.createElement("span");
+      wrap.className = "ticker-item";
+      const marker = document.createElement("span");
+      marker.className = "ticker-item__marker";
+      marker.textContent = "◢";
+      const title = document.createElement("span");
+      title.className = "ticker-item__title";
+      title.textContent = it.title;
+      const detail = document.createElement("span");
+      detail.className = "ticker-item__detail";
+      detail.textContent = it.detail;
+      wrap.append(marker, title, detail);
+      globalTickerEl.appendChild(wrap);
+    }
+  }
+
   function activityEventTone(ev: ActivityEvent): "neutral" | "good" | "bad" {
     switch (ev.kind) {
       case "mission_completed":
@@ -9223,6 +9335,7 @@ Your lair`;
     playerProfilePicEl.alt = `${state.playerName} profile`;
     renderStatusBar();
     renderThreatMeter();
+    renderGlobalTicker();
     hudShort.textContent = `Turn ${state.turnNumber}`;
 
     const mainOnly = state.phase === "main";
