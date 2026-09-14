@@ -113,6 +113,8 @@ import {
 } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation, type NavigationApi } from "./navigation";
+import { startBootSequence, type BootSequenceHandle } from "./ui/bootSequence";
+import { initSettingsMenu } from "./ui/playerSettings";
 import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
 import {
   INBOUND_CALLOUT_CLASS,
@@ -9607,6 +9609,15 @@ Your lair`;
 }
 
 const runSetup = initRunSetup(catalog);
+const playerSettings = initSettingsMenu(
+  typeof localStorage === "undefined" ? null : localStorage,
+);
+
+/* The shell the boot sequence plays on. Static markup, so it is found once rather than per run. */
+const omegaShell = document.querySelector<HTMLElement>(".omega-shell");
+/** The boot playing right now, if one is — held so leaving the screen can cut it short. */
+let bootSequence: BootSequenceHandle | null = null;
+
 /* The controller needs `nav` and `nav` needs the controller's `startRun`, so Play routes
  * through this ref, filled in as soon as the controller exists. */
 let startRunFromMenu: () => void = () => {};
@@ -9620,6 +9631,26 @@ const navigation = initNavigation({
   },
   startRun(): void {
     startRunFromMenu();
+  },
+  gameScreenOpened(): void {
+    /* A boot left over from a run that was quit mid-sequence would still be holding the shell
+     * dark; end it before arming another. */
+    bootSequence?.finish();
+    bootSequence = null;
+    /* Read at the point of use rather than cached, so the toggle takes effect on the very next
+     * run rather than on the next page load. */
+    if (omegaShell === null || playerSettings.read().skipBootSequence) {
+      return;
+    }
+    bootSequence = startBootSequence(omegaShell, {
+      onDone: () => {
+        bootSequence = null;
+      },
+    });
+  },
+  gameScreenClosed(): void {
+    bootSequence?.finish();
+    bootSequence = null;
   },
 });
 

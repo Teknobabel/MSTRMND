@@ -4,6 +4,17 @@ export type NavigationHooks = {
   setGameLoopRunning: (running: boolean) => void;
   /** Roll the run the title screen is configured for; called as Play is pressed. */
   startRun: () => void;
+  /**
+   * The game screen has just been revealed for a fresh run, with the new state already
+   * rendered into it. Where the viewscreen boot sequence is played from.
+   *
+   * Only ever fires for a run that is starting. Coming back to the game screen from Settings or
+   * from the pause overlay is a resume, and a console that rebooted every time the player
+   * glanced at the options would be a console nobody opened the options on.
+   */
+  gameScreenOpened: () => void;
+  /** The game screen is being left — quit, or a run that has ended. Stop anything playing on it. */
+  gameScreenClosed: () => void;
 };
 
 export type NavigationApi = {
@@ -66,6 +77,10 @@ export function initNavigation(hooks: NavigationHooks): NavigationApi {
     paused = false;
     screen = "game";
     apply();
+    /* After `apply`, so the shell is visible and laid out on the frame the boot sequence puts
+     * its first keyframe on — starting it against a `hidden` screen would leave the stages that
+     * have to measure the map with nothing to measure. */
+    hooks.gameScreenOpened();
     void tryLockLandscape();
   });
 
@@ -98,6 +113,7 @@ export function initNavigation(hooks: NavigationHooks): NavigationApi {
   btnPauseQuit.addEventListener("click", () => {
     paused = false;
     screen = "main";
+    hooks.gameScreenClosed();
     apply();
   });
 
@@ -113,6 +129,7 @@ export function initNavigation(hooks: NavigationHooks): NavigationApi {
     returnToMainMenu(): void {
       paused = false;
       screen = "main";
+      hooks.gameScreenClosed();
       apply();
     },
   };

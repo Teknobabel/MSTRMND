@@ -18,6 +18,17 @@
   --red-deep: #8c1320;
   --red-glow: rgba(255, 34, 56, 0.4);
   --red-glow-soft: rgba(232, 17, 45, 0.18);
+  /*
+   * The red a burst of corruption comes out at.
+   *
+   * Not a fourth shade picked by eye: this is the colour `--gs-redshift` lands on, worked out in
+   * the note above `.glitch-shard[data-mode="invert"]` — the filter chain that exists precisely
+   * so the bright modes go red instead of white. Anything meant to read as the same *kind* of
+   * light as a glitch — the boot sequence's strike line and scanner — names this rather than
+   * `--red-bright`, which it is only a couple of points from but does not derive from.
+   */
+  --red-glitch: #ff1d27;
+  --red-glitch-glow: rgba(255, 29, 39, 0.55);
   --text-0: #f3eaea;
   --text-1: #cdb9ba;
   --text-2: #91797b;
@@ -8326,4 +8337,901 @@ body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ============================================================
+   Settings screen
+   ============================================================ */
+
+/*
+ * The settings list. Same console furniture as a game panel — chamfered corner, hairline rules,
+ * display-face heading — at menu scale, so the screen behind the title reads as part of the same
+ * machine the run does rather than as a browser form.
+ */
+.settings-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 34rem;
+}
+
+.settings-group {
+  padding: 0.55rem 0.9rem 0.7rem;
+  border: 1px solid var(--line-1);
+  background:
+    var(--edge-line) top right / var(--cut) var(--cut) no-repeat,
+    linear-gradient(180deg, rgba(40, 12, 16, 0.5), transparent 30%),
+    var(--panel-bg);
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+}
+
+.settings-group__title {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+  text-shadow: 0 0 10px var(--red-glow-soft);
+}
+
+.settings-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 0.5rem 0;
+}
+
+/* A rule between rows rather than a box around each: the group is the box, the rows are lines. */
+.settings-row + .settings-row {
+  border-top: 1px solid var(--line-0);
+}
+
+/* The label is the hit area for the switch beside it, so the whole row reads as one control. */
+.settings-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.settings-row__label {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-0);
+}
+
+.settings-row__note {
+  font-size: 0.86rem;
+  line-height: 1.3;
+  color: var(--text-2);
+}
+
+/*
+ * The switch. A throw, not a pill: a block that slides from one half of a slotted housing to the
+ * other and lights when it lands, which is this console's own vocabulary for on.
+ */
+.settings-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 3.4rem;
+  height: 1.5rem;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--line-1);
+  background: linear-gradient(180deg, rgba(8, 3, 4, 0.95), rgba(26, 9, 12, 0.95));
+  cursor: pointer;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.settings-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  background: var(--line-2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s, box-shadow 0.18s;
+}
+
+.settings-switch:hover {
+  border-color: var(--line-2);
+}
+
+.settings-switch:checked {
+  border-color: var(--red);
+  box-shadow: inset 0 0 14px rgba(232, 17, 45, 0.22);
+}
+
+.settings-switch:checked::after {
+  transform: translateX(100%);
+  background: var(--red-bright);
+  box-shadow: 0 0 12px var(--red-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.settings-switch:focus-visible {
+  outline: 2px solid var(--red-bright);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Boot sequence — the viewscreen waking up
+   ============================================================ */
+
+/*
+ * What a run opens on, for its first two seconds. See `src/ui/bootSequence.ts` for the clock
+ * these rules read and for the four jobs the script does that a stylesheet cannot.
+ *
+ * Every rule in this section is scoped to `.omega-shell--booting`, and every animation runs
+ * `both` — the `0%` frame is what holds an element dark through its delay, and the `100%` frame
+ * is what holds it at rest until the class comes off. Nothing here leaves a mark once it does:
+ * removing the class reverts every element to the styling it would have had, and the two overlay
+ * layers are removed with it.
+ *
+ * Three constraints decided which property each stage animates, and they are worth stating once
+ * here rather than re-deriving at each rule below:
+ *
+ *  - `.map-marker` carries the projection's own transform, rewritten every frame by
+ *    `syncMapProjection`. A site's arrival is therefore animated on the ring and plate *inside*
+ *    the pin, neither of which owns a transform, plus opacity on the pin itself.
+ *  - `.drawer` carries the open/closed slide and `.map-plot` carries the camera's lean away from
+ *    an open drawer, both transitions on `transform`. So the tabs animate on `.drawer-tab`, and
+ *    the map's power-on is a `clip-path` on `.map-panel`.
+ *  - `.stat-block__num` carries the rise and tint of a number that is counting. The stats stage
+ *    animates the block around it and the value's clip, never the number.
+ */
+.omega-shell--booting {
+  /*
+   * Defaults for the stage clock. `startBootSequence` writes the real values over these at the
+   * top of every run; they are stated here so the sheet can be read on its own, and so a boot
+   * whose script never got to them still plays in order rather than all at once.
+   */
+  --boot-t-power: 0ms;
+  --boot-d-power: 420ms;
+  --boot-t-map: 60ms;
+  --boot-d-map: 640ms;
+  --boot-t-pins: 520ms;
+  --boot-d-pins: 420ms;
+  --boot-span-pins: 560ms;
+  --boot-t-stats: 660ms;
+  --boot-d-stats: 440ms;
+  --boot-step-stats: 65ms;
+  --boot-t-tabs: 980ms;
+  --boot-d-tabs: 440ms;
+  --boot-step-tabs: 55ms;
+  --boot-t-plan: 1180ms;
+  --boot-d-plan: 560ms;
+  --boot-t-plan-sections: 1360ms;
+  --boot-d-plan-sections: 340ms;
+  --boot-step-plan-sections: 60ms;
+  --boot-t-chrome: 1400ms;
+  --boot-d-chrome: 440ms;
+  /* The house easing for anything that arrives: fast out of the gate, long settle. */
+  --boot-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---------------- Stage 1: power ---------------- */
+
+/*
+ * The surge. A white bloom across the whole shell and one roll of interference down it, both
+ * gone inside half a second — this is the frame the console is switched on, not a state it sits
+ * in. Screen blending, so it lifts what is behind it rather than washing it out, and no pointer
+ * events anywhere: the player can click straight through the boot.
+ */
+.boot-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.boot-veil__flash {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    ellipse 75% 45% at 50% 50%,
+    var(--red-glitch),
+    rgba(255, 29, 39, 0.4) 45%,
+    transparent 76%
+  );
+  animation: boot-power-flash var(--boot-d-power) ease-out var(--boot-t-power) both;
+}
+
+@keyframes boot-power-flash {
+  0% {
+    opacity: 0;
+  }
+  7% {
+    opacity: 0.6;
+  }
+  26% {
+    opacity: 0.09;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The roll: scan bands travelling down the shell once, the way a tube settles onto its sync. */
+.boot-veil__roll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -40%;
+  bottom: -40%;
+  mix-blend-mode: screen;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 60, 82, 0.12) 0 2px,
+    transparent 2px 6px
+  );
+  animation: boot-power-roll calc(var(--boot-d-power) + 220ms) linear var(--boot-t-power) both;
+}
+
+@keyframes boot-power-roll {
+  0% {
+    transform: translateY(-30%);
+    opacity: 0.85;
+  }
+  70% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(30%);
+    opacity: 0;
+  }
+}
+
+/* ---------------- Stage 2: the world map turns on ---------------- */
+
+/*
+ * The panel comes up the way a tube does: the picture strikes as a hairline across the middle,
+ * pulls open top and bottom, and burns off the overexposure it struck at.
+ *
+ * `clip-path` rather than a scale, because the map must not squash on the way in — a squashed
+ * world map reads as a broken projection, and the pins would be plotted onto a frame the wrong
+ * shape. The `filter` is the phosphor bloom: washed out and colourless at the strike, back to the
+ * map's own grade by the end.
+ */
+.omega-shell--booting .map-panel {
+  animation: boot-map-open var(--boot-d-map) var(--boot-ease) var(--boot-t-map) both;
+}
+
+/*
+ * The overexposure is driven *into* the map's own red rather than out of it. Brightness alone
+ * pins the red channel and drags green and blue up behind it, which is a picture blowing out to
+ * white; the heavy `saturate` after it pulls the result back onto the red axis, so the strike
+ * reads as the phosphor being overdriven rather than as a grey wash sitting on top of the art.
+ * Same reasoning as the glitch layer's `--gs-redshift`, reached with one filter instead of three
+ * because there is a hue here already worth keeping.
+ *
+ * The contrast barely moves, and that is the other half of it. Crushing contrast lifts black
+ * toward mid-grey, and the ocean is most of this picture — at `0.4` the map opened behind a
+ * pale fog that no amount of saturation could colour, because grey has no hue to push. Held near
+ * `1`, the bloom comes from brightness and lands only where there is already something lit.
+ */
+@keyframes boot-map-open {
+  0% {
+    clip-path: inset(50% 0 50% 0);
+    filter: brightness(3.4) contrast(0.92) saturate(6);
+    opacity: 0.25;
+  }
+  16% {
+    clip-path: inset(49.5% 0 49.5% 0);
+    opacity: 1;
+  }
+  55% {
+    filter: brightness(1.8) contrast(0.96) saturate(2.6);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    filter: brightness(1) contrast(1) saturate(1);
+    opacity: 1;
+  }
+}
+
+/* The panel's corner brackets strike white with the picture and cool to their own red. */
+.omega-shell--booting .game-panel--map::before,
+.omega-shell--booting .game-panel--map::after {
+  animation: boot-map-bracket var(--boot-d-map) ease-out var(--boot-t-map) both;
+}
+
+@keyframes boot-map-bracket {
+  0%,
+  12% {
+    border-color: transparent;
+  }
+  30% {
+    border-color: var(--red-glitch);
+  }
+  100% {
+    border-color: var(--red);
+  }
+}
+
+/*
+ * The map's own boot layers, hung on the panel rather than inside `#map-panel` — that one is
+ * emptied on every render (see `bootSequence.ts`). The panel's own `clip-path` trims all three
+ * to its chamfered shape for free.
+ */
+.boot-map-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The strike: a bright line drawn out from the centre, which the picture then opens from. */
+.boot-map-fx__line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  transform-origin: 50% 50%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--red-glitch) 14%,
+    var(--red-glitch) 86%,
+    transparent
+  );
+  box-shadow: 0 0 16px var(--red-glitch-glow), 0 0 36px var(--red-glow);
+  animation: boot-map-line var(--boot-d-map) var(--boot-ease) var(--boot-t-map) both;
+}
+
+@keyframes boot-map-line {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  9% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  30% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+/*
+ * The graticule the console draws before it has terrain to draw: a wireframe of the same frame,
+ * opening with the picture and burning off as the art resolves under it. The one moment the map
+ * admits it is a projection.
+ */
+.boot-map-fx__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(232, 17, 45, 0.32) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 17, 45, 0.32) 1px, transparent 1px);
+  background-size: 6.25% 8.333%;
+  animation: boot-map-grid calc(var(--boot-d-map) + 280ms) ease-out var(--boot-t-map) both;
+}
+
+@keyframes boot-map-grid {
+  0%,
+  13% {
+    clip-path: inset(50% 0 50% 0);
+    opacity: 0;
+  }
+  34% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 0;
+  }
+}
+
+/*
+ * The scanner, and the reason the sites light in the order they do.
+ *
+ * The band is 16% of the plot tall and hangs off `top: 0`, so at `translateY(-100%)` its bright
+ * lower edge sits exactly on the top of the frame, and at `translateY(525%)` — (100 - 16) / 16 —
+ * exactly on the bottom. Linear between the two, over `--boot-span-pins`, starting at
+ * `--boot-t-pins`: the edge is at fraction `f` of the plot at `t-pins + f * span-pins`, which is
+ * the same expression `bootPinDelayMs` hands each pin. That is what makes a site light *because*
+ * the beam is on it rather than merely near when it is.
+ */
+.boot-map-fx__sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 16%;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(255, 29, 39, 0.22) 58%,
+    rgba(255, 29, 39, 0.62) 93%,
+    var(--red-glitch) 100%
+  );
+  box-shadow: 0 1px 26px rgba(232, 17, 45, 0.65);
+  animation: boot-map-sweep var(--boot-span-pins) linear var(--boot-t-pins) both;
+}
+
+@keyframes boot-map-sweep {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(525%);
+    opacity: 0;
+  }
+}
+
+/* ---------------- Stage 3: locations pop into the map ---------------- */
+
+/*
+ * A site acquires under the beam: the reticle drops in from wide open, snaps past its resting
+ * size with a white flare as it catches, and settles; the plate blooms inside it a beat later.
+ *
+ * `--boot-pin-at` is when this pin's turn is, written per pin by `bootSequence.ts` from where the
+ * projection actually put it. `--boot-elapsed` is how far into the sequence the pin was
+ * *created* — zero for every pin that was there at the start, and the age of the boot for one the
+ * map rebuilt mid-sequence. Subtracting it is what stops a late arrival waiting out a delay
+ * measured from a start it was not there for; `max()` is what stops that subtraction going
+ * negative, which would otherwise start the animation part-played.
+ *
+ * The motion is on the ring and the plate, never on `.map-marker` itself: that transform belongs
+ * to the projection and is rewritten under these every frame.
+ *
+ * All three are set as longhands rather than with the `animation` shorthand, because the delay
+ * expression above has to survive being read per element — and `animation-iteration-count` is
+ * therefore stated explicitly. It is not redundant: `.map-marker__ring` already carries
+ * `animation: pin-breathe 4.6s ease-in-out infinite` (and the lair's ring `lair-beacon`, also
+ * infinite), and a shorthand's `infinite` is not displaced by longhands that never mention the
+ * count. Without this line the acquisition loops for the rest of the boot and is cut off
+ * part-played when the class comes off — which is exactly what it did.
+ */
+.omega-shell--booting .map-marker {
+  animation-name: boot-pin-in;
+  animation-duration: var(--boot-d-pins);
+  animation-timing-function: ease-out;
+  animation-delay: max(
+    0ms,
+    calc(var(--boot-pin-at, var(--boot-t-pins)) - var(--boot-elapsed, 0ms))
+  );
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+}
+
+@keyframes boot-pin-in {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.omega-shell--booting .map-marker__ring {
+  animation-name: boot-pin-lock;
+  animation-duration: var(--boot-d-pins);
+  animation-timing-function: var(--boot-ease);
+  animation-delay: max(
+    0ms,
+    calc(var(--boot-pin-at, var(--boot-t-pins)) - var(--boot-elapsed, 0ms))
+  );
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+}
+
+/*
+ * No `border-color` anywhere in here: the three site categories each paint their own ring, and a
+ * keyframe naming a colour would flatten all of them to one for the length of the boot. The flare
+ * is a `box-shadow`, which nothing else on the ring claims.
+ */
+@keyframes boot-pin-lock {
+  0% {
+    transform: scale(3.6);
+    opacity: 0;
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+  26% {
+    opacity: 1;
+  }
+  58% {
+    transform: scale(0.9);
+    opacity: 1;
+    box-shadow: 0 0 18px 3px rgba(255, 255, 255, 0.7);
+  }
+  74% {
+    transform: scale(1.07);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(232, 17, 45, 0);
+  }
+}
+
+.omega-shell--booting .map-marker__dot {
+  animation-name: boot-pin-plate;
+  animation-duration: var(--boot-d-pins);
+  animation-timing-function: var(--boot-ease);
+  animation-delay: max(
+    0ms,
+    calc(var(--boot-pin-at, var(--boot-t-pins)) - var(--boot-elapsed, 0ms))
+  );
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+}
+
+@keyframes boot-pin-plate {
+  0%,
+  52% {
+    transform: scale(0);
+    filter: brightness(1);
+  }
+  72% {
+    transform: scale(1.3);
+    filter: brightness(2.6);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* ---------------- Stage 4: the status readouts come on line ---------------- */
+
+/*
+ * The bar itself opens like the map — from its own centre line — and the readouts then light
+ * along it one at a time, each with the stutter a filament gives before it holds.
+ */
+.omega-shell--booting .omega-statusbar {
+  animation: boot-bar-open 320ms var(--boot-ease) calc(var(--boot-t-stats) - 180ms) both;
+}
+
+/*
+ * The end frame overshoots the box by 3px rather than landing on it, because both bars hang a
+ * 1px hairline off `bottom: -1px` and a clip held at exactly `inset(0)` would shave it off for
+ * the length of the boot.
+ */
+@keyframes boot-bar-open {
+  0% {
+    clip-path: inset(50% 0 50% 0);
+    opacity: 0.4;
+  }
+  100% {
+    clip-path: inset(-3px 0 -3px 0);
+    opacity: 1;
+  }
+}
+
+.omega-shell--booting .game-player-profile,
+.omega-shell--booting .omega-statusbar__right {
+  animation: boot-rise var(--boot-d-stats) var(--boot-ease) var(--boot-t-stats) both;
+}
+
+.omega-shell--booting .stat-block {
+  animation: boot-stat-on var(--boot-d-stats) ease-out
+    calc(var(--boot-t-stats) + var(--boot-i, 0) * var(--boot-step-stats)) both;
+}
+
+/* Lit, dropped, lit, dipped, held — a filament finding its level, not a fade. */
+@keyframes boot-stat-on {
+  0% {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  16% {
+    opacity: 1;
+  }
+  24% {
+    opacity: 0.2;
+  }
+  36% {
+    opacity: 1;
+  }
+  44% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The icon strikes hot and cools into its resting glow. */
+.omega-shell--booting .stat-block__icon {
+  animation: boot-stat-icon var(--boot-d-stats) var(--boot-ease)
+    calc(var(--boot-t-stats) + var(--boot-i, 0) * var(--boot-step-stats)) both;
+}
+
+@keyframes boot-stat-icon {
+  0% {
+    transform: scale(0.55);
+    filter: drop-shadow(0 0 2px var(--red-glow-soft));
+  }
+  40% {
+    transform: scale(1.18);
+    filter: drop-shadow(0 0 16px var(--red-glow)) brightness(2.2);
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 5px var(--red-glow-soft)) brightness(1);
+  }
+}
+
+/*
+ * Label and number fill in from the left, the way a readout being written does. A clip rather
+ * than a fade, and on the value rather than on the number inside it: `.stat-block__num` carries
+ * the lift and tint of a count in progress and has to be left alone. The trailing `-20%` is so
+ * the clip ends clear of a glow that spills past the text box.
+ */
+.omega-shell--booting .stat-block__value,
+.omega-shell--booting .stat-block__label {
+  animation: boot-readout-fill var(--boot-d-stats) var(--boot-ease)
+    calc(var(--boot-t-stats) + var(--boot-i, 0) * var(--boot-step-stats) + 90ms) both;
+}
+
+/*
+ * Vertically the clip is held well outside the box, so the glow a readout throws above and below
+ * its text box is not shaved off for the length of the boot; only the right edge does any work.
+ */
+@keyframes boot-readout-fill {
+  0% {
+    clip-path: inset(-50% 100% -50% 0);
+  }
+  100% {
+    clip-path: inset(-50% -30% -50% 0);
+  }
+}
+
+/* The Omega bar's segments charge left to right under the percentage they belong to. */
+.omega-shell--booting .omega-progress {
+  animation: boot-readout-fill calc(var(--boot-d-stats) + 160ms) var(--boot-ease)
+    calc(var(--boot-t-stats) + 140ms) both;
+}
+
+/* ---------------- Stage 5: the menu tabs rise into their row ---------------- */
+
+/*
+ * Each tab comes up out of the cabinet floor, overshoots slightly, and its top edge — the edge
+ * that reads as lit when a drawer is open — flares as it lands.
+ *
+ * On `.drawer-tab`, not `.drawer`: the drawer's own transform is the open/closed slide, and a
+ * boot animation there would be fighting the transition that opens a menu.
+ */
+.omega-shell--booting .drawer-tab {
+  animation:
+    boot-tab-in var(--boot-d-tabs) var(--boot-ease)
+      calc(var(--boot-t-tabs) + var(--boot-i, 0) * var(--boot-step-tabs)) both,
+    boot-tab-flare var(--boot-d-tabs) ease-out
+      calc(var(--boot-t-tabs) + var(--boot-i, 0) * var(--boot-step-tabs)) both;
+}
+
+@keyframes boot-tab-in {
+  0% {
+    transform: translateY(150%);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  72% {
+    transform: translateY(-9%);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/*
+ * The flare lands on the tab's own resting colours rather than on nothing, because a `both` fill
+ * holds the last frame until the class comes off. No drawer can be open during a boot, so the
+ * closed-tab values are the right ones to end on.
+ *
+ * Nothing here is a `box-shadow`: the tab carries a `clip-path` for its chamfered corner, which
+ * trims the element's own painting — an outer glow would be clipped away before it was drawn.
+ * The light comes from the top edge, the label and the tab's own brightness instead.
+ */
+@keyframes boot-tab-flare {
+  0%,
+  50% {
+    color: var(--text-2);
+    border-top-color: var(--line-2);
+    text-shadow: none;
+    filter: brightness(1);
+  }
+  70% {
+    color: #fff;
+    border-top-color: var(--red-bright);
+    text-shadow: 0 0 12px var(--red-glow);
+    filter: brightness(1.75);
+  }
+  100% {
+    color: var(--text-2);
+    border-top-color: var(--line-2);
+    text-shadow: none;
+    filter: brightness(1);
+  }
+}
+
+/* ---------------- Stage 6: the mission planner slides in ---------------- */
+
+/*
+ * In off the left edge of the screen, past its resting place and back.
+ *
+ * `-130%` clears the panel's own width plus the shell's gutter, and `html` / `body` are
+ * `overflow: hidden`, so the travel happens off-stage rather than widening the page. The panel's
+ * `height` transition — armed by `syncPlanColumnHeight` once it has measured — is on a different
+ * property and is not disturbed by this.
+ */
+.omega-shell--booting .omega-body--floating .game-panel--plan-column {
+  animation: boot-plan-in var(--boot-d-plan) var(--boot-ease) var(--boot-t-plan) both;
+}
+
+@keyframes boot-plan-in {
+  0% {
+    transform: translateX(-130%);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  78% {
+    transform: translateX(2%);
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Operation, Deployment, Assessment, filling in down the column once the panel has landed. */
+.omega-shell--booting .game-panel--plan-column .plan-section {
+  animation: boot-plan-section var(--boot-d-plan-sections) var(--boot-ease)
+    calc(var(--boot-t-plan-sections) + var(--boot-i, 0) * var(--boot-step-plan-sections)) both;
+}
+
+@keyframes boot-plan-section {
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* The Deploy bar is the last of the planner to arrive, under the sections it acts on. */
+.omega-shell--booting .plan-column-footer {
+  animation: boot-rise var(--boot-d-plan-sections) var(--boot-ease)
+    calc(var(--boot-t-plan-sections) + 180ms) both;
+}
+
+/* ---------------- Stage 7: the rest of the console ---------------- */
+
+/*
+ * The events ticker wipes open from its centre, as the status bar did, so the two read as the
+ * same family of hardware. The map layers panel settles down out of the map's top edge.
+ */
+.omega-shell--booting .omega-ticker-bar {
+  animation: boot-bar-open var(--boot-d-chrome) var(--boot-ease) var(--boot-t-chrome) both;
+}
+
+/*
+ * The bottom bar is the one bar that cannot take the wipe: it carries its own `clip-path`, the
+ * polygon that raises its centre section around the execute button, and an animated `clip-path`
+ * would replace that with a rectangle for the length of the boot and snap the shoulders back at
+ * the end. It comes up as a bar instead, with its power rail drawn across it.
+ */
+.omega-shell--booting .omega-bottombar {
+  animation: boot-bottombar-in var(--boot-d-chrome) var(--boot-ease) var(--boot-t-chrome) both;
+}
+
+@keyframes boot-bottombar-in {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.omega-shell--booting .omega-bottombar::before {
+  animation: boot-rail-draw var(--boot-d-chrome) var(--boot-ease)
+    calc(var(--boot-t-chrome) + 100ms) both;
+}
+
+@keyframes boot-rail-draw {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0.7;
+  }
+}
+
+.omega-shell--booting .omega-bottombar__brand,
+.omega-shell--booting .btn-execute,
+.omega-shell--booting .omega-telemetry {
+  animation: boot-rise var(--boot-d-chrome) var(--boot-ease)
+    calc(var(--boot-t-chrome) + 140ms) both;
+}
+
+.omega-shell--booting .omega-body--floating .game-panel--map-layers {
+  animation: boot-drop var(--boot-d-chrome) var(--boot-ease) var(--boot-t-chrome) both;
+}
+
+/* The two arrivals everything not otherwise choreographed uses. */
+@keyframes boot-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes boot-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/*
+ * A player who has asked their system for less motion never sees any of this:
+ * `startBootSequence` returns before the class is ever added. This is the belt to that braces —
+ * a shell that somehow carries the class under reduced motion opens live rather than dark.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .omega-shell--booting,
+  .omega-shell--booting *,
+  .omega-shell--booting *::before,
+  .omega-shell--booting *::after {
+    animation: none !important;
+  }
 }

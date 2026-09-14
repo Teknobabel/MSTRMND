@@ -50,6 +50,28 @@
       <section id="screen-settings" class="screen screen-settings" hidden aria-hidden="true">
         <div class="menu-backdrop" aria-hidden="true"></div>
         <h2 class="screen-title screen-title--menu">SETTINGS</h2>
+        <!-- Player preferences, not run state: each control writes straight through to
+             localStorage as it is changed (see src/ui/playerSettings.ts), so there is no Apply
+             step and nothing here to cancel. -->
+        <div class="settings-panel">
+          <div class="settings-group">
+            <h3 class="settings-group__title">Viewscreen</h3>
+            <div class="settings-row">
+              <label class="settings-row__text" for="setting-skip-boot">
+                <span class="settings-row__label">Skip boot up animation</span>
+                <span class="settings-row__note">
+                  Open a run on the live console instead of powering the viewscreen on.
+                </span>
+              </label>
+              <input
+                type="checkbox"
+                class="settings-switch"
+                id="setting-skip-boot"
+                role="switch"
+              />
+            </div>
+          </div>
+        </div>
         <div class="screen-actions">
           <button type="button" class="btn" id="btn-settings-back">Back</button>
         </div>
