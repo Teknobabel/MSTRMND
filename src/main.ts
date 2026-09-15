@@ -8180,7 +8180,11 @@ Your lair`;
         });
       }
     }
-    for (const entry of state.activityLog.slice(-2)) {
+    /* `activityLog` is newest-turn-first (`appendActivityEvent` prepends a new bucket), so the
+     * two most recent turns are at the *front* of it. Within one turn the events are appended in
+     * the order they happened, which is how a turn should read, so only the last few of those are
+     * trimmed. */
+    for (const entry of state.activityLog.slice(0, 2)) {
       for (const ev of entry.events.slice(-8)) {
         const item = tickerItemForEvent(ev);
         if (item) {
