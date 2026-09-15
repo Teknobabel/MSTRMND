@@ -2,11 +2,15 @@
  * The viewscreen waking up.
  *
  * A run opens on a console that is not on yet: the shell is in the markup, laid out and sized,
- * but every readout on it is dark. Over the next two seconds it comes up the way a cathode-ray
- * console would — power hits, the world map strikes from a line and opens, a scanner crosses it
- * and every site it passes locks in under the beam, the status readouts light one after
- * another, the menu tabs rise into their row, and the mission planner slides in off the left
- * edge.
+ * but every readout on it is dark. Over the next several seconds it comes up the way a
+ * cathode-ray console would — power hits, the world map strikes from a line and opens, a scanner
+ * crosses it and every site it passes locks in under the beam, the status readouts light one
+ * after another, the menu tabs rise into their row, and the mission planner slides in off the
+ * left edge.
+ *
+ * It takes its time, and it can afford to: any pointer or key ends it on the spot. The length is
+ * {@link BOOT_STAGES}' to set and has been retimed more than once, so nothing outside that table
+ * — here or in the stylesheet — should be written as though it knew the total.
  *
  * Almost all of it is CSS. This module's job is only the four things a stylesheet cannot do for
  * itself:
@@ -73,7 +77,7 @@ export const BOOT_PIN_SPAN_MS = 560;
 export const BOOT_SETTLE_MS = 140;
 
 export const BOOT_STAGES: Readonly<Record<BootStageId, BootStage>> = {
-  /* The power surge: a white bloom over the whole shell and one roll of interference. */
+  /* The power surge: a red bloom over the whole shell and one roll of interference. */
   power: { atMs: 30, durationMs: 1420, stepMs: 0, cssStem: "power" },
   /* The map strikes from a line, opens top and bottom, and burns off its overexposure. */
   map: { atMs: 90, durationMs: 2240, stepMs: 0, cssStem: "map" },
@@ -187,8 +191,12 @@ export interface BootSequenceOptions {
   /** Called once the console is live, however it got there. */
   readonly onDone?: () => void;
   /**
-   * Whether a pointer or key anywhere ends the sequence early. On by default: two seconds is
-   * short, but it is not shorter than a player who already knows what the console looks like.
+   * Whether a pointer or key anywhere ends the sequence early.
+   *
+   * On by default, and the clock in {@link BOOT_STAGES} is timed on the assumption: the sequence
+   * runs long enough to be worth watching once, which is a good deal longer than a player opening
+   * their fiftieth run wants to wait. Turning this off without shortening the stages would leave
+   * them waiting it out every time.
    */
   readonly skippable?: boolean;
 }
@@ -200,8 +208,8 @@ export interface BootSequenceOptions {
  * never a frame of the finished console showing before the boot hides it. The pin timings need
  * the projection, which needs the plot to have been measured at its revealed size, so that one
  * step waits two frames — by which time the `ResizeObserver` in `main.ts` has run and every pin
- * carries a real `--map-py`. Until then pins fall back to the head of their stage, which is
- * half a second away.
+ * carries a real `--map-py`. Until then pins fall back to the head of their own stage, which is
+ * whole seconds away on the current clock and was never less than a few hundred milliseconds.
  */
 export function startBootSequence(
   shell: HTMLElement,
@@ -239,8 +247,8 @@ export function startBootSequence(
    * The two overlays the effect needs that are not in the markup: the power flash over the whole
    * shell, and the map's own strike line / wireframe / scanner.
    *
-   * Built here rather than in index.html because they exist for two seconds a run and mean
-   * nothing to anything else — and because the map's live panel (`#map-panel`) is emptied by
+   * Built here rather than in index.html because they exist for one boot a run and mean nothing
+   * to anything else — and because the map's live panel (`#map-panel`) is emptied by
    * `renderMapPanel` on every state change, so an overlay parked inside it would not survive
    * one. The map's layers hang off the panel *around* it instead.
    */

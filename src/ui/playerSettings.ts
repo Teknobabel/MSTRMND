@@ -12,8 +12,9 @@ export interface PlayerSettings {
   /**
    * Bypass the viewscreen boot sequence and open a run on the live console.
    *
-   * Off by default: the boot is the first thing a new player sees, and it is two seconds. The
-   * toggle is for the run after the fiftieth.
+   * Off by default: the boot is the first thing a new player sees, and it is worth seeing once.
+   * The toggle is for the run after the fiftieth — as is the fact that any click or key cuts the
+   * sequence short, which is the out for the runs in between.
    */
   readonly skipBootSequence: boolean;
 }

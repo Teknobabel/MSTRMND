@@ -8471,8 +8471,10 @@ body {
    ============================================================ */
 
 /*
- * What a run opens on, for its first two seconds. See `src/ui/bootSequence.ts` for the clock
- * these rules read and for the four jobs the script does that a stylesheet cannot.
+ * What a run opens on. See `src/ui/bootSequence.ts` for the clock these rules read, for the four
+ * jobs the script does that a stylesheet cannot, and for how long the whole thing runs — the
+ * stage table there is the only place that knows, and it has been retimed more than once, so
+ * nothing below is written as though it did.
  *
  * Every rule in this section is scoped to `.omega-shell--booting`, and every animation runs
  * `both` — the `0%` frame is what holds an element dark through its delay, and the `100%` frame
@@ -8494,29 +8496,34 @@ body {
  */
 .omega-shell--booting {
   /*
-   * Defaults for the stage clock. `startBootSequence` writes the real values over these at the
-   * top of every run; they are stated here so the sheet can be read on its own, and so a boot
-   * whose script never got to them still plays in order rather than all at once.
+   * The stage clock, as a readable snapshot.
+   *
+   * `BOOT_STAGES` in `src/ui/bootSequence.ts` is the authority, and `startBootSequence` writes
+   * it over every one of these at the top of a run — so retiming the sequence is done there and
+   * only there. These exist so the rules below can be read without cross-referencing the module,
+   * and so `var()` has something to resolve to if the class is ever applied without the script
+   * (a devtools poke, in practice). They are not kept in lockstep: drift here costs nothing and
+   * changes nothing a player sees, so do not chase it.
    */
-  --boot-t-power: 0ms;
-  --boot-d-power: 420ms;
-  --boot-t-map: 60ms;
-  --boot-d-map: 640ms;
-  --boot-t-pins: 520ms;
-  --boot-d-pins: 420ms;
+  --boot-t-power: 30ms;
+  --boot-d-power: 1420ms;
+  --boot-t-map: 90ms;
+  --boot-d-map: 2240ms;
+  --boot-t-pins: 2220ms;
+  --boot-d-pins: 2420ms;
   --boot-span-pins: 560ms;
-  --boot-t-stats: 660ms;
+  --boot-t-stats: 3660ms;
   --boot-d-stats: 440ms;
   --boot-step-stats: 65ms;
-  --boot-t-tabs: 980ms;
+  --boot-t-tabs: 4080ms;
   --boot-d-tabs: 440ms;
   --boot-step-tabs: 55ms;
-  --boot-t-plan: 1180ms;
+  --boot-t-plan: 5000ms;
   --boot-d-plan: 560ms;
-  --boot-t-plan-sections: 1360ms;
-  --boot-d-plan-sections: 340ms;
+  --boot-t-plan-sections: 5500ms;
+  --boot-d-plan-sections: 1340ms;
   --boot-step-plan-sections: 60ms;
-  --boot-t-chrome: 1400ms;
+  --boot-t-chrome: 6000ms;
   --boot-d-chrome: 440ms;
   /* The house easing for anything that arrives: fast out of the gate, long settle. */
   --boot-ease: cubic-bezier(0.16, 1, 0.3, 1);
@@ -8525,10 +8532,12 @@ body {
 /* ---------------- Stage 1: power ---------------- */
 
 /*
- * The surge. A white bloom across the whole shell and one roll of interference down it, both
- * gone inside half a second — this is the frame the console is switched on, not a state it sits
- * in. Screen blending, so it lifts what is behind it rather than washing it out, and no pointer
- * events anywhere: the player can click straight through the boot.
+ * The surge: a bloom across the whole shell in the glitch layer's own red, and one roll of
+ * interference down it. This is the console being switched on rather than a state it sits in, so
+ * both are shaped to be over well inside the stage that carries them — the fade is the keyframe
+ * stops below, not the stage length. Screen blending, so the bloom lifts what is behind it rather
+ * than washing it out, and no pointer events anywhere: the player can click straight through the
+ * boot, which is also how they skip it.
  */
 .boot-veil {
   position: absolute;
@@ -8555,10 +8564,10 @@ body {
   0% {
     opacity: 0;
   }
-  7% {
+  15% {
     opacity: 0.6;
   }
-  26% {
+  60% {
     opacity: 0.09;
   }
   100% {
