@@ -8916,30 +8916,51 @@ body {
   }
 }
 
+/* ---------------- The three horizontal bars: housings, not arrivals ---------------- */
+
+/*
+ * The events ticker, the status bar and the bottom bar are in the markup from the very first
+ * frame, carrying their real border and ground dimmed to near-black. The console therefore opens
+ * as an empty chassis with the space for every readout already marked out, and what a stage does
+ * is *light* a bar rather than deliver one — the same reading the map panel already gave, where
+ * the frame is there before the picture strikes.
+ *
+ * `filter` rather than a border colour, for two reasons. The three bars do not share one border:
+ * the bottom bar's top edge is `--line-2` where its sides are `--line-1`, and a keyframe naming a
+ * colour would flatten that for the length of the boot. And a border is only half of a housing —
+ * the ground behind it, the inset highlight and the hairline each bar hangs off its bottom edge
+ * all have to come up together, and one filter takes the lot without naming any of them.
+ *
+ * Saturation is held above 1 at the dim end deliberately. Scaling brightness alone walks a dark
+ * red toward neutral, and a grey outline reads as a disabled control rather than as a lit one
+ * waiting its turn; keeping the chroma up keeps the housings unmistakably part of this console.
+ *
+ * Every bar's own contents are hidden by their stage until after the housing they sit in has
+ * lit, so the short gap between the two is the point of the effect: a lit, empty frame, and then
+ * the thing that belongs in it.
+ */
+@keyframes boot-housing-light {
+  0% {
+    filter: brightness(0.5) saturate(1.6);
+  }
+  62% {
+    filter: brightness(1.3) saturate(1.15);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+  }
+}
+
 /* ---------------- Stage 4: the status readouts come on line ---------------- */
 
 /*
- * The bar itself opens like the map — from its own centre line — and the readouts then light
- * along it one at a time, each with the stutter a filament gives before it holds.
+ * The bar is a housing and it is there from the first frame (see `boot-housing-light` above), so
+ * what this stage does is light it — and then the readouts come on along it one at a time, each
+ * with the stutter a filament gives before it holds.
  */
 .omega-shell--booting .omega-statusbar {
-  animation: boot-bar-open 320ms var(--boot-ease) calc(var(--boot-t-stats) - 180ms) both;
-}
-
-/*
- * The end frame overshoots the box by 3px rather than landing on it, because both bars hang a
- * 1px hairline off `bottom: -1px` and a clip held at exactly `inset(0)` would shave it off for
- * the length of the boot.
- */
-@keyframes boot-bar-open {
-  0% {
-    clip-path: inset(50% 0 50% 0);
-    opacity: 0.4;
-  }
-  100% {
-    clip-path: inset(-3px 0 -3px 0);
-    opacity: 1;
-  }
+  animation: boot-housing-light var(--boot-d-stats) var(--boot-ease)
+    calc(var(--boot-t-stats) - 180ms) both;
 }
 
 .omega-shell--booting .game-player-profile,
@@ -9150,52 +9171,38 @@ body {
 /* ---------------- Stage 7: the rest of the console ---------------- */
 
 /*
- * The events ticker wipes open from its centre, as the status bar did, so the two read as the
- * same family of hardware. The map layers panel settles down out of the map's top edge.
+ * The events ticker and the bottom bar light the same way the status bar does, so all three read
+ * as one family of hardware. Their contents follow: the ticker's plate and feed below, and the
+ * bottom bar's brand, execute button and telemetry further down. The map layers panel settles
+ * down out of the map's top edge.
  */
-.omega-shell--booting .omega-ticker-bar {
-  animation: boot-bar-open var(--boot-d-chrome) var(--boot-ease) var(--boot-t-chrome) both;
-}
-
-/*
- * The bottom bar is the one bar that cannot take the wipe: it carries its own `clip-path`, the
- * polygon that raises its centre section around the execute button, and an animated `clip-path`
- * would replace that with a rectangle for the length of the boot and snap the shoulders back at
- * the end. It comes up as a bar instead, with its power rail drawn across it.
- */
+.omega-shell--booting .omega-ticker-bar,
 .omega-shell--booting .omega-bottombar {
-  animation: boot-bottombar-in var(--boot-d-chrome) var(--boot-ease) var(--boot-t-chrome) both;
+  animation: boot-housing-light var(--boot-d-chrome) var(--boot-ease) var(--boot-t-chrome) both;
 }
 
-@keyframes boot-bottombar-in {
-  0% {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.omega-shell--booting .omega-bottombar::before {
-  animation: boot-rail-draw var(--boot-d-chrome) var(--boot-ease)
+/* The feed fills in from the left inside a housing that is already lit, and the plate that names
+   it comes up with the rest of the chrome. The scrolling track itself is left alone: it carries
+   `ticker-scroll`, and animating it here would stop the marquee for the length of the boot. */
+.omega-shell--booting .omega-ticker__label {
+  animation: boot-rise var(--boot-d-chrome) var(--boot-ease)
     calc(var(--boot-t-chrome) + 100ms) both;
 }
 
-@keyframes boot-rail-draw {
-  0% {
-    transform: scaleX(0);
-    opacity: 0;
-  }
-  60% {
-    opacity: 1;
-  }
-  100% {
-    transform: scaleX(1);
-    opacity: 0.7;
-  }
+.omega-shell--booting .omega-ticker {
+  animation: boot-readout-fill var(--boot-d-chrome) var(--boot-ease)
+    calc(var(--boot-t-chrome) + 180ms) both;
 }
+
+/*
+ * The bottom bar's power rail is deliberately *not* animated, and that is what makes this bar
+ * read as a housing at all. Its top border is clipped away across most of the width by the
+ * polygon that raises the centre section around the execute button, so the rail is the only edge
+ * that actually draws the top of the bar — hold it back and there is nothing up there to mark
+ * the reserved space. Left alone, it sits dim with the rest of the housing from the first frame
+ * and flares through `boot-housing-light`'s overshoot as the bar comes up, which is the same
+ * beat a separate draw-on was doing and one animation fewer.
+ */
 
 .omega-shell--booting .omega-bottombar__brand,
 .omega-shell--booting .btn-execute,
