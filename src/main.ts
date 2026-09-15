@@ -113,6 +113,8 @@ import {
 } from "./game/omegaPlan";
 import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation, type NavigationApi } from "./navigation";
+import { createNoveltyLedger } from "./ui/novelty";
+import { observeWorldNovelty, siteNoveltySubject } from "./ui/worldNovelty";
 import { startBootSequence, type BootSequenceHandle } from "./ui/bootSequence";
 import { initSettingsMenu } from "./ui/playerSettings";
 import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
@@ -1466,11 +1468,50 @@ function initGameController(
     }
     switch (subject.kind) {
       case "site":
-        return `site:${subject.locationId}`;
+        /* Not spelled out here. The novelty ledger keys its breadcrumbs on the same strings this
+         * function returns, which is what lets a hover clear a mark a sampler raised with no
+         * lookup table in between — so the site spelling is taken from the module that owns it
+         * rather than written twice and hoped about. */
+        return siteNoveltySubject(subject.locationId);
       case "lair":
         return "lair";
       case "event":
         return "event";
+    }
+  }
+
+  /**
+   * What has changed in the world that the player has not been shown yet.
+   *
+   * Fed once per `refresh` and read by whichever surface draws the flag; see `ui/novelty.ts` for
+   * the shape and `ui/worldNovelty.ts` for the facets. It sits beside `mapSubjectKey` above on
+   * purpose — the subjects it holds are spelled the same way that function spells markers, which
+   * is what lets a click on a pin clear the mark a sampler raised without a lookup table.
+   *
+   * Player-attention state, not run state, so it is held here rather than in `GameState` — the
+   * same line the map layers and the settings draw. `startRun` clears it, and the first sample
+   * after that is a silent baseline.
+   */
+  const novelty = createNoveltyLedger();
+
+  /**
+   * How long the pointer has to stay on a marker before its breadcrumb counts as read.
+   *
+   * Hovering is what puts the site's card on screen, so hovering *is* being shown the thing —
+   * but only if the hover was a look rather than a pass. Without a dwell, one sweep of the
+   * pointer across the map on the way to a drawer wipes every flag it brushes, and the player
+   * never sees a single one of the cards those flags were pointing at. Long enough to mean
+   * "stopped here", short enough that nobody deliberately reading a card has to wait for it.
+   */
+  const MAP_NOVELTY_DWELL_MS = 300;
+
+  /** The pending dwell, if the pointer is currently resting on something flagged. */
+  let mapNoveltyDwell: number | null = null;
+
+  function cancelMapNoveltyDwell(): void {
+    if (mapNoveltyDwell !== null) {
+      window.clearTimeout(mapNoveltyDwell);
+      mapNoveltyDwell = null;
     }
   }
 
@@ -7341,7 +7382,6 @@ Your lair`;
         tipLines.push(`Assets: ${revealedAssetNames.join(", ")}`);
       }
 
-      pin.title = tipLines.join("\n");
       pin.setAttribute("aria-label", tipLines.join(". "));
 
       pin.draggable = mainOnly;
@@ -7356,6 +7396,10 @@ Your lair`;
         e.dataTransfer!.effectAllowed = "copy";
       });
       pin.addEventListener("click", () => {
+        /* The hover above normally gets here first, but a touch tap does not hover: it fires
+         * `pointerover` and then `pointerout` on lift, which cancels the dwell before it lands.
+         * So a tap clears the breadcrumb through the click instead. Idempotent either way. */
+        acknowledgeMapSubject({ kind: "site", locationId: loc.id });
         toggleMapPin({ kind: "site", locationId: loc.id });
       });
 
@@ -7370,6 +7414,18 @@ Your lair`;
         );
       }
       pin.appendChild(dot);
+
+      /* The breadcrumb, if this site is carrying one. Built before the name column below so it
+       * reads first — "NEW Chandra Reactor" rather than the other way round — since it is inside
+       * the pin's own button and joins its accessible name. */
+      if (novelty.has(siteNoveltySubject(loc.id))) {
+        pin.classList.add("map-marker--flagged");
+        const flag = document.createElement("span");
+        flag.className = "map-marker__flag";
+        flag.textContent = "NEW";
+        pin.appendChild(flag);
+      }
+
       /* Name and tag rail hang off one column under the pin, so a name showing and a readout
        * showing can never land on top of each other — which they would if each were pinned to
        * the marker at its own offset. */
@@ -7734,6 +7790,23 @@ Your lair`;
       return;
     }
     hoveredMapSubject = subject;
+    /*
+     * Settling on a marker is what clears its breadcrumb. The hover is already what puts the
+     * site's card on screen, so it is the moment the player is actually shown the thing the flag
+     * was pointing at — needing a click on top of that made the flag outlive its own answer.
+     *
+     * Keyboard focus lands here too (`focusin` on the plot), so tabbing the map reads the same
+     * way pointing at it does. The dwell is what separates a look from a pass; see
+     * `MAP_NOVELTY_DWELL_MS`.
+     */
+    cancelMapNoveltyDwell();
+    if (subject !== null) {
+      const settled = subject;
+      mapNoveltyDwell = window.setTimeout(() => {
+        mapNoveltyDwell = null;
+        acknowledgeMapSubject(settled);
+      }, MAP_NOVELTY_DWELL_MS);
+    }
     syncMapReticle();
     renderSiteInspector();
   }
@@ -8495,6 +8568,62 @@ Your lair`;
    */
   function locationCardFromEvent(target: EventTarget | null): HTMLElement | null {
     return target instanceof Element ? target.closest<HTMLElement>(".location-card") : null;
+  }
+
+  /** The pin a subject is drawn as, or `null` for one that has no marker on the plot. */
+  function mapMarkerElFor(subject: MapSubject): HTMLElement | null {
+    switch (subject.kind) {
+      case "site":
+        return mapPanelEl.querySelector<HTMLElement>(
+          `.map-marker[data-location-id="${CSS.escape(subject.locationId)}"]`,
+        );
+      case "lair":
+        return mapPanelEl.querySelector<HTMLElement>('.map-marker[data-map-lair="true"]');
+      case "event":
+        /* The event offer is an inspector card in the corner, not a marker on the map. */
+        return null;
+    }
+  }
+
+  /**
+   * Bring one pin's breadcrumb back in line with the ledger, in place.
+   *
+   * A dismissal is the one map change that must not go through `renderMapPanel`: that function
+   * throws every pin away and rebuilds it, which would destroy the button the pointer is resting
+   * on and clear `hoveredMapSubject` — so reading a flagged site would close the card the hover
+   * had just opened, until the pointer moved again. One class and one element on one pin costs
+   * nothing and leaves the rest of the plot alone.
+   *
+   * Only ever takes a flag *down*: raising one is `renderMapPanel`'s job, because a mark can only
+   * appear while `refresh` is already rebuilding the plot around it. It still reads the ledger
+   * rather than taking a boolean, so the class it leaves on the pin is the ledger's answer and
+   * not the caller's assumption about it.
+   */
+  function syncMapNoveltyFlag(subject: MapSubject): void {
+    const pin = mapMarkerElFor(subject);
+    const key = mapSubjectKey(subject);
+    if (pin === null || key === null) {
+      return;
+    }
+    const flagged = novelty.has(key);
+    pin.classList.toggle("map-marker--flagged", flagged);
+    if (!flagged) {
+      pin.querySelector(".map-marker__flag")?.remove();
+    }
+  }
+
+  /**
+   * The player has looked at this marker: take every breadcrumb off it.
+   *
+   * Keyed on {@link mapSubjectKey}, not on the location id, so this covers whatever the map grows
+   * a flag for next — the lair included — rather than only sites.
+   */
+  function acknowledgeMapSubject(subject: MapSubject): void {
+    const key = mapSubjectKey(subject);
+    if (key === null || !novelty.acknowledge(key)) {
+      return;
+    }
+    syncMapNoveltyFlag(subject);
   }
 
   function setMapMarkerPreview(locationId: string | null): void {
@@ -9295,6 +9424,13 @@ Your lair`;
    */
   function startRun(): void {
     clearAllAssignSlots();
+    /* Before the new state, so the first sample the `refresh` below takes is the baseline for
+     * this run rather than a diff against the last one — otherwise every site the previous run
+     * had identified would read as having gone dark, and every site this one starts with would
+     * read as news. A dwell still counting down belongs to the run being thrown away; letting it
+     * land would acknowledge a subject in the new run's ledger on the player's behalf. */
+    cancelMapNoveltyDwell();
+    novelty.reset();
     state = createInitialGameState(content, undefined, runSetup.read());
     refresh();
   }
@@ -9330,6 +9466,14 @@ Your lair`;
     reconcileAssignSlots();
     syncAssignAssetSlotArrayWithMission();
     reconcileStagedAssetSlots();
+
+    /* Before anything draws, so every surface below renders against flags that are already up
+     * to date rather than one pass behind whatever the last action changed. */
+    observeWorldNovelty(novelty, {
+      turnNumber: state.turnNumber,
+      playableLocationIds: runLocations().map((l) => l.id),
+      intelStates: state.locationIntelStates,
+    });
 
     organizationNameEl.textContent = state.organizationName;
     playerNameEl.textContent = state.playerName;

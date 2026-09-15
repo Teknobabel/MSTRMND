@@ -8916,6 +8916,27 @@ body {
   }
 }
 
+/*
+ * A site that opens the run already flagged plants its flag as the reticle catches, not on the
+ * frame the plot was built.
+ *
+ * The flag is in the markup from the first render now that identified sites carry one from the
+ * baseline (`worldNovelty.ts`), so without this its own `map-flag-raise` would play out while the
+ * pin around it was still at `opacity: 0` — and the flag would simply be *there* when the site
+ * lit, having visibly arrived at nothing. Same delay expression the ring and plate use, pushed
+ * most of a pin's own duration later so it lands behind the lock rather than with it. Its
+ * `both` fill is what holds it hidden in the meantime.
+ */
+.omega-shell--booting .map-marker__flag {
+  animation-delay: max(
+    0ms,
+    calc(
+      var(--boot-pin-at, var(--boot-t-pins)) + var(--boot-d-pins) * 0.7 -
+        var(--boot-elapsed, 0ms)
+    )
+  );
+}
+
 /* ---------------- The three horizontal bars: housings, not arrivals ---------------- */
 
 /*
@@ -9249,5 +9270,128 @@ body {
   .omega-shell--booting *::before,
   .omega-shell--booting *::after {
     animation: none !important;
+  }
+}
+
+/* ---------------- Site breadcrumb: the NEW flag ---------------- */
+
+/*
+ * The flag a pin wears while the player has not yet looked at what changed there. Raised by the
+ * novelty ledger (`ui/novelty.ts`) and taken off by a click on the pin.
+ *
+ * The one thing on this map that is not red. That is the entire point of it: every other signal
+ * here — the category hues, the security glow, the targeting reticle — is a shade of the same
+ * console, so a flag painted in any of them would have to compete with all of them at once. A
+ * pale plate reads as *placed on top of* the picture rather than as part of it, which is what a
+ * breadcrumb is: the interface pointing at itself, not the world reporting something.
+ *
+ * Hung up and to the right of the pin on a leader line, out of the way of the name and tag rail,
+ * which hang below it. It sits inside the pin's own `<button>`, so it is clickable furniture
+ * rather than an obstruction, and its text joins the button's accessible name.
+ */
+.map-marker__flag {
+  position: absolute;
+  left: 58%;
+  bottom: 74%;
+  z-index: 1;
+  padding: 0.12rem 0.85rem 0.12rem 0.42rem;
+  /* The notch cut out of the trailing edge, the same 12deg rake the leader line below runs at. */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.42rem) 100%, 0 100%);
+  background: linear-gradient(180deg, #fff, var(--text-0));
+  color: #120306;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0, 0, 0, 0.8);
+  transform-origin: 0 100%;
+  animation: map-flag-raise 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/*
+ * The leader back down to the dot. Drawn as a rotated bar from the flag's own bottom-left corner
+ * rather than as a border on anything, so it stays welded to the plate at every pin size — the
+ * pin's box doubles once a site is identified, and every offset here is a percentage of it.
+ */
+.map-marker__flag::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  bottom: 0;
+  width: 0.62rem;
+  height: 1px;
+  transform-origin: 100% 50%;
+  transform: rotate(38deg);
+  background: linear-gradient(to left, var(--text-0), rgba(243, 234, 234, 0.25));
+}
+
+@keyframes map-flag-raise {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) translateY(4px);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.06) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/*
+ * A flagged pin outranks its neighbours so the plate is never half-covered by a pin that happens
+ * to sit up and to the right of it — but stays under the hover/selection rank (3), because what
+ * the player is actually pointing at still wins.
+ */
+.map-marker--flagged {
+  z-index: 2;
+}
+
+/*
+ * The flag breathes, and unlike `pin-breathe` it is allowed to be noticed: this is the one mark
+ * on the map that exists to be acted on and then go away, so it does not have to survive being
+ * looked at for a whole turn. Held on a longer period than the pins so the two never read as one
+ * pulse, and stopped the moment the pointer is on the pin — by then it has done its job.
+ */
+.map-marker__flag::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.42rem) 100%, 0 100%);
+  animation: map-flag-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes map-flag-pulse {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.map-marker:hover .map-marker__flag::after,
+.map-marker:focus-visible .map-marker__flag::after {
+  animation: none;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The flag still arrives and still reads; it just does not move to say so. */
+  .map-marker__flag,
+  .map-marker__flag::after {
+    animation: none;
+  }
+
+  .map-marker__flag::after {
+    opacity: 1;
   }
 }
