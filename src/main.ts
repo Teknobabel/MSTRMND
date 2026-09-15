@@ -55,6 +55,7 @@ import {
 } from "./game/mission";
 import {
   dynamicTraitDisplayLabel,
+  dynamicTraitStyle,
   dynamicTraitSuccessModifierBreakdownFromFullRoster,
   dynamicTraitSuccessModifierFromFullRoster,
   type DynamicTraitSuccessBreakdownEntry,
@@ -654,8 +655,12 @@ function sortedTraitIdsForDisplay(
 ): string[] {
   const rank = (id: string): number => {
     const trait = catalog.traits.find((t) => t.id === id);
-    /* An id with no catalog entry is a content bug; park it at the end rather than guessing. */
-    return trait === undefined ? 99 : TRAIT_TYPE_DISPLAY_ORDER[trait.type];
+    /* An id with no catalog entry — or one naming an art-only `dynamic` row, which no minion
+     * can hold — is a content bug; park it at the end rather than guessing. */
+    if (trait === undefined || trait.type === "dynamic") {
+      return 99;
+    }
+    return TRAIT_TYPE_DISPLAY_ORDER[trait.type];
   };
   return traitIds
     .map((id, index) => ({ id, index, rank: rank(id) }))
@@ -708,7 +713,7 @@ function minionSkillPillEls(
     span.className = "minions-trait-pill minions-trait-pill--trait";
     span.tabIndex = 0;
     span.title = formatDynamicTraitTooltip(catalog, roster, dtrait);
-    span.appendChild(createTraitIconEl());
+    span.appendChild(createTraitPillIconEl(dynamicTraitStyle(catalog, dtrait.kind), "trait"));
     const text = document.createElement("span");
     text.className = "minions-trait-pill__label";
     text.textContent = dynamicTraitDisplayLabel(catalog, roster, dtrait);

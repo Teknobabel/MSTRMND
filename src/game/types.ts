@@ -1,9 +1,21 @@
+/** The trait types a minion can actually hold. */
 export type TraitType = "status_positive" | "status_negative" | "primary" | "secondary";
+
+/**
+ * What a catalog row may be: one of the four {@link TraitType}s a minion holds, or `dynamic` —
+ * a row that exists only to give one {@link DynamicTraitKind} a name and an icon. Dynamic rows
+ * are never held, rolled, or required; see {@link Trait}.
+ */
+export type TraitCatalogType = TraitType | "dynamic";
 
 export type Trait = {
   id: string;
   name: string;
-  type: TraitType;
+  /**
+   * `dynamic` rows are art-only: their `id` is a {@link DynamicTraitKind} rather than something
+   * a minion can be given, so they are excluded from every requirement, roll, and level-up pool.
+   */
+  type: TraitCatalogType;
   /**
    * Site-root path to this trait's own glyph, worn by every pill that names it. Optional: a
    * trait without one keeps the generic tag the pills have always drawn, so authoring an icon
@@ -20,6 +32,16 @@ export type DynamicTraitKind =
   | "hatred"
   | "hero"
   | "wanted";
+
+/** Every {@link DynamicTraitKind}, for the editor's fixed `dynamic` trait rows and validation. */
+export const DYNAMIC_TRAIT_KINDS: readonly DynamicTraitKind[] = [
+  "friend",
+  "ally",
+  "rival",
+  "hatred",
+  "hero",
+  "wanted",
+];
 
 /**
  * Every kind here is a **projection** of an affinity table: the four minion-to-minion kinds come

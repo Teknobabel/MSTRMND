@@ -260,6 +260,16 @@ textarea {
   color: var(--err);
 }
 
+/* Built-in rows (the dynamic relationship traits): present for their art, not authorable. */
+.ed-entity-row--fixed::after {
+  content: "built-in";
+  float: right;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .ed-entity-row .ed-entity-id {
   color: var(--text-dim);
   font-family: var(--mono);

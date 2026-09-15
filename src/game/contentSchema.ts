@@ -15,6 +15,7 @@ import type {
   MapTemplate,
   MinionTemplate,
   MissionEffect,
+  DynamicTraitKind,
   MissionTemplate,
   MissionTargetType,
   OmegaPlanStage,
@@ -26,7 +27,12 @@ import type {
   Trait,
   WantedLevelTier,
 } from "./types";
-import { AGENT_ABILITY_IDS, AGENT_MOVEMENT_BEHAVIORS, DEFAULT_BALANCE } from "./types";
+import {
+  AGENT_ABILITY_IDS,
+  AGENT_MOVEMENT_BEHAVIORS,
+  DEFAULT_BALANCE,
+  DYNAMIC_TRAIT_KINDS,
+} from "./types";
 import { OMEGA_MISSIONS_PER_STAGE } from "./omegaPlan";
 import { missionTargetTypeTargetsLocation } from "./mission";
 
@@ -139,7 +145,14 @@ function zodErrorToIssues(
  * they live in {@link collectContentIssues}.
  * ---------------------------------------------------------------------------------------------- */
 
-const traitTypeSchema = z.enum(["status_positive", "status_negative", "primary", "secondary"]);
+const traitTypeSchema = z.enum([
+  "status_positive",
+  "status_negative",
+  "primary",
+  "secondary",
+  /* Art-only rows for the runtime dynamic trait kinds — see `Trait.type`. */
+  "dynamic",
+]);
 
 export const traitSchema: z.ZodType<Trait> = z.object({
   id: z.string().min(1),
@@ -902,6 +915,20 @@ function pushDuplicateIdIssues(
   }
 }
 
+/** A `dynamic` row stands for one {@link DynamicTraitKind}, so its id has to be one. */
+function checkDynamicTraitRows(traits: readonly Trait[], issues: ContentIssue[]): void {
+  traits.forEach((t, i) => {
+    if (t.type === "dynamic" && !DYNAMIC_TRAIT_KINDS.includes(t.id as DynamicTraitKind)) {
+      issues.push({
+        slice: "traits",
+        entityId: t.id,
+        path: `[${i}].id`,
+        message: `A dynamic trait id must be one of: ${DYNAMIC_TRAIT_KINDS.join(", ")}`,
+      });
+    }
+  });
+}
+
 function checkMinionLikeTraitRefs(
   slice: "minions" | "agents",
   templates: readonly MinionTemplate[],
@@ -1354,7 +1381,13 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
   const issues: ContentIssue[] = [];
   const s = slices as ParsedContentSlices;
 
-  const traitIds = s.traits !== null ? new Set(s.traits.map((t) => t.id)) : null;
+  /* `dynamic` rows carry art for a runtime kind, so nothing may *reference* one: leaving them
+   * out here makes every required/starting/level-up/challenge use of such an id an unknown-trait
+   * issue rather than a silently accepted reference to something no minion can hold. */
+  const traitIds =
+    s.traits !== null
+      ? new Set(s.traits.filter((t) => t.type !== "dynamic").map((t) => t.id))
+      : null;
   const assetIds = s.assets !== null ? new Set(s.assets.map((a) => a.id)) : null;
   const minionTemplateIds = s.minions !== null ? new Set(s.minions.map((m) => m.id)) : null;
   const missionIds = s.missions !== null ? new Set(s.missions.map((m) => m.id)) : null;
@@ -1373,6 +1406,7 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
 
   if (s.traits !== null) {
     pushDuplicateIdIssues("traits", s.traits, issues);
+    checkDynamicTraitRows(s.traits, issues);
   }
   if (s.assets !== null) {
     pushDuplicateIdIssues("assets", s.assets, issues);

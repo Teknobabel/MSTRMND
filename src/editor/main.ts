@@ -82,6 +82,20 @@ function sliceArray(draft: RawContentSlices, slice: ContentSliceKey): unknown[] 
   return Array.isArray(v) ? v : [];
 }
 
+/**
+ * An art-only `dynamic` trait row (see `Trait.type`): one per runtime relationship kind, fixed
+ * in place. It shows up in the Traits list so its icon can be set, but it is not authorable
+ * content — no picker offers it, and it cannot be renamed, duplicated, or deleted.
+ */
+function isDynamicTraitRow(slice: ContentSliceKey, row: unknown): boolean {
+  return (
+    slice === "traits" &&
+    typeof row === "object" &&
+    row !== null &&
+    (row as Row).type === "dynamic"
+  );
+}
+
 function entityId(row: unknown): string | null {
   if (typeof row === "string") {
     return null;
@@ -268,6 +282,9 @@ function initEditor(store: EditorStore): void {
   function ids(slice: ContentSliceKey): string[] {
     const out: string[] = [];
     for (const row of sliceArray(store.draft, slice)) {
+      if (isDynamicTraitRow(slice, row)) {
+        continue;
+      }
       const id = entityId(row);
       if (id !== null) {
         out.push(id);
@@ -406,7 +423,7 @@ function initEditor(store: EditorStore): void {
       const bad = issuesForEntity(store.issues, selectedSlice, id, i).length > 0;
       const btn = el(
         "button",
-        `ed-entity-row${i === selectedIndex ? " ed-entity-row--active" : ""}${bad ? " ed-entity-row--bad" : ""}`,
+        `ed-entity-row${i === selectedIndex ? " ed-entity-row--active" : ""}${bad ? " ed-entity-row--bad" : ""}${isDynamicTraitRow(selectedSlice, row) ? " ed-entity-row--fixed" : ""}`,
       );
       btn.appendChild(document.createTextNode(entityLabel(selectedSlice, row, i)));
       if (id !== null) {
@@ -478,19 +495,25 @@ function initEditor(store: EditorStore): void {
     panel.appendChild(el("h2", "", entityLabel(selectedSlice, row, selectedIndex)));
 
     const toolbar = el("div", "ed-detail-toolbar");
-    if (id !== null && RENAMABLE_SLICES.has(selectedSlice)) {
-      const renameBtn = el("button", "ed-btn-small", "Rename id…");
-      renameBtn.addEventListener("click", () => {
-        renameEntity(id);
-      });
-      toolbar.appendChild(renameBtn);
+    if (isDynamicTraitRow(selectedSlice, row)) {
+      /* Fixed row: the game looks it up by kind, so every id-changing action would only break
+       * the link. Editing the icon is the whole point of it being here. */
+      toolbar.appendChild(el("span", "ed-hint", "Built-in relationship — icon only."));
+    } else {
+      if (id !== null && RENAMABLE_SLICES.has(selectedSlice)) {
+        const renameBtn = el("button", "ed-btn-small", "Rename id…");
+        renameBtn.addEventListener("click", () => {
+          renameEntity(id);
+        });
+        toolbar.appendChild(renameBtn);
+      }
+      const dupBtn = el("button", "ed-btn-small", "Duplicate");
+      dupBtn.addEventListener("click", duplicateEntity);
+      toolbar.appendChild(dupBtn);
+      const delBtn = el("button", "ed-btn-small ed-btn-danger", "Delete…");
+      delBtn.addEventListener("click", deleteEntity);
+      toolbar.appendChild(delBtn);
     }
-    const dupBtn = el("button", "ed-btn-small", "Duplicate");
-    dupBtn.addEventListener("click", duplicateEntity);
-    toolbar.appendChild(dupBtn);
-    const delBtn = el("button", "ed-btn-small ed-btn-danger", "Delete…");
-    delBtn.addEventListener("click", deleteEntity);
-    toolbar.appendChild(delBtn);
     panel.appendChild(toolbar);
 
     const entityIssues = issuesForEntity(store.issues, selectedSlice, id, selectedIndex);

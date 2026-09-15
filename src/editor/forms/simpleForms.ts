@@ -59,7 +59,53 @@ function cardArtRow(container: HTMLElement, ctx: FormCtx): void {
   );
 }
 
+/**
+ * The whole form for a `dynamic` trait row. These rows are not authored content — there is one
+ * per runtime `DynamicTraitKind` and the game finds it by that kind — so id, name, and type are
+ * all fixed and the icon is the only thing to edit.
+ */
+function renderDynamicTraitForm(container: HTMLElement, ctx: FormCtx): void {
+  const idInput = textInput(str(ctx.row, "id"), () => undefined);
+  idInput.readOnly = true;
+  idInput.title = "Fixed — this id is the runtime relationship kind this row draws";
+  container.appendChild(formRow("id", idInput));
+  const nameInput = textInput(str(ctx.row, "name"), () => undefined);
+  nameInput.readOnly = true;
+  nameInput.title = "Fixed — pill wording comes from the relationship, not from this row";
+  container.appendChild(formRow("name", nameInput));
+  container.appendChild(
+    artFieldRow(ctx, "icon", {
+      optional: true,
+      suggestedName: `trait-${str(ctx.row, "id")}`,
+    }),
+  );
+  container.appendChild(
+    hint(
+      `icon — the glyph on every pill showing this relationship (e.g. "${DYNAMIC_TRAIT_PILL_EXAMPLE[str(ctx.row, "id")] ?? "Ally of Vex"}"). Drawn at ~13px, same as any trait icon. Leave it empty and the pill keeps the generic tag glyph.`,
+    ),
+  );
+  container.appendChild(
+    hint(
+      "Dynamic traits are projected from affinity scores, not authored: nobody can be given one, no mission can require one, and they are never rolled as site requirements or security. This row exists only to carry the art. Tune what each one is worth under Game Balance.",
+    ),
+  );
+}
+
+/** Sample pill text per kind, so the icon hint shows what the glyph will sit next to. */
+const DYNAMIC_TRAIT_PILL_EXAMPLE: Record<string, string> = {
+  friend: "Friend of Vex",
+  ally: "Ally of Vex",
+  rival: "Rival of Vex",
+  hatred: "Hatred for Vex",
+  hero: "Allies in Geneva",
+  wanted: "Wanted in Geneva",
+};
+
 export function renderTraitForm(container: HTMLElement, ctx: FormCtx): void {
+  if (str(ctx.row, "type") === "dynamic") {
+    renderDynamicTraitForm(container, ctx);
+    return;
+  }
   idAndName(container, ctx);
   container.appendChild(
     formRow(

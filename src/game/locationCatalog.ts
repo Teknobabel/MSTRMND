@@ -157,7 +157,7 @@ export function rollInitialLocationIntelStates(
 /**
  * Per-run required traits for each map location (not in JSON).
  * Level 1 → 0 traits; level 2 → 1; level 3 → 2 distinct picks from primary + secondary only
- * (excludes status_positive / status_negative).
+ * (status traits and art-only `dynamic` rows are never eligible).
  */
 export function rollLocationRequiredTraits(
   catalog: ContentCatalog,
@@ -165,7 +165,7 @@ export function rollLocationRequiredTraits(
   rng: () => number,
 ): Record<string, string[]> {
   const eligible = catalog.traits
-    .filter((t) => t.type !== "status_positive" && t.type !== "status_negative")
+    .filter((t) => t.type === "primary" || t.type === "secondary")
     .map((t) => t.id);
   const out: Record<string, string[]> = {};
   for (const loc of runLocations) {
@@ -178,7 +178,7 @@ export function rollLocationRequiredTraits(
 /**
  * Per-run security trait stack per location (reveal order = array order).
  * Length equals `locationLevel` (1–3); first `securityLevel` entries apply to missions.
- * Same eligible pool as {@link rollLocationRequiredTraits} (primary + secondary; no status traits).
+ * Same eligible pool as {@link rollLocationRequiredTraits} (primary + secondary only).
  */
 export function rollLocationSecurityTraits(
   catalog: ContentCatalog,
@@ -186,7 +186,7 @@ export function rollLocationSecurityTraits(
   rng: () => number,
 ): Record<string, string[]> {
   const eligible = catalog.traits
-    .filter((t) => t.type !== "status_positive" && t.type !== "status_negative")
+    .filter((t) => t.type === "primary" || t.type === "secondary")
     .map((t) => t.id);
   const out: Record<string, string[]> = {};
   for (const loc of runLocations) {

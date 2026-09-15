@@ -13,12 +13,28 @@ import type {
   DynamicTraitKind,
   DynamicTraitModifiers,
   MinionInstance,
+  Trait,
 } from "./types";
 import { DEFAULT_BALANCE } from "./types";
 import { pairKey } from "./affinity";
 
 const DEFAULT_BONUS_BY_KIND: Record<DynamicTraitKind, number> =
   DEFAULT_BALANCE.dynamicTraitModifiers;
+
+/**
+ * The catalog row that carries this kind's art, if one is authored.
+ *
+ * A dynamic trait is not a catalog entity — it is projected from an affinity score — but the
+ * pills that draw it still want a glyph, so `content/traits.json` may hold a `type: "dynamic"`
+ * row per kind whose only job is to name an icon. Nothing else reads these rows, and a kind
+ * without one simply keeps the generic tag.
+ */
+export function dynamicTraitStyle(
+  catalog: ContentCatalog,
+  kind: DynamicTraitKind,
+): Trait | undefined {
+  return catalog.traits.find((t) => t.type === "dynamic" && t.id === kind);
+}
 
 export function isPositiveDynamicTraitKind(kind: DynamicTraitKind): boolean {
   return kind === "friend" || kind === "ally" || kind === "hero";

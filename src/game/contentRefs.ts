@@ -1,5 +1,5 @@
 import type { ContentSliceKey } from "./contentSchema";
-import type { ContentCatalog, MissionEffect } from "./types";
+import type { ContentCatalog, MissionEffect, Trait } from "./types";
 
 /**
  * One id-reference between catalog entities, e.g. mission "heist" → asset "getaway-car"
@@ -194,5 +194,10 @@ export function unreferencedIds(
   const referenced = new Set(
     references.filter((r) => r.toSlice === slice).map((r) => r.toId),
   );
-  return catalog[slice].map((e) => e.id).filter((id) => !referenced.has(id));
+  return catalog[slice]
+    /* Art-only `dynamic` trait rows are reached by kind at runtime, never by id, so they are
+     * unreferenced by construction — listing them would be pure noise. */
+    .filter((e) => !(slice === "traits" && (e as Trait).type === "dynamic"))
+    .map((e) => e.id)
+    .filter((id) => !referenced.has(id));
 }

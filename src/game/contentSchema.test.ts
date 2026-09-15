@@ -430,3 +430,34 @@ describe("parseCatalog (throwing wrapper)", () => {
     }
   });
 });
+
+describe("dynamic trait rows", () => {
+  it("parses an art-only row for each relationship kind", () => {
+    const raw = rawFixtureSlices();
+    raw.traits.push({ id: "ally", name: "Ally", type: "dynamic", icon: "/assets/x.webp" });
+    const { catalog, issues } = parseContentCatalog(raw);
+    expect(issues).toEqual([]);
+    expect(catalog?.traits.find((t) => t.id === "ally")?.icon).toBe("/assets/x.webp");
+  });
+
+  it("rejects a dynamic row whose id is not a relationship kind", () => {
+    const raw = rawFixtureSlices();
+    raw.traits.push({ id: "besties", name: "Besties", type: "dynamic" });
+    const { issues } = parseContentCatalog(raw);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.path).toBe("[6].id");
+    expect(issues[0]?.message).toContain("must be one of");
+  });
+
+  it("is not referenceable — no minion or mission may hold one", () => {
+    const raw = rawFixtureSlices();
+    raw.traits.push({ id: "hero", name: "Hero", type: "dynamic" });
+    raw.minions[0]!.startingTraitIds = ["hero"];
+    raw.missions[0]!.requiredTraitIds = ["hero"];
+    const { issues } = parseContentCatalog(raw);
+    expect(issues.map((i) => i.message)).toEqual([
+      'Unknown trait id "hero"',
+      'Unknown trait id "hero"',
+    ]);
+  });
+});

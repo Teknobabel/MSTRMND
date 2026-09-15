@@ -134,5 +134,35 @@
     "id": "shaken",
     "name": "Shaken",
     "type": "status_negative"
+  },
+  {
+    "id": "friend",
+    "name": "Friend",
+    "type": "dynamic"
+  },
+  {
+    "id": "ally",
+    "name": "Ally",
+    "type": "dynamic"
+  },
+  {
+    "id": "rival",
+    "name": "Rival",
+    "type": "dynamic"
+  },
+  {
+    "id": "hatred",
+    "name": "Hatred",
+    "type": "dynamic"
+  },
+  {
+    "id": "hero",
+    "name": "Hero",
+    "type": "dynamic"
+  },
+  {
+    "id": "wanted",
+    "name": "Wanted",
+    "type": "dynamic"
   }
 ]
