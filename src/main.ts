@@ -249,7 +249,7 @@ const LOCATION_CATEGORY_LABEL: Record<LocationType, string> = {
 };
 
 /** The menus filed as drawers along the bottom of the map, keyed by `data-drawer` in the markup. */
-const DRAWER_IDS = ["omega", "missions", "minions", "locations", "lair"] as const;
+const DRAWER_IDS = ["omega", "missions", "minions", "assets", "locations", "lair"] as const;
 
 type DrawerId = (typeof DRAWER_IDS)[number];
 
@@ -258,27 +258,15 @@ function isDrawerId(value: string | undefined): value is DrawerId {
 }
 
 type LairInspectorTab = "missions" | "active" | "upgrades";
-type LairPanelSection = LairInspectorTab | "assets";
 
 /**
  * Lair sections shown as tabs on the lair's map inspector card, which is a quarter of the map
- * wide — too narrow for the drawer's columns. Owned assets are left to the drawer.
+ * wide — too narrow for the drawer's columns.
  */
 const LAIR_INSPECTOR_TABS: readonly { id: LairInspectorTab; label: string }[] = [
   { id: "missions", label: "Missions" },
   { id: "active", label: "Active Missions" },
   { id: "upgrades", label: "Upgrades" },
-];
-
-/**
- * Lair sections shown as columns in the Lair drawer: what this base can still become, and what
- * it owns. Missions — the lair's pool and the ones in flight — are the Missions menu's to list.
- * Upgrades take a double-width column so their choices sit two abreast instead of stacking off
- * the bottom, which leaves the drawer three card columns wide overall.
- */
-const LAIR_MENU_COLUMNS: readonly { id: LairPanelSection; label: string; wide?: true }[] = [
-  { id: "upgrades", label: "Upgrades", wide: true },
-  { id: "assets", label: "Assets" },
 ];
 
 /* Stat glyph paths, shared by the status bar and the mission effect lines. */
@@ -1473,6 +1461,7 @@ function initGameController(
   const locationsPanelEl = req<HTMLElement>("locations-panel");
   const missionsPanelRootEl = req<HTMLElement>("missions-panel-root");
   const lairPanelEl = req<HTMLElement>("lair-panel");
+  const assetsPanelEl = req<HTMLElement>("assets-panel");
   const mapPanelEl = req<HTMLElement>("map-panel");
   const mapLayersPanelEl = req<HTMLElement>("map-layers-panel");
   /**
@@ -2859,7 +2848,7 @@ function initGameController(
     const cap = assignSupportAssetIds.length;
     if (cap === 0) {
       assignSupportAssetsFieldset.hidden = true;
-      renderLairPanel();
+      renderAssetsPanel();
       return;
     }
     assignSupportAssetsFieldset.hidden = false;
@@ -2939,8 +2928,8 @@ function initGameController(
     }
 
     assignSupportAssetsList.appendChild(wrap);
-    /* Staging a support asset changes what is still available, which the Assets tab shows. */
-    renderLairPanel();
+    /* Staging a support asset changes what is still spare, which the Assets menu shows. */
+    renderAssetsPanel();
   }
 
   /**
@@ -5379,6 +5368,13 @@ function initGameController(
         container.appendChild(buildAssetCardArticle(assetId, template, unit < available));
       }
     }
+  }
+
+  /** The Assets drawer: everything the run owns, one card per unit. */
+  function renderAssetsPanel(): void {
+    withDeferredCardArt(openDrawer !== "assets", () => {
+      fillAssetsInto(assetsPanelEl);
+    });
   }
 
   function buildAssetCardArticle(
@@ -8094,44 +8090,41 @@ function initGameController(
       }
     }
 
-    function fillLairSectionInto(section: LairPanelSection, container: HTMLElement): void {
+    function fillLairSectionInto(section: LairInspectorTab, container: HTMLElement): void {
       if (section === "missions") {
         fillLairMissionsInto(container);
       } else if (section === "upgrades") {
         fillLairUpgradesInto(container);
-      } else if (section === "active") {
-        renderActiveMissionsInto(container);
       } else {
-        fillAssetsInto(container);
+        renderActiveMissionsInto(container);
       }
     }
 
+    /*
+     * The drawer is down to one section — what this base can still become. Missions, running or
+     * on offer, are the Missions menu's to list, and what the run owns has a menu of its own, so
+     * the upgrade choices keep their own two-abreast column rather than being stretched across
+     * a menu they no longer share, three choices to a row.
+     */
     if (layout.kind === "columns") {
       const columnsWrap = document.createElement("div");
       columnsWrap.className = "lair-panel-columns";
-      for (const def of LAIR_MENU_COLUMNS) {
-        const column = document.createElement("section");
-        column.className = "lair-panel-column";
-        if (def.wide) {
-          column.classList.add("lair-panel-column--wide");
-        }
-        column.setAttribute("aria-label", def.label);
 
-        const heading = document.createElement("h3");
-        heading.className = "game-controls-heading lair-panel-column-title";
-        heading.textContent = def.label;
+      const column = document.createElement("section");
+      column.className = "lair-panel-column lair-panel-column--wide";
+      column.setAttribute("aria-label", "Upgrades");
 
-        const list = document.createElement("div");
-        list.className = "lair-panel-missions";
-        if (def.wide) {
-          list.classList.add("lair-panel-missions--split");
-        }
-        fillLairSectionInto(def.id, list);
+      const heading = document.createElement("h3");
+      heading.className = "game-controls-heading lair-panel-column-title";
+      heading.textContent = "Upgrades";
 
-        column.appendChild(heading);
-        column.appendChild(list);
-        columnsWrap.appendChild(column);
-      }
+      const list = document.createElement("div");
+      list.className = "lair-panel-missions lair-panel-missions--grid";
+      fillLairUpgradesInto(list);
+
+      column.appendChild(heading);
+      column.appendChild(list);
+      columnsWrap.appendChild(column);
       container.appendChild(columnsWrap);
       return;
     }
@@ -9615,6 +9608,7 @@ function initGameController(
     renderLocationsPanel();
     renderMissionsPanel();
     renderLairPanel();
+    renderAssetsPanel();
     renderMapPanel();
     renderSiteInspector();
     if (!overlayActivityLog.hidden) {

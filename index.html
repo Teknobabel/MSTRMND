@@ -471,7 +471,33 @@
                     <div id="minions-panel" class="minions-panel"></div>
                   </aside>
                 </section>
-                <section class="drawer" data-drawer="locations" style="--drawer-slot: 3">
+                <section class="drawer" data-drawer="assets" style="--drawer-slot: 3">
+                  <button
+                    type="button"
+                    class="drawer-tab"
+                    id="drawer-tab-assets"
+                    data-drawer-tab="assets"
+                    aria-expanded="false"
+                    aria-controls="drawer-panel-assets"
+                  >
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z" />
+                      <path d="M2.5 9h19" />
+                    </svg>
+                    <span class="drawer-tab__label">Assets</span>
+                    <svg class="drawer-tab__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M6 15l6-6 6 6" />
+                    </svg>
+                  </button>
+                  <aside
+                    class="game-panel game-panel--assets drawer__panel"
+                    id="drawer-panel-assets"
+                    aria-labelledby="drawer-tab-assets"
+                  >
+                    <div id="assets-panel" class="assets-panel"></div>
+                  </aside>
+                </section>
+                <section class="drawer" data-drawer="locations" style="--drawer-slot: 4">
                   <button
                     type="button"
                     class="drawer-tab"
@@ -497,7 +523,7 @@
                     <div id="locations-panel" class="locations-panel"></div>
                   </aside>
                 </section>
-                <section class="drawer" data-drawer="lair" style="--drawer-slot: 4">
+                <section class="drawer" data-drawer="lair" style="--drawer-slot: 5">
                   <button
                     type="button"
                     class="drawer-tab"

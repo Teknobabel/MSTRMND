@@ -1673,7 +1673,8 @@ body {
 }
 
 .game-panel--missions,
-.game-panel--lair {
+.game-panel--lair,
+.game-panel--assets {
   --panel-bg: rgba(12, 4, 7, 0.9);
 }
 
@@ -1826,7 +1827,7 @@ body {
      down behind. */
   --drawer-floor: calc(var(--drawer-tab-h) + 0.7rem);
   --drawer-gap: 0.5rem;
-  --drawer-count: 5;
+  --drawer-count: 6;
   --drawer-tab-w: calc(
     (100% - var(--drawer-gap) * (var(--drawer-count) - 1)) / var(--drawer-count)
   );
@@ -5924,9 +5925,9 @@ body {
   gap: 0.4rem;
 }
 
+/* The Lair drawer's one section, wide enough that its three card columns never crush. */
 .lair-panel-column--wide {
-  flex-grow: 2;
-  min-width: 23rem;
+  min-width: 34rem;
 }
 
 .locations-panel-column-title,
@@ -5941,18 +5942,28 @@ body {
   gap: 0.45rem;
 }
 
-.game-panel.game-panel--lair .assets-panel {
+/* Assets have the whole menu to themselves, so their cards fill it three to a row. */
+.game-panel.game-panel--assets .assets-panel {
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 0.55rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+  padding-bottom: var(--drawer-floor);
+}
+
+.game-panel.game-panel--assets .assets-panel > .assets-panel-empty {
+  grid-column: 1 / -1;
 }
 
 .game-panel.game-panel--lair,
 .game-panel.game-panel--minions,
 .game-panel.game-panel--locations,
 .game-panel.game-panel--missions,
+.game-panel.game-panel--assets,
 .game-panel.game-panel--map,
 .game-panel.game-panel--plan-column {
   min-height: 0;
@@ -5991,18 +6002,19 @@ body {
 }
 
 /*
- * Upgrades run two cards abreast: the level's choices sit side by side instead of stacking off
- * the bottom of the drawer. The level line and its rule note stay full width above them.
+ * Upgrades run three cards abreast across the menu they now have to themselves, so a level's
+ * choices sit side by side instead of stacking off the bottom of the drawer. The level line and
+ * its rule note stay full width above them.
  */
-.lair-panel-missions--split {
+.lair-panel-missions--grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: start;
   gap: 0.45rem;
 }
 
-.lair-panel-missions--split > .lair-upgrade-level-title,
-.lair-panel-missions--split > .assets-panel-empty {
+.lair-panel-missions--grid > .lair-upgrade-level-title,
+.lair-panel-missions--grid > .assets-panel-empty {
   grid-column: 1 / -1;
 }
 
