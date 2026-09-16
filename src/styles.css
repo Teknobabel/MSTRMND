@@ -4978,6 +4978,19 @@ body {
   color: var(--text-2);
 }
 
+/* An asset an outcome hands over or takes away, rather than one a mission asks for: no
+ * have/missing question, only whether it sits under On Success or On Failure — the same pair
+ * the panel around it frames itself with. Left accent only, like `--req-have` beside it, so the
+ * cell reads as the same kind of object rather than gaining a border the requirement cells don't
+ * have. */
+.card-brief__pills > .minions-trait-pill--good {
+  border-left-color: var(--good-dim);
+}
+
+.card-brief__pills > .minions-trait-pill--bad {
+  border-left-color: var(--red-deep);
+}
+
 /*
  * A temporary status — Injured, Lucky — is the one trait in a minion's list that is not simply
  * what the minion is, so it keeps its green / red. On the shared ground that signal is carried by
@@ -5498,9 +5511,30 @@ body {
   color: var(--text-1);
 }
 
-/* A name with nothing under it — the fallback for text that arrived without a second line —
-   closes up rather than leaving the bubble padded for a description it does not have. */
-.app-global-tooltip__desc[hidden] {
+/*
+ * The third line, when a tooltip has one: where the player stands with respect to the thing
+ * described ("You have 3 minions with this skill"), never more description.
+ *
+ * Ruled off and set in the display face rather than merely spaced, because it is a different
+ * kind of statement from the line above it — that one is true for everybody and this one is
+ * true for this run. Run on as a third sentence of body text it read as more description, which
+ * is the one thing it must not be mistaken for.
+ */
+.app-global-tooltip__note {
+  display: block;
+  margin-top: 0.4rem;
+  padding-top: 0.34rem;
+  border-top: 1px solid var(--line-1);
+  font-family: var(--font-display);
+  font-size: 0.63rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+
+/* A line the tooltip does not have closes up rather than leaving the bubble padded for it. */
+.app-global-tooltip__desc[hidden],
+.app-global-tooltip__note[hidden] {
   display: none;
 }
 

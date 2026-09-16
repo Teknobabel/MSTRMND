@@ -28,21 +28,27 @@
  * asks one question — does the player currently hold enough of it — which it answers with the
  * same `--req-have` / `--req-missing` pair the skill cells use.
  *
- * `missionAssetCell` is exported for exactly one other caller: the asset gains listed under a
- * mission card's On Success / On Failure panels (`main.ts`). A gain has nothing to hold either,
- * so it always wears the same `have` look a satisfied requirement does — success and failure are
- * already told apart by the panel's own green or red frame, not by the cell inside it. One
- * builder either way, so a change to how an asset cell is drawn never has to be made twice.
+ * `missionAssetCell` is exported for exactly one other caller: the asset gains and losses listed
+ * under a mission card's On Success / On Failure panels (`main.ts`). Those have nothing to hold,
+ * so their accent instead carries which panel they sit in — `good` for On Success, `bad` for On
+ * Failure — and their caption names the direction ("Gain Asset" / "Lose Asset") rather than the
+ * generic "Asset" a requirement cell wears. One builder either way, so a change to how an asset
+ * cell is drawn never has to be made twice.
  *
  * Purely presentational and data-in / DOM-out, like `locationBrief.ts`: the caller builds the
  * skill cells and hands in the asset list already resolved against the roster.
  */
 import { ICON_CRATE, briefIcon, briefPanel, briefPlaceholder } from "./cardBrief";
 
-/** Which modifier an asset cell wears: whether the roster currently covers it. */
-export type MissionBriefAssetRowVariant = "have" | "missing";
+/**
+ * Which modifier an asset cell wears. A required asset only ever asks whether the roster covers
+ * it (`have` / `missing`); an asset an effect hands over or takes away asks nothing of the
+ * roster — its accent instead says whether it sits under On Success or On Failure (`good` /
+ * `bad`), the same pair the panel around it frames itself with.
+ */
+export type MissionBriefAssetRowVariant = "have" | "missing" | "good" | "bad";
 
-/** One asset cell — a requirement or an effect's own gain — built by {@link missionAssetCell}. */
+/** One asset cell — a requirement or an effect's own gain/loss — built by {@link missionAssetCell}. */
 export interface MissionBriefAssetRow {
   /** Catalog id of the asset this cell is for. Not drawn — it is what a caller wiring `preview`
    * needs in order to build the right card, without re-deriving it from the cell's position. */
@@ -52,6 +58,9 @@ export interface MissionBriefAssetRow {
    * with a count rather than repeating the cell. */
   quantity: number;
   variant: MissionBriefAssetRowVariant;
+  /** The kind caption over the name — "Asset" for a requirement, "Gain Asset" / "Lose Asset" for
+   * an effect. Rendered upper-cased by CSS, so any casing reads the same. */
+  caption: string;
   tooltip: string;
   /**
    * Called with the cell element so the caller can float the asset's full card beside it on
@@ -64,6 +73,8 @@ export interface MissionBriefAssetRow {
 const ASSET_ROW_VARIANT_CLASS: Record<MissionBriefAssetRowVariant, string> = {
   have: "minions-trait-pill--req-have",
   missing: "minions-trait-pill--req-missing",
+  good: "minions-trait-pill--good",
+  bad: "minions-trait-pill--bad",
 };
 
 export interface MissionBriefModel {
@@ -97,7 +108,7 @@ export function missionAssetCell(row: MissionBriefAssetRow): HTMLElement {
   text.className = "minions-trait-pill__text";
   const caption = document.createElement("span");
   caption.className = "minions-trait-pill__caption";
-  caption.textContent = "Asset";
+  caption.textContent = row.caption;
   text.appendChild(caption);
   const name = document.createElement("span");
   name.className = "minions-trait-pill__label";

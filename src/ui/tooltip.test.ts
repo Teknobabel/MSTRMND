@@ -23,4 +23,31 @@ describe("tooltipText", () => {
   it("trims both halves, so a stray newline cannot open a third line", () => {
     expect(tooltipText("  Deploy  ", "  Spends 2 CP.  ")).toBe("Deploy\nSpends 2 CP.");
   });
+
+  it("puts a note on a third line of its own", () => {
+    expect(
+      tooltipText(
+        "Skill - Primary",
+        "A core skill. It covers this requirement on any mission that asks for it.",
+        "You have 3 minions with this skill",
+      ),
+    ).toBe(
+      "Skill - Primary\nA core skill. It covers this requirement on any mission that asks for it.\nYou have 3 minions with this skill",
+    );
+  });
+
+  it("keeps the note on the third line when the description is several sentences", () => {
+    // The description folds to one line, so the note is always the last of exactly three.
+    expect(tooltipText("Heat", "One.\nTwo.\nThree.", "You are at tier 2").split("\n")).toEqual([
+      "Heat",
+      "One. Two. Three.",
+      "You are at tier 2",
+    ]);
+  });
+
+  it("does not leave a hole when a note arrives without a description", () => {
+    expect(tooltipText("Skill - Primary", undefined, "You have 3 minions with this skill")).toBe(
+      "Skill - Primary\nYou have 3 minions with this skill",
+    );
+  });
 });

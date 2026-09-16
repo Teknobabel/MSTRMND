@@ -556,23 +556,77 @@ function req<T extends HTMLElement>(id: string): T {
   return el as T;
 }
 
+/**
+ * How many roster minions hold a given skill — the third line of every skill tooltip.
+ *
+ * A module-level hook rather than an argument threaded down: the count is a fact about the
+ * player's roster, identical for every pill on screen and unrelated to the card any one of them
+ * is drawn on. Carrying it by parameter would mean a new argument on `createTraitPillEl` and on
+ * all five helpers that call it, at every call site, to move one number that never differs
+ * between them. Bound once by `bindRosterSkillCounts` when the game boots; until then it reports
+ * `null` and the line is simply left off, which is also what the title screen wants.
+ */
+let rosterSkillCountFor: (traitId: string) => number | null = () => null;
+
+function bindRosterSkillCounts(read: (traitId: string) => number): void {
+  rosterSkillCountFor = read;
+}
+
+/**
+ * The kind mark a skill tooltip opens with, in place of the trait's own name — the pill under
+ * the pointer is already showing that, and repeating it costs the line that could say what kind
+ * of thing it is instead.
+ *
+ * A status is not a skill and does not claim to be one: the leading noun is the category, and
+ * the word after the dash is the type within it. `dynamic` rows never reach here (they are
+ * art-only and excluded from every requirement and level-up pool — see `game/types.ts`), but
+ * the catalog type admits them, so they get an honest mark rather than a cast.
+ */
+const TRAIT_TOOLTIP_KIND_MARK: Record<Trait["type"], string> = {
+  primary: "Skill - Primary",
+  secondary: "Skill - Secondary",
+  status_positive: "Status - Positive",
+  status_negative: "Status - Negative",
+  dynamic: "Standing",
+};
+
+/** The noun the roster-count line uses, so a status is never counted as a skill. */
+const TRAIT_TOOLTIP_KIND_NOUN: Record<Trait["type"], string> = {
+  primary: "skill",
+  secondary: "skill",
+  status_positive: "status",
+  status_negative: "status",
+  dynamic: "standing",
+};
+
+const TRAIT_TOOLTIP_DESC: Record<Trait["type"], string> = {
+  primary: "A core skill. It covers this requirement on any mission that asks for it.",
+  secondary: "A supporting skill. It covers this requirement on any mission that asks for it.",
+  status_positive: "A good turn for this minion: +10% mission success chance while it holds.",
+  status_negative: "A bad turn for this minion: −20% mission success chance while it holds.",
+  dynamic: "A standing projected from this minion's affinity scores, not a skill it can be given.",
+};
+
+/** "You have 3 minions with this skill", or nothing at all before the roster exists. */
+function rosterSkillCountLine(noun: string, count: number | null): string | undefined {
+  if (count === null) {
+    return undefined;
+  }
+  if (count === 0) {
+    return `You have no minions with this ${noun}`;
+  }
+  return `You have ${count} minion${count === 1 ? "" : "s"} with this ${noun}`;
+}
+
 function formatStaticTraitTooltip(trait: Trait | undefined, traitId: string): string {
   if (!trait) {
     return traitId;
   }
-  if (trait.type === "status_positive") {
-    return tooltipText(`${trait.name} (Status)`, "A good turn for this minion: +10% mission success chance while it holds.");
-  }
-  if (trait.type === "status_negative") {
-    return tooltipText(`${trait.name} (Status)`, "A bad turn for this minion: −20% mission success chance while it holds.");
-  }
-  if (trait.type === "primary") {
-    return tooltipText(`${trait.name} (Primary Trait)`, "A core skill. It covers this requirement on any mission that asks for it.");
-  }
-  if (trait.type === "secondary") {
-    return tooltipText(`${trait.name} (Secondary Trait)`, "A supporting skill. It covers this requirement on any mission that asks for it.");
-  }
-  return trait.name;
+  return tooltipText(
+    TRAIT_TOOLTIP_KIND_MARK[trait.type],
+    TRAIT_TOOLTIP_DESC[trait.type],
+    rosterSkillCountLine(TRAIT_TOOLTIP_KIND_NOUN[trait.type], rosterSkillCountFor(traitId)),
+  );
 }
 
 function formatDynamicTraitTooltip(
@@ -1121,6 +1175,7 @@ function missionRequiredAssetRows(
       name: template?.name ?? assetId,
       quantity,
       variant: (ownedAssets[assetId] ?? 0) >= quantity ? "have" : "missing",
+      caption: "Asset",
       tooltip: formatStaticAssetTooltip(template, assetId),
     });
   }
@@ -1358,6 +1413,12 @@ function initGameController(
   runSetup: RunSetupApi,
 ): GameControllerApi {
   let state: GameState = createInitialGameState(content, undefined, runSetup.read());
+
+  /* Read through the live binding rather than captured once: `dispatch` replaces `state`, and a
+   * skill tooltip is built fresh on every render, so the count is always this turn's roster. */
+  bindRosterSkillCounts(
+    (traitId) => state.player.minions.filter((m) => m.traitIds.includes(traitId)).length,
+  );
 
   const organizationNameEl = req<HTMLElement>("organization-name");
   const playerNameEl = req<HTMLElement>("player-name");
@@ -1622,23 +1683,27 @@ function initGameController(
   }
 
   /**
-   * One asset an effect gains, built by the exact same cell {@link missionAssetCell} draws for a
-   * mission's Requirements grid — the generic crate mark, the ruled divider, the "Asset" caption
-   * over the name. There is nothing to hold here, so it always wears the plain `have` look a
-   * satisfied requirement does; success and failure are already told apart by the On Success /
-   * On Failure panel's own green or red frame, not by the cell inside it. One builder behind
-   * both, so the two can never drift on how an asset is shown on a mission card.
+   * One asset an effect hands over or takes away, built by the exact same cell
+   * {@link missionAssetCell} draws for a mission's Requirements grid — the generic crate mark,
+   * the ruled divider, a caption over the name. There is nothing to hold here, so the accent
+   * carries which panel it sits in (`good` for On Success, `bad` for On Failure) rather than a
+   * have/missing pair, and the caption names the direction instead of the generic "Asset" a
+   * requirement wears. One builder behind both, so the two can never drift on how an asset is
+   * shown on a mission card.
    */
   function missionEffectAssetCell(
     catalog: ReturnType<typeof loadContent>,
     assetId: string,
+    tone: "good" | "bad",
+    direction: "gain" | "lose",
   ): HTMLElement {
     const template = catalog.assets.find((a) => a.id === assetId);
     return missionAssetCell({
       assetId,
       name: template?.name ?? assetId,
       quantity: 1,
-      variant: "have",
+      variant: tone,
+      caption: direction === "gain" ? "Gain Asset" : "Lose Asset",
       tooltip: formatStaticAssetTooltip(template, assetId),
       preview: (el) => attachAssetRowPreview(el, assetId),
     });
@@ -1651,39 +1716,6 @@ function initGameController(
   ): HTMLElement[] {
     const toneClass =
       tone === "good" ? "mission-card-effects__item--good" : "mission-card-effects__item--bad";
-
-    if (effect.kind === "exchange_assets") {
-      const item = document.createElement("li");
-      item.className = `mission-card-effects__item ${toneClass}`;
-      const hasRemove = effect.removeAssetIds.length > 0;
-      const hasGain = effect.gainAssetIds.length > 0;
-      if (hasRemove && hasGain) {
-        item.append("Removed up to ");
-        effect.removeAssetIds.forEach((id: string, idx: number) => {
-          if (idx > 0) item.append(", ");
-          item.appendChild(createAssetPillEl(catalog, id));
-        });
-        item.append(" from inventory, then gained ");
-        effect.gainAssetIds.forEach((id: string, idx: number) => {
-          if (idx > 0) item.append(", ");
-          item.appendChild(createAssetPillEl(catalog, id));
-        });
-      } else if (hasRemove) {
-        item.append("Removed up to ");
-        effect.removeAssetIds.forEach((id: string, idx: number) => {
-          if (idx > 0) item.append(", ");
-          item.appendChild(createAssetPillEl(catalog, id));
-        });
-        item.append(" from inventory");
-      } else if (hasGain) {
-        item.append("Gained ");
-        effect.gainAssetIds.forEach((id: string, idx: number) => {
-          if (idx > 0) item.append(", ");
-          item.appendChild(createAssetPillEl(catalog, id));
-        });
-      }
-      return [item];
-    }
 
     const lines = describeMissionEffect(effect, catalog);
     return lines.map((line) => {
@@ -1766,10 +1798,27 @@ function initGameController(
       tone === "good" ? "brief-panel--good" : "brief-panel--bad",
     );
 
-    /* Asset gains are pulled out of the line-by-line list and drawn as their own single-column
-     * run of cells — see `missionEffectAssetCell`. */
-    const gainedAssetIds = effects.flatMap((e) => (e.kind === "gain_assets" ? e.assetIds : []));
-    const otherEffects = effects.filter((e) => e.kind !== "gain_assets");
+    /* Every asset an outcome hands over or takes away is pulled out of the line-by-line list and
+     * drawn as its own cell in a single-column run instead — see `missionEffectAssetCell`. Order
+     * follows the effect list, and an exchange still names its removal before its gain. */
+    const assetGrants: Array<{ assetId: string; direction: "gain" | "lose" }> = [];
+    for (const effect of effects) {
+      if (effect.kind === "gain_assets") {
+        for (const assetId of effect.assetIds) {
+          assetGrants.push({ assetId, direction: "gain" });
+        }
+      } else if (effect.kind === "exchange_assets") {
+        for (const assetId of effect.removeAssetIds) {
+          assetGrants.push({ assetId, direction: "lose" });
+        }
+        for (const assetId of effect.gainAssetIds) {
+          assetGrants.push({ assetId, direction: "gain" });
+        }
+      }
+    }
+    const otherEffects = effects.filter(
+      (e) => e.kind !== "gain_assets" && e.kind !== "exchange_assets",
+    );
 
     const list = document.createElement("ul");
     list.className = "card-brief__assets";
@@ -1780,11 +1829,11 @@ function initGameController(
       body.appendChild(list);
     }
 
-    if (gainedAssetIds.length > 0) {
+    if (assetGrants.length > 0) {
       const grid = document.createElement("div");
       grid.className = "card-brief__pills card-brief__pills--grid card-brief__pills--single";
-      for (const assetId of gainedAssetIds) {
-        grid.appendChild(missionEffectAssetCell(catalog, assetId));
+      for (const { assetId, direction } of assetGrants) {
+        grid.appendChild(missionEffectAssetCell(catalog, assetId, tone, direction));
       }
       body.appendChild(grid);
     }

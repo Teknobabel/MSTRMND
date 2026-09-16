@@ -2,17 +2,25 @@
  * Global custom tooltip manager that styles all tooltips across the application
  * with the retro-tactical panel appearance.
  *
- * Every tooltip in the app is two lines and only two: the **name** of the thing under the
- * pointer, then one short line saying what it is. The name is what a player hovering a bare icon
- * is actually asking for, and the description is the answer they would have had to look up — so
- * a tooltip that opens with a sentence and never names its subject was answering the second
- * question without ever having heard the first.
+ * Every tooltip in the app is the **name** of the thing under the pointer, then one short line
+ * saying what it is. The name is what a player hovering a bare icon is actually asking for, and
+ * the description is the answer they would have had to look up — so a tooltip that opens with a
+ * sentence and never names its subject was answering the second question without ever having
+ * heard the first.
  *
- * The two lines travel in one attribute (`title`, or `data-tooltip` once this has claimed it):
- * the first line is the name, everything after it is the description. {@link tooltipText} and
- * {@link setTooltip} build that string, and call sites should use them rather than writing the
- * newline out by hand — they are the one place the format is spelled. Text arriving without a
- * second line still shows, as a name with nothing under it.
+ * A tooltip may add a **third line**, and only for one job: a fact about the player's own
+ * position with respect to the thing described — "You have 3 minions with this skill". It is a
+ * separate line rather than a clause on the description because it is a different kind of
+ * statement. The description says what a thing *is* and is the same for every player; the note
+ * says where *you* stand and changes as the run does. Anything that is neither belongs in the
+ * description or nowhere.
+ *
+ * The lines travel in one attribute (`title`, or `data-tooltip` once this has claimed it),
+ * newline-separated: first line names, last line is the note when there are three, everything
+ * between describes. {@link tooltipText} and {@link setTooltip} build that string, and call
+ * sites should use them rather than writing the newlines out by hand — they are the one place
+ * the format is spelled. Text arriving without a second line still shows, as a name with
+ * nothing under it.
  *
  * The one exception is deliberate and lives at the call sites, not here: anything that floats a
  * **card** on hover shows the card instead (see `ui/locationBrief.ts`, `ui/missionBrief.ts`),
@@ -24,21 +32,31 @@ export interface TooltipApi {
   hide: () => void;
 }
 
+/** Collapses a line's own newlines away, so only the separators this module writes survive. */
+function oneLine(text: string | undefined): string {
+  return text?.replace(/\s+/g, " ").trim() ?? "";
+}
+
 /**
- * The house format, as a string: name on the first line, description on the second.
+ * The house format, as a string: name, description, and the optional note (see the module
+ * comment for what earns the third line).
  *
  * A description spanning several sentences is folded onto the one line rather than rejected —
- * the shape of the tooltip is fixed, and a long second line simply wraps inside it.
+ * the shape of the tooltip is fixed, and a long line simply wraps inside it. A note given
+ * without a description takes the second line, because a tooltip cannot have a hole in it.
  */
-export function tooltipText(name: string, description?: string): string {
-  const trimmedName = name.trim();
-  const trimmedDesc = description?.replace(/\s+/g, " ").trim() ?? "";
-  return trimmedDesc === "" ? trimmedName : `${trimmedName}\n${trimmedDesc}`;
+export function tooltipText(name: string, description?: string, note?: string): string {
+  return [name.trim(), oneLine(description), oneLine(note)].filter((s) => s !== "").join("\n");
 }
 
 /** {@link tooltipText}, applied straight to an element. */
-export function setTooltip(el: HTMLElement, name: string, description?: string): void {
-  el.title = tooltipText(name, description);
+export function setTooltip(
+  el: HTMLElement,
+  name: string,
+  description?: string,
+  note?: string,
+): void {
+  el.title = tooltipText(name, description, note);
 }
 
 const HOVER_DELAY_MS = 1000;
@@ -56,24 +74,36 @@ export function initGlobalTooltips(delayMs: number = HOVER_DELAY_MS): TooltipApi
   nameEl.className = "app-global-tooltip__name";
   const descEl = document.createElement("span");
   descEl.className = "app-global-tooltip__desc";
+  const noteEl = document.createElement("span");
+  noteEl.className = "app-global-tooltip__note";
   tooltipEl.appendChild(nameEl);
   tooltipEl.appendChild(descEl);
+  tooltipEl.appendChild(noteEl);
   document.body.appendChild(tooltipEl);
 
-  /** Splits the house format onto its two lines: first line names, the rest describes. */
+  /**
+   * Splits the house format onto its lines: the first names, the last is the note when there are
+   * three of them, and whatever sits between describes. `tooltipText` has already folded each
+   * line's own newlines away, so a text arriving with three lines really does carry three
+   * statements rather than one that happened to wrap.
+   */
   function fill(text: string): void {
-    const newline = text.indexOf("\n");
-    const name = newline === -1 ? text : text.slice(0, newline);
-    const desc = newline === -1 ? "" : text.slice(newline + 1).replace(/\s+/g, " ").trim();
-    nameEl.textContent = name.trim();
+    const lines = text.split("\n");
+    nameEl.textContent = (lines[0] ?? "").trim();
+    const desc = lines.length >= 3 ? lines.slice(1, -1).join(" ").trim() : (lines[1] ?? "").trim();
+    const note = lines.length >= 3 ? (lines[lines.length - 1] ?? "").trim() : "";
     descEl.textContent = desc;
     descEl.hidden = desc === "";
+    noteEl.textContent = note;
+    noteEl.hidden = note === "";
   }
 
   function clearContent(): void {
     nameEl.textContent = "";
     descEl.textContent = "";
     descEl.hidden = true;
+    noteEl.textContent = "";
+    noteEl.hidden = true;
   }
 
   let activeAnchor: HTMLElement | null = null;
