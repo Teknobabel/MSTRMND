@@ -271,12 +271,13 @@ const LAIR_INSPECTOR_TABS: readonly { id: LairInspectorTab; label: string }[] = 
 ];
 
 /**
- * Lair sections shown as columns in the Lair drawer.
+ * Lair sections shown as columns in the Lair drawer: what this base can still become, and what
+ * it owns. Missions — the lair's pool and the ones in flight — are the Missions menu's to list.
+ * Upgrades take a double-width column so their choices sit two abreast instead of stacking off
+ * the bottom, which leaves the drawer three card columns wide overall.
  */
-const LAIR_MENU_COLUMNS: readonly { id: LairPanelSection; label: string }[] = [
-  { id: "missions", label: "Missions" },
-  { id: "upgrades", label: "Upgrades" },
-  { id: "active", label: "Active Missions" },
+const LAIR_MENU_COLUMNS: readonly { id: LairPanelSection; label: string; wide?: true }[] = [
+  { id: "upgrades", label: "Upgrades", wide: true },
   { id: "assets", label: "Assets" },
 ];
 
@@ -5764,16 +5765,6 @@ function initGameController(
     status?: { label: string; kind: "inprogress" | "pending" | "locked" };
   };
 
-  /** Runnable offers from one source (omega phase / lair / lair upgrades / event). */
-  type AvailableMissionGroup = {
-    label: string;
-    /** Shown in place of the card list when the source has nothing on offer. */
-    emptyText: string;
-    /** Optional rule line under the heading (how the group's offers relate to each other). */
-    note?: string;
-    entries: AvailableMissionEntry[];
-  };
-
   function missionDisplayName(missionTemplateId: string): string {
     return findMissionOrEventTemplate(missionTemplateId)?.name ?? missionTemplateId;
   }
@@ -5908,74 +5899,40 @@ function initGameController(
   }
 
   /**
-   * Every mission the run has unlocked and could still be started from, grouped by source.
-   * Mirrors what `assignMission` accepts: the lair pool, pending lair upgrades, and the global
-   * event offer. The active omega phase's own unfinished slots are the Omega Plan panel's to
-   * show, not this menu's — see `renderOmegaPlanPanel`.
+   * Every mission the run has unlocked and could still be started from: the lair's own pool,
+   * which is all `assignMission` still accepts from this menu. Lair upgrades are the Lair
+   * menu's to show, and the active omega phase's own unfinished slots belong to the Omega Plan
+   * panel — see `renderOmegaPlanPanel`.
+   *
+   * No Event Offer here either. The offer has its own pane on the dashboard, lit and in the
+   * corner where the run puts it (`.game-panel--site-inspector--event`), and `eventOfferEntry`
+   * still builds that card — so listing it again at the foot of this menu was the same offer
+   * twice, with the duplicate being the copy nobody is looking at.
    */
-  function collectAvailableMissionGroups(): AvailableMissionGroup[] {
-    const mainOnly = state.phase === "main";
-    const groups: AvailableMissionGroup[] = [];
+  function fillAvailableMissionsInto(container: HTMLElement): void {
+    if (state.activeLairId === null || state.lairMissionIds.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent =
+        state.activeLairId === null ? "No lair in this run." : "No missions at this lair.";
+      container.appendChild(empty);
+      return;
+    }
 
-    if (state.activeLairId !== null) {
-      groups.push({
-        label: "Lair",
-        emptyText: "No missions at this lair.",
-        entries: [...state.lairMissionIds].sort(compareMissionIdsByName).map((mid) => ({
+    const mainOnly = state.phase === "main";
+    const list = document.createElement("div");
+    list.className = "missions-available-list";
+    for (const mid of [...state.lairMissionIds].sort(compareMissionIdsByName)) {
+      list.appendChild(
+        buildMissionEntryCard({
           missionTemplateId: mid,
           dragMeta: mainOnly
             ? { draggable: true, source: "lair", missionTemplateId: mid }
             : undefined,
-        })),
-      });
-
-      const upgrades = lairUpgradeOffer();
-      groups.push({
-        label: upgrades.label,
-        emptyText: upgrades.emptyText,
-        ...(upgrades.note !== null ? { note: upgrades.note } : {}),
-        entries: upgrades.entries,
-      });
+        }),
+      );
     }
-
-    /* No Event Offer group here. The offer has its own pane on the dashboard, lit and in the
-     * corner where the run puts it (`.game-panel--site-inspector--event`), and `eventOfferEntry`
-     * still builds that card — so listing it again at the foot of this menu was the same offer
-     * twice, with the duplicate being the copy nobody is looking at. */
-    return groups;
-  }
-
-  function fillAvailableMissionsInto(container: HTMLElement): void {
-    const groups = collectAvailableMissionGroups();
-
-    for (const group of groups) {
-      const heading = document.createElement("h3");
-      heading.className = "events-tab-section-title";
-      heading.textContent = group.label;
-      container.appendChild(heading);
-
-      if (group.note !== undefined) {
-        const note = document.createElement("p");
-        note.className = "assets-panel-empty";
-        note.textContent = group.note;
-        container.appendChild(note);
-      }
-
-      if (group.entries.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "assets-panel-empty";
-        empty.textContent = group.emptyText;
-        container.appendChild(empty);
-        continue;
-      }
-
-      const list = document.createElement("div");
-      list.className = "missions-available-list";
-      for (const entry of group.entries) {
-        list.appendChild(buildMissionEntryCard(entry));
-      }
-      container.appendChild(list);
-    }
+    container.appendChild(list);
   }
 
   /** One resolved / cancelled / aborted mission, as it reads in the history column. */
@@ -6118,9 +6075,13 @@ function initGameController(
     parent: HTMLElement,
     label: string,
     fill: (container: HTMLElement) => void,
+    opts?: { readonly wide?: true },
   ): void {
     const column = document.createElement("section");
     column.className = "missions-menu-column";
+    if (opts?.wide === true) {
+      column.classList.add("missions-menu-column--wide");
+    }
     column.setAttribute("aria-label", label);
 
     const heading = document.createElement("h3");
@@ -6140,15 +6101,26 @@ function initGameController(
     withDeferredCardArt(openDrawer !== "missions", buildMissionsPanel);
   }
 
+  /**
+   * Three card columns wide: the offers take the first two, laid out two cards abreast, since
+   * that is the list the player is actually shopping from. The third stacks what is underway
+   * over what has resolved, splitting its height evenly so a long history never pushes the
+   * running missions out of sight.
+   */
   function buildMissionsPanel(): void {
     missionsPanelRootEl.innerHTML = "";
     const columns = document.createElement("div");
     columns.className = "missions-menu-columns";
-    appendMissionsMenuColumn(columns, "Available", fillAvailableMissionsInto);
-    appendMissionsMenuColumn(columns, "Active", (body) => {
+    appendMissionsMenuColumn(columns, "Available", fillAvailableMissionsInto, { wide: true });
+
+    const stack = document.createElement("div");
+    stack.className = "missions-menu-column missions-menu-column--stack";
+    appendMissionsMenuColumn(stack, "Active", (body) => {
       renderActiveMissionsInto(body);
     });
-    appendMissionsMenuColumn(columns, "History", fillMissionHistoryInto);
+    appendMissionsMenuColumn(stack, "History", fillMissionHistoryInto);
+    columns.appendChild(stack);
+
     missionsPanelRootEl.appendChild(columns);
   }
 
@@ -8140,6 +8112,9 @@ function initGameController(
       for (const def of LAIR_MENU_COLUMNS) {
         const column = document.createElement("section");
         column.className = "lair-panel-column";
+        if (def.wide) {
+          column.classList.add("lair-panel-column--wide");
+        }
         column.setAttribute("aria-label", def.label);
 
         const heading = document.createElement("h3");
@@ -8148,6 +8123,9 @@ function initGameController(
 
         const list = document.createElement("div");
         list.className = "lair-panel-missions";
+        if (def.wide) {
+          list.classList.add("lair-panel-missions--split");
+        }
         fillLairSectionInto(def.id, list);
 
         column.appendChild(heading);

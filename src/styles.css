@@ -5924,6 +5924,11 @@ body {
   gap: 0.4rem;
 }
 
+.lair-panel-column--wide {
+  flex-grow: 2;
+  min-width: 23rem;
+}
+
 .locations-panel-column-title,
 .lair-panel-column-title,
 .minions-panel-column-title {
@@ -5985,6 +5990,22 @@ body {
   gap: 0.45rem;
 }
 
+/*
+ * Upgrades run two cards abreast: the level's choices sit side by side instead of stacking off
+ * the bottom of the drawer. The level line and its rule note stay full width above them.
+ */
+.lair-panel-missions--split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 0.45rem;
+}
+
+.lair-panel-missions--split > .lair-upgrade-level-title,
+.lair-panel-missions--split > .assets-panel-empty {
+  grid-column: 1 / -1;
+}
+
 /* Which rung of the upgrade ladder the visible choices belong to. */
 .lair-upgrade-level-title {
   margin: 0;
@@ -6004,7 +6025,7 @@ body {
   gap: 0.45rem;
 }
 
-/* Missions drawer: Available / Active / History side by side */
+/* Missions drawer: a double-width Available beside a stacked Active-over-History column */
 .game-panel.game-panel--missions .missions-panel-root {
   overflow: hidden;
 }
@@ -6033,6 +6054,30 @@ body {
 
 .missions-menu-column-title {
   margin: 0;
+}
+
+/* The offers span two of the drawer's three columns, and run two cards abreast inside them. */
+.missions-menu-column--wide {
+  flex-grow: 2;
+  min-width: 27rem;
+}
+
+.missions-menu-column--wide .missions-available-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+}
+
+/*
+ * Active over History in the last column. Each half is a `.missions-menu-column` in its own
+ * right, so the shared `flex: 1 1 0` splits the height evenly and each body scrolls alone.
+ */
+.missions-menu-column--stack {
+  gap: 0.65rem;
+}
+
+.missions-menu-column--stack > .missions-menu-column {
+  min-width: 0;
 }
 
 .missions-menu-column-body {
