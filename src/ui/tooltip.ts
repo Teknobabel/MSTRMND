@@ -1,11 +1,44 @@
 /**
  * Global custom tooltip manager that styles all tooltips across the application
  * with the retro-tactical panel appearance.
+ *
+ * Every tooltip in the app is two lines and only two: the **name** of the thing under the
+ * pointer, then one short line saying what it is. The name is what a player hovering a bare icon
+ * is actually asking for, and the description is the answer they would have had to look up — so
+ * a tooltip that opens with a sentence and never names its subject was answering the second
+ * question without ever having heard the first.
+ *
+ * The two lines travel in one attribute (`title`, or `data-tooltip` once this has claimed it):
+ * the first line is the name, everything after it is the description. {@link tooltipText} and
+ * {@link setTooltip} build that string, and call sites should use them rather than writing the
+ * newline out by hand — they are the one place the format is spelled. Text arriving without a
+ * second line still shows, as a name with nothing under it.
+ *
+ * The one exception is deliberate and lives at the call sites, not here: anything that floats a
+ * **card** on hover shows the card instead (see `ui/locationBrief.ts`, `ui/missionBrief.ts`),
+ * because the card already carries the name, the art and more description than a bubble can.
  */
 
 export interface TooltipApi {
   destroy: () => void;
   hide: () => void;
+}
+
+/**
+ * The house format, as a string: name on the first line, description on the second.
+ *
+ * A description spanning several sentences is folded onto the one line rather than rejected —
+ * the shape of the tooltip is fixed, and a long second line simply wraps inside it.
+ */
+export function tooltipText(name: string, description?: string): string {
+  const trimmedName = name.trim();
+  const trimmedDesc = description?.replace(/\s+/g, " ").trim() ?? "";
+  return trimmedDesc === "" ? trimmedName : `${trimmedName}\n${trimmedDesc}`;
+}
+
+/** {@link tooltipText}, applied straight to an element. */
+export function setTooltip(el: HTMLElement, name: string, description?: string): void {
+  el.title = tooltipText(name, description);
 }
 
 const HOVER_DELAY_MS = 1000;
@@ -16,7 +49,32 @@ export function initGlobalTooltips(delayMs: number = HOVER_DELAY_MS): TooltipApi
   tooltipEl.className = "app-global-tooltip";
   tooltipEl.setAttribute("role", "tooltip");
   tooltipEl.setAttribute("aria-hidden", "true");
+  /* Built once and refilled, rather than rebuilt per hover: the bubble is measured immediately
+   * after it is filled (see `position`), and swapping children is one less thing between the
+   * text landing and that measurement being taken. */
+  const nameEl = document.createElement("span");
+  nameEl.className = "app-global-tooltip__name";
+  const descEl = document.createElement("span");
+  descEl.className = "app-global-tooltip__desc";
+  tooltipEl.appendChild(nameEl);
+  tooltipEl.appendChild(descEl);
   document.body.appendChild(tooltipEl);
+
+  /** Splits the house format onto its two lines: first line names, the rest describes. */
+  function fill(text: string): void {
+    const newline = text.indexOf("\n");
+    const name = newline === -1 ? text : text.slice(0, newline);
+    const desc = newline === -1 ? "" : text.slice(newline + 1).replace(/\s+/g, " ").trim();
+    nameEl.textContent = name.trim();
+    descEl.textContent = desc;
+    descEl.hidden = desc === "";
+  }
+
+  function clearContent(): void {
+    nameEl.textContent = "";
+    descEl.textContent = "";
+    descEl.hidden = true;
+  }
 
   let activeAnchor: HTMLElement | null = null;
   let pendingAnchor: HTMLElement | null = null;
@@ -36,7 +94,7 @@ export function initGlobalTooltips(delayMs: number = HOVER_DELAY_MS): TooltipApi
     activeAnchor = null;
     tooltipEl.classList.remove("is-visible");
     tooltipEl.setAttribute("aria-hidden", "true");
-    tooltipEl.textContent = "";
+    clearContent();
   }
 
   function show(anchor: HTMLElement, text: string): void {
@@ -47,7 +105,7 @@ export function initGlobalTooltips(delayMs: number = HOVER_DELAY_MS): TooltipApi
     }
 
     activeAnchor = anchor;
-    tooltipEl.textContent = trimmed;
+    fill(trimmed);
     tooltipEl.classList.add("is-visible");
     tooltipEl.setAttribute("aria-hidden", "false");
 
@@ -61,7 +119,7 @@ export function initGlobalTooltips(delayMs: number = HOVER_DELAY_MS): TooltipApi
       activeAnchor = null;
       tooltipEl.classList.remove("is-visible");
       tooltipEl.setAttribute("aria-hidden", "true");
-      tooltipEl.textContent = "";
+      clearContent();
     }
 
     hoverTimer = window.setTimeout(() => {

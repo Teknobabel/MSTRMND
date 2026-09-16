@@ -17,6 +17,7 @@
  */
 import { createCardArtImg } from "./cardArt";
 import { ICON_CLIPBOARD, ICON_CRATE, briefIcon, briefPlaceholder, briefSectionLabel } from "./cardBrief";
+import { setTooltip, tooltipText } from "./tooltip";
 
 /** Highest intel a site can reach; the meter draws this many pips. */
 const BRIEF_INTEL_PIPS = 3;
@@ -85,7 +86,11 @@ export interface LocationBriefModel {
 function briefIntelMeter(intelLevel: number): HTMLElement {
   const meter = document.createElement("span");
   meter.className = "loc-brief__meter";
-  meter.title = `Intel ${intelLevel} of ${BRIEF_INTEL_PIPS}`;
+  setTooltip(
+    meter,
+    "Intel Level",
+    `${intelLevel} of ${BRIEF_INTEL_PIPS}. Each step uncovers more of this site — its asset slots, then what is in them, then the agents standing there.`,
+  );
   meter.setAttribute("aria-label", `Intel ${intelLevel} of ${BRIEF_INTEL_PIPS}`);
   for (let i = 0; i < BRIEF_INTEL_PIPS; i += 1) {
     const pip = document.createElement("i");
@@ -315,7 +320,7 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
       model.assetCountUnknown
         ? briefPlaceholder(
             "Manifest sealed",
-            "Raise intel at this site to learn how many assets are stored here.",
+            tooltipText("Sealed Manifest", "Raise intel at this site to learn how many assets are stored here."),
           )
         : briefPlaceholder("Nothing stored here"),
     );
@@ -329,7 +334,9 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
      * "here is what I have, and there is more" rather than hiding the known behind the unknown. */
     if (model.assetCountUnknown) {
       list.appendChild(
-        briefSealedRow("Raise intel at this site to learn how many assets are stored here."),
+        briefSealedRow(
+          tooltipText("Sealed Manifest", "Raise intel at this site to learn how many assets are stored here."),
+        ),
       );
     }
     assets.appendChild(list);

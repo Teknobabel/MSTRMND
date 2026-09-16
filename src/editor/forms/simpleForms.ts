@@ -2,6 +2,7 @@ import { artFieldRow } from "../artField";
 import { SUPPORT_ASSET_ABILITY_KINDS } from "../../game/types";
 import type { SupportAssetAbilityKind } from "../../game/types";
 import type { FormCtx } from "./context";
+import { setTooltip } from "../../ui/tooltip";
 import {
   el,
   fieldset,
@@ -23,7 +24,7 @@ import {
 function idAndName(container: HTMLElement, ctx: FormCtx): void {
   const idInput = textInput(str(ctx.row, "id"), () => undefined);
   idInput.readOnly = true;
-  idInput.title = "Use the Rename button to change ids (updates all references)";
+  setTooltip(idInput, "id", "Read-only. Use the Rename button to change an id — it updates every reference to it.");
   container.appendChild(formRow("id", idInput));
   container.appendChild(
     formRow(
@@ -67,11 +68,11 @@ function cardArtRow(container: HTMLElement, ctx: FormCtx): void {
 function renderDynamicTraitForm(container: HTMLElement, ctx: FormCtx): void {
   const idInput = textInput(str(ctx.row, "id"), () => undefined);
   idInput.readOnly = true;
-  idInput.title = "Fixed — this id is the runtime relationship kind this row draws";
+  setTooltip(idInput, "id", "Fixed — this id is the runtime relationship kind this row draws.");
   container.appendChild(formRow("id", idInput));
   const nameInput = textInput(str(ctx.row, "name"), () => undefined);
   nameInput.readOnly = true;
-  nameInput.title = "Fixed — pill wording comes from the relationship, not from this row";
+  setTooltip(nameInput, "name", "Fixed — the pill wording comes from the relationship, not from this row.");
   container.appendChild(formRow("name", nameInput));
   container.appendChild(
     artFieldRow(ctx, "icon", {

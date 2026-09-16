@@ -5,6 +5,7 @@ import type {
   MinionAffinityConfig,
 } from "../../game/types";
 import type { FormCtx } from "./context";
+import { setTooltip } from "../../ui/tooltip";
 import {
   el,
   fieldset,
@@ -461,9 +462,9 @@ function affinityFieldRows(ctx: FormCtx, defs: AffinityFieldDef[], rerender: () 
       },
       { min: def.min, max: def.max },
     );
-    input.title = def.tooltip;
+    setTooltip(input, def.label, def.tooltip);
     const frow = formRow(def.label, input, hint(def.tooltip));
-    frow.title = def.tooltip;
+    setTooltip(frow, def.label, def.tooltip);
     rows.push(frow);
   }
   return rows;
@@ -607,9 +608,9 @@ function locationAffinityBlock(ctx: FormCtx): HTMLElement {
         },
         { min: def.min, max: def.max },
       );
-      input.title = def.tooltip;
+      setTooltip(input, def.label, def.tooltip);
       const frow = formRow(def.label, input, hint(def.tooltip));
-      frow.title = def.tooltip;
+      setTooltip(frow, def.label, def.tooltip);
       rows.push(frow);
     }
     wrap.appendChild(
@@ -647,9 +648,9 @@ export function renderBalanceForm(container: HTMLElement, ctx: FormCtx): void {
           }),
         { min: def.min, max: def.max },
       );
-      input.title = def.tooltip;
+      setTooltip(input, def.label, def.tooltip);
       const frow = formRow(def.label, input, hint(def.tooltip));
-      frow.title = def.tooltip;
+      setTooltip(frow, def.label, def.tooltip);
       rows.push(frow);
     }
     container.appendChild(fieldset(group.legend, ...rows));
@@ -679,9 +680,10 @@ export function renderBalanceForm(container: HTMLElement, ctx: FormCtx): void {
         }),
       { min: -100, max: 100 },
     );
-    input.title = DYNAMIC_MODIFIER_TOOLTIPS[kind];
-    const frow = formRow(`${kind} modifier %`, input, hint(DYNAMIC_MODIFIER_TOOLTIPS[kind]));
-    frow.title = DYNAMIC_MODIFIER_TOOLTIPS[kind];
+    const modLabel = `${kind} modifier %`;
+    setTooltip(input, modLabel, DYNAMIC_MODIFIER_TOOLTIPS[kind]);
+    const frow = formRow(modLabel, input, hint(DYNAMIC_MODIFIER_TOOLTIPS[kind]));
+    setTooltip(frow, modLabel, DYNAMIC_MODIFIER_TOOLTIPS[kind]);
     modRows.push(frow);
   }
   container.appendChild(

@@ -1,6 +1,7 @@
 import { artFieldRow } from "../artField";
 import { AGENT_ABILITY_DEFS } from "../../game/agentAbility";
 import type { FormCtx } from "./context";
+import { setTooltip } from "../../ui/tooltip";
 import {
   fieldset,
   formRow,
@@ -114,7 +115,7 @@ function dynamicTraitRowEditor(
 export function renderMinionForm(container: HTMLElement, ctx: FormCtx): void {
   const idInput = textInput(str(ctx.row, "id"), () => undefined);
   idInput.readOnly = true;
-  idInput.title = "Use the Rename button to change ids (updates all references)";
+  setTooltip(idInput, "id", "Read-only. Use the Rename button to change an id — it updates every reference to it.");
   container.appendChild(formRow("id", idInput));
   container.appendChild(
     formRow(

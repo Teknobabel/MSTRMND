@@ -10,6 +10,7 @@ import { fetchSlices, saveSlices } from "./api";
 import { clearPersistedDraft, createStore, loadPersistedDraft, type EditorStore } from "./store";
 import { el, str, type Row } from "./widgets";
 import type { FormCtx } from "./forms/context";
+import { setTooltip } from "../ui/tooltip";
 import {
   renderAssetForm,
   renderLocationForm,
@@ -318,11 +319,15 @@ function initEditor(store: EditorStore): void {
     const saveBtn = el("button", "ed-btn-primary", "Save to content/");
     const blocked = store.issues.length > 0;
     saveBtn.disabled = blocked || !store.dirty;
-    saveBtn.title = blocked
-      ? `Fix ${store.issues.length} issue(s) before saving`
-      : store.dirty
-        ? "Write changed slices to content/*.json"
-        : "No unsaved changes";
+    setTooltip(
+      saveBtn,
+      "Save to content/",
+      blocked
+        ? `Fix ${store.issues.length} issue(s) before saving.`
+        : store.dirty
+          ? "Writes every changed slice back to content/*.json."
+          : "Nothing has changed since the last save.",
+    );
     saveBtn.addEventListener("click", () => {
       void (async () => {
         const result = await saveSlices(store.draft);

@@ -47,7 +47,6 @@ import {
   mergedRequiredTraitIdsSorted,
   missionAllowsTargetLocation,
   unionParticipantTraitIds,
-  missionOutcomeChances,
   missionTargetTypeTargetsLocation,
   supportAbilitiesForAssetIds,
   type MissionTargetLocationFilters,
@@ -188,7 +187,7 @@ import {
 import { buildMissionBrief, missionAssetCell, type MissionBriefAssetRow } from "./ui/missionBrief";
 import { briefPanel } from "./ui/cardBrief";
 import { buildMinionBrief } from "./ui/minionBrief";
-import { initGlobalTooltips } from "./ui/tooltip";
+import { initGlobalTooltips, setTooltip, tooltipText } from "./ui/tooltip";
 import {
   appendCardArtShell,
   appendCardHeroOverlay,
@@ -208,34 +207,33 @@ import {
   resolveUnknownCardArtThumb,
 } from "./ui/cardArt";
 
-/** What each intel step unlocks at a site (hover text on the location card's Intel Level label). */
-const INTEL_LEVEL_TOOLTIP_LINES: readonly string[] = [
-  "0 — Unknown: no name, type, level, security or site traits; assets and agents stay secret unless uncovered another way",
-  "1 — every asset slot is listed (contents still unknown)",
-  "2 — asset contents are identified and count as revealed for missions",
-  "3 — opposing agents here are visible, including any that arrive later",
-];
+/*
+ * The description half of the stat tooltips — one line each, because every tooltip in the app
+ * is a name and one short line under it (see `ui/tooltip.ts`). These were four-line rule dumps
+ * before; what survives the cut is what a player who does not know the stat needs, which is the
+ * range it moves in and what moving it buys them. The exact per-level unlock tables live in
+ * `design/SYSTEM_REFERENCE.md`, which is where a designer looks anyway.
+ */
 
-/** Hover text for the location card's Security Level label. */
-const SECURITY_LEVEL_TOOLTIP_LINES: readonly string[] = [
-  "Defensive alert level at this site (0 up to the location level).",
-  "Each point reveals 1 security trait, adding it to the required traits for missions here.",
-  "Moves only when a mission or event authors a security effect — nothing raises it by default.",
-];
+/** What intel is, on the location card's Intel Level label and the Intel effect badges. */
+const INTEL_LEVEL_TOOLTIP_DESC =
+  "What you know about a site, 0 to 3: each step uncovers more — its asset slots, then what is in them, then the agents standing there.";
 
-/** Hover text for the Infamy icon (status bar stat block, mission effect lines). */
-const INFAMY_TOOLTIP_LINES: readonly string[] = [
-  "Your organization's notoriety (0 to 100).",
-  "Higher infamy unlocks lair upgrade levels and higher-level minions in the hire pool.",
-  "Some events only show up once infamy clears their threshold.",
-];
+/** What security is, on the location card's Security Level label and the Security effect badges. */
+const SECURITY_LEVEL_TOOLTIP_DESC =
+  "The site's defensive alert level, 0 up to its location level. Each point reveals one more security trait that missions here have to cover.";
 
-/** Hover text for the Heat icon (status bar stat block, mission effect lines). */
-const HEAT_TOOLTIP_LINES: readonly string[] = [
-  "Law-enforcement attention on your organization (0 to 100).",
-  "Heat sets the Threat Level tier, which raises the opposing-agent cap and the heat gained each turn.",
-  "The tier never drops once reached, even when heat falls again.",
-];
+/** What infamy is, on the status bar stat block and the Infamy effect badges. */
+const INFAMY_TOOLTIP_DESC =
+  "Your organization's notoriety, 0 to 100. Higher infamy unlocks lair upgrade levels, better recruits in the hire pool, and events gated behind it.";
+
+/** What heat is, on the status bar stat block and the Heat effect badges. */
+const HEAT_TOOLTIP_DESC =
+  "Law-enforcement attention, 0 to 100. It sets the Threat Level tier — which never drops once reached — raising the opposing-agent cap and your heat gain each turn.";
+
+/** What the planner's odds ring and the active-mission Success chance row are reading. */
+const SUCCESS_CHANCE_TOOLTIP_DESC =
+  "The odds this plan succeeds: the share of its required traits and assets the crew covers, adjusted by statuses, relationships, support assets, timed events and agent challenge traits.";
 
 /** Locations drawer columns left-to-right; locations filtered and sorted within each. */
 const LOCATION_CATEGORY_TAB_ORDER: readonly LocationType[] = [
@@ -563,16 +561,16 @@ function formatStaticTraitTooltip(trait: Trait | undefined, traitId: string): st
     return traitId;
   }
   if (trait.type === "status_positive") {
-    return `${trait.name} (Status)\n+10% mission success chance`;
+    return tooltipText(`${trait.name} (Status)`, "A good turn for this minion: +10% mission success chance while it holds.");
   }
   if (trait.type === "status_negative") {
-    return `${trait.name} (Status)\n−20% mission success chance`;
+    return tooltipText(`${trait.name} (Status)`, "A bad turn for this minion: −20% mission success chance while it holds.");
   }
   if (trait.type === "primary") {
-    return `${trait.name} (Primary Trait)\nFulfills mission operational requirements`;
+    return tooltipText(`${trait.name} (Primary Trait)`, "A core skill. It covers this requirement on any mission that asks for it.");
   }
   if (trait.type === "secondary") {
-    return `${trait.name} (Secondary Trait)\nFulfills mission tactical requirements`;
+    return tooltipText(`${trait.name} (Secondary Trait)`, "A supporting skill. It covers this requirement on any mission that asks for it.");
   }
   return trait.name;
 }
@@ -585,17 +583,17 @@ function formatDynamicTraitTooltip(
   const label = dynamicTraitDisplayLabel(catalog, roster, dt);
   switch (dt.kind) {
     case "friend":
-      return `${label}\nRelationship: +5% mission success when paired`;
+      return tooltipText(label, "Relationship: +5% mission success when these two are sent out together.");
     case "ally":
-      return `${label}\nRelationship: +10% mission success when paired`;
+      return tooltipText(label, "Relationship: +10% mission success when these two are sent out together.");
     case "rival":
-      return `${label}\nRelationship: −5% mission success when paired`;
+      return tooltipText(label, "Relationship: −5% mission success when these two are sent out together.");
     case "hatred":
-      return `${label}\nRelationship: −10% mission success when paired`;
+      return tooltipText(label, "Relationship: −10% mission success when these two are sent out together.");
     case "hero":
-      return `${label}\nStanding: +5% mission success at this location`;
+      return tooltipText(label, "Standing: +5% mission success on any mission aimed at this location.");
     case "wanted":
-      return `${label}\nStanding: −5% mission success at this location`;
+      return tooltipText(label, "Standing: −5% mission success on any mission aimed at this location.");
   }
 }
 
@@ -758,21 +756,21 @@ function createMinionsCardStatsRow(stats: {
 
   const cpBadge = document.createElement("div");
   cpBadge.className = "minions-card-badge minions-card-badge--cp";
-  cpBadge.title = `CP Cost: ${stats.cpCost}`;
+  setTooltip(cpBadge, "CP Cost", "Command points spent to hire this minion. Your CP pool refills at the start of every turn.");
   cpBadge.tabIndex = 0;
   cpBadge.setAttribute("aria-label", `CP Cost: ${stats.cpCost}`);
   cpBadge.innerHTML = `${MINION_STAT_ICON_CP}<span class="minions-card-badge__value">${stats.cpCost}</span>`;
 
   const levelBadge = document.createElement("div");
   levelBadge.className = "minions-card-badge minions-card-badge--level";
-  levelBadge.title = `Level: ${stats.level}`;
+  setTooltip(levelBadge, "Level", "The minion's rank. It rises with XP, and each level unlocks the next skill on this minion's track.");
   levelBadge.tabIndex = 0;
   levelBadge.setAttribute("aria-label", `Level: ${stats.level}`);
   levelBadge.innerHTML = `${MINION_STAT_ICON_LEVEL}<span class="minions-card-badge__value">${stats.level}</span>`;
 
   const xpBadge = document.createElement("div");
   xpBadge.className = "minions-card-badge minions-card-badge--xp";
-  xpBadge.title = `XP: ${stats.xp}`;
+  setTooltip(xpBadge, "XP", "Experience, earned for every mission this minion finishes. Enough of it levels them up and resets to zero.");
   xpBadge.tabIndex = 0;
   xpBadge.setAttribute("aria-label", `XP: ${stats.xp}`);
   xpBadge.innerHTML = `${MINION_STAT_ICON_XP}<span class="minions-card-badge__value">${stats.xp}</span>`;
@@ -793,21 +791,21 @@ function createMissionCardStatsRow(stats: {
 
   const targetBadge = document.createElement("div");
   targetBadge.className = "minions-card-badge minions-card-badge--target";
-  targetBadge.title = `Target: ${stats.target}`;
+  setTooltip(targetBadge, "Target", "What this mission can be aimed at — a site, an asset stored in one, a minion, or nothing at all.");
   targetBadge.tabIndex = 0;
   targetBadge.setAttribute("aria-label", `Target: ${stats.target}`);
   targetBadge.innerHTML = `${MISSION_STAT_ICON_TARGET}<span class="minions-card-badge__value">${stats.target}</span>`;
 
   const cpBadge = document.createElement("div");
   cpBadge.className = "minions-card-badge minions-card-badge--cp";
-  cpBadge.title = `Cost: ${stats.cpCost}`;
+  setTooltip(cpBadge, "Cost", "Command points spent to launch this mission. Paid when you deploy, and not refunded if it fails.");
   cpBadge.tabIndex = 0;
   cpBadge.setAttribute("aria-label", `Cost: ${stats.cpCost}`);
   cpBadge.innerHTML = `${MINION_STAT_ICON_CP}<span class="minions-card-badge__value">${stats.cpCost}</span>`;
 
   const durationBadge = document.createElement("div");
   durationBadge.className = "minions-card-badge minions-card-badge--duration";
-  durationBadge.title = `Duration: ${stats.duration} turn${stats.duration === 1 || stats.duration === "1" ? "" : "s"}`;
+  setTooltip(durationBadge, "Duration", "Turns the mission runs before it resolves. Its crew is committed for the whole of it.");
   durationBadge.tabIndex = 0;
   durationBadge.setAttribute("aria-label", `Duration: ${stats.duration}`);
   durationBadge.innerHTML = `${MISSION_STAT_ICON_DURATION}<span class="minions-card-badge__value">${stats.duration}</span>`;
@@ -829,28 +827,28 @@ function createLocationCardStatsRow(stats: {
 
   const typeBadge = document.createElement("div");
   typeBadge.className = "minions-card-badge minions-card-badge--type";
-  typeBadge.title = `Location Type: ${stats.type}`;
+  setTooltip(typeBadge, "Location Type", "The site's category — political, economic or military. Missions filter on it, so it decides what can be aimed here.");
   typeBadge.tabIndex = 0;
   typeBadge.setAttribute("aria-label", `Location Type: ${stats.type}`);
   typeBadge.innerHTML = `${LOCATION_STAT_ICON_TYPE}<span class="minions-card-badge__value">${stats.type}</span>`;
 
   const levelBadge = document.createElement("div");
   levelBadge.className = "minions-card-badge minions-card-badge--level";
-  levelBadge.title = `Location Level: ${stats.level}`;
+  setTooltip(levelBadge, "Location Level", "How well defended the site is, 1 to 3. It caps security level and sets how many site traits a mission here must cover.");
   levelBadge.tabIndex = 0;
   levelBadge.setAttribute("aria-label", `Location Level: ${stats.level}`);
   levelBadge.innerHTML = `${MINION_STAT_ICON_LEVEL}<span class="minions-card-badge__value">${stats.level}</span>`;
 
   const securityBadge = document.createElement("div");
   securityBadge.className = "minions-card-badge minions-card-badge--security";
-  securityBadge.title = `Security Level: ${stats.securityLevel}\n${SECURITY_LEVEL_TOOLTIP_LINES.join("\n")}`;
+  setTooltip(securityBadge, "Security Level", SECURITY_LEVEL_TOOLTIP_DESC);
   securityBadge.tabIndex = 0;
   securityBadge.setAttribute("aria-label", `Security Level: ${stats.securityLevel}`);
   securityBadge.innerHTML = `${LOCATION_STAT_ICON_SECURITY}<span class="minions-card-badge__value">${stats.securityLevel}</span>`;
 
   const intelBadge = document.createElement("div");
   intelBadge.className = "minions-card-badge minions-card-badge--intel";
-  intelBadge.title = `Intel Level: ${stats.intelLevel}\n${INTEL_LEVEL_TOOLTIP_LINES.join("\n")}`;
+  setTooltip(intelBadge, "Intel Level", INTEL_LEVEL_TOOLTIP_DESC);
   intelBadge.tabIndex = 0;
   intelBadge.setAttribute("aria-label", `Intel Level: ${stats.intelLevel}`);
   intelBadge.innerHTML = `${LOCATION_STAT_ICON_INTEL}<span class="minions-card-badge__value">${stats.intelLevel}</span>`;
@@ -907,14 +905,16 @@ function formatStaticAssetTooltip(asset: Asset | undefined, assetId: string): st
   }
   const header =
     asset.supportAbility !== undefined ? `${asset.name} (Support Asset)` : `${asset.name} (Asset)`;
-  const lines: string[] = [header];
+  /* A support asset leads with what it does on a mission — that is the reason to carry one —
+   * and falls back to its flavour line when it has no ability to report. */
+  const desc: string[] = [];
   if (asset.supportAbility !== undefined) {
-    lines.push(describeSupportAssetAbility(asset.supportAbility));
+    desc.push(describeSupportAssetAbility(asset.supportAbility));
   }
   if (asset.description) {
-    lines.push(asset.description);
+    desc.push(asset.description);
   }
-  return lines.join("\n");
+  return tooltipText(header, desc.join(" "));
 }
 
 /** Stats a mission effect line names by word, shown as their icon instead. */
@@ -927,27 +927,27 @@ type MissionEffectStat = "infamy" | "heat" | "intel" | "security";
  */
 const MISSION_EFFECT_STAT_META: Record<
   MissionEffectStat,
-  { label: string; iconPaths: string; tooltipLines: readonly string[] }
+  { label: string; iconPaths: string; tooltipDesc: string }
 > = {
   infamy: {
     label: "Infamy",
     iconPaths: INFAMY_ICON_SVG_PATHS,
-    tooltipLines: INFAMY_TOOLTIP_LINES,
+    tooltipDesc: INFAMY_TOOLTIP_DESC,
   },
   heat: {
     label: "Heat",
     iconPaths: HEAT_ICON_SVG_PATHS,
-    tooltipLines: HEAT_TOOLTIP_LINES,
+    tooltipDesc: HEAT_TOOLTIP_DESC,
   },
   intel: {
     label: "Intel level",
     iconPaths: INTEL_ICON_SVG_PATHS,
-    tooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
+    tooltipDesc: INTEL_LEVEL_TOOLTIP_DESC,
   },
   security: {
     label: "Security level",
     iconPaths: SECURITY_ICON_SVG_PATHS,
-    tooltipLines: SECURITY_LEVEL_TOOLTIP_LINES,
+    tooltipDesc: SECURITY_LEVEL_TOOLTIP_DESC,
   },
 };
 
@@ -1008,7 +1008,9 @@ function createMissionEffectStatBadgeEl(stat: MissionEffectStat, value: string):
   }
   badge.tabIndex = 0;
   badge.setAttribute("aria-label", `${meta.label} ${value}`);
-  badge.title = `${meta.label} ${value}\n${meta.tooltipLines.join("\n")}`;
+  /* The delta is already the large text on the badge, so the tooltip names the stat rather than
+   * repeating the reading back — the question a bare icon raises is "what is this". */
+  setTooltip(badge, meta.label, meta.tooltipDesc);
   badge.appendChild(createSvgPillIcon(meta.iconPaths, "mission-card-effects__stat-icon"));
   const valueEl = document.createElement("span");
   valueEl.className = "mission-card-effects__stat-value";
@@ -1145,18 +1147,21 @@ function plannedAssetSlotsDisplay(
     .join(", ");
 }
 
-/** `Name — what it does` per committed support asset, for a stat-row tooltip. */
-function supportAssetTooltipLines(
+/** `Name — what it does` per committed support asset, as the one description line a stat-row
+ * tooltip gets under its label. */
+function supportAssetTooltipDesc(
   catalog: ReturnType<typeof loadContent>,
   supportAssetIds: readonly string[],
-): string[] {
-  return supportAssetIds.map((id) => {
-    const a = catalog.assets.find((x) => x.id === id);
-    if (a?.supportAbility === undefined) {
-      return `${a?.name ?? id} — no effect`;
-    }
-    return `${a.name} — ${describeSupportAssetAbility(a.supportAbility)}`;
-  });
+): string {
+  return supportAssetIds
+    .map((id) => {
+      const a = catalog.assets.find((x) => x.id === id);
+      if (a?.supportAbility === undefined) {
+        return `${a?.name ?? id} — no effect`;
+      }
+      return `${a.name} — ${describeSupportAssetAbility(a.supportAbility)}`;
+    })
+    .join("; ");
 }
 
 /** Comma-joined names of the support assets a mission is carrying. */
@@ -1218,17 +1223,6 @@ function createLocationRequirementPillsEl(
     rosterTraitIds,
   );
   return wrap;
-}
-
-function minionNameByInstanceId(
-  catalog: ReturnType<typeof loadContent>,
-  roster: readonly MinionInstance[],
-  instanceId: string,
-): string {
-  const inst = roster.find((m) => m.instanceId === instanceId);
-  return inst !== undefined
-    ? catalog.minions.find((t) => t.id === inst.templateId)?.name ?? inst.templateId
-    : instanceId;
 }
 
 function formatLocationTypeLabel(locationType: string): string {
@@ -2508,7 +2502,7 @@ function initGameController(
     btn.type = "button";
     btn.className = "card-add-to-planner-btn";
     btn.setAttribute("aria-label", ariaLabel);
-    btn.title = ariaLabel;
+    setTooltip(btn, "Add to Plan", `${ariaLabel}, the same way dragging the card there would.`);
     btn.innerHTML = ICON_CROSSHAIR;
     btn.addEventListener("click", (ev) => {
       ev.preventDefault();
@@ -2611,117 +2605,6 @@ function initGameController(
         return payload !== null && applyTargetPayloadToPlanner(payload);
       },
     });
-  }
-
-  function formatSignedPercent(delta: number): string {
-    if (delta > 0) {
-      return `+${delta}%`;
-    }
-    return `${delta}%`;
-  }
-
-  function formatMissionSuccessChanceTooltipLines(
-    breakdown: SuccessChanceBreakdown,
-    dynamicEntries: readonly DynamicTraitSuccessBreakdownEntry[],
-    roster: readonly MinionInstance[],
-  ): string[] {
-    /* Odds first — that is the question the number on the button is answering. The derivation
-     * below it explains where the success chance came from. */
-    const lines: string[] = [...missionOutcomeOddsTooltipLines(breakdown.finalPercent), ""];
-    const denom = breakdown.requiredTraitCount + breakdown.requiredAssetSlotCount;
-    if (denom === 0) {
-      lines.push("Base 100% (no required traits or assets).");
-    } else {
-      lines.push(
-        `Base ${breakdown.basePercent}% = round(100 * (${breakdown.matchedTraits} + ${breakdown.matchedAssets}) / ${denom}).`,
-      );
-      if (breakdown.requiredTraitCount > 0) {
-        lines.push(
-          `Traits: ${breakdown.matchedTraits}/${breakdown.requiredTraitCount} required ids covered by the participant union.`,
-        );
-      }
-      if (breakdown.requiredAssetSlotCount > 0) {
-        lines.push(
-          `Assets: ${breakdown.matchedAssets}/${breakdown.requiredAssetSlotCount} required asset slots satisfied.`,
-        );
-      }
-    }
-    if (breakdown.missingTraitIds.length > 0) {
-      lines.push(`Missing required traits: ${traitDisplayNames(content, breakdown.missingTraitIds)}.`);
-    }
-    if (breakdown.statusEntries.length > 0) {
-      for (const e of breakdown.statusEntries) {
-        const who = minionNameByInstanceId(content, roster, e.instanceId);
-        const tn = content.traits.find((t) => t.id === e.traitId)?.name ?? e.traitId;
-        lines.push(`  ${who} — ${tn}: ${formatSignedPercent(e.delta)}`);
-      }
-    }
-    if (dynamicEntries.length > 0) {
-      for (const e of dynamicEntries) {
-        const who = minionNameByInstanceId(content, roster, e.ownerInstanceId);
-        lines.push(`  ${who} — ${e.traitLabel}: ${formatSignedPercent(e.delta)}`);
-      }
-    }
-    if (breakdown.eventSuccessModifierDelta !== 0) {
-      lines.push(
-        `Timed event modifier: ${formatSignedPercent(breakdown.eventSuccessModifierDelta)}.`,
-      );
-    }
-    if (breakdown.supportAssetDelta !== 0) {
-      lines.push(`Support assets: ${formatSignedPercent(breakdown.supportAssetDelta)}.`);
-    }
-    if (breakdown.challengeTraitIds.length > 0) {
-      const unmatched = new Set(breakdown.unmatchedChallengeTraitIds);
-      lines.push(
-        `Agent challenge traits at target (from agents you can see): ${breakdown.challengeTraitIds
-          .map((tid) => {
-            const name = traitDisplayNames(content, [tid]);
-            if (breakdown.challengeTraitsIgnored) {
-              return `${name} (ignored)`;
-            }
-            return `${name}${unmatched.has(tid) ? " (unmatched)" : " (covered)"}`;
-          })
-          .join(", ")}.`,
-      );
-      if (breakdown.challengeTraitsIgnored) {
-        lines.push("A support asset ignores agent challenge traits: no penalty.");
-      } else if (breakdown.unmatchedChallengeTraitIds.length > 0) {
-        lines.push(
-          `Unmatched challenge traits: ${breakdown.unmatchedChallengeTraitIds.length} * -${content.balance.agentChallengeTraitPenalty}% = -${breakdown.challengeTraitPenaltyTotal}%.`,
-        );
-      }
-    }
-    if (breakdown.preClampPercent !== breakdown.finalPercent) {
-      lines.push(`Clamped to [0, 100]: shown success chance is ${breakdown.finalPercent}%.`);
-    } else {
-      lines.push(`Shown success chance: ${breakdown.finalPercent}%.`);
-    }
-    return lines;
-  }
-
-  /**
-   * The three-way odds behind one success chance — what the player is really buying when they
-   * move the number. The compromised band sits directly above the success chance
-   * (`balance.compromisedBandPercent` points wide, clipped by the 100% ceiling), and a mission
-   * that lands in it takes the success effects *and* the failure effects.
-   */
-  function missionOutcomeOddsTooltipLines(chancePercent: number): string[] {
-    const odds = missionOutcomeChances(chancePercent, content.balance.compromisedBandPercent);
-    const lines = [
-      "Outcome odds",
-      `  Success: ${odds.successPercent}%`,
-      `  Compromised: ${odds.compromisedPercent}%`,
-      `  Failure: ${odds.failurePercent}%`,
-    ];
-    if (odds.compromisedPercent > 0) {
-      lines.push(
-        "Compromised = a near miss (within " +
-          `${content.balance.compromisedBandPercent} points of success): the mission applies ` +
-          "both its success and its failure effects, and still counts as a completed Omega " +
-          "Plan mission.",
-      );
-    }
-    return lines;
   }
 
   /**
@@ -2979,7 +2862,7 @@ function initGameController(
          * than the empty one it replaced. It moves to the hover text instead, like every other
          * collapsed chip in this column. */
         if (tpl?.supportAbility !== undefined) {
-          chip.title = describeSupportAssetAbility(tpl.supportAbility);
+          setTooltip(chip, tpl.name, describeSupportAssetAbility(tpl.supportAbility));
         }
 
         const removeBtn = document.createElement("button");
@@ -3160,12 +3043,12 @@ function initGameController(
       row.setAttribute("aria-label", `${tag} slot: ${hint}. Opens the ${label} menu.`);
       /* The hint gets one line beside the tag, and an asset's can be longer than that — the line
        * ellipses, so the whole of it plus what the click does is on the hover. */
-      row.title = `${hint}, or click to open ${label}`;
+      setTooltip(row, `${tag} Slot`, `${hint}. Click to open the ${label} menu.`);
       row.addEventListener("click", () => {
         setOpenDrawer(menu);
       });
     } else {
-      row.title = hint;
+      setTooltip(row, `${tag} Slot`, hint);
     }
 
     const ghost = document.createElement("span");
@@ -3460,7 +3343,7 @@ function initGameController(
         {
           label: "Intel level",
           value: String(targetIntel),
-          labelTooltipLines: INTEL_LEVEL_TOOLTIP_LINES,
+          labelTooltipDesc: INTEL_LEVEL_TOOLTIP_DESC,
         },
       ]);
       body.appendChild(dl);
@@ -3815,7 +3698,7 @@ function initGameController(
         const label = document.createElement("span");
         label.className = "plan-reqs__group-label";
         label.textContent = group.label;
-        label.title = group.hint;
+        setTooltip(label, group.label, group.hint);
         row.appendChild(label);
       }
 
@@ -3874,7 +3757,7 @@ function initGameController(
     if (staged === null) {
       assignChanceValueEl.textContent = "--";
       assignChanceNoteEl.textContent = "No plan staged";
-      assignChanceEl.title = "Stage a mission, target and minions to see the odds.";
+      setTooltip(assignChanceEl, "Success Chance", "Stage a mission, a target and its crew to see the odds.");
       return;
     }
     if (targetUnknown) {
@@ -3882,8 +3765,11 @@ function initGameController(
       const note = document.createElement("strong");
       note.textContent = "Target defenses unknown";
       assignChanceNoteEl.replaceChildren(note);
-      assignChanceEl.title =
-        "This site has not been identified yet — its traits, security, and true odds stay unknown until intel is gathered.";
+      setTooltip(
+        assignChanceEl,
+        "Success Chance",
+        "This site has not been identified yet — its traits, security and true odds stay unknown until you gather intel on it.",
+      );
       return;
     }
     /* The digits carry the reading, so they get the size; the sign rides along small enough
@@ -3896,11 +3782,7 @@ function initGameController(
     sign.textContent = "%";
     assignChanceValueEl.replaceChildren(digits, sign);
     assignChanceNoteEl.textContent = successChanceNote(pct);
-    assignChanceEl.title = formatMissionSuccessChanceTooltipLines(
-      staged.breakdown,
-      staged.dynamicEntries,
-      state.player.minions,
-    ).join("\n");
+    setTooltip(assignChanceEl, "Success Chance", SUCCESS_CHANCE_TOOLTIP_DESC);
   }
 
   /**
@@ -4012,13 +3894,14 @@ function initGameController(
 
   /**
    * Disables the button and records both why, for the two audiences that ask: `title` is the
-   * full sentence a hover gets, `assignBlockReason` is the short label a click on the disabled
-   * button flashes (see `flashAssignBlockedAlert`). Each call site is one blocking condition, in
+   * full sentence a hover gets — it becomes the description line under the button's name, so
+   * write it as one — and `assignBlockReason` is the short label a click on the disabled button
+   * flashes (see `flashAssignBlockedAlert`). Each call site is one blocking condition, in
    * priority order — the first one reached is the "highest level" reason and the only one shown.
    */
   function disableAssignButton(title: string, alertReason: string): void {
     btnAssign.disabled = true;
-    btnAssign.title = title;
+    setTooltip(btnAssign, "Deploy", title);
     assignBlockReason = alertReason;
   }
 
@@ -4026,7 +3909,7 @@ function initGameController(
   function applyAssignButtonEnabled(): void {
     const mainOnly = state.phase === "main";
     if (!mainOnly) {
-      disableAssignButton("Only during Main Phase", "Main Phase Only");
+      disableAssignButton("Available only during the Main Phase.", "Main Phase Only");
       return;
     }
     if (!assignMissionTemplateId || assignMissionSource === null) {
@@ -4083,17 +3966,17 @@ function initGameController(
       .map((id) => instanceById.get(id))
       .filter((x): x is NonNullable<typeof x> => x !== undefined);
     if (!canAssignParticipants(participants, maxP)) {
-      disableAssignButton(`Assign 1–${maxP} minions`, "Invalid Minion Selection");
+      disableAssignButton(`This mission takes 1–${maxP} minions; the plan does not have that many.`, "Invalid Minion Selection");
       return;
     }
     const cost = missionTemplate.startCommandPoints;
     const canAfford = state.player.commandPoints >= cost;
     if (!canAfford) {
-      disableAssignButton(`Need ${cost} CP (${state.player.commandPoints} available)`, "No CP");
+      disableAssignButton(`Costs ${cost} CP and you have ${state.player.commandPoints}.`, "No CP");
       return;
     }
     btnAssign.disabled = false;
-    btnAssign.title = `Spend ${cost} CP to assign`;
+    setTooltip(btnAssign, "Deploy", `Spends ${cost} CP to send this plan out.`);
     assignBlockReason = null;
   }
 
@@ -4502,21 +4385,22 @@ function initGameController(
       chip.className = "location-agent-chip";
       chip.appendChild(createCardArtImg(resolveAgentCardArt(template), "card-art--chip"));
       chip.appendChild(document.createTextNode(name));
-      const chipTitle: string[] = [];
+      /* One agent, one description: what it makes harder here, then what it does. The pieces are
+       * joined into a single line rather than stacked, because the second line of a tooltip is
+       * the description — all of it (see `ui/tooltip.ts`). */
+      const chipDesc: string[] = [];
       if (a.challengeTraitIds.length > 0) {
-        chipTitle.push(
+        chipDesc.push(
           `Challenge traits: ${traitDisplayNames(content, a.challengeTraitIds)} — each one no participant matches costs -${content.balance.agentChallengeTraitPenalty}% success here.`,
         );
       }
       for (const abilityId of a.abilityIds) {
         const def = agentAbilityDef(abilityId);
         if (def !== undefined) {
-          chipTitle.push(`${def.name} (${def.kind}): ${def.description}`);
+          chipDesc.push(`${def.name} (${def.kind}): ${def.description}`);
         }
       }
-      if (chipTitle.length > 0) {
-        chip.title = chipTitle.join("\n");
-      }
+      setTooltip(chip, name, chipDesc.join(" "));
       if (a.abilityIds.length > 0) {
         const abilities = document.createElement("span");
         abilities.className = "location-agent-abilities";
@@ -4531,7 +4415,11 @@ function initGameController(
         const note = document.createElement("span");
         note.className = "location-agent-challenge-note";
         note.textContent = `Challenge: ${traitDisplayNames(content, siteChallenges)}`;
-        note.title = `Each distinct challenge trait costs -${content.balance.agentChallengeTraitPenalty}% success on missions here unless a participant has the matching trait.`;
+        setTooltip(
+          note,
+          "Challenge Traits",
+          `Each distinct challenge trait the agents here hold costs -${content.balance.agentChallengeTraitPenalty}% success on missions at this site, unless a participant has the matching trait.`,
+        );
         agentNote = note;
       }
     }
@@ -4552,7 +4440,7 @@ function initGameController(
           knowledge: "empty",
           name: "",
           art: null,
-          tooltip: "Empty slot — whatever was stored here is already gone.",
+          tooltip: tooltipText("Empty Slot", "Whatever was stored here is already gone."),
         });
         continue;
       }
@@ -4562,25 +4450,26 @@ function initGameController(
         : undefined;
       const name = identifiedSlot ? (assetNameById.get(slot.assetId) ?? slot.assetId) : "";
       const targetVisibility = identifiedSlot ? "revealed" : "hidden";
-      const tooltipLines: string[] = [];
+      /* An identified slot names its asset; one the player can only tell is *there* is named for
+       * what it is to them — a slot with something in it — and the description is the step that
+       * would open it. Either way the drag hint rides on the description, never the name. */
+      const rowName = identifiedSlot ? name : "Sealed Slot";
+      const rowDesc: string[] = [];
       if (identifiedSlot) {
-        tooltipLines.push(name);
         if (template?.description !== undefined && template.description !== "") {
-          tooltipLines.push(template.description);
+          rowDesc.push(template.description);
         }
       } else {
-        tooltipLines.push(
-          "Something is stored in this slot. Intel 2 here identifies what it is.",
-        );
+        rowDesc.push("Something is stored in this slot. Intel 2 at this site identifies what it is.");
       }
       if (enableAssignDrag) {
-        tooltipLines.push(`Drag to Plan mission target (slot ${si + 1}).`);
+        rowDesc.push(`Drag it to the plan to aim a mission at slot ${si + 1}.`);
       }
       assetRows.push({
         knowledge: identifiedSlot ? "identified" : "existence",
         name,
         art: identifiedSlot ? resolveAssetCardArt(template) : resolveUnknownCardArtThumb(),
-        tooltip: tooltipLines.join("\n"),
+        tooltip: tooltipText(rowName, rowDesc.join(" ")),
         /* Only once the slot is identified. Below that the player has earned the knowledge that
          * something is in there and nothing else, and there is no card to show — floating the
          * real asset's would hand over the intel the slot is still withholding. */
@@ -4646,7 +4535,7 @@ function initGameController(
     statsRow.className = "minions-card-stats-row";
     const levelBadge = document.createElement("div");
     levelBadge.className = "minions-card-badge minions-card-badge--level";
-    levelBadge.title = `Upgrade Level: ${levelValue}`;
+    setTooltip(levelBadge, "Upgrade Level", "How far this lair's upgrade track has been built out. Each level offers a set of upgrade missions, and installing one opens the next.");
     levelBadge.tabIndex = 0;
     levelBadge.setAttribute("aria-label", `Upgrade Level: ${levelValue}`);
     levelBadge.innerHTML = `${MINION_STAT_ICON_LEVEL}<span class="minions-card-badge__value">${levelValue}</span>`;
@@ -4668,20 +4557,23 @@ function initGameController(
       label: string;
       value: string;
       valueEl?: HTMLElement;
-      tooltipLines?: readonly string[];
-      labelTooltipLines?: readonly string[];
+      /* Both tooltips take the row's own `label` as their first line — the row is already named,
+       * and naming it twice differently is how a tooltip format drifts. The caller supplies only
+       * the description under it. */
+      tooltipDesc?: string;
+      labelTooltipDesc?: string;
       dtClass?: string;
       ddClass?: string;
     }>,
   ): void {
-    for (const { label, value, valueEl, tooltipLines, labelTooltipLines, dtClass, ddClass } of rows) {
+    for (const { label, value, valueEl, tooltipDesc, labelTooltipDesc, dtClass, ddClass } of rows) {
       const dt = document.createElement("dt");
       dt.textContent = label;
       if (dtClass !== undefined) {
         dt.className = dtClass;
       }
-      if (labelTooltipLines !== undefined && labelTooltipLines.length > 0) {
-        dt.title = labelTooltipLines.join("\n");
+      if (labelTooltipDesc !== undefined && labelTooltipDesc !== "") {
+        setTooltip(dt, label, labelTooltipDesc);
       }
       const dd = document.createElement("dd");
       if (ddClass !== undefined) {
@@ -4689,11 +4581,11 @@ function initGameController(
       }
       if (valueEl !== undefined) {
         dd.appendChild(valueEl);
-      } else if (tooltipLines !== undefined && tooltipLines.length > 0) {
+      } else if (tooltipDesc !== undefined && tooltipDesc !== "") {
         const span = document.createElement("span");
         span.className = "mission-success-chance-value";
         span.textContent = value;
-        span.title = tooltipLines.join("\n");
+        setTooltip(span, label, tooltipDesc);
         dd.appendChild(span);
       } else {
         dd.textContent = value;
@@ -4803,11 +4695,11 @@ function initGameController(
       const canFire = mainOnly && !isBusy;
       fireBtn.disabled = !canFire;
       if (!mainOnly) {
-        fireBtn.title = "Only during Main Phase";
+        setTooltip(fireBtn, "Fire", "Available only during the Main Phase.");
       } else if (isBusy) {
-        fireBtn.title = "Cannot fire while on a mission";
+        setTooltip(fireBtn, "Fire", "This minion is out on a mission and cannot be fired until it returns.");
       } else {
-        fireBtn.title = "Remove from roster (returns to hire pool after cooldown)";
+        setTooltip(fireBtn, "Fire", "Removes this minion from the roster. They return to the hire pool, stats intact, after a cooldown.");
       }
       fireBtn.addEventListener("click", (ev) => {
         ev.preventDefault();
@@ -4874,13 +4766,13 @@ function initGameController(
       const rosterFull = state.player.minions.length >= state.player.maxRosterSize;
       hireBtn.disabled = !mainOnly || !canAfford || rosterFull;
       if (!mainOnly) {
-        hireBtn.title = "Only during Main Phase";
+        setTooltip(hireBtn, "Hire", "Available only during the Main Phase.");
       } else if (rosterFull) {
-        hireBtn.title = `Roster full (${state.player.minions.length}/${state.player.maxRosterSize})`;
+        setTooltip(hireBtn, "Hire", `Your roster is full (${state.player.minions.length}/${state.player.maxRosterSize}). Fire someone to make room.`);
       } else if (!canAfford) {
-        hireBtn.title = `Need ${tpl.hireCommandPoints} CP (${state.player.commandPoints} available)`;
+        setTooltip(hireBtn, "Hire", `Costs ${tpl.hireCommandPoints} CP and you have ${state.player.commandPoints}.`);
       } else {
-        hireBtn.title = `Spend ${tpl.hireCommandPoints} CP`;
+        setTooltip(hireBtn, "Hire", `Spends ${tpl.hireCommandPoints} CP to add this minion to your roster.`);
       }
 
       hireBtn.addEventListener("click", () => {
@@ -4927,15 +4819,15 @@ function initGameController(
       const rosterFull = state.player.minions.length >= state.player.maxRosterSize;
       hireBtn.disabled = !mainOnly || !canAfford || rosterFull || !tpl;
       if (!tpl) {
-        hireBtn.title = "Unknown minion template";
+        setTooltip(hireBtn, "Rehire", "This minion's template is missing from the catalog, so they cannot be brought back.");
       } else if (!mainOnly) {
-        hireBtn.title = "Only during Main Phase";
+        setTooltip(hireBtn, "Rehire", "Available only during the Main Phase.");
       } else if (rosterFull) {
-        hireBtn.title = `Roster full (${state.player.minions.length}/${state.player.maxRosterSize})`;
+        setTooltip(hireBtn, "Rehire", `Your roster is full (${state.player.minions.length}/${state.player.maxRosterSize}). Fire someone to make room.`);
       } else if (!canAfford) {
-        hireBtn.title = `Need ${cost} CP (${state.player.commandPoints} available)`;
+        setTooltip(hireBtn, "Rehire", `Costs ${cost} CP and you have ${state.player.commandPoints}.`);
       } else {
-        hireBtn.title = `Spend ${cost} CP to restore this minion`;
+        setTooltip(hireBtn, "Rehire", `Spends ${cost} CP to take this minion back with the level and traits they left on.`);
       }
 
       hireBtn.addEventListener("click", () => {
@@ -5047,11 +4939,11 @@ function initGameController(
       const canRerollOffers = mainOnly && p.commandPoints >= rerollCost;
       btnReroll.disabled = !canRerollOffers;
       if (!mainOnly) {
-        btnReroll.title = "Only during Main Phase";
+        setTooltip(btnReroll, "Reroll", "Available only during the Main Phase.");
       } else if (p.commandPoints < rerollCost) {
-        btnReroll.title = `Need ${rerollCost} CP (${p.commandPoints} available)`;
+        setTooltip(btnReroll, "Reroll", `Costs ${rerollCost} CP and you have ${p.commandPoints}.`);
       } else {
-        btnReroll.title = `Spend ${rerollCost} CP to draw a new hire pool`;
+        setTooltip(btnReroll, "Reroll", `Spends ${rerollCost} CP to discard the current hire offers and draw a fresh pool.`);
       }
       btnReroll.addEventListener("click", () => {
         dispatch((s) => rerollHireOffers(s, content, rng));
@@ -5612,7 +5504,7 @@ function initGameController(
       label: string;
       value: string;
       valueEl?: HTMLElement;
-      tooltipLines?: readonly string[];
+      tooltipDesc?: string;
     }> = [
       { label: "Source", value: sourceLabel },
       { label: "Target", value: formatMissionTargetSummary(am.target) },
@@ -5700,32 +5592,22 @@ function initGameController(
         rows.push({
           label: "Support assets",
           value: supportAssetsDisplay(content, am.supportAssetIds),
-          tooltipLines: supportAssetTooltipLines(content, am.supportAssetIds),
+          tooltipDesc: supportAssetTooltipDesc(content, am.supportAssetIds),
         });
       }
       let successValue: string;
-      let successTooltip: readonly string[] | undefined;
+      let successTooltip: string | undefined;
       const partCap = participantCapForActiveMission(am);
       if (canAssignParticipants(participants, partCap)) {
         const breakdown = computeSuccessChanceBreakdown(mission, participants, successOpts);
         successValue = `${breakdown.finalPercent}%`;
-        const dynEntries = dynamicTraitSuccessModifierBreakdownFromFullRoster(
-          content,
-          state.player.minions,
-          am.participantInstanceIds,
-          lid,
-        );
-        successTooltip = formatMissionSuccessChanceTooltipLines(
-          breakdown,
-          dynEntries.entries,
-          state.player.minions,
-        );
+        successTooltip = SUCCESS_CHANCE_TOOLTIP_DESC;
       } else {
         successValue = "—";
       }
       rows.push(
-        successTooltip !== undefined && successTooltip.length > 0
-          ? { label: "Success chance", value: successValue, tooltipLines: successTooltip }
+        successTooltip !== undefined
+          ? { label: "Success chance", value: successValue, tooltipDesc: successTooltip }
           : { label: "Success chance", value: successValue },
       );
     } else {
@@ -5784,7 +5666,13 @@ function initGameController(
     cancelBtn.className = "btn active-mission-card-cancel";
     cancelBtn.textContent = "Cancel mission";
     cancelBtn.disabled = !mainOnly;
-    cancelBtn.title = mainOnly ? "Remove mission; minions free immediately" : "Only during Main Phase";
+    setTooltip(
+      cancelBtn,
+      "Cancel Mission",
+      mainOnly
+        ? "Calls the operation off. Its crew and any committed assets are free again immediately; the CP you paid to launch it is not refunded."
+        : "Available only during the Main Phase.",
+    );
     cancelBtn.addEventListener("click", () => {
       if (state.phase !== "main") {
         return;
@@ -6362,7 +6250,9 @@ function initGameController(
     callout.tabIndex = 0;
     callout.setAttribute("role", "img");
     const tipLines = missionCalloutTooltipLines(am);
-    callout.title = tipLines.join("\n");
+    /* The mission's name is the callout's name; everything else about the operation is the line
+     * under it, run together rather than stacked. */
+    setTooltip(callout, tipLines[0]!, tipLines.slice(1).join(" · "));
     callout.setAttribute("aria-label", tipLines.join(". "));
     /* Held back until the mission's packet gets here. Re-applied on every render rather than set
      * once, so a redraw mid-flight cannot land the crew ahead of the upload. */
@@ -6406,7 +6296,11 @@ function initGameController(
       `Idle: ${idle.length} minion${idle.length === 1 ? "" : "s"}`,
       `Crew: ${names.join(", ")}`,
     ];
-    callout.title = tipLines.join("\n");
+    setTooltip(
+      callout,
+      "Idle Minions",
+      `${idle.length} minion${idle.length === 1 ? "" : "s"} sitting this turn out at the lair: ${names.join(", ")}.`,
+    );
     callout.setAttribute("aria-label", tipLines.join(". "));
     for (const inst of idle) {
       const tpl = content.minions.find((t) => t.id === inst.templateId);
@@ -7051,7 +6945,7 @@ function initGameController(
       for (const option of group.options) {
         const row = document.createElement("label");
         row.className = "map-layers-row";
-        row.title = option.hint;
+        setTooltip(row, option.label, option.hint);
 
         const input = document.createElement("input");
         input.type = "checkbox";
@@ -7153,8 +7047,7 @@ function initGameController(
     /* A button, unlike the site pins, with nothing draggable about it: the lair is not a
      * mission target and carries no payload. All a click does is park it in the inspector. */
     home.dataset.mapLair = "true";
-    home.title = `${lair.name}
-Your lair`;
+    setTooltip(home, lair.name, "Your lair — the base every operation runs from. Click to open it in the inspector.");
     home.setAttribute("aria-label", `${lair.name}, your lair`);
     home.addEventListener("click", () => {
       toggleMapPin({ kind: "lair" });
@@ -8890,6 +8783,12 @@ Your lair`;
     readonly key: string;
     readonly icon: string;
     readonly label: string;
+    /**
+     * The description line under the block's name on hover. Every readout in this row is an icon
+     * and a bare number, which is the shape a tooltip is most owed: the row says *what* each of
+     * the six numbers is at a glance and nothing at all about what any of them does.
+     */
+    readonly tooltip: string;
     /** The icon is a glyph rather than an SVG — the Omega mark. */
     readonly iconText?: boolean;
     readonly blockClass?: string;
@@ -8906,16 +8805,44 @@ Your lair`;
       key: "omega",
       icon: "Ω",
       label: "Omega Plan",
+      tooltip:
+        "How far along this run's Omega Plan is — the share of the missions its three phases actually require, not all nine slots. Clearing the final phase wins the run.",
       iconText: true,
       blockClass: "stat-block--progress",
       unit: "%",
       segments: true,
     },
-    { key: "command", icon: ICON_BOLT, label: "Command", suffix: true },
-    { key: "infamy", icon: ICON_STAR, label: "Infamy" },
-    { key: "heat", icon: ICON_FLAME, label: "Heat", blockClass: "stat-block--heat" },
-    { key: "minions", icon: ICON_PERSON, label: "Minions", suffix: true },
-    { key: "agents", icon: ICON_CROSSHAIR, label: "Agents" },
+    {
+      key: "command",
+      icon: ICON_BOLT,
+      label: "Command",
+      tooltip:
+        "Command points, and the most you can hold. CP pay for hiring, launching missions and rerolling the hire pool, and the pool refills at the start of every turn.",
+      suffix: true,
+    },
+    { key: "infamy", icon: ICON_STAR, label: "Infamy", tooltip: INFAMY_TOOLTIP_DESC },
+    {
+      key: "heat",
+      icon: ICON_FLAME,
+      label: "Heat",
+      tooltip: HEAT_TOOLTIP_DESC,
+      blockClass: "stat-block--heat",
+    },
+    {
+      key: "minions",
+      icon: ICON_PERSON,
+      label: "Minions",
+      tooltip:
+        "Minions on your roster, against the most it can hold. Hire from the pool in the Minions drawer; fire someone to make room when it is full.",
+      suffix: true,
+    },
+    {
+      key: "agents",
+      icon: ICON_CROSSHAIR,
+      label: "Agents",
+      tooltip:
+        "Opposing agents you can currently see. More spawn as your Threat Level tier rises, and the ones you have not uncovered are not counted here — the number is what you know about, not what is out there.",
+    },
   ];
 
   const statCells = new Map<string, StatCell>();
@@ -8931,6 +8858,12 @@ Your lair`;
       const block = document.createElement("div");
       block.className =
         spec.blockClass === undefined ? "stat-block" : `stat-block ${spec.blockClass}`;
+      /* On the block, not the label or the number: the whole readout is one thing to point at,
+       * and the row is built once and written in place, so this is set once and never rewritten
+       * by a render. Focusable so the tooltip is reachable without a pointer — the manager
+       * listens for `focusin` as well as hover. */
+      block.tabIndex = 0;
+      setTooltip(block, spec.label, spec.tooltip);
 
       const icon = document.createElement("span");
       if (spec.iconText === true) {
@@ -9731,7 +9664,7 @@ Your lair`;
     }
     const mt = findMissionOrEventTemplate(assignMissionTemplateId);
     if (!mt) {
-      btnAssign.title = "Unknown mission — pick another from Omega, Lair, or Events.";
+      setTooltip(btnAssign, "Deploy", "This mission is no longer in the catalog — pick another from Omega, Lair or Events.");
       return;
     }
     let targetPayload: MissionTarget;
@@ -9779,7 +9712,7 @@ Your lair`;
       {
         onApplied: clearAllAssignSlots,
         onError: (err) => {
-          btnAssign.title = formatAssignMissionError(err);
+          setTooltip(btnAssign, "Deploy", formatAssignMissionError(err));
         },
       },
     );
