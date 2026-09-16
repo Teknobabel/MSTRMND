@@ -1,9 +1,10 @@
 /**
- * Shared pieces of the "brief" a card draws under its art: the icon-and-label header a section
- * opens with, and the placeholder a section shows instead of collapsing when it has nothing to
- * list. Used by both the location card's Intelligence Brief (`ui/locationBrief.ts`) and the
- * mission card's Mission Brief (`ui/missionBrief.ts`) so the two read as the same kind of
- * paperwork — see `.card-brief*` in styles.css for the rest of the shared visual language.
+ * Shared pieces of the "brief" a card draws under its art: the framed section a mission card
+ * files each of its statements in, the icon-and-label header a location card's sections open
+ * with, and the placeholder either shows instead of collapsing when it has nothing to list.
+ * Used by the location card's Intelligence Brief (`ui/locationBrief.ts`) and the mission card's
+ * Mission Brief (`ui/missionBrief.ts`) so the two read as the same kind of paperwork — see
+ * `.card-brief*` and `.brief-panel*` in styles.css for the rest of the shared visual language.
  */
 
 export const ICON_CLIPBOARD =
@@ -36,6 +37,44 @@ export function briefSectionLabel(iconPaths: string, text: string, tally: string
     h.appendChild(t);
   }
   return h;
+}
+
+/**
+ * A boxed section of a mission card: a ruled header strip carrying the console's tick mark and
+ * the section's name, then the body it encloses.
+ *
+ * The mission card's four sections — brief, requirements, and the two outcomes — are each one of
+ * these. A location card keeps the flat `briefSectionLabel` headings instead: its brief is one
+ * form that fills in as intel arrives, and boxing its halves separately would cut that form in
+ * two. A mission's sections are genuinely four separate statements about one job, which is what
+ * the frames are for.
+ *
+ * `modifier` tones the frame — see `.brief-panel--good` / `--bad`.
+ */
+export function briefPanel(
+  title: string,
+  modifier?: string,
+): { panel: HTMLElement; body: HTMLElement } {
+  const panel = document.createElement("section");
+  panel.className = modifier === undefined ? "brief-panel" : `brief-panel ${modifier}`;
+
+  const head = document.createElement("h5");
+  head.className = "brief-panel__head";
+  const mark = document.createElement("span");
+  mark.className = "brief-panel__mark";
+  mark.setAttribute("aria-hidden", "true");
+  head.appendChild(mark);
+  const text = document.createElement("span");
+  text.className = "brief-panel__title";
+  text.textContent = title;
+  head.appendChild(text);
+  panel.appendChild(head);
+
+  const body = document.createElement("div");
+  body.className = "brief-panel__body";
+  panel.appendChild(body);
+
+  return { panel, body };
 }
 
 /** The "nothing here yet" line a section shows instead of collapsing, so the form reads as blank

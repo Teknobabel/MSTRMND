@@ -186,6 +186,7 @@ import {
   type LocationBriefAssetRow,
 } from "./ui/locationBrief";
 import { buildMissionBrief, type MissionBriefAssetRow } from "./ui/missionBrief";
+import { briefPanel } from "./ui/cardBrief";
 import { buildMinionBrief } from "./ui/minionBrief";
 import { initGlobalTooltips } from "./ui/tooltip";
 import {
@@ -598,11 +599,19 @@ function formatDynamicTraitTooltip(
   }
 }
 
+/**
+ * `caption` is the kind mark a mission card's requirement cells wear over the name — "Skill"
+ * here, "Asset" on the cells beside them (`ui/missionBrief.ts`). It is what carries the
+ * distinction the two column headings used to, now that skills and assets share one grid. Every
+ * other context leaves it off: a pill in a stats row or a minion's trait list is already under a
+ * heading that says what it is, and a caption there would only repeat it on every chip.
+ */
 function createTraitPillEl(
   catalog: ReturnType<typeof loadContent>,
   traitId: string,
   rosterTraitIds?: ReadonlySet<string>,
   iconKind: "trait" | "security" = "trait",
+  caption?: string,
 ): HTMLElement {
   const trait = catalog.traits.find((t) => t.id === traitId);
   const span = document.createElement("span");
@@ -628,8 +637,24 @@ function createTraitPillEl(
   const text = document.createElement("span");
   text.className = "minions-trait-pill__label";
   text.textContent = trait?.name ?? traitId;
-  span.appendChild(text);
+  span.appendChild(caption === undefined ? text : captionedPillText(caption, text));
   return span;
+}
+
+/**
+ * Wraps a pill's name in a column with its kind caption above it — the two-line text half of a
+ * mission card's requirement cell. The label element is passed in rather than built here so the
+ * caller keeps ownership of it, whether it holds a trait's name or an asset's.
+ */
+function captionedPillText(caption: string, label: HTMLElement): HTMLElement {
+  const wrap = document.createElement("span");
+  wrap.className = "minions-trait-pill__text";
+  const cap = document.createElement("span");
+  cap.className = "minions-trait-pill__caption";
+  cap.textContent = caption;
+  wrap.appendChild(cap);
+  wrap.appendChild(label);
+  return wrap;
 }
 
 /**
@@ -940,23 +965,61 @@ const MISSION_EFFECT_STAT_BY_KIND: Partial<Record<MissionEffect["kind"], Mission
   security_level_delta_by_location_level: "security",
 };
 
+/** The signed number inside a stat effect's value — the reading the badge is built around. */
+const MISSION_EFFECT_DELTA_RE = /[+\u2212-]?\d+%?/;
+
+/**
+ * Splits a stat value into the delta and whatever qualifies it. Most are the number alone
+ * ("+15"), but a scoped one carries words on one or both sides of it — "-1 at all political
+ * locations", "globally -1 (all playable locations)" — and those words are a footnote on the
+ * reading, not a part of it. Returns the number and the rest rejoined, or a null note when the
+ * value is nothing but the number.
+ */
+function splitMissionEffectStatValue(value: string): { delta: string; note: string | null } {
+  const match = MISSION_EFFECT_DELTA_RE.exec(value);
+  if (match === null) {
+    return { delta: value, note: null };
+  }
+  const note = `${value.slice(0, match.index)} ${value.slice(match.index + match[0].length)}`
+    .replace(/\s+/g, " ")
+    .trim();
+  return { delta: match[0], note: note === "" ? null : note };
+}
+
 /**
  * One stat effect as a stat badge, built like the location-card and mission-cost badges: the
  * stat's icon stands in for its name, which moves into the hover tooltip and the accessible
  * label, leaving the badge to read as icon + delta.
+ *
+ * The delta is set large enough to be read across the card at a glance, which is the whole point
+ * of a badge. A qualifier that comes with it is not, and stays at the size of the outcome lines
+ * around it: left at the delta's size, a scoped effect's sentence swelled to three lines of
+ * display face and drowned out the plain numbers beside it.
  */
 function createMissionEffectStatBadgeEl(stat: MissionEffectStat, value: string): HTMLElement {
   const meta = MISSION_EFFECT_STAT_META[stat];
+  const { delta, note } = splitMissionEffectStatValue(value);
   const badge = document.createElement("span");
   badge.className = `mission-card-effects__stat-chip mission-card-effects__stat-chip--${stat}`;
+  if (note !== null) {
+    /* A qualified badge takes a line of its own — it is a sentence, and sitting it in among the
+     * bare numbers would leave them looking like part of it. */
+    badge.classList.add("mission-card-effects__stat-chip--noted");
+  }
   badge.tabIndex = 0;
   badge.setAttribute("aria-label", `${meta.label} ${value}`);
   badge.title = `${meta.label} ${value}\n${meta.tooltipLines.join("\n")}`;
   badge.appendChild(createSvgPillIcon(meta.iconPaths, "mission-card-effects__stat-icon"));
   const valueEl = document.createElement("span");
   valueEl.className = "mission-card-effects__stat-value";
-  valueEl.textContent = value;
+  valueEl.textContent = delta;
   badge.appendChild(valueEl);
+  if (note !== null) {
+    const noteEl = document.createElement("span");
+    noteEl.className = "mission-card-effects__stat-note";
+    noteEl.textContent = note;
+    badge.appendChild(noteEl);
+  }
   return badge;
 }
 
@@ -1035,8 +1098,8 @@ function requiredMissionRequirementPillsEl(
 }
 
 /**
- * The mission card's own asset manifest: one row per distinct required asset, aggregating
- * duplicate ids in a mission's requirement list into a single row with a quantity — the brief
+ * The mission card's own required-asset cells: one cell per distinct required asset, aggregating
+ * duplicate ids in a mission's requirement list into a single cell with a quantity — the brief
  * lists what a mission needs, not how many times its authors happened to repeat an id.
  */
 function missionRequiredAssetRows(
@@ -1054,7 +1117,6 @@ function missionRequiredAssetRows(
     rows.push({
       assetId,
       name: template?.name ?? assetId,
-      art: resolveAssetCardArt(template),
       quantity,
       have: (ownedAssets[assetId] ?? 0) >= quantity,
       tooltip: formatStaticAssetTooltip(template, assetId),
@@ -1564,11 +1626,16 @@ function initGameController(
   }
 
   /**
-   * One asset an effect gains, drawn as the same manifest row `missionAssetRow` (in
-   * `ui/missionBrief.ts`) uses for the Required Assets column — thumbnail, blank code, name —
-   * so an asset reads the same wherever a mission card names one. Tone stands in for that row's
+   * One asset an effect gains, drawn as the same manifest row a location's asset list uses
+   * (`.card-brief__asset` — picture, blank code, name). Tone stands in for that row's
    * have/missing pair: there is nothing to hold here, only whether the gain happens on success
    * or on failure.
+   *
+   * The picture is the generic crate mark, in the same grey as the requirement cells above — an
+   * asset reads as one kind of object everywhere on a mission card, and the card stays a sheet
+   * of marks and type rather than a strip of postage stamps. A *location* card keeps the real
+   * photographs: its manifest is the inventory of a place the player is casing, where telling
+   * one shelf from another at a glance is the whole job.
    */
   function missionEffectAssetRow(
     catalog: ReturnType<typeof loadContent>,
@@ -1579,7 +1646,7 @@ function initGameController(
     const li = document.createElement("li");
     li.className = `card-brief__asset card-brief__asset--${tone}`;
     li.title = formatStaticAssetTooltip(template, assetId);
-    li.appendChild(createCardArtImg(resolveAssetCardArt(template), "card-brief__asset-thumb"));
+    li.appendChild(createSvgPillIcon(ASSET_ICON_SVG_PATHS, "card-brief__asset-glyph"));
     const code = document.createElement("span");
     code.className = "card-brief__asset-code";
     li.appendChild(code);
@@ -1599,9 +1666,9 @@ function initGameController(
       tone === "good" ? "mission-card-effects__item--good" : "mission-card-effects__item--bad";
 
     if (effect.kind === "gain_assets") {
-      // The asset speaks for itself: no "Gain asset:" lead-in, just a manifest row formatted the
-      // same way the Required Assets column above draws one — thumbnail and name — so an asset
-      // reads as the same object whether the mission wants it or hands it over.
+      // The asset speaks for itself: no "Gain asset:" lead-in, just a manifest row — thumbnail
+      // and name — so an asset an outcome hands over reads as an object rather than as a
+      // sentence about one.
       return effect.assetIds.map((id: string) => missionEffectAssetRow(catalog, id, tone));
     }
 
@@ -1701,32 +1768,28 @@ function initGameController(
   }
 
   /**
-   * One outcome column — its `card-brief__label` and a `card-brief__assets` list of rows. Built
-   * the same way `buildMissionBrief`'s Required Skills / Required Assets columns are, so the two
-   * rows of the card share one set of column classes and land on the same divider.
+   * One outcome — a framed `briefPanel` holding a `card-brief__assets` list of rows. The same
+   * frame the brief's own two sections come in (`ui/missionBrief.ts`), toned green or red so the
+   * two halves of this row are told apart by their edge rather than by reading their headings.
    */
-  function missionEffectsColumn(
+  function missionEffectsPanel(
     heading: string,
     effects: readonly MissionEffect[],
     catalog: ReturnType<typeof loadContent>,
     tone: "good" | "bad",
-    toneClass: string,
   ): HTMLElement {
-    const group = document.createElement("section");
-    group.className = `card-brief__col mission-card-effects__group ${toneClass}`;
-
-    const label = document.createElement("h5");
-    label.className = "card-brief__label";
-    label.textContent = heading;
-    group.appendChild(label);
+    const { panel, body } = briefPanel(
+      heading,
+      tone === "good" ? "brief-panel--good" : "brief-panel--bad",
+    );
 
     const list = document.createElement("ul");
     list.className = "card-brief__assets";
     for (const item of missionEffectListItemEls(effects, catalog, tone)) {
       list.appendChild(item);
     }
-    group.appendChild(list);
-    return group;
+    body.appendChild(list);
+    return panel;
   }
 
   function createMissionCardEffectsEl(
@@ -1742,43 +1805,18 @@ function initGameController(
       return null;
     }
 
+    /* Two framed panels side by side, each half the row. Success and failure are the same kind
+     * of statement about the same job, so neither gets the wider half — and a mission with only
+     * one outcome's worth of effects gets a single panel across the whole row rather than a
+     * half-width one with a gap beside it. */
     const container = document.createElement("div");
     container.className = "mission-card-effects";
 
-    const cols = document.createElement("div");
-    cols.className = "card-brief__cols";
-    container.appendChild(cols);
-
-    const groups: HTMLElement[] = [];
     if (successEffects.length > 0) {
-      groups.push(
-        missionEffectsColumn(
-          "On Success",
-          successEffects,
-          catalog,
-          "good",
-          "mission-card-effects__group--success",
-        ),
-      );
+      container.appendChild(missionEffectsPanel("On Success", successEffects, catalog, "good"));
     }
     if (failureEffects.length > 0) {
-      groups.push(
-        missionEffectsColumn(
-          "On Failure",
-          failureEffects,
-          catalog,
-          "bad",
-          "mission-card-effects__group--failure",
-        ),
-      );
-    }
-    /* The divider between columns only makes sense with two of them — a mission with only one
-     * outcome's worth of effects gets a single full-width column, not a stray rule on its edge. */
-    if (groups.length === 2) {
-      groups[1]!.classList.add("card-brief__col--assets");
-    }
-    for (const group of groups) {
-      cols.appendChild(group);
+      container.appendChild(missionEffectsPanel("On Failure", failureEffects, catalog, "bad"));
     }
 
     return container;
@@ -4301,7 +4339,7 @@ function initGameController(
 
       meta.appendChild(statsRow);
 
-      /* The brief — stamp, description, then Required Skills / Required Assets side by side —
+      /* The brief — stamp, description, then one Requirements grid of skill and asset cells —
        * stays under the art like a location card's dossier: it wraps to any number of lines,
        * which would push the name off the top of a fixed-height banner. */
       const traitIdsForDisplay =
@@ -4310,7 +4348,7 @@ function initGameController(
           : mission.requiredTraitIds;
       const rosterTraitIds = unionParticipantTraitIds(state.player.minions);
       const requirementPills = sortedTraitIdsForDisplay(content, traitIdsForDisplay).map((tid) =>
-        createTraitPillEl(content, tid, rosterTraitIds),
+        createTraitPillEl(content, tid, rosterTraitIds, "trait", "Skill"),
       );
 
       body.appendChild(
@@ -4335,18 +4373,18 @@ function initGameController(
         body.appendChild(effectsEl);
       }
     } else {
-      const briefHead = document.createElement("div");
-      briefHead.className = "card-brief__head";
-      const briefStamp = document.createElement("span");
-      briefStamp.className = "card-brief__stamp";
-      briefStamp.textContent = "Mission Brief";
-      briefHead.appendChild(briefStamp);
-      body.appendChild(briefHead);
-
+      /* No template behind the id. The card still comes in the same framed section a real
+       * mission's brief does, with the id where the brief would be — a card that dropped the
+       * frame here would read as broken rather than as a mission the catalog has lost. */
+      const wrap = document.createElement("div");
+      wrap.className = "card-brief card-brief--mission";
+      const { panel, body: panelBody } = briefPanel("Mission Brief");
       const dl = document.createElement("dl");
       dl.className = "asset-card-stats";
       appendMinionStatRows(dl, [{ label: "Mission id", value: missionId }]);
-      body.appendChild(dl);
+      panelBody.appendChild(dl);
+      wrap.appendChild(panel);
+      body.appendChild(wrap);
     }
 
     return article;

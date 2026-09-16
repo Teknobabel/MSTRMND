@@ -4293,6 +4293,108 @@ body {
 }
 
 /* ============================================================
+   Brief panels: the mission card's framed sections
+   ------------------------------------------------------------
+   A mission card says four separate things about one job — what it is, what it wants, what it
+   pays, what it costs — so each gets its own frame with its own ruled header, and the outcome
+   pair is told apart by the colour of that frame rather than by reading the two headings.
+
+   A location card deliberately does *not* use these: its brief is one form that fills in as far
+   as the player's intel reaches, and boxing its halves separately would cut that form in two.
+   It keeps the flat `.card-brief__label` headings below.
+   ============================================================ */
+
+.brief-panel {
+  --brief-panel-line: var(--line-1);
+  --brief-panel-ink: var(--red-bright);
+  --brief-panel-mark: var(--red);
+  --brief-panel-glow: var(--red-glow);
+  box-sizing: border-box;
+  border: 1px solid var(--brief-panel-line);
+  background: rgba(10, 4, 5, 0.3);
+}
+
+.brief-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin: 0;
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--brief-panel-line);
+  /* A shade darker than the panel's own ground, so the strip reads as the tab on a folder
+     rather than as a first line of content that happens to be in the display face. */
+  background: rgba(0, 0, 0, 0.3);
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brief-panel-ink);
+}
+
+/* The double tick before a section's name: the same slanted edge the cards cut their corners
+   with, stood up and struck twice, so a section is marked with the console's own mark rather
+   than with a bullet. Two rather than one — a single tick is the stamp a whole brief opens with
+   (`.card-brief__stamp`), and the sections inside it should not repeat that mark exactly. */
+.brief-panel__mark {
+  position: relative;
+  flex: none;
+  width: 0.55rem;
+  height: 0.6rem;
+}
+
+.brief-panel__mark::before,
+.brief-panel__mark::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 0.17rem;
+  height: 100%;
+  transform: skewX(-20deg);
+  background: var(--brief-panel-mark);
+  box-shadow: 0 0 6px var(--brief-panel-glow);
+}
+
+.brief-panel__mark::before {
+  left: 0;
+}
+
+.brief-panel__mark::after {
+  left: 0.27rem;
+}
+
+.brief-panel__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brief-panel__body {
+  padding: 0.45rem;
+}
+
+/* The outcome pair. Success and failure are the same kind of statement, so they differ only in
+   the colour of the frame and the ink in its header — not in size, weight or placement. */
+.brief-panel--good {
+  --brief-panel-line: var(--good-dim);
+  --brief-panel-ink: var(--good);
+  --brief-panel-mark: var(--good);
+  --brief-panel-glow: rgba(69, 223, 123, 0.35);
+}
+
+.brief-panel--bad {
+  --brief-panel-line: var(--red-deep);
+  --brief-panel-ink: var(--red-bright);
+  --brief-panel-mark: var(--red);
+}
+
+/* A framed section's own empty line sits inside a frame that already has padding, so it does not
+   also need the margin the flat sections give it. */
+.brief-panel__body > .card-brief__empty {
+  min-height: 0;
+}
+
+/* ============================================================
    Card brief: two-column dossier under a card's art
    ------------------------------------------------------------
    Shared by the location card's Intelligence Brief (`ui/locationBrief.ts`) and the mission
@@ -4317,6 +4419,20 @@ body {
      the same screen, so a media query cannot tell them apart. */
   container-type: inline-size;
   container-name: card-brief;
+}
+
+/*
+ * The mission card's brief is a stack of framed panels rather than one ruled form, so it keeps
+ * to the card's own padding instead of bleeding out to the padding box: a frame that ran past
+ * the text above it would read as a box that had escaped the card. The outcome row below
+ * (`.mission-card-effects`) is a sibling of this, not a child, and opens the same gap.
+ */
+.card-brief--mission {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
 }
 
 /* ---- Header strip: file number on the left, how much of it is filled in on the right ----
@@ -4405,9 +4521,10 @@ body {
   margin-top: 0.5rem;
 }
 
-/* The minion bio's Skills section is a lone `.card-brief__col` with no `.card-brief__cols` wrapper
-   around it (`ui/minionBrief.ts`) — full width instead of one half of two — so it needs its own
-   copy of that wrapper's top margin to open the same gap under the header/description. */
+/* A lone `.card-brief__col` with no `.card-brief__cols` wrapper around it — the minion bio's
+   Skills section (`ui/minionBrief.ts`) and the mission brief's Requirements section
+   (`ui/missionBrief.ts`), both full width instead of one half of two — needs its own copy of
+   that wrapper's top margin to open the same gap under the header/description. */
 .card-brief > .card-brief__col {
   margin-top: 0.5rem;
 }
@@ -4421,7 +4538,8 @@ body {
 }
 
 /* The manifest gets the wider half: its lines are art plus a code plus a catalog name, where
-   the requirements half wraps short pills and gives its slack back. */
+   the requirements half wraps short pills and gives its slack back. Location cards only — the
+   mission card's outcome row is two framed panels of equal width now. */
 .card-brief__col--assets {
   flex-grow: 1.3;
   padding-left: 0.5rem;
@@ -4524,15 +4642,98 @@ body {
   color: var(--text-3);
 }
 
-/* ---- Requirements half ----
- * Skills and traits read as the manifest's own family now: one column, full-width rows sized to
- * the same footprint as `.card-brief__asset` — a wrap of little chips was quick to scan for one
- * or two, but the asset list already proved a stacked column reads faster once there are more. */
+/* ---- Requirements ----
+ * Skills and traits read as the manifest's own family now: full-width rows sized to the same
+ * footprint as `.card-brief__asset` — a wrap of little chips was quick to scan for one or two,
+ * but the asset list already proved a stacked column reads faster once there are more. */
 
 .card-brief__pills {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+}
+
+/*
+ * The mission card's Requirements section (`ui/missionBrief.ts`): skill cells and asset cells in
+ * one grid, two across, skills first. A mission asks for a list of things the player either has
+ * or has not — splitting that list down the middle by *kind*, under two headings, made two short
+ * columns of unequal length where one continuous run of identical cells says it in one pass.
+ *
+ * `minmax(0, 1fr)` twice rather than `1fr 1fr`: a long asset name must be allowed to ellipse
+ * inside its cell (see the label rule below) instead of forcing its track wider than half and
+ * knocking the two columns out of alignment. `grid-auto-rows: 1fr` keeps a cell that wrapped
+ * level with its neighbour, so the grid stays a grid and not a brick wall.
+ */
+.card-brief__pills--grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--brief-row-h), auto);
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+/* Two cells across a card this narrow leaves a name about four characters of room. One column
+   of full-width cells is the better trade there — the same call `.card-brief__cols` makes at
+   this width. */
+@container card-brief (max-width: 19rem) {
+  .card-brief__pills--grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/*
+ * A cell in that grid is two halves with a rule between them: a fixed picture box on the left,
+ * then the kind caption over the name. The box is fixed — and the same box a manifest thumbnail
+ * gets — so that every divider in the grid lands on the same two verticals however wide or
+ * narrow the glyph inside it happens to draw. A skill's mark is centred in it; an asset's art
+ * fills it.
+ */
+.card-brief__pills--grid > .minions-trait-pill {
+  align-items: stretch;
+  gap: 0;
+  padding: var(--brief-row-pad) 0.4rem var(--brief-row-pad) var(--brief-row-pad);
+}
+
+.card-brief__pills--grid > .minions-trait-pill > .minions-trait-pill__icon {
+  width: var(--brief-thumb-w);
+  height: var(--brief-thumb-h);
+  /* The stroked marks and the uploaded glyphs both letterbox inside the box rather than
+     stretching to it — `preserveAspectRatio` for the SVGs, `object-fit` for the images. */
+  margin-block: 0;
+  align-self: center;
+  object-fit: contain;
+}
+
+.card-brief__pills--grid > .minions-trait-pill > .minions-trait-pill__text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 0;
+  margin-left: 0.4rem;
+  padding-left: 0.45rem;
+  border-left: 1px solid var(--line-1);
+}
+
+/* The kind mark the two column headings used to carry. Sized and tracked like a section label
+   and toned to `--text-3`, a step below the dimmest name under it: it is there to be read once
+   per cell, not scanned down the column. */
+.minions-trait-pill__caption {
+  font-family: var(--font-display);
+  font-size: 0.46rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+.card-brief__pills--grid .minions-trait-pill__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.76rem;
+  line-height: 1.25;
 }
 
 /* Held to the same row box `.card-brief__asset` renders at (`--brief-row-h`), so a skill row and
@@ -4646,6 +4847,44 @@ body {
   border-left: 1px solid var(--line-1);
 }
 
+/* A cell is half a card wide in the grid above, so a catalog name that does not fit has to end
+   in an ellipsis rather than push its track out of true. Harmless on the full-width lists, where
+   nothing reaches the edge in the first place. */
+.card-brief__pills > .minions-trait-pill > .minions-trait-pill__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Required-asset cells ----
+ * An asset requirement is one of these slots, not a manifest row: same box, same crate glyph in
+ * the icon cell, same divider and name. The thumbnail it used to carry belongs to the full-width
+ * manifest a location card draws (`.card-brief__asset`) — at half a card wide there is room for
+ * a mark, not a photograph, and the mark is what puts an asset cell on the same footing as the
+ * skill cells it now sits in line with. */
+
+/* How many the mission wants, when it wants more than one. Pushed to the far edge of the cell so
+   the counts line up down the column however long the names beside them run. */
+.card-brief__pills > .minions-trait-pill > .card-brief__asset-code {
+  margin-left: auto;
+  padding-left: 0.3rem;
+  flex: none;
+}
+
+/* Floats the asset's full card on hover, the same way a manifest row does — and lights the same
+   way, so "is this worth pointing at" does not depend on which list the asset is in. `help`
+   rather than `pointer`: hovering reveals, but there is nothing here to click. */
+.card-brief__pills > .minions-trait-pill.card-brief__req--previewable {
+  cursor: help;
+}
+
+.card-brief__pills > .minions-trait-pill.card-brief__req--previewable:hover,
+.card-brief__pills > .minions-trait-pill.card-brief__req--previewable:focus-visible {
+  border-color: var(--line-2);
+  border-left-color: var(--red);
+  background: rgba(44, 13, 17, 0.6);
+}
+
 /* A security measure the site has not had to show yet: it takes a pill's shape, so the player
    can see how much longer this list is going to get, but the name is blacked out.
  *
@@ -4725,6 +4964,23 @@ body {
   font-size: 0.7rem;
   line-height: 1.25;
   transition: border-color 0.15s, background-color 0.15s;
+}
+
+/* The generic crate mark standing where a manifest row's thumbnail would, on a mission card's
+   outcome lists (`missionEffectAssetRow`). It takes the thumbnail's whole box so the rows keep
+   their height and the names stay on the same vertical, and it is stroked in the grey the trait
+   glyphs above it use — the two are the same kind of mark and should not differ in weight. No
+   plate behind it: the frame belongs to the photograph, not to the line art that replaced it. */
+.card-brief__asset-glyph {
+  width: var(--brief-thumb-w);
+  height: var(--brief-thumb-h);
+  flex: none;
+  display: block;
+  fill: none;
+  stroke: var(--text-2);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .card-brief__asset-thumb {
@@ -5069,23 +5325,34 @@ body {
    Mission card outcome effects
    ============================================================ */
 
-/* This is the same `.card-brief__cols` two-column brief the skills/assets half above uses —
- * success's column plain, failure's carrying `.card-brief__col--assets` (added in
- * `createMissionCardEffectsEl`) for the same wider-half-plus-divider treatment the Required
- * Assets column gets — so the divider lands on the same line and both rows read as one sheet
- * rather than two independently-measured blocks. */
+/*
+ * The two outcome panels, side by side and equally wide — neither success nor failure is the
+ * bigger half of what a mission is worth — and stretched to a shared height so the pair reads as
+ * one row rather than as two boxes that happened to end where their contents did.
+ *
+ * Its own container rather than the brief's: the outcome row is a sibling of `.card-brief`, not
+ * a child, so a `card-brief` query cannot reach it. The panels query *this* instead and take the
+ * whole row each when there is no longer width for two — which is also what a lone outcome does,
+ * rather than sitting in a half-width box with a gap beside it.
+ */
 .mission-card-effects {
-  margin-top: 0.6rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--line-1);
+  container-type: inline-size;
+  container-name: mission-effects;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
 }
 
-.mission-card-effects__group--success .card-brief__label {
-  color: var(--good);
+.mission-card-effects > .brief-panel:only-child {
+  grid-column: 1 / -1;
 }
 
-.mission-card-effects__group--failure .card-brief__label {
-  color: var(--red-bright);
+@container mission-effects (max-width: 19rem) {
+  .mission-card-effects > .brief-panel {
+    grid-column: 1 / -1;
+  }
 }
 
 /* One outcome line, boxed the same way `.card-brief__asset` and the requirement rows above it
@@ -5125,53 +5392,70 @@ body {
    location-card and mission-cost badges, and colours follow the status bar (infamy, heat) and
    the location card badges (intel, security) so the glyphs stay recognisable. */
 /* Every stat effect shares one line: badges flow across it and wrap as a row, each keeping
-   its icon glued to the delta it belongs to. */
+   its icon glued to the delta it belongs to. The column gap does the separating now that the
+   badges have no boxes of their own to hold them apart. */
 .mission-card-effects__item--stats {
   display: flex;
   flex-wrap: wrap;
   /* Baseline, so the item's absolutely-positioned tone marker takes its static position from
      the first row rather than being centred across a wrapped one. */
   align-items: baseline;
-  column-gap: 0.35rem;
-  row-gap: 0.2rem;
+  column-gap: 0.75rem;
+  row-gap: 0.25rem;
 }
 
+/*
+ * A stat delta is a reading, not a chip. Boxing each one put a second frame inside the outcome
+ * row that already frames them — three small bordered rectangles inside a bordered rectangle —
+ * and every pixel that frame spent was a pixel the glyph and the number could not have. With the
+ * box gone they take the row's full height instead: the icon runs to the size the asset
+ * thumbnails beside it do, and the number is read at a glance rather than deciphered.
+ *
+ * Sized so the tallest part still clears the row it sits in — `--brief-row-h` less the item's
+ * own border and padding — and the outcome rows stay level with the requirement cells above.
+ */
 .mission-card-effects__stat-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.22rem;
+  gap: 0.3rem;
   max-width: 100%;
   min-width: 0;
-  padding: 0.08rem 0.35rem;
   font-family: var(--font-display);
-  font-size: 0.72rem;
+  font-size: 1.18rem;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0.03em;
-  background: rgba(30, 10, 13, 0.75);
-  border: 1px solid var(--line-1);
   color: var(--text-1);
   cursor: help;
   user-select: none;
-  outline: none;
-  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+  transition: color 0.15s;
 }
 
-.mission-card-effects__stat-chip:hover,
+/* The badges still carry the tooltip that spells the stat's name out, so they still have to
+   answer the pointer. With no border or ground left to light, the mark itself does it. */
+.mission-card-effects__stat-chip:hover .mission-card-effects__stat-icon,
+.mission-card-effects__stat-chip:focus-visible .mission-card-effects__stat-icon {
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+/* A keyboard stop needs a ring of its own now that there is no border to recolour. */
 .mission-card-effects__stat-chip:focus-visible {
-  border-color: var(--line-2);
-  background: rgba(44, 13, 17, 0.95);
+  outline: 1px solid var(--line-2);
+  outline-offset: 3px;
 }
 
 .mission-card-effects__stat-icon {
-  width: 0.72rem;
-  height: 0.72rem;
+  width: 1.75rem;
+  height: 1.75rem;
   flex-shrink: 0;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  /* Thinner than the 2 it carried at half this size: a stroke scaled with the glyph would read
+     as a heavier mark than the line art in the cells above rather than the same mark, larger. */
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+  transition: filter 0.15s;
 }
 
 .mission-card-effects__stat-chip--infamy .mission-card-effects__stat-icon,
@@ -5184,11 +5468,34 @@ body {
   color: var(--warn);
 }
 
+/* The reading itself: never broken and never shrunk. It used to be allowed to wrap, back when
+   it could hold a whole qualifying sentence; now that the sentence has its own element the only
+   thing wrapping could do to a delta is split "-1" across two lines, which it did. */
 .mission-card-effects__stat-value {
-  min-width: 0;
+  flex: none;
+  white-space: nowrap;
   font-weight: 700;
   color: var(--text-0);
+}
+
+/* What qualifies a scoped delta — "at all political locations". Set in the body face at the size
+   of the outcome lines around it, because it is one of those: a sentence about the number, not
+   part of the reading. */
+.mission-card-effects__stat-note {
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.03em;
+  color: var(--text-2);
   word-break: break-word;
+}
+
+/* A badge carrying one takes the whole line: among the bare numbers it would read as though the
+   sentence covered them too. */
+.mission-card-effects__stat-chip--noted {
+  flex-basis: 100%;
 }
 
 /* Active mission cards */
