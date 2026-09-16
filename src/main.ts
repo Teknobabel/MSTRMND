@@ -5348,19 +5348,10 @@ function initGameController(
 
     const ops = document.createElement("section");
     ops.className = "omega-ops";
+    /* No heading of its own — the phase strip above already names the selected phase (kicker +
+     * title on its tile), so a second "Phase X Operations / <name>" line here would just repeat
+     * it. The accessible name still carries the phase, for anyone not reading the strip's tile. */
     ops.setAttribute("aria-label", `Phase ${OMEGA_PHASE_NUMERALS[selectedStage]!} operations`);
-
-    const opsHead = document.createElement("div");
-    opsHead.className = "omega-ops__head";
-    const opsTitle = document.createElement("h3");
-    opsTitle.className = "omega-ops__title";
-    opsTitle.textContent = `Phase ${OMEGA_PHASE_NUMERALS[selectedStage]!} Operations`;
-    opsHead.appendChild(opsTitle);
-    const opsSub = document.createElement("p");
-    opsSub.className = "omega-ops__sub";
-    opsSub.textContent = `/ ${OMEGA_PHASES[selectedStage]!.name}`;
-    opsHead.appendChild(opsSub);
-    ops.appendChild(opsHead);
 
     const missionWrap = document.createElement("div");
     missionWrap.className = "omega-plan-phase-missions";
@@ -5389,30 +5380,26 @@ function initGameController(
             am.omegaStageIndex === selectedStage &&
             am.omegaSlotIndex === mi,
         );
-      /* No chip at all for a slot that is simply next up in the current stage — "Pending" said
-       * nothing a bare, draggable card didn't already. */
-      let badge: HTMLElement | null = null;
-      if (slotDone || slotRunning || !isCurrentStage) {
-        badge = document.createElement("span");
-        badge.classList.add("status-badge", "omega-card-badge");
-        if (slotDone) {
-          badge.classList.add("status-badge--complete");
-          badge.textContent = "Complete";
-        } else if (slotRunning) {
-          badge.classList.add("status-badge--inprogress");
-          badge.textContent = "In Progress";
-        } else if (isCompleteStage) {
-          /* Phase cleared without this slot — it was never required. */
-          badge.classList.add("status-badge--locked");
-          badge.textContent = "Skipped";
-        } else {
-          badge.classList.add("status-badge--locked");
-          badge.textContent = "Locked";
-        }
+      const badge = document.createElement("span");
+      badge.classList.add("status-badge", "omega-card-badge");
+      if (slotDone) {
+        badge.classList.add("status-badge--complete");
+        badge.textContent = "Complete";
+      } else if (slotRunning) {
+        badge.classList.add("status-badge--inprogress");
+        badge.textContent = "In Progress";
+      } else if (isCompleteStage) {
+        /* Phase cleared without this slot — it was never required. */
+        badge.classList.add("status-badge--locked");
+        badge.textContent = "Skipped";
+      } else {
+        /* Not done, not running, not skipped — named by its own phase's number rather than a
+         * bare "Pending" or "Locked": the phase strip above already carries locked/in-progress
+         * status for the phase as a whole, so repeating it card by card said nothing new. */
+        badge.classList.add("status-badge--pending");
+        badge.textContent = `Phase ${selectedStage + 1}`;
       }
-      if (badge) {
-        card.appendChild(badge);
-      }
+      card.appendChild(badge);
       missionWrap.appendChild(card);
     }
 

@@ -3917,36 +3917,6 @@ body {
   gap: 0.5rem;
 }
 
-.omega-ops__head {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 0.6rem;
-  padding-bottom: 0.35rem;
-  border-bottom: 1px solid var(--line-1);
-}
-
-.omega-ops__title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--red-bright);
-}
-
-.omega-ops__sub {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-
 /*
  * The menu's only scroller, so the cards give way rather than the plan above them. Three
  * columns to match the three mission slots a phase holds; `align-content: start` keeps a short
