@@ -26,6 +26,7 @@ import {
 import type {
   Asset,
   DynamicTrait,
+  LairUpgradeLevel,
   LocationAssetSlot,
   LocationType,
   MinionInstance,
@@ -99,7 +100,7 @@ import {
   UNKNOWN_LOCATION_NAME,
 } from "./game/intel";
 import {
-  currentLairUpgradeLevel,
+  currentLairUpgradeLevelIndex,
   getLairById,
   lairUpgradeLevelMinInfamy,
   lairUpgradeLevels,
@@ -4562,13 +4563,13 @@ function initGameController(
     meta.appendChild(title);
 
     const total = lairUpgradeLevels(state.activeLairId, content).length;
-    const current = currentLairUpgradeLevel(
+    const openIndex = currentLairUpgradeLevelIndex(
       state.activeLairId,
       state.completedLairUpgradeMissionIds,
       content,
     );
     const levelValue =
-      current !== null ? `${current.index + 1} / ${total}` : total === 0 ? "—" : "Complete";
+      total === 0 ? "—" : openIndex < total ? `${openIndex + 1} / ${total}` : "Complete";
 
     const statsRow = document.createElement("div");
     statsRow.className = "minions-card-stats-row";
@@ -5758,7 +5759,7 @@ function initGameController(
   type AvailableMissionEntry = {
     missionTemplateId: string;
     dragMeta?: MissionCardDragMeta;
-    status?: { label: string; kind: "inprogress" | "pending" | "locked" };
+    status?: { label: string; kind: "complete" | "inprogress" | "pending" | "locked" };
   };
 
   function missionDisplayName(missionTemplateId: string): string {
@@ -5771,82 +5772,117 @@ function initGameController(
     });
   }
 
+  /** Where one rung of the lair's upgrade ladder stands for this run. */
+  type LairUpgradeRung = {
+    readonly level: LairUpgradeLevel;
+    readonly index: number;
+    readonly title: string;
+    /** The mutually exclusive choice that was installed here, once one has succeeded. */
+    readonly installedMissionId: string | null;
+    /** The choice from this rung currently underway, if any. */
+    readonly runningMissionId: string | null;
+    /** The one rung the ladder is open at — the only one whose work can be started. */
+    readonly isCurrent: boolean;
+    /** Infamy this rung wants before its work may begin (0 ⇒ ungated). */
+    readonly needInfamy: number;
+    readonly infamyLocked: boolean;
+  };
+
   /**
-   * The single upgrade level the player may act on right now, rendered the same way in the Lair
-   * panel and the Missions menu. Its missions are mutually exclusive — starting one closes the
-   * level while it runs, completing one locks the rest out for the run — so the offer carries
-   * the rule line and the per-card badges that say so. Levels below are settled; levels above
-   * stay hidden until their turn. A level under its `minInfamy` is still shown in full, with
-   * the standing it wants spelled out: infamy gates starting the work, never seeing it.
+   * The whole upgrade ladder, rung by rung. Levels below the open one are settled, the open one
+   * is the only one that can be acted on, and the rungs above it are still described in full:
+   * infamy and order gate *starting* the work, never seeing what it leads to, which is what
+   * lets the Lair menu show the climb rather than one step of it.
    */
-  function lairUpgradeOffer(): {
-    label: string;
-    note: string | null;
-    emptyText: string;
-    entries: AvailableMissionEntry[];
-  } {
-    const total = lairUpgradeLevels(state.activeLairId, content).length;
-    const current = currentLairUpgradeLevel(
+  function lairUpgradeLadder(): LairUpgradeRung[] {
+    const levels = lairUpgradeLevels(state.activeLairId, content);
+    const openIndex = currentLairUpgradeLevelIndex(
       state.activeLairId,
       state.completedLairUpgradeMissionIds,
       content,
     );
-    if (current === null) {
+    return levels.map((level, index) => {
+      const needInfamy = lairUpgradeLevelMinInfamy(level);
       return {
-        label: "Lair Upgrades",
-        note: null,
-        emptyText:
-          total === 0 ? "This lair has no upgrades." : "Every upgrade level is installed.",
-        entries: [],
+        level,
+        index,
+        title: level.name ?? `Level ${index + 1}`,
+        installedMissionId:
+          level.missionIds.find((id) => state.completedLairUpgradeMissionIds.includes(id)) ?? null,
+        runningMissionId:
+          state.activeMissions.find(
+            (am) => am.missionSource === "lair" && level.missionIds.includes(am.missionTemplateId),
+          )?.missionTemplateId ?? null,
+        isCurrent: index === openIndex,
+        needInfamy,
+        infamyLocked: state.player.infamy < needInfamy,
       };
-    }
-    const { level, index } = current;
-    const levelLabel = `Level ${index + 1} of ${total}`;
-    const label =
-      level.name !== undefined
-        ? `Lair Upgrades — ${levelLabel}: ${level.name}`
-        : `Lair Upgrades — ${levelLabel}`;
-    const running = state.activeMissions.find(
-      (am) => am.missionSource === "lair" && level.missionIds.includes(am.missionTemplateId),
-    );
-    const needInfamy = lairUpgradeLevelMinInfamy(level);
-    const infamyLocked = state.player.infamy < needInfamy;
-    const entries: AvailableMissionEntry[] = [...level.missionIds]
-      .sort(compareMissionIdsByName)
-      .map((mid) => {
-        if (running !== undefined) {
-          return {
-            missionTemplateId: mid,
-            status:
-              running.missionTemplateId === mid
-                ? ({ label: "In Progress", kind: "inprogress" } as const)
-                : ({ label: "Locked", kind: "locked" } as const),
-          };
-        }
-        if (infamyLocked) {
-          return {
-            missionTemplateId: mid,
-            status: { label: `${needInfamy} Infamy`, kind: "locked" } as const,
-          };
-        }
+    });
+  }
+
+  /**
+   * A rung's mutually exclusive choices as mission-list entries: which may be dragged into the
+   * planner, and what each card's corner chip says. Only the open rung hands out drag meta —
+   * everything else is settled, closed, or not yet reachable.
+   */
+  function lairUpgradeRungEntries(rung: LairUpgradeRung): AvailableMissionEntry[] {
+    return [...rung.level.missionIds].sort(compareMissionIdsByName).map((mid) => {
+      if (rung.installedMissionId !== null) {
+        return rung.installedMissionId === mid
+          ? ({
+              missionTemplateId: mid,
+              status: { label: "Installed", kind: "complete" },
+            } as const)
+          : ({ missionTemplateId: mid, status: { label: "Closed", kind: "locked" } } as const);
+      }
+      if (rung.runningMissionId !== null) {
+        return rung.runningMissionId === mid
+          ? ({
+              missionTemplateId: mid,
+              status: { label: "In Progress", kind: "inprogress" },
+            } as const)
+          : ({ missionTemplateId: mid, status: { label: "Locked", kind: "locked" } } as const);
+      }
+      if (!rung.isCurrent) {
         return {
           missionTemplateId: mid,
-          dragMeta:
-            state.phase === "main"
-              ? ({ draggable: true, source: "lair", missionTemplateId: mid } as const)
-              : undefined,
-          ...(level.missionIds.length > 1
-            ? { status: { label: "Choose One", kind: "pending" } as const }
-            : {}),
-        };
-      });
-    const note =
-      running !== undefined
-        ? `${missionDisplayName(running.missionTemplateId)} is underway — the other choices stay closed until it resolves.`
-        : infamyLocked
-          ? `Needs ${needInfamy} infamy to begin (you have ${state.player.infamy}).`
-          : null;
-    return { label, note, emptyText: "No pending upgrades.", entries };
+          status: { label: "Locked", kind: "locked" },
+        } as const;
+      }
+      if (rung.infamyLocked) {
+        return {
+          missionTemplateId: mid,
+          status: { label: `${rung.needInfamy} Infamy`, kind: "locked" },
+        } as const;
+      }
+      return {
+        missionTemplateId: mid,
+        dragMeta:
+          state.phase === "main"
+            ? ({ draggable: true, source: "lair", missionTemplateId: mid } as const)
+            : undefined,
+        ...(rung.level.missionIds.length > 1
+          ? { status: { label: "Choose One", kind: "pending" } as const }
+          : {}),
+      };
+    });
+  }
+
+  /** The rule line under a rung: how its choices relate to each other, and what holds them shut. */
+  function lairUpgradeRungNote(rung: LairUpgradeRung): string | null {
+    if (rung.installedMissionId !== null) {
+      return `${missionDisplayName(rung.installedMissionId)} is installed — the rest of this level closed with it.`;
+    }
+    if (rung.runningMissionId !== null) {
+      return `${missionDisplayName(rung.runningMissionId)} is underway — the other choices stay closed until it resolves.`;
+    }
+    if (!rung.isCurrent) {
+      return "Opens once every level before it is installed.";
+    }
+    if (rung.infamyLocked) {
+      return `Needs ${rung.needInfamy} infamy to begin (you have ${state.player.infamy}).`;
+    }
+    return null;
   }
 
   /** Corner status chip on a mission card (In Progress / Locked / Pending). */
@@ -6138,20 +6174,27 @@ function initGameController(
     const assetNameById = new Map(content.assets.map((a) => [a.id, a.name]));
     const mainOnly = state.phase === "main";
 
-    /* Sorting an Unknown site into its category's column would say what it is, so they get a
-     * column of their own, in map order (their names would give the order away just as well). */
-    const identifiedLocations = runLocations().filter((loc) => isSiteIdentified(loc.id));
-    const unknownLocations = runLocations().filter((loc) => !isSiteIdentified(loc.id));
-
+    /*
+     * Every site sits in its own category's column, scouted or not: the map already plots an
+     * Unknown site where it stands, so filing it under what it is costs the player nothing they
+     * could not already read off the plot, and it keeps one column per category rather than a
+     * fourth that empties out as the run goes on.
+     *
+     * Within a column the scouted sites come first, ordered by level then name; the Unknown tail
+     * keeps map order, since every one of them reads as the same name and a level-and-name sort
+     * would only be ordering by facts the player has not earned yet.
+     */
     function sortedLocationsForCategory(tabType: LocationType) {
-      return identifiedLocations
-        .filter((loc) => loc.locationType === tabType)
+      const ofType = runLocations().filter((loc) => loc.locationType === tabType);
+      const identified = ofType
+        .filter((loc) => isSiteIdentified(loc.id))
         .sort((a, b) => {
           if (a.locationLevel !== b.locationLevel) {
             return a.locationLevel - b.locationLevel;
           }
           return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
         });
+      return [...identified, ...ofType.filter((loc) => !isSiteIdentified(loc.id))];
     }
 
     function fillLocationList(
@@ -6214,13 +6257,8 @@ function initGameController(
         columnsWrap,
         label,
         sortedLocationsForCategory(tabType),
-        unknownLocations.length > 0
-          ? `No known ${label.toLowerCase()} locations yet.`
-          : `No ${label.toLowerCase()} locations on this map.`,
+        `No ${label.toLowerCase()} locations on this map.`,
       );
-    }
-    if (unknownLocations.length > 0) {
-      appendLocationColumn(columnsWrap, UNKNOWN_LOCATION_NAME, unknownLocations, "");
     }
     locationsPanelEl.appendChild(columnsWrap);
   }
@@ -7763,7 +7801,7 @@ function initGameController(
     if (subject.kind === "lair") {
       /* The drawer's contents folded into tabs, under a per-pane id prefix — several tablists
        * can be up at once, and shared tab ids would leave every `aria-labelledby` ambiguous. */
-      renderLairPanelInto(pane.bodyEl, { kind: "tabs", idPrefix: `${pane.el.id}-lair` });
+      renderLairPanelInto(pane.bodyEl, `${pane.el.id}-lair`);
       return;
     }
     if (subject.kind === "event") {
@@ -7973,23 +8011,246 @@ function initGameController(
     });
   }
 
+  /**
+   * Which rung of the upgrade ladder the Lair menu is showing, or null to follow the ladder's
+   * own open rung. Clicking a tile pins that rung; picking the open one hands the view back, so
+   * the menu keeps up with the climb on its own once the player stops browsing ahead.
+   */
+  let lairPanelRungIndex: number | null = null;
+
+  const LAIR_LEVEL_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"] as const;
+
+  function lairLevelNumeral(index: number): string {
+    return LAIR_LEVEL_NUMERALS[index] ?? String(index + 1);
+  }
+
   /** The Lair drawer. */
   function renderLairPanel(): void {
-    withDeferredCardArt(openDrawer !== "lair", () => {
-      renderLairPanelInto(lairPanelEl, { kind: "columns" });
-    });
+    withDeferredCardArt(openDrawer !== "lair", buildLairPanel);
   }
 
   /**
-   * Both surfaces that draw the lair, rendered from one place: the drawer lays every section
-   * out as a column, the map inspector's narrow card folds them into tabs. `idPrefix`
-   * namespaces a tablist, since several inspector cards can be up together and tablists sharing
-   * tab ids would leave every `aria-labelledby` ambiguous.
+   * The Lair menu, built as the Omega Plan menu is: the base's art full-bleed across a banner,
+   * a strip of tiles for the climb, then the cards of whichever rung is selected. The ladder is
+   * the same shape of thing a plan's phases are — a fixed run of tiers, one open at a time, each
+   * a set of mutually exclusive missions — so it reads better in the same three bands than as a
+   * column of whatever happens to be startable this turn.
    */
-  function renderLairPanelInto(
-    container: HTMLElement,
-    layout: { readonly kind: "columns" } | { readonly kind: "tabs"; readonly idPrefix: string },
-  ): void {
+  function buildLairPanel(): void {
+    lairPanelEl.innerHTML = "";
+    if (state.activeLairId === null) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent = "No lair in this run.";
+      lairPanelEl.appendChild(empty);
+      return;
+    }
+    const lair = getLairById(content, state.activeLairId);
+    if (!lair) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent = "Lair not found in catalog.";
+      lairPanelEl.appendChild(empty);
+      return;
+    }
+
+    const ladder = lairUpgradeLadder();
+    const installedCount = ladder.filter((r) => r.installedMissionId !== null).length;
+
+    /* ---- Base banner: the lair's art full-bleed, copy over it ---- */
+
+    const hero = document.createElement("header");
+    hero.className = "lair-hero";
+    hero.appendChild(createCardArtImg(resolveLairCardArt(lair), "lair-hero__art"));
+
+    const heroText = document.createElement("div");
+    heroText.className = "lair-hero__text";
+
+    const nameEl = document.createElement("h2");
+    nameEl.className = "lair-hero-name";
+    nameEl.textContent = lair.name;
+    heroText.appendChild(nameEl);
+
+    if (lair.description) {
+      const descEl = document.createElement("p");
+      descEl.className = "lair-hero-description";
+      descEl.textContent = lair.description;
+      heroText.appendChild(descEl);
+    }
+
+    const tagline = document.createElement("p");
+    tagline.className = "lair-hero-tagline";
+    tagline.textContent =
+      ladder.length === 0
+        ? "No upgrades on file for this base."
+        : `${ladder.length} levels. ${installedCount} installed, ${ladder.length - installedCount} to go.`;
+    heroText.appendChild(tagline);
+
+    hero.appendChild(heroText);
+    lairPanelEl.appendChild(hero);
+
+    if (ladder.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "assets-panel-empty";
+      empty.textContent = "This lair has no upgrades.";
+      lairPanelEl.appendChild(empty);
+      return;
+    }
+
+    /* ---- Ladder strip: one tile per level, click one to bring up its choices ---- */
+
+    const openRung = ladder.find((r) => r.isCurrent);
+    /* Every level installed: nothing is open, so the strip rests on the last rung climbed. */
+    const defaultIndex = openRung?.index ?? ladder.length - 1;
+    const selectedIndex = Math.min(
+      ladder.length - 1,
+      Math.max(0, lairPanelRungIndex ?? defaultIndex),
+    );
+
+    function buildRungTile(rung: LairUpgradeRung): HTMLElement {
+      const isInstalled = rung.installedMissionId !== null;
+      const isSelected = rung.index === selectedIndex;
+      const percent = isInstalled ? 100 : 0;
+
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "lair-level-tile";
+      tile.setAttribute("role", "tab");
+      tile.setAttribute("aria-selected", isSelected ? "true" : "false");
+      if (isInstalled) {
+        tile.classList.add("lair-level-tile--complete");
+      } else if (rung.isCurrent) {
+        tile.classList.add("lair-level-tile--current");
+      } else {
+        tile.classList.add("lair-level-tile--locked");
+      }
+      if (isSelected) {
+        tile.classList.add("lair-level-tile--selected");
+      }
+
+      const head = document.createElement("span");
+      head.className = "lair-level-tile__head";
+
+      const kicker = document.createElement("span");
+      kicker.className = "lair-level-kicker";
+      kicker.textContent = `Level ${lairLevelNumeral(rung.index)}`;
+      head.appendChild(kicker);
+
+      const badge = document.createElement("span");
+      if (isInstalled) {
+        badge.className = "status-badge status-badge--complete";
+        badge.textContent = "Installed";
+      } else if (rung.runningMissionId !== null) {
+        badge.className = "status-badge status-badge--inprogress";
+        badge.textContent = "In Progress";
+      } else if (rung.isCurrent && !rung.infamyLocked) {
+        badge.className = "status-badge status-badge--pending";
+        badge.textContent = "Open";
+      } else {
+        badge.className = "status-badge status-badge--locked";
+        badge.textContent = "Locked";
+      }
+      head.appendChild(badge);
+      tile.appendChild(head);
+
+      const title = document.createElement("span");
+      title.className = "lair-level-title";
+      title.textContent = rung.title;
+      tile.appendChild(title);
+
+      const blurb = document.createElement("span");
+      blurb.className = "lair-level-blurb";
+      blurb.textContent =
+        rung.installedMissionId !== null
+          ? `${missionDisplayName(rung.installedMissionId)} is built into the base.`
+          : `${rung.level.missionIds.length} installations on offer — take one and the level closes.`;
+      tile.appendChild(blurb);
+
+      const foot = document.createElement("span");
+      foot.className = "lair-level-tile__foot";
+
+      const progress = document.createElement("span");
+      progress.className = "lair-level-progress";
+      const fill = document.createElement("span");
+      fill.className = "lair-level-progress__fill";
+      if (isInstalled) {
+        fill.classList.add("lair-level-progress__fill--complete");
+      }
+      fill.style.width = `${percent}%`;
+      progress.appendChild(fill);
+      foot.appendChild(progress);
+
+      const stats = document.createElement("span");
+      stats.className = "lair-level-tile__stats";
+
+      const requirement = document.createElement("span");
+      requirement.className = "lair-level-requirement";
+      requirement.textContent =
+        rung.needInfamy > 0 ? `${rung.needInfamy} Infamy` : "No standing needed";
+      requirement.title =
+        rung.needInfamy > 0
+          ? `This level's work cannot begin under ${rung.needInfamy} infamy.`
+          : "This level's work can begin at any standing.";
+      stats.appendChild(requirement);
+
+      const percentEl = document.createElement("span");
+      percentEl.className = "lair-level-percent";
+      percentEl.textContent = `${percent}%`;
+      stats.appendChild(percentEl);
+
+      foot.appendChild(stats);
+      tile.appendChild(foot);
+
+      tile.addEventListener("click", () => {
+        /* Picking the ladder's own open rung un-pins, so the view follows the climb from here. */
+        lairPanelRungIndex = rung.index === defaultIndex ? null : rung.index;
+        renderLairPanel();
+      });
+
+      return tile;
+    }
+
+    const strip = document.createElement("div");
+    strip.className = "lair-level-strip";
+    strip.setAttribute("role", "tablist");
+    strip.setAttribute("aria-label", "Lair upgrade levels");
+    for (const rung of ladder) {
+      strip.appendChild(buildRungTile(rung));
+    }
+    lairPanelEl.appendChild(strip);
+
+    /* ---- The selected level's mutually exclusive choices ---- */
+
+    const selected = ladder[selectedIndex]!;
+    const ops = document.createElement("section");
+    ops.className = "lair-ops";
+    /* No heading of its own — the strip above already names the selected level on its tile. */
+    ops.setAttribute("aria-label", `Level ${lairLevelNumeral(selectedIndex)} upgrades`);
+
+    const note = lairUpgradeRungNote(selected);
+    if (note !== null) {
+      const noteEl = document.createElement("p");
+      noteEl.className = "lair-ops-note";
+      noteEl.textContent = note;
+      ops.appendChild(noteEl);
+    }
+
+    const missionWrap = document.createElement("div");
+    missionWrap.className = "lair-level-missions";
+    for (const entry of lairUpgradeRungEntries(selected)) {
+      missionWrap.appendChild(buildMissionEntryCard(entry));
+    }
+    ops.appendChild(missionWrap);
+    lairPanelEl.appendChild(ops);
+  }
+
+  /**
+   * The lair as the map inspector draws it: a quarter of the map wide, so the base's sections
+   * fold into tabs rather than the drawer's bands. `idPrefix` namespaces the tablist, since
+   * several inspector cards can be up together and tablists sharing tab ids would leave every
+   * `aria-labelledby` ambiguous.
+   */
+  function renderLairPanelInto(container: HTMLElement, idPrefix: string): void {
     container.innerHTML = "";
     if (state.activeLairId === null) {
       const empty = document.createElement("p");
@@ -8006,28 +8267,7 @@ function initGameController(
       container.appendChild(empty);
       return;
     }
-    /* The drawer keeps its own compact header — a wide column of cards below it has room to
-     * spare, and a full hero card there would dwarf the columns beside it. The map inspector's
-     * narrow pane is exactly where a site's card lives, so the lair gets the same one there,
-     * with the tabbed sections that follow now describing the base rather than introducing it. */
-    if (layout.kind === "columns") {
-      const header = document.createElement("div");
-      header.className = "lair-panel-header";
-      const headerBody = appendCardArtShell(header, resolveLairCardArt(lair));
-      const nameEl = document.createElement("p");
-      nameEl.className = "lair-panel-name";
-      nameEl.textContent = lair.name;
-      headerBody.appendChild(nameEl);
-      if (lair.description) {
-        const desc = document.createElement("p");
-        desc.className = "lair-panel-description";
-        desc.textContent = lair.description;
-        headerBody.appendChild(desc);
-      }
-      container.appendChild(header);
-    } else {
-      container.appendChild(buildLairCardArticle(lair));
-    }
+    container.appendChild(buildLairCardArticle(lair));
 
     function missionNameForSort(mid: string): string {
       return content.missions.find((m) => m.id === mid)?.name ?? mid;
@@ -8060,33 +8300,35 @@ function initGameController(
       }
     }
 
-    /** Only the next open upgrade level — earlier ones are settled, later ones stay unseen. */
+    /** Only the open rung — this card has no room for the ladder the drawer lays out in full. */
     function fillLairUpgradesInto(container: HTMLElement): void {
-      const offer = lairUpgradeOffer();
-      if (offer.entries.length === 0) {
+      const ladder = lairUpgradeLadder();
+      const rung = ladder.find((r) => r.isCurrent);
+      if (rung === undefined) {
         const empty = document.createElement("p");
         empty.className = "assets-panel-empty";
-        empty.textContent = offer.emptyText;
+        empty.textContent =
+          ladder.length === 0 ? "This lair has no upgrades." : "Every upgrade level is installed.";
         container.appendChild(empty);
         return;
       }
+
       const levelLine = document.createElement("p");
       levelLine.className = "lair-upgrade-level-title";
-      /* The column or tab already says "Upgrades"; keep just the level part here. */
-      levelLine.textContent = offer.label.replace("Lair Upgrades — ", "");
+      /* The tab already says "Upgrades"; keep just the level part here. */
+      levelLine.textContent = `Level ${rung.index + 1} of ${ladder.length}: ${rung.title}`;
       container.appendChild(levelLine);
-      if (offer.note !== null) {
-        const note = document.createElement("p");
-        note.className = "assets-panel-empty";
-        note.textContent = offer.note;
-        container.appendChild(note);
+
+      const note = lairUpgradeRungNote(rung);
+      if (note !== null) {
+        const noteEl = document.createElement("p");
+        noteEl.className = "assets-panel-empty";
+        noteEl.textContent = note;
+        container.appendChild(noteEl);
       }
-      for (const entry of offer.entries) {
-        const card = omegaPlanMissionCard(entry.missionTemplateId, entry.dragMeta);
-        if (entry.status) {
-          appendMissionCardBadge(card, entry.status);
-        }
-        container.appendChild(card);
+
+      for (const entry of lairUpgradeRungEntries(rung)) {
+        container.appendChild(buildMissionEntryCard(entry));
       }
     }
 
@@ -8098,35 +8340,6 @@ function initGameController(
       } else {
         renderActiveMissionsInto(container);
       }
-    }
-
-    /*
-     * The drawer is down to one section — what this base can still become. Missions, running or
-     * on offer, are the Missions menu's to list, and what the run owns has a menu of its own, so
-     * the upgrade choices keep their own two-abreast column rather than being stretched across
-     * a menu they no longer share, three choices to a row.
-     */
-    if (layout.kind === "columns") {
-      const columnsWrap = document.createElement("div");
-      columnsWrap.className = "lair-panel-columns";
-
-      const column = document.createElement("section");
-      column.className = "lair-panel-column lair-panel-column--wide";
-      column.setAttribute("aria-label", "Upgrades");
-
-      const heading = document.createElement("h3");
-      heading.className = "game-controls-heading lair-panel-column-title";
-      heading.textContent = "Upgrades";
-
-      const list = document.createElement("div");
-      list.className = "lair-panel-missions lair-panel-missions--grid";
-      fillLairUpgradesInto(list);
-
-      column.appendChild(heading);
-      column.appendChild(list);
-      columnsWrap.appendChild(column);
-      container.appendChild(columnsWrap);
-      return;
     }
 
     const tablist = document.createElement("div");
@@ -8143,7 +8356,7 @@ function initGameController(
       }
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-selected", def.id === lairInspectorTab ? "true" : "false");
-      tab.id = `${layout.idPrefix}-tab-${def.id}`;
+      tab.id = `${idPrefix}-tab-${def.id}`;
       tab.textContent = def.label;
       tab.addEventListener("click", () => {
         if (lairInspectorTab === def.id) {
@@ -8159,7 +8372,7 @@ function initGameController(
     const list = document.createElement("div");
     list.className = "lair-panel-missions";
     list.setAttribute("role", "tabpanel");
-    list.setAttribute("aria-labelledby", `${layout.idPrefix}-tab-${lairInspectorTab}`);
+    list.setAttribute("aria-labelledby", `${idPrefix}-tab-${lairInspectorTab}`);
     fillLairSectionInto(lairInspectorTab, list);
     container.appendChild(list);
   }

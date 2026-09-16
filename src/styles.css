@@ -1995,7 +1995,6 @@ body {
  * the column row is stretched to the full height of the panel and each column's list becomes
  * its own scroller down to the floor.
  */
-.drawer__panel .lair-panel-columns,
 .drawer__panel .locations-panel-columns,
 .drawer__panel .minions-panel-columns {
   flex: 1 1 0;
@@ -2003,7 +2002,6 @@ body {
   align-items: stretch;
 }
 
-.drawer__panel .lair-panel-column,
 .drawer__panel .locations-panel-column,
 .drawer__panel .minions-panel-column {
   min-height: 0;
@@ -2028,7 +2026,6 @@ body {
   min-height: 28px;
 }
 
-.drawer__panel .lair-panel-column > .lair-panel-missions,
 .drawer__panel .locations-panel-list,
 .drawer__panel .minions-panel-list,
 .drawer__panel .missions-menu-column-body {
@@ -3594,12 +3591,16 @@ body {
    ============================================================ */
 
 /*
- * Three bands stacked down the menu: the plan's banner, a strip of the three phases, then the
- * operations of whichever phase is selected. Only the last one scrolls — the banner and the
- * strip stay put, so the way back to another phase is always on screen no matter how tall the
- * mission cards run.
+ * Three bands stacked down the menu: a banner, a strip of tiers, then the missions of whichever
+ * tier is selected. Only the last one scrolls — the banner and the strip stay put, so the way
+ * back to another tier is always on screen no matter how tall the mission cards run.
+ *
+ * The Omega Plan menu and the Lair menu are both built this way: a plan's three phases and a
+ * lair's upgrade ladder are the same shape of thing, a fixed run of tiers with one open at a
+ * time, so the rules below are written once and worn by both.
  */
-.omega-plan-panel {
+.omega-plan-panel,
+.lair-panel {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -3608,18 +3609,20 @@ body {
 }
 
 /* The panel hands its scrolling to the mission grid inside it (see the grid's rule below). */
-.game-panel--omega {
+.game-panel--omega,
+.game-panel--lair {
   overflow: hidden;
 }
 
 /* ---------------- Plan banner ---------------- */
 
 /*
- * The plan's art runs full-bleed across the whole band with the copy laid over it, so the
+ * The subject's art runs full-bleed across the whole band with the copy laid over it, so the
  * negative margins pull the banner back out through the menu's gutter to its top and side
  * edges — the panel's own clip-path re-cuts the corners over it.
  */
-.omega-plan-hero {
+.omega-plan-hero,
+.lair-hero {
   position: relative;
   flex-shrink: 0;
   display: flex;
@@ -3636,7 +3639,8 @@ body {
  * No `filter` here, unlike the card thumbnails: the right of the band is meant to read as the
  * art itself, and the house saturate/contrast grade visibly darkens it against the source.
  */
-.omega-plan-hero > .omega-plan-hero__art {
+.omega-plan-hero > .omega-plan-hero__art,
+.lair-hero > .lair-hero__art {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -3651,7 +3655,8 @@ body {
  * edge so that half of the band is the untouched picture. One horizontal gradient only — a
  * top-and-tail layer over it would tint the clear side too.
  */
-.omega-plan-hero::after {
+.omega-plan-hero::after,
+.lair-hero::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -3665,7 +3670,8 @@ body {
   );
 }
 
-.omega-plan-hero__text {
+.omega-plan-hero__text,
+.lair-hero__text {
   position: relative;
   /* Above the art and its scrim. */
   z-index: 1;
@@ -3676,7 +3682,8 @@ body {
   gap: 0.3rem;
 }
 
-.omega-plan-name {
+.omega-plan-name,
+.lair-hero-name {
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.85rem;
@@ -3688,7 +3695,8 @@ body {
   text-shadow: 0 0 20px var(--red-glow-soft);
 }
 
-.omega-plan-description {
+.omega-plan-description,
+.lair-hero-description {
   margin: 0.15rem 0 0;
   font-size: 0.78rem;
   line-height: 1.45;
@@ -3701,7 +3709,8 @@ body {
 }
 
 /* Flavour line under the blurb, in the same red as the kicker above it. */
-.omega-plan-tagline {
+.omega-plan-tagline,
+.lair-hero-tagline {
   margin: auto 0 0;
   padding-top: 0.35rem;
   font-family: var(--font-display);
@@ -3722,7 +3731,21 @@ body {
   gap: 0.6rem;
 }
 
-.omega-phase-tile {
+/*
+ * The ladder's tiers, however many a lair authors: equal columns laid down automatically rather
+ * than a fixed count, so content decides the width of a rung and the strip still reads as one
+ * bar across the menu.
+ */
+.lair-level-strip {
+  flex-shrink: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.omega-phase-tile,
+.lair-level-tile {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -3745,35 +3768,41 @@ body {
   transition: border-color 0.15s, box-shadow 0.15s, opacity 0.2s, filter 0.2s;
 }
 
-.omega-phase-tile:hover {
+.omega-phase-tile:hover,
+.lair-level-tile:hover {
   border-color: var(--line-2);
   box-shadow: 0 0 16px rgba(232, 17, 45, 0.12);
 }
 
-.omega-phase-tile:focus-visible {
+.omega-phase-tile:focus-visible,
+.lair-level-tile:focus-visible {
   outline: 1px solid var(--red-bright);
   outline-offset: 1px;
 }
 
-/* A phase not reached yet is still readable and still clickable, just held back. */
-.omega-phase-tile--locked {
+/* A tier not reached yet is still readable and still clickable, just held back. */
+.omega-phase-tile--locked,
+.lair-level-tile--locked {
   opacity: 0.55;
   filter: saturate(0.4);
 }
 
-.omega-phase-tile--locked:hover {
+.omega-phase-tile--locked:hover,
+.lair-level-tile--locked:hover {
   opacity: 0.8;
 }
 
-/* The phase whose operations are showing: lit border and a bar down its leading edge. */
-.omega-phase-tile--selected {
+/* The tier whose missions are showing: lit border and a bar down its leading edge. */
+.omega-phase-tile--selected,
+.lair-level-tile--selected {
   opacity: 1;
   filter: none;
   border-color: var(--red);
   box-shadow: 0 0 24px rgba(232, 17, 45, 0.18);
 }
 
-.omega-phase-tile--selected::before {
+.omega-phase-tile--selected::before,
+.lair-level-tile--selected::before {
   content: "";
   position: absolute;
   top: 0;
@@ -3784,14 +3813,16 @@ body {
   box-shadow: 0 0 10px var(--red-glow);
 }
 
-.omega-phase-tile__head {
+.omega-phase-tile__head,
+.lair-level-tile__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
-.omega-phase-kicker {
+.omega-phase-kicker,
+.lair-level-kicker {
   font-family: var(--font-display);
   font-size: 0.58rem;
   font-weight: 600;
@@ -3800,7 +3831,8 @@ body {
   color: var(--red-bright);
 }
 
-.omega-plan-phase-title {
+.omega-plan-phase-title,
+.lair-level-title {
   display: block;
   margin: 0;
   font-family: var(--font-display);
@@ -3812,20 +3844,23 @@ body {
   color: var(--text-1);
 }
 
-.omega-phase-tile--selected .omega-plan-phase-title {
+.omega-phase-tile--selected .omega-plan-phase-title,
+.lair-level-tile--selected .lair-level-title {
   color: var(--text-0);
   text-shadow: 0 0 14px var(--red-glow-soft);
 }
 
-.omega-phase-blurb {
+.omega-phase-blurb,
+.lair-level-blurb {
   display: block;
   font-size: 0.72rem;
   line-height: 1.4;
   color: var(--text-2);
 }
 
-/* Pinned to the foot of the tile so all three bars line up however long the blurbs run. */
-.omega-phase-tile__foot {
+/* Pinned to the foot of the tile so every bar lines up however long the blurbs run. */
+.omega-phase-tile__foot,
+.lair-level-tile__foot {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -3833,7 +3868,8 @@ body {
   padding-top: 0.4rem;
 }
 
-.omega-phase-progress {
+.omega-phase-progress,
+.lair-level-progress {
   display: block;
   position: relative;
   height: 9px;
@@ -3844,6 +3880,7 @@ body {
 
 /* Blocked / pip-style bars: dark separators sliced over the fill */
 .omega-phase-progress::after,
+.lair-level-progress::after,
 .mission-progress__bar::after {
   content: "";
   position: absolute;
@@ -3852,7 +3889,8 @@ body {
   background: repeating-linear-gradient(90deg, transparent 0 7px, rgba(5, 2, 3, 0.9) 7px 9px);
 }
 
-.omega-phase-progress__fill {
+.omega-phase-progress__fill,
+.lair-level-progress__fill {
   display: block;
   position: absolute;
   inset: 0;
@@ -3862,12 +3900,14 @@ body {
   transition: width 0.5s ease;
 }
 
-.omega-phase-progress__fill--complete {
+.omega-phase-progress__fill--complete,
+.lair-level-progress__fill--complete {
   background: linear-gradient(90deg, var(--good-dim), var(--good));
   box-shadow: 0 0 10px rgba(69, 223, 123, 0.35);
 }
 
-.omega-phase-progress__fill::after {
+.omega-phase-progress__fill::after,
+.lair-level-progress__fill::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -3887,15 +3927,17 @@ body {
   }
 }
 
-.omega-phase-tile__stats {
+.omega-phase-tile__stats,
+.lair-level-tile__stats {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
-/* "Complete X of Y" — the phase's designer-authored mission requirement. */
-.omega-phase-requirement {
+/* What the tier asks of the player: a phase's mission count, a rung's infamy gate. */
+.omega-phase-requirement,
+.lair-level-requirement {
   display: block;
   margin: 0;
   font-family: var(--font-display);
@@ -3906,11 +3948,13 @@ body {
   color: var(--text-2);
 }
 
-.omega-phase-tile--selected .omega-phase-requirement {
+.omega-phase-tile--selected .omega-phase-requirement,
+.lair-level-tile--selected .lair-level-requirement {
   color: var(--text-1);
 }
 
-.omega-phase-percent {
+.omega-phase-percent,
+.lair-level-percent {
   font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 700;
@@ -3918,13 +3962,15 @@ body {
   color: var(--red-bright);
 }
 
-.omega-phase-tile--complete .omega-phase-percent {
+.omega-phase-tile--complete .omega-phase-percent,
+.lair-level-tile--complete .lair-level-percent {
   color: var(--good);
 }
 
-/* ---------------- Operations for the selected phase ---------------- */
+/* ---------------- Missions of the selected tier ---------------- */
 
-.omega-ops {
+.omega-ops,
+.lair-ops {
   flex: 1 1 0;
   min-height: 0;
   display: flex;
@@ -3933,11 +3979,13 @@ body {
 }
 
 /*
- * The menu's only scroller, so the cards give way rather than the plan above them. Three
- * columns to match the three mission slots a phase holds; `align-content: start` keeps a short
- * row at the top instead of centring it in the leftover height.
+ * The menu's only scroller, so the cards give way rather than the bands above them. Three
+ * columns to match the three mission slots a phase holds — and the three an upgrade level
+ * offers at its widest; `align-content: start` keeps a short row at the top instead of centring
+ * it in the leftover height.
  */
-.omega-plan-phase-missions {
+.omega-plan-phase-missions,
+.lair-level-missions {
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
@@ -4442,10 +4490,6 @@ body {
 .card-art--chip {
   width: 28px;
   height: 28px;
-}
-
-.lair-panel-header.card-with-art {
-  flex-shrink: 0;
 }
 
 /* Revealed opposing agents on location cards */
@@ -5903,7 +5947,6 @@ body {
 }
 
 .locations-panel-columns,
-.lair-panel-columns,
 .minions-panel-columns {
   display: flex;
   flex-direction: row;
@@ -5916,7 +5959,6 @@ body {
 }
 
 .locations-panel-column,
-.lair-panel-column,
 .minions-panel-column {
   flex: 1 1 0;
   min-width: 11rem;
@@ -5925,13 +5967,7 @@ body {
   gap: 0.4rem;
 }
 
-/* The Lair drawer's one section, wide enough that its three card columns never crush. */
-.lair-panel-column--wide {
-  min-width: 34rem;
-}
-
 .locations-panel-column-title,
-.lair-panel-column-title,
 .minions-panel-column-title {
   margin: 0;
 }
@@ -5969,30 +6005,12 @@ body {
   min-height: 0;
 }
 
-.minions-panel,
-.lair-panel {
+.minions-panel {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.lair-panel-name {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 0.84rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-0);
-}
-
-.lair-panel-description {
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.4;
-  color: var(--text-2);
 }
 
 .lair-panel-missions {
@@ -6001,21 +6019,14 @@ body {
   gap: 0.45rem;
 }
 
-/*
- * Upgrades run three cards abreast across the menu they now have to themselves, so a level's
- * choices sit side by side instead of stacking off the bottom of the drawer. The level line and
- * its rule note stay full width above them.
- */
-.lair-panel-missions--grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-content: start;
-  gap: 0.45rem;
-}
-
-.lair-panel-missions--grid > .lair-upgrade-level-title,
-.lair-panel-missions--grid > .assets-panel-empty {
-  grid-column: 1 / -1;
+/* The rule line above a rung's cards: what is installed, running, or holding it shut. */
+.lair-ops-note {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-3);
+  font-style: italic;
 }
 
 /* Which rung of the upgrade ladder the visible choices belong to. */
