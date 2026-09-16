@@ -185,7 +185,7 @@ import {
   locationDesignation,
   type LocationBriefAssetRow,
 } from "./ui/locationBrief";
-import { buildMissionBrief, type MissionBriefAssetRow } from "./ui/missionBrief";
+import { buildMissionBrief, missionAssetCell, type MissionBriefAssetRow } from "./ui/missionBrief";
 import { briefPanel } from "./ui/cardBrief";
 import { buildMinionBrief } from "./ui/minionBrief";
 import { initGlobalTooltips } from "./ui/tooltip";
@@ -203,9 +203,9 @@ import {
   resolveMissionCardArt,
   resolvePlayerLocationCardArt,
   resolveMinionCardArt,
+  resolveOmegaPlanCardArt,
   resolveUnknownCardArt,
   resolveUnknownCardArtThumb,
-  resolveOmegaPlanCardArt,
 } from "./ui/cardArt";
 
 /** What each intel step unlocks at a site (hover text on the location card's Intel Level label). */
@@ -1118,7 +1118,7 @@ function missionRequiredAssetRows(
       assetId,
       name: template?.name ?? assetId,
       quantity,
-      have: (ownedAssets[assetId] ?? 0) >= quantity,
+      variant: (ownedAssets[assetId] ?? 0) >= quantity ? "have" : "missing",
       tooltip: formatStaticAssetTooltip(template, assetId),
     });
   }
@@ -1258,7 +1258,9 @@ function formatTargetLocationFilters(
   const parts: string[] = [];
   const siteIds = filters.targetLocationIds;
   if (siteIds !== undefined && siteIds.length > 0) {
-    parts.push(siteIds.map((id) => locationName?.(id) ?? id).join(" or "));
+    /* Deduped: several pinned sites the player cannot identify all render under the one
+       Unknown name, and "Unknown or Unknown" says nothing the single word does not. */
+    parts.push([...new Set(siteIds.map((id) => locationName?.(id) ?? id))].join(" or "));
   }
   const types = filters.targetLocationTypes;
   if (types !== undefined && types.length > 0) {
@@ -1626,35 +1628,26 @@ function initGameController(
   }
 
   /**
-   * One asset an effect gains, drawn as the same manifest row a location's asset list uses
-   * (`.card-brief__asset` — picture, blank code, name). Tone stands in for that row's
-   * have/missing pair: there is nothing to hold here, only whether the gain happens on success
-   * or on failure.
-   *
-   * The picture is the generic crate mark, in the same grey as the requirement cells above — an
-   * asset reads as one kind of object everywhere on a mission card, and the card stays a sheet
-   * of marks and type rather than a strip of postage stamps. A *location* card keeps the real
-   * photographs: its manifest is the inventory of a place the player is casing, where telling
-   * one shelf from another at a glance is the whole job.
+   * One asset an effect gains, built by the exact same cell {@link missionAssetCell} draws for a
+   * mission's Requirements grid — the generic crate mark, the ruled divider, the "Asset" caption
+   * over the name. There is nothing to hold here, so it always wears the plain `have` look a
+   * satisfied requirement does; success and failure are already told apart by the On Success /
+   * On Failure panel's own green or red frame, not by the cell inside it. One builder behind
+   * both, so the two can never drift on how an asset is shown on a mission card.
    */
-  function missionEffectAssetRow(
+  function missionEffectAssetCell(
     catalog: ReturnType<typeof loadContent>,
     assetId: string,
-    tone: "good" | "bad",
   ): HTMLElement {
     const template = catalog.assets.find((a) => a.id === assetId);
-    const li = document.createElement("li");
-    li.className = `card-brief__asset card-brief__asset--${tone}`;
-    li.title = formatStaticAssetTooltip(template, assetId);
-    li.appendChild(createSvgPillIcon(ASSET_ICON_SVG_PATHS, "card-brief__asset-glyph"));
-    const code = document.createElement("span");
-    code.className = "card-brief__asset-code";
-    li.appendChild(code);
-    const name = document.createElement("span");
-    name.className = "card-brief__asset-name";
-    name.textContent = template?.name ?? assetId;
-    li.appendChild(name);
-    return li;
+    return missionAssetCell({
+      assetId,
+      name: template?.name ?? assetId,
+      quantity: 1,
+      variant: "have",
+      tooltip: formatStaticAssetTooltip(template, assetId),
+      preview: (el) => attachAssetRowPreview(el, assetId),
+    });
   }
 
   function renderMissionEffectItemEls(
@@ -1664,13 +1657,6 @@ function initGameController(
   ): HTMLElement[] {
     const toneClass =
       tone === "good" ? "mission-card-effects__item--good" : "mission-card-effects__item--bad";
-
-    if (effect.kind === "gain_assets") {
-      // The asset speaks for itself: no "Gain asset:" lead-in, just a manifest row — thumbnail
-      // and name — so an asset an outcome hands over reads as an object rather than as a
-      // sentence about one.
-      return effect.assetIds.map((id: string) => missionEffectAssetRow(catalog, id, tone));
-    }
 
     if (effect.kind === "exchange_assets") {
       const item = document.createElement("li");
@@ -1768,9 +1754,12 @@ function initGameController(
   }
 
   /**
-   * One outcome — a framed `briefPanel` holding a `card-brief__assets` list of rows. The same
-   * frame the brief's own two sections come in (`ui/missionBrief.ts`), toned green or red so the
-   * two halves of this row are told apart by their edge rather than by reading their headings.
+   * One outcome — a framed `briefPanel` holding a `card-brief__assets` list of rows, plus, when
+   * the outcome hands over an asset, a one-column run of the same cells a mission's Requirements
+   * section builds (`card-brief__pills--grid`, single column rather than two since there is no
+   * skill column to sit beside). The same frame the brief's own two sections come in
+   * (`ui/missionBrief.ts`), toned green or red so the two halves of this row are told apart by
+   * their edge rather than by reading their headings.
    */
   function missionEffectsPanel(
     heading: string,
@@ -1783,12 +1772,29 @@ function initGameController(
       tone === "good" ? "brief-panel--good" : "brief-panel--bad",
     );
 
+    /* Asset gains are pulled out of the line-by-line list and drawn as their own single-column
+     * run of cells — see `missionEffectAssetCell`. */
+    const gainedAssetIds = effects.flatMap((e) => (e.kind === "gain_assets" ? e.assetIds : []));
+    const otherEffects = effects.filter((e) => e.kind !== "gain_assets");
+
     const list = document.createElement("ul");
     list.className = "card-brief__assets";
-    for (const item of missionEffectListItemEls(effects, catalog, tone)) {
+    for (const item of missionEffectListItemEls(otherEffects, catalog, tone)) {
       list.appendChild(item);
     }
-    body.appendChild(list);
+    if (list.childElementCount > 0) {
+      body.appendChild(list);
+    }
+
+    if (gainedAssetIds.length > 0) {
+      const grid = document.createElement("div");
+      grid.className = "card-brief__pills card-brief__pills--grid card-brief__pills--single";
+      for (const assetId of gainedAssetIds) {
+        grid.appendChild(missionEffectAssetCell(catalog, assetId));
+      }
+      body.appendChild(grid);
+    }
+
     return panel;
   }
 
@@ -4316,8 +4322,10 @@ function initGameController(
     meta.appendChild(title);
 
     if (mission) {
+      /* Named as the player knows the site: a mission pinned to somewhere they have no intel on
+       * reads "Unknown" until they scout it, rather than handing them the name for free. */
       const siteFilters = missionTargetTypeTargetsLocation(mission.targetType)
-        ? formatTargetLocationFilters(mission, targetLocationDisplayName)
+        ? formatTargetLocationFilters(mission, siteDisplayName)
         : null;
       const targetTypeLabel = formatMissionTargetTypeLabel(mission.targetType);
       // A mission pinned to specific sites already names them, so the generic "Location"
@@ -5129,9 +5137,36 @@ function initGameController(
     return article;
   }
 
+  /**
+   * Which phase's missions the Omega menu is showing, or null to follow the run's own phase.
+   * Clicking a phase tile pins that phase; picking the active one hands the view back.
+   */
+  let omegaPanelStageIndex: number | null = null;
+
   function renderOmegaPlanPanel(): void {
     withDeferredCardArt(openDrawer !== "omega", buildOmegaPlanPanel);
   }
+
+  /*
+   * Phase names and blurbs are fixed copy rather than content: a plan's stages carry only their
+   * mission ids and how many of them must land, and every plan runs the same three beats.
+   */
+  const OMEGA_PHASES = [
+    {
+      name: "Shadow Seeding",
+      blurb: "Infiltrate governments. Deploy propaganda. Establish covert networks.",
+    },
+    {
+      name: "Global Destabilization",
+      blurb: "Sabotage infrastructure. Incite unrest. Capture strategic assets.",
+    },
+    {
+      name: "Final Subjugation",
+      blurb: "Unleash final offensive. Force surrender. Establish total control.",
+    },
+  ] as const;
+
+  const OMEGA_PHASE_NUMERALS = ["I", "II", "III"] as const;
 
   function buildOmegaPlanPanel(): void {
     omegaPlanPanelEl.innerHTML = "";
@@ -5153,65 +5188,80 @@ function initGameController(
     }
     const currentPlan = plan;
 
-    const header = document.createElement("div");
-    header.className = "omega-plan-header";
-    const headerBody = appendCardArtShell(header, resolveOmegaPlanCardArt(currentPlan));
+    const activeStage = state.activeOmegaStageIndex;
+    const selectedStage = Math.min(
+      OMEGA_STAGE_COUNT - 1,
+      Math.max(0, omegaPanelStageIndex ?? activeStage),
+    );
+    const mainOnly = state.phase === "main";
 
-    const nameEl = document.createElement("p");
+    /* ---- Plan banner: the plan's art full-bleed, copy over it ---- */
+
+    const hero = document.createElement("header");
+    hero.className = "omega-plan-hero";
+    hero.appendChild(
+      createCardArtImg(resolveOmegaPlanCardArt(currentPlan), "omega-plan-hero__art"),
+    );
+
+    const heroText = document.createElement("div");
+    heroText.className = "omega-plan-hero__text";
+
+    const nameEl = document.createElement("h2");
     nameEl.className = "omega-plan-name";
     nameEl.textContent = currentPlan.name;
-    headerBody.appendChild(nameEl);
+    heroText.appendChild(nameEl);
 
     if (currentPlan.description) {
       const descEl = document.createElement("p");
       descEl.className = "omega-plan-description";
       descEl.textContent = currentPlan.description;
-      headerBody.appendChild(descEl);
+      heroText.appendChild(descEl);
     }
 
-    omegaPlanPanelEl.appendChild(header);
+    const tagline = document.createElement("p");
+    tagline.className = "omega-plan-tagline";
+    tagline.textContent = `Three phases. ${omegaPlanRequiredMissionTotal(currentPlan)} operations to a darker tomorrow.`;
+    heroText.appendChild(tagline);
 
-    const PHASE_NAMES = [
-      "Shadow Seeding",
-      "Global Destabilization",
-      "Final Subjugation",
-    ] as const;
+    hero.appendChild(heroText);
 
-    const mainOnly = state.phase === "main";
+    omegaPlanPanelEl.appendChild(hero);
 
-    function buildPhaseSection(stageIndex: number): HTMLElement {
-      const stage = currentPlan.stages[stageIndex]!;
-      const section = document.createElement("section");
-      section.className = "omega-plan-phase";
-      section.setAttribute("aria-label", `Phase ${stageIndex + 1}`);
-      const isCurrent = stageIndex === state.activeOmegaStageIndex;
-      const isComplete = stageIndex < state.activeOmegaStageIndex;
+    /* ---- Phase strip: three tiles, click one to bring up its operations ---- */
+
+    function buildPhaseTile(stageIndex: number): HTMLElement {
+      const copy = OMEGA_PHASES[stageIndex]!;
+      const isCurrent = stageIndex === activeStage;
+      const isComplete = stageIndex < activeStage;
+      const isSelected = stageIndex === selectedStage;
+      const stageRequired = omegaStageRequiredMissions(currentPlan, stageIndex);
+      const stageProgress = state.omegaStageProgress[stageIndex]!;
+      const successes = Math.min(stageRequired, stageProgress.filter(Boolean).length);
+      const percent = Math.round((successes / stageRequired) * 100);
+
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "omega-phase-tile";
+      tile.setAttribute("role", "tab");
+      tile.setAttribute("aria-selected", isSelected ? "true" : "false");
       if (isCurrent) {
-        section.classList.add("omega-plan-phase--current");
+        tile.classList.add("omega-phase-tile--current");
       } else if (isComplete) {
-        section.classList.add("omega-plan-phase--complete");
+        tile.classList.add("omega-phase-tile--complete");
       } else {
-        section.classList.add("omega-plan-phase--locked");
+        tile.classList.add("omega-phase-tile--locked");
+      }
+      if (isSelected) {
+        tile.classList.add("omega-phase-tile--selected");
       }
 
-      const stageRequired = omegaStageRequiredMissions(currentPlan, stageIndex);
+      const head = document.createElement("span");
+      head.className = "omega-phase-tile__head";
 
-      const phaseHeader = document.createElement("div");
-      phaseHeader.className = "omega-phase-header";
-      const headerText = document.createElement("div");
-      const heading = document.createElement("h3");
-      heading.className = "omega-plan-phase-title";
-      heading.textContent = PHASE_NAMES[stageIndex]!;
-      const requirement = document.createElement("p");
-      requirement.className = "omega-phase-requirement";
-      requirement.textContent = `Complete ${stageRequired} of ${stage.missionIds.length}`;
-      requirement.title =
-        stageRequired < stage.missionIds.length
-          ? `Any ${stageRequired} of this phase's ${stage.missionIds.length} missions must succeed to advance.`
-          : "Every mission in this phase must succeed to advance.";
-      headerText.appendChild(heading);
-      headerText.appendChild(requirement);
-      phaseHeader.appendChild(headerText);
+      const phaseKicker = document.createElement("span");
+      phaseKicker.className = "omega-phase-kicker";
+      phaseKicker.textContent = `Phase ${OMEGA_PHASE_NUMERALS[stageIndex]!}`;
+      head.appendChild(phaseKicker);
 
       const phaseBadge = document.createElement("span");
       if (isComplete) {
@@ -5224,50 +5274,126 @@ function initGameController(
         phaseBadge.className = "status-badge status-badge--locked";
         phaseBadge.textContent = "Locked";
       }
-      phaseHeader.appendChild(phaseBadge);
-      section.appendChild(phaseHeader);
+      head.appendChild(phaseBadge);
+      tile.appendChild(head);
 
-      const stageProgress = state.omegaStageProgress[stageIndex]!;
-      const phaseSuccesses = Math.min(stageRequired, stageProgress.filter(Boolean).length);
-      const progress = document.createElement("div");
+      const title = document.createElement("span");
+      title.className = "omega-plan-phase-title";
+      title.textContent = copy.name;
+      tile.appendChild(title);
+
+      const blurb = document.createElement("span");
+      blurb.className = "omega-phase-blurb";
+      blurb.textContent = copy.blurb;
+      tile.appendChild(blurb);
+
+      const foot = document.createElement("span");
+      foot.className = "omega-phase-tile__foot";
+
+      const progress = document.createElement("span");
       progress.className = "omega-phase-progress";
-      const fill = document.createElement("div");
+      const fill = document.createElement("span");
       fill.className = "omega-phase-progress__fill";
       if (isComplete) {
         fill.classList.add("omega-phase-progress__fill--complete");
       }
-      fill.style.width = `${Math.round((phaseSuccesses / stageRequired) * 100)}%`;
+      fill.style.width = `${percent}%`;
       progress.appendChild(fill);
-      section.appendChild(progress);
+      foot.appendChild(progress);
 
-      const missionWrap = document.createElement("div");
-      missionWrap.className = "omega-plan-phase-missions";
-      for (let mi = 0; mi < 3; mi += 1) {
-        const missionId = stage.missionIds[mi]!;
-        const card = omegaPlanMissionCard(
-          missionId,
-          mainOnly && isCurrent
-            ? {
-                draggable: true,
-                source: "omega",
-                missionTemplateId: missionId,
-                stageIndex,
-                slotIndex: mi,
-              }
-            : undefined,
+      const stats = document.createElement("span");
+      stats.className = "omega-phase-tile__stats";
+
+      const requirement = document.createElement("span");
+      requirement.className = "omega-phase-requirement";
+      requirement.textContent = `Complete ${stageRequired} of ${OMEGA_MISSIONS_PER_STAGE}`;
+      requirement.title =
+        stageRequired < OMEGA_MISSIONS_PER_STAGE
+          ? `Any ${stageRequired} of this phase's ${OMEGA_MISSIONS_PER_STAGE} missions must succeed to advance.`
+          : "Every mission in this phase must succeed to advance.";
+      stats.appendChild(requirement);
+
+      const percentEl = document.createElement("span");
+      percentEl.className = "omega-phase-percent";
+      percentEl.textContent = `${percent}%`;
+      stats.appendChild(percentEl);
+
+      foot.appendChild(stats);
+      tile.appendChild(foot);
+
+      tile.addEventListener("click", () => {
+        /* Picking the run's own phase un-pins, so the view follows the plan on from here. */
+        omegaPanelStageIndex = stageIndex === activeStage ? null : stageIndex;
+        renderOmegaPlanPanel();
+      });
+
+      return tile;
+    }
+
+    const strip = document.createElement("div");
+    strip.className = "omega-phase-strip";
+    strip.setAttribute("role", "tablist");
+    strip.setAttribute("aria-label", "Omega plan phases");
+    for (let stageIndex = 0; stageIndex < OMEGA_STAGE_COUNT; stageIndex += 1) {
+      strip.appendChild(buildPhaseTile(stageIndex));
+    }
+    omegaPlanPanelEl.appendChild(strip);
+
+    /* ---- Operations: the selected phase's missions, scrolling under a fixed heading ---- */
+
+    const stage = currentPlan.stages[selectedStage]!;
+    const stageProgress = state.omegaStageProgress[selectedStage]!;
+    const isCurrentStage = selectedStage === activeStage;
+    const isCompleteStage = selectedStage < activeStage;
+
+    const ops = document.createElement("section");
+    ops.className = "omega-ops";
+    ops.setAttribute("aria-label", `Phase ${OMEGA_PHASE_NUMERALS[selectedStage]!} operations`);
+
+    const opsHead = document.createElement("div");
+    opsHead.className = "omega-ops__head";
+    const opsTitle = document.createElement("h3");
+    opsTitle.className = "omega-ops__title";
+    opsTitle.textContent = `Phase ${OMEGA_PHASE_NUMERALS[selectedStage]!} Operations`;
+    opsHead.appendChild(opsTitle);
+    const opsSub = document.createElement("p");
+    opsSub.className = "omega-ops__sub";
+    opsSub.textContent = `/ ${OMEGA_PHASES[selectedStage]!.name}`;
+    opsHead.appendChild(opsSub);
+    ops.appendChild(opsHead);
+
+    const missionWrap = document.createElement("div");
+    missionWrap.className = "omega-plan-phase-missions";
+    for (let mi = 0; mi < OMEGA_MISSIONS_PER_STAGE; mi += 1) {
+      const missionId = stage.missionIds[mi]!;
+      const card = omegaPlanMissionCard(
+        missionId,
+        mainOnly && isCurrentStage
+          ? {
+              draggable: true,
+              source: "omega",
+              missionTemplateId: missionId,
+              stageIndex: selectedStage,
+              slotIndex: mi,
+            }
+          : undefined,
+      );
+
+      const slotDone = stageProgress[mi] === true;
+      const slotRunning =
+        isCurrentStage &&
+        !slotDone &&
+        state.activeMissions.some(
+          (am) =>
+            am.missionSource === "omega" &&
+            am.omegaStageIndex === selectedStage &&
+            am.omegaSlotIndex === mi,
         );
-
-        const slotDone = stageProgress[mi] === true;
-        const slotRunning =
-          isCurrent &&
-          !slotDone &&
-          state.activeMissions.some(
-            (am) =>
-              am.missionSource === "omega" &&
-              am.omegaStageIndex === stageIndex &&
-              am.omegaSlotIndex === mi,
-          );
-        const badge = document.createElement("span");
+      /* No chip at all for a slot that is simply next up in the current stage — "Pending" said
+       * nothing a bare, draggable card didn't already. */
+      let badge: HTMLElement | null = null;
+      if (slotDone || slotRunning || !isCurrentStage) {
+        badge = document.createElement("span");
         badge.classList.add("status-badge", "omega-card-badge");
         if (slotDone) {
           badge.classList.add("status-badge--complete");
@@ -5275,10 +5401,7 @@ function initGameController(
         } else if (slotRunning) {
           badge.classList.add("status-badge--inprogress");
           badge.textContent = "In Progress";
-        } else if (isCurrent) {
-          badge.classList.add("status-badge--pending");
-          badge.textContent = "Pending";
-        } else if (isComplete) {
+        } else if (isCompleteStage) {
           /* Phase cleared without this slot — it was never required. */
           badge.classList.add("status-badge--locked");
           badge.textContent = "Skipped";
@@ -5286,20 +5409,15 @@ function initGameController(
           badge.classList.add("status-badge--locked");
           badge.textContent = "Locked";
         }
-        card.appendChild(badge);
-        missionWrap.appendChild(card);
       }
-
-      section.appendChild(missionWrap);
-      return section;
+      if (badge) {
+        card.appendChild(badge);
+      }
+      missionWrap.appendChild(card);
     }
 
-    const phasesWrap = document.createElement("div");
-    phasesWrap.className = "omega-plan-phases";
-    for (let stageIndex = 0; stageIndex < 3; stageIndex += 1) {
-      phasesWrap.appendChild(buildPhaseSection(stageIndex));
-    }
-    omegaPlanPanelEl.appendChild(phasesWrap);
+    ops.appendChild(missionWrap);
+    omegaPlanPanelEl.appendChild(ops);
   }
 
   /**
@@ -7354,8 +7472,9 @@ Your lair`;
       }
 
       const intel = intelLevelAtLocation(state, loc.id);
-      /* Intel 0: an Unknown pin. No name, no category (colour, glyph, or the type layers that
-       * dim by it), no level and no security — only where it is and that intel there is 0. */
+      /* Intel below identity: an Unknown pin. No name, no category (colour, glyph, or the type
+       * layers that dim by it), no level, security, Omega-target flag, or revealed assets —
+       * only where it is and how much intel there is. */
       const identified = isLocationIdentifiedByPlayer(intel);
       const security = securityLevelForLocation(state.locationSecurityStates, loc.id);
       const agents = playerVisibleOpposingAgentsAtLocation(state, loc.id);
@@ -7402,8 +7521,9 @@ Your lair`;
       /* Sites the active Omega phase could still be aimed at, and the gear the player has
        * actually identified at this one. Both are worked out whatever the Map Layers panel is
        * set to: the tooltip is the accessible reading of the tag rail, and a chip the player
-       * has switched off is still a fact about the site. */
-      const omegaMissionIds = omegaTargets.get(loc.id) ?? [];
+       * has switched off is still a fact about the site. An Unidentified site shows neither —
+       * same rule as level and security above: a fact the player has not earned yet. */
+      const omegaMissionIds = identified ? omegaTargets.get(loc.id) ?? [] : [];
       if (omegaMissionIds.length > 0) {
         const names = omegaMissionIds.map(
           (id) => findMissionOrEventTemplate(id)?.name ?? id,
@@ -7411,15 +7531,17 @@ Your lair`;
         tipLines.push(`Omega Phase ${omegaPhaseNumber} target: ${names.join(", ")}`);
       }
       const revealedAssetNames: string[] = [];
-      for (const slot of state.locationAssetSlots.find((p) => p.locationId === loc.id)?.slots ??
-        []) {
-        /* The same bar the location card names a slot by: stored as revealed, or intel deep
-         * enough to read the site's inventory. Anything short of that is not the player's to
-         * see, whatever the layer is set to. */
-        if (!isOccupiedAssetSlot(slot) || assetSlotKnowledge(slot, intel) !== "identified") {
-          continue;
+      if (identified) {
+        for (const slot of state.locationAssetSlots.find((p) => p.locationId === loc.id)
+          ?.slots ?? []) {
+          /* The same bar the location card names a slot by: stored as revealed, or intel deep
+           * enough to read the site's inventory. Anything short of that is not the player's to
+           * see, whatever the layer is set to. */
+          if (!isOccupiedAssetSlot(slot) || assetSlotKnowledge(slot, intel) !== "identified") {
+            continue;
+          }
+          revealedAssetNames.push(assetNameById.get(slot.assetId) ?? slot.assetId);
         }
-        revealedAssetNames.push(assetNameById.get(slot.assetId) ?? slot.assetId);
       }
       if (revealedAssetNames.length > 0) {
         tipLines.push(`Assets: ${revealedAssetNames.join(", ")}`);
@@ -7501,16 +7623,19 @@ Your lair`;
           ),
         );
       }
-      /* Intel rides after level and security rather than beside them — it is the one reading
-       * identity itself does not gate, so it sits last of the three. `x / max` in the tooltip;
-       * the chip is the numerator, which is the part that moves. */
-      tags.appendChild(
-        createMapMarkerTag(
-          "intel",
-          createSvgPillIcon(UNKNOWN_ICON_SVG_PATHS, "map-marker__tag-icon"),
-          `${intel}`,
-        ),
-      );
+      /* Intel rides after level and security rather than beside them so it sits last of the
+       * three. `x / max` in the tooltip; the chip is the numerator, which is the part that
+       * moves. Gated by identity like the rest: an Unidentified site's own intel count is still
+       * a fact about it the player has not earned yet. */
+      if (identified) {
+        tags.appendChild(
+          createMapMarkerTag(
+            "intel",
+            createSvgPillIcon(UNKNOWN_ICON_SVG_PATHS, "map-marker__tag-icon"),
+            `${intel}`,
+          ),
+        );
+      }
       if (revealedAssetNames.length > 0) {
         tags.appendChild(
           createMapMarkerTag(

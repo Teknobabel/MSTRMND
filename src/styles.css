@@ -62,8 +62,8 @@
    * The brief's row system. Every row in a mission or location brief is one thumbnail tall — a
    * required skill, a manifest line, an outcome, an empty section's placeholder — which is what
    * makes the two columns land level with each other line for line rather than only at their
-   * headers. Gained-asset rows are drawn straight into the outcome list too (see
-   * `missionEffectAssetRow`), so those two shapes have to agree on a height as well.
+   * headers. A gained-asset cell in an outcome's grid (`missionEffectAssetCell`, `main.ts`) is
+   * the same cell the Requirements grid draws (`missionAssetCell`), so it derives from here too.
    *
    * They agree because they all derive it from here: the thumbnail's box, its own 1px border,
    * and the row padding around it. Raising `--brief-thumb-h` raises every row type together and
@@ -1974,15 +1974,12 @@ body {
 }
 
 /*
- * What scrolls in each menu, and the floor at the end of it. The Omega Plan scrolls as one
- * page, so the panel is the scroller and the floor goes under its content. The column menus
- * scroll column by column: the column row is stretched to the full height of the panel and
- * each column's list becomes its own scroller down to the floor.
+ * What scrolls in each menu, and the floor at the end of it. The Omega Plan holds its plan
+ * banner and phase strip still and scrolls only the mission grid under them, which carries the
+ * floor itself (see the Omega Plan panel section). The column menus scroll column by column:
+ * the column row is stretched to the full height of the panel and each column's list becomes
+ * its own scroller down to the floor.
  */
-.drawer__panel > .omega-plan-panel {
-  padding-bottom: var(--drawer-floor);
-}
-
 .drawer__panel .lair-panel-columns,
 .drawer__panel .locations-panel-columns,
 .drawer__panel .minions-panel-columns {
@@ -3581,13 +3578,84 @@ body {
    Omega Plan panel
    ============================================================ */
 
+/*
+ * Three bands stacked down the menu: the plan's banner, a strip of the three phases, then the
+ * operations of whichever phase is selected. Only the last one scrolls — the banner and the
+ * strip stay put, so the way back to another phase is always on screen no matter how tall the
+ * mission cards run.
+ */
 .omega-plan-panel {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
 }
 
-.omega-plan-header {
+/* The panel hands its scrolling to the mission grid inside it (see the grid's rule below). */
+.game-panel--omega {
+  overflow: hidden;
+}
+
+/* ---------------- Plan banner ---------------- */
+
+/*
+ * The plan's art runs full-bleed across the whole band with the copy laid over it, so the
+ * negative margins pull the banner back out through the menu's gutter to its top and side
+ * edges — the panel's own clip-path re-cuts the corners over it.
+ */
+.omega-plan-hero {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 12rem;
+  overflow: hidden;
+  margin: -0.7rem calc(var(--panel-pad-x) * -1) 0;
+  padding: 1.1rem var(--panel-pad-x) 1.2rem;
+  border-bottom: 1px solid var(--line-1);
+}
+
+/*
+ * No `filter` here, unlike the card thumbnails: the right of the band is meant to read as the
+ * art itself, and the house saturate/contrast grade visibly darkens it against the source.
+ */
+.omega-plan-hero > .omega-plan-hero__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Art is framed for a card, so the interesting half sits above centre. */
+  object-position: center 35%;
+}
+
+/*
+ * Scrim over the art: near-solid under the copy, then clearing completely well before the right
+ * edge so that half of the band is the untouched picture. One horizontal gradient only — a
+ * top-and-tail layer over it would tint the clear side too.
+ */
+.omega-plan-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(6, 2, 4, 0.96) 0%,
+    rgba(6, 2, 4, 0.93) 36%,
+    rgba(6, 2, 4, 0.6) 54%,
+    rgba(6, 2, 4, 0) 70%
+  );
+}
+
+.omega-plan-hero__text {
+  position: relative;
+  /* Above the art and its scrim. */
+  z-index: 1;
+  max-width: 46%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -3596,54 +3664,114 @@ body {
 .omega-plan-name {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 0.84rem;
+  font-size: 1.85rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  line-height: 1.05;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-0);
+  text-shadow: 0 0 20px var(--red-glow-soft);
 }
 
 .omega-plan-description {
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.4;
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
   color: var(--text-2);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.omega-plan-stage-hint {
-  margin: 0;
-  font-size: 0.76rem;
-  letter-spacing: 0.06em;
-  color: var(--text-1);
+/* Flavour line under the blurb, in the same red as the kicker above it. */
+.omega-plan-tagline {
+  margin: auto 0 0;
+  padding-top: 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--red-bright);
 }
 
-.omega-plan-phases {
-  display: flex;
-  flex-direction: column;
+/* ---------------- Phase strip ---------------- */
+
+/* Always three across — a plan has exactly three phases, and they read as one bar. */
+.omega-phase-strip {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.6rem;
 }
 
-.omega-plan-phase {
+.omega-phase-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  transition: opacity 0.2s;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.55rem 0.7rem 0.6rem;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--line-1);
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--cut)) 0,
+    100% var(--cut),
+    100% 100%,
+    0 100%
+  );
+  background: linear-gradient(180deg, rgba(40, 12, 16, 0.35), rgba(10, 4, 6, 0.55));
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.2s, filter 0.2s;
 }
 
-.omega-plan-phase--locked {
-  opacity: 0.5;
+.omega-phase-tile:hover {
+  border-color: var(--line-2);
+  box-shadow: 0 0 16px rgba(232, 17, 45, 0.12);
+}
+
+.omega-phase-tile:focus-visible {
+  outline: 1px solid var(--red-bright);
+  outline-offset: 1px;
+}
+
+/* A phase not reached yet is still readable and still clickable, just held back. */
+.omega-phase-tile--locked {
+  opacity: 0.55;
   filter: saturate(0.4);
 }
 
-.omega-phase-header {
+.omega-phase-tile--locked:hover {
+  opacity: 0.8;
+}
+
+/* The phase whose operations are showing: lit border and a bar down its leading edge. */
+.omega-phase-tile--selected {
+  opacity: 1;
+  filter: none;
+  border-color: var(--red);
+  box-shadow: 0 0 24px rgba(232, 17, 45, 0.18);
+}
+
+.omega-phase-tile--selected::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--red);
+  box-shadow: 0 0 10px var(--red-glow);
+}
+
+.omega-phase-tile__head {
   display: flex;
-  flex-direction: row;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
 }
@@ -3658,35 +3786,40 @@ body {
 }
 
 .omega-plan-phase-title {
+  display: block;
   margin: 0;
   font-family: var(--font-display);
-  font-size: 0.74rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  line-height: 1.15;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-0);
-}
-
-.omega-plan-phase-title::before {
-  content: none;
-}
-
-/* "Complete X of Y" — the phase's designer-authored mission requirement. */
-.omega-phase-requirement {
-  margin: 0.15rem 0 0;
-  font-family: var(--font-display);
-  font-size: 0.58rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-
-.omega-plan-phase--current .omega-phase-requirement {
   color: var(--text-1);
 }
 
+.omega-phase-tile--selected .omega-plan-phase-title {
+  color: var(--text-0);
+  text-shadow: 0 0 14px var(--red-glow-soft);
+}
+
+.omega-phase-blurb {
+  display: block;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+/* Pinned to the foot of the tile so all three bars line up however long the blurbs run. */
+.omega-phase-tile__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+
 .omega-phase-progress {
+  display: block;
   position: relative;
   height: 9px;
   border: 1px solid var(--line-1);
@@ -3705,6 +3838,7 @@ body {
 }
 
 .omega-phase-progress__fill {
+  display: block;
   position: absolute;
   inset: 0;
   width: 0%;
@@ -3738,10 +3872,96 @@ body {
   }
 }
 
-.omega-plan-phase-missions {
+.omega-phase-tile__stats {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* "Complete X of Y" — the phase's designer-authored mission requirement. */
+.omega-phase-requirement {
+  display: block;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.omega-phase-tile--selected .omega-phase-requirement {
+  color: var(--text-1);
+}
+
+.omega-phase-percent {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--red-bright);
+}
+
+.omega-phase-tile--complete .omega-phase-percent {
+  color: var(--good);
+}
+
+/* ---------------- Operations for the selected phase ---------------- */
+
+.omega-ops {
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.5rem;
+}
+
+.omega-ops__head {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--line-1);
+}
+
+.omega-ops__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+}
+
+.omega-ops__sub {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+/*
+ * The menu's only scroller, so the cards give way rather than the plan above them. Three
+ * columns to match the three mission slots a phase holds; `align-content: start` keeps a short
+ * row at the top instead of centring it in the leftover height.
+ */
+.omega-plan-phase-missions {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 0.6rem;
+  padding-right: 0.15rem;
+  padding-bottom: var(--drawer-floor);
 }
 
 .omega-plan-mission-card {
@@ -3853,20 +4073,6 @@ body {
 .card-add-to-planner-btn:hover {
   border-color: var(--red-bright);
   color: var(--red-bright);
-}
-
-/* Omega Plan drawer: phases as columns */
-.game-panel--omega .omega-plan-phases {
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 0.65rem;
-}
-
-.game-panel--omega .omega-plan-phase {
-  flex: 1 1 calc(33.333% - 0.45rem);
-  min-width: 13rem;
-  max-width: 100%;
 }
 
 /* ============================================================
@@ -4255,10 +4461,6 @@ body {
 
 .lair-panel-header.card-with-art {
   flex-shrink: 0;
-}
-
-.omega-plan-header.card-with-art {
-  flex-direction: row;
 }
 
 /* Revealed opposing agents on location cards */
@@ -4681,6 +4883,13 @@ body {
   }
 }
 
+/* The same run of cells, one column instead of two — an outcome's own asset gains (`main.ts`)
+ * have no skill column to sit beside, so the cell may as well take the row's whole width rather
+ * than leave half of it empty. */
+.card-brief__pills--grid.card-brief__pills--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /*
  * A cell in that grid is two halves with a rule between them: a fixed picture box on the left,
  * then the kind caption over the name. The box is fixed — and the same box a manifest thumbnail
@@ -4772,9 +4981,9 @@ body {
 /*
  * Have / missing used to be carried by the border's *style* and the presence of a background —
  * dotted and hollow for a requirement the roster cannot meet. With every slot on the same solid
- * ground that reads as flimsy rather than as unmet, so the signal moves to where the manifest
- * column already keeps it (`.card-brief__asset--have`): the left accent lights up and the name
- * comes up to full strength when the requirement is met, and stays dim when it is not.
+ * ground that reads as flimsy rather than as unmet, so the signal moves to the left accent
+ * instead: it lights up and the name comes up to full strength when the requirement is met, and
+ * both stay dim when it is not.
  */
 .card-brief__pills > .minions-trait-pill--req-have {
   border-left-color: var(--line-2);
@@ -4966,23 +5175,6 @@ body {
   transition: border-color 0.15s, background-color 0.15s;
 }
 
-/* The generic crate mark standing where a manifest row's thumbnail would, on a mission card's
-   outcome lists (`missionEffectAssetRow`). It takes the thumbnail's whole box so the rows keep
-   their height and the names stay on the same vertical, and it is stroked in the grey the trait
-   glyphs above it use — the two are the same kind of mark and should not differ in weight. No
-   plate behind it: the frame belongs to the photograph, not to the line art that replaced it. */
-.card-brief__asset-glyph {
-  width: var(--brief-thumb-w);
-  height: var(--brief-thumb-h);
-  flex: none;
-  display: block;
-  fill: none;
-  stroke: var(--text-2);
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .card-brief__asset-thumb {
   width: var(--brief-thumb-w);
   height: var(--brief-thumb-h);
@@ -5128,33 +5320,6 @@ body {
 /* Dragging is the stronger affordance where a row carries both, so it keeps its own cursor. */
 .card-brief__asset--draggable.card-brief__asset--previewable {
   cursor: grab;
-}
-
-/* The mission brief's own pair: a required asset is always known, so there is nothing to
-   identify — only whether the player currently holds enough of it. */
-.card-brief__asset--have {
-  border-left-color: var(--line-2);
-}
-
-.card-brief__asset--missing {
-  border-style: dashed;
-}
-
-/* Matched to `.minions-trait-pill--req-missing` in the column beside it: unmet is dimmer than
-   met, but still has to be readable, so it sits one step down rather than two. */
-.card-brief__asset--missing .card-brief__asset-name {
-  color: var(--text-2);
-}
-
-/* An asset an effect hands over rather than one a mission asks for: no have/missing question,
-   only whether the gain happens on success or on failure — the same pair `.mission-card-effects`
-   colours its lines with. */
-.card-brief__asset--good {
-  border-left-color: var(--good-dim);
-}
-
-.card-brief__asset--bad {
-  border-left-color: var(--red-deep);
 }
 
 /* ---- Intel 0: no file to read ---- */

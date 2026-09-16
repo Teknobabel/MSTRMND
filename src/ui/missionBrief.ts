@@ -28,22 +28,30 @@
  * asks one question — does the player currently hold enough of it — which it answers with the
  * same `--req-have` / `--req-missing` pair the skill cells use.
  *
+ * `missionAssetCell` is exported for exactly one other caller: the asset gains listed under a
+ * mission card's On Success / On Failure panels (`main.ts`). A gain has nothing to hold either,
+ * so it always wears the same `have` look a satisfied requirement does — success and failure are
+ * already told apart by the panel's own green or red frame, not by the cell inside it. One
+ * builder either way, so a change to how an asset cell is drawn never has to be made twice.
+ *
  * Purely presentational and data-in / DOM-out, like `locationBrief.ts`: the caller builds the
  * skill cells and hands in the asset list already resolved against the roster.
  */
 import { ICON_CRATE, briefIcon, briefPanel, briefPlaceholder } from "./cardBrief";
 
-/** One required-asset cell of the requirements grid. */
+/** Which modifier an asset cell wears: whether the roster currently covers it. */
+export type MissionBriefAssetRowVariant = "have" | "missing";
+
+/** One asset cell — a requirement or an effect's own gain — built by {@link missionAssetCell}. */
 export interface MissionBriefAssetRow {
   /** Catalog id of the asset this cell is for. Not drawn — it is what a caller wiring `preview`
    * needs in order to build the right card, without re-deriving it from the cell's position. */
   assetId: string;
   name: string;
-  /** How many the mission needs of this one asset; duplicates in the requirement list collapse
-   * into a single cell with a count rather than repeating the cell. */
+  /** How many of this one asset the cell speaks for; duplicate ids collapse into a single cell
+   * with a count rather than repeating the cell. */
   quantity: number;
-  /** Whether the player currently holds at least `quantity` of it. */
-  have: boolean;
+  variant: MissionBriefAssetRowVariant;
   tooltip: string;
   /**
    * Called with the cell element so the caller can float the asset's full card beside it on
@@ -53,6 +61,11 @@ export interface MissionBriefAssetRow {
   preview?: (el: HTMLElement) => void;
 }
 
+const ASSET_ROW_VARIANT_CLASS: Record<MissionBriefAssetRowVariant, string> = {
+  have: "minions-trait-pill--req-have",
+  missing: "minions-trait-pill--req-missing",
+};
+
 export interface MissionBriefModel {
   description: string | null;
   /** Skill (trait) cells, built by the caller so it can carry roster-match colouring. */
@@ -61,11 +74,13 @@ export interface MissionBriefModel {
 }
 
 /**
- * One required asset, built as the same slot a skill cell is: the generic crate mark in the icon
+ * One asset cell, built as the same slot a skill cell is: the generic crate mark in the icon
  * box, the ruled divider, then the kind caption over the name — so the grid reads as one run of
- * identical cells whichever kind of requirement a given cell happens to hold.
+ * identical cells whichever kind of requirement, or outcome, a given cell happens to hold. The
+ * single builder behind both the Requirements grid and the asset gains under On Success / On
+ * Failure, so the two can never drift on how an asset is shown — change this and both follow.
  */
-function missionAssetCell(row: MissionBriefAssetRow): HTMLElement {
+export function missionAssetCell(row: MissionBriefAssetRow): HTMLElement {
   const cell = document.createElement("span");
   /* The floating card carries the name and the description the tooltip was spelling out, and
    * more besides, so a cell that has one does not also get a text bubble sliding out over it a
@@ -73,9 +88,7 @@ function missionAssetCell(row: MissionBriefAssetRow): HTMLElement {
   if (row.preview === undefined) {
     cell.title = row.tooltip;
   }
-  cell.className = row.have
-    ? "minions-trait-pill minions-trait-pill--asset minions-trait-pill--req-have"
-    : "minions-trait-pill minions-trait-pill--asset minions-trait-pill--req-missing";
+  cell.className = `minions-trait-pill minions-trait-pill--asset ${ASSET_ROW_VARIANT_CLASS[row.variant]}`;
   cell.tabIndex = 0;
 
   cell.appendChild(briefIcon(ICON_CRATE, "minions-trait-pill__icon"));
