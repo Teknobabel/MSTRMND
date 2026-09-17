@@ -4530,9 +4530,8 @@ body {
    pays, what it costs — so each gets its own frame with its own ruled header, and the outcome
    pair is told apart by the colour of that frame rather than by reading the two headings.
 
-   A location card deliberately does *not* use these: its brief is one form that fills in as far
-   as the player's intel reaches, and boxing its halves separately would cut that form in two.
-   It keeps the flat `.card-brief__label` headings below.
+   A location card's brief uses the same frames (`.card-brief--panels`): Intelligence Brief,
+   Requirements, then Assets.
    ============================================================ */
 
 .brief-panel {
@@ -4658,7 +4657,8 @@ body {
  * the text above it would read as a box that had escaped the card. The outcome row below
  * (`.mission-card-effects`) is a sibling of this, not a child, and opens the same gap.
  */
-.card-brief--mission {
+.card-brief--mission,
+.card-brief--panels {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
@@ -5137,7 +5137,7 @@ body {
 }
 
 /* A security measure the site has not had to show yet: it takes a pill's shape, so the player
-   can see how much longer this list is going to get, but the name is blacked out.
+   can see how much longer this list is going to get, but its name reads "Locked".
  *
  * Selector carries the slot scope so it outranks the requirement-slot rules above, which would
  * otherwise hand this row the same solid border a known requirement gets. It keeps their ground
@@ -5152,13 +5152,6 @@ body {
 
 .card-brief__pills > .minions-trait-pill.loc-brief__pill-sealed:hover {
   border-color: var(--line-2);
-}
-
-/* Every sealed pill blacks out to the same length, whatever word is under the bar — a redaction
-   whose width tracked the hidden word would be a hint. */
-.loc-brief__pill-sealed .loc-brief__redacted {
-  width: 2.6rem;
-  overflow: hidden;
 }
 
 /* Redacted text: the words stay in the DOM for screen readers, struck out under a bar the
@@ -5195,6 +5188,21 @@ body {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* A location card's Assets section: the manifest laid out on the same two-across grid as the
+   Requirements section above it, collapsing to one column at the same narrow width. */
+.card-brief__assets--grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--brief-row-h), auto);
+  align-items: stretch;
+}
+
+@container card-brief (max-width: 19rem) {
+  .card-brief__assets--grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /*

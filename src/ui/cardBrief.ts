@@ -13,6 +13,8 @@ export const ICON_CRATE = '<path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z"/><path
 /** The crosshair a mission's target wears — the same mark the old Target stat badge used. */
 export const ICON_TARGET =
   '<circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>';
+/** The shield a security trait wears — the same mark as the card's Security stat badge. */
+export const ICON_SHIELD = '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>';
 
 export function briefIcon(paths: string, className: string): SVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -47,17 +49,16 @@ export function briefSectionLabel(iconPaths: string, text: string, tally: string
  * the section's name, then the body it encloses.
  *
  * The mission card's four sections — brief, requirements, and the two outcomes — are each one of
- * these. A location card keeps the flat `briefSectionLabel` headings instead: its brief is one
- * form that fills in as intel arrives, and boxing its halves separately would cut that form in
- * two. A mission's sections are genuinely four separate statements about one job, which is what
- * the frames are for.
+ * these, as are a location card's Intelligence Brief, Requirements and Assets. `head` is returned
+ * so a section can hang extra readouts on its header strip (the location's file number and intel
+ * meter).
  *
  * `modifier` tones the frame — see `.brief-panel--good` / `--bad`.
  */
 export function briefPanel(
   title: string,
   modifier?: string,
-): { panel: HTMLElement; body: HTMLElement } {
+): { panel: HTMLElement; head: HTMLElement; body: HTMLElement } {
   const panel = document.createElement("section");
   panel.className = modifier === undefined ? "brief-panel" : `brief-panel ${modifier}`;
 
@@ -77,7 +78,7 @@ export function briefPanel(
   body.className = "brief-panel__body";
   panel.appendChild(body);
 
-  return { panel, body };
+  return { panel, head, body };
 }
 
 /** The "nothing here yet" line a section shows instead of collapsing, so the form reads as blank

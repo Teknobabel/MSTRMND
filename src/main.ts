@@ -4443,8 +4443,8 @@ function initGameController(
 
     /*
      * The intelligence brief. Everything below the art is one block now (`ui/locationBrief.ts`):
-     * requirements on the left, the asset manifest on the right, and both drawn as a form that
-     * is only as filled in as the player's intel. What this function still owns is the *data* —
+     * the brief, the requirements grid, then the asset manifest, all drawn as a form that is
+     * only as filled in as the player's intel. What this function still owns is the *data* —
      * which traits are revealed, what each slot is worth knowing, and the drag payloads — since
      * all of that is catalog and game state the brief has no business reaching for.
      */
@@ -4456,10 +4456,15 @@ function initGameController(
     const requirementPills: HTMLElement[] = [];
     if (identified) {
       for (const tid of sortedTraitIdsForDisplay(content, siteRequiredTraitIds)) {
-        requirementPills.push(createTraitPillEl(content, tid, rosterTraitIds, "trait"));
+        requirementPills.push(createTraitPillEl(content, tid, rosterTraitIds, "trait", "Skill"));
       }
+      /* The stack reveals in order, one trait per security level, so a trait's place in it is
+       * the level that brought it out. */
       for (const tid of sortedTraitIdsForDisplay(content, revealedSecIds)) {
-        requirementPills.push(createTraitPillEl(content, tid, rosterTraitIds, "security"));
+        const revealLevel = securityTraitIds.indexOf(tid) + 1;
+        requirementPills.push(
+          createTraitPillEl(content, tid, rosterTraitIds, "security", `Security Lvl ${revealLevel}`),
+        );
       }
     }
 
@@ -4583,10 +4588,11 @@ function initGameController(
         intelLevel,
         identified,
         designation: locationDesignation(loc.id),
+        description: loc.description,
         requirementPills,
-        classifiedSecurityCount: identified
-          ? securityTraitIds.length - revealedSecCount
-          : 0,
+        classifiedSecurityLevels: identified
+          ? securityTraitIds.slice(revealedSecCount).map((_, i) => revealedSecCount + i + 1)
+          : [],
         assets: assetRows,
         assetCountUnknown,
         agents: agentChips,

@@ -7,16 +7,23 @@
  * with a "no intel" stamp; at 1 the requirements are typed in and the asset manifest lists
  * sealed crates; at 2 the crates are named and photographed; at 3 the opposition is on it.
  *
- * Two columns, always in the same places so a player reading a wall of cards finds the same
- * thing twice: **Mission Requirements** on the left (the site's own traits and its security
- * stack together, since a mission has to beat both), **Assets** on the right.
+ * Three framed sections, stacked like a mission card's: the **Intelligence Brief** (file number,
+ * intel meter and the site's description), **Requirements** (the site's own traits and its
+ * security stack in one two-across grid, since a mission has to beat both), then **Assets**.
  *
  * Purely presentational and data-in / DOM-out: every catalog lookup, tooltip and drag payload
  * is the caller's, handed in as a built pill or a `wire` callback. That keeps the module
  * previewable and testable without a game state behind it.
  */
 import { createCardArtImg } from "./cardArt";
-import { ICON_CLIPBOARD, ICON_CRATE, briefIcon, briefPlaceholder, briefSectionLabel } from "./cardBrief";
+import {
+  ICON_CRATE,
+  ICON_SHIELD,
+  briefIcon,
+  briefPanel,
+  briefPlaceholder,
+  briefSectionLabel,
+} from "./cardBrief";
 import { setTooltip, tooltipText } from "./tooltip";
 
 /** Highest intel a site can reach; the meter draws this many pips. */
@@ -70,10 +77,13 @@ export interface LocationBriefModel {
   /** Below `INTEL_SITE_IDENTITY` the site has no brief to speak of — see the blank-form note. */
   identified: boolean;
   designation: string;
-  /** Site traits then revealed security traits, built by the caller. */
+  /** The site's catalog description, shown in the Intelligence Brief section. */
+  description: string | null;
+  /** Site traits then revealed security traits, built by the caller (captioned grid cells). */
   requirementPills: readonly HTMLElement[];
-  /** Security traits the stack still holds back; drawn as sealed rows, not named. */
-  classifiedSecurityCount: number;
+  /** The security level that reveals each trait the stack still holds back; drawn as sealed
+   * rows, not named. */
+  classifiedSecurityLevels: readonly number[];
   assets: readonly LocationBriefAssetRow[];
   /** Slots are known to exist but not how many (intel 0, nothing revealed by play). */
   assetCountUnknown: boolean;
@@ -235,59 +245,66 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
     return root;
   }
 
-  /* Header: what file this is, and how much of it has been filled in. */
-  const head = document.createElement("div");
-  head.className = "card-brief__head";
-  const stamp = document.createElement("span");
-  stamp.className = "card-brief__stamp";
-  stamp.textContent = "Intelligence Brief";
-  head.appendChild(stamp);
+  root.classList.add("card-brief--panels");
+
+  /* ---- The brief proper: file number and intel meter on the header strip, description below ---- */
+  const brief = briefPanel("Intelligence Brief");
   const code = document.createElement("span");
   code.className = "loc-brief__code";
   code.textContent = model.designation;
-  head.appendChild(code);
-  head.appendChild(briefIntelMeter(model.intelLevel));
-  root.appendChild(head);
+  brief.head.appendChild(code);
+  brief.head.appendChild(briefIntelMeter(model.intelLevel));
+  if (model.description !== null && model.description !== "") {
+    const desc = document.createElement("p");
+    desc.className = "asset-card-description";
+    desc.textContent = model.description;
+    brief.body.appendChild(desc);
+  } else {
+    brief.body.appendChild(briefPlaceholder("No brief on file"));
+  }
+  root.appendChild(brief.panel);
 
-  const cols = document.createElement("div");
-  cols.className = "card-brief__cols";
-  root.appendChild(cols);
-
-  /* ---- Left: mission requirements (site traits + security stack, as one list) ---- */
-  const reqs = document.createElement("section");
-  reqs.className = "card-brief__col card-brief__col--reqs";
-  reqs.appendChild(briefSectionLabel(ICON_CLIPBOARD, "Mission Requirements", null));
-
-  if (model.requirementPills.length === 0 && model.classifiedSecurityCount === 0) {
-    reqs.appendChild(briefPlaceholder("No special requirements"));
+  /* ---- Requirements: site traits then the security stack, in one two-across grid ---- */
+  const reqs = briefPanel("Mission Modifiers");
+  if (model.requirementPills.length === 0 && model.classifiedSecurityLevels.length === 0) {
+    reqs.body.appendChild(briefPlaceholder("No special requirements"));
   } else {
     const pills = document.createElement("div");
-    pills.className = "card-brief__pills";
+    pills.className = "card-brief__pills card-brief__pills--grid";
     for (const pill of model.requirementPills) {
       pills.appendChild(pill);
     }
     /* Security the site has not had to show yet. The count is no secret — the stack is as deep
      * as the site's level — so saying how much is still sealed costs nothing and tells the
      * player what raising security here will cost them. */
-    for (let i = 0; i < model.classifiedSecurityCount; i += 1) {
+    for (const level of model.classifiedSecurityLevels) {
       const sealed = document.createElement("span");
       sealed.className = "minions-trait-pill loc-brief__pill-sealed";
-      sealed.title =
-        "A security measure this site has not had to use yet. It joins the requirements as security rises.";
-      sealed.appendChild(briefIcon(ICON_LOCK, "minions-trait-pill__icon"));
+      sealed.title = tooltipText(
+        "Security Measure",
+        "As security increases at this location, new mission modifiers are unlocked. Reduce security level to remove these modifiers.",
+      );
+      sealed.appendChild(briefIcon(ICON_SHIELD, "minions-trait-pill__icon"));
+      const text = document.createElement("span");
+      text.className = "minions-trait-pill__text";
+      const caption = document.createElement("span");
+      caption.className = "minions-trait-pill__caption";
+      caption.textContent = `Security Lvl ${level}`;
+      text.appendChild(caption);
       const label = document.createElement("span");
-      label.className = "minions-trait-pill__label loc-brief__redacted";
-      label.textContent = "Classified";
-      sealed.appendChild(label);
+      label.className = "minions-trait-pill__label";
+      label.textContent = "LOCKED";
+      text.appendChild(label);
+      sealed.appendChild(text);
       pills.appendChild(sealed);
     }
-    reqs.appendChild(pills);
+    reqs.body.appendChild(pills);
   }
 
-  /* Opposition rides under the requirements rather than in its own half: an agent standing at
-   * the site is one more thing a mission has to beat, so it belongs with what the job takes. */
+  /* Opposition rides under the requirements rather than in its own section: an agent standing
+   * at the site is one more thing a mission has to beat, so it belongs with what the job takes. */
   if (model.agents.length > 0) {
-    reqs.appendChild(briefSectionLabel(ICON_SKULL, "Opposition", null));
+    reqs.body.appendChild(briefSectionLabel(ICON_SKULL, "Opposition", null));
     const agentsWrap = document.createElement("div");
     agentsWrap.className = "loc-brief__agents";
     for (const chip of model.agents) {
@@ -296,24 +313,13 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
     if (model.agentNote !== null) {
       agentsWrap.appendChild(model.agentNote);
     }
-    reqs.appendChild(agentsWrap);
+    reqs.body.appendChild(agentsWrap);
   }
+  root.appendChild(reqs.panel);
 
-  cols.appendChild(reqs);
-
-  /* ---- Right: the asset manifest ---- */
-  const assets = document.createElement("section");
-  assets.className = "card-brief__col card-brief__col--assets";
-
-  const confirmed = model.assets.filter((a) => a.knowledge === "identified").length;
-  const listed = model.assets.filter((a) => a.knowledge !== "empty").length;
-  assets.appendChild(
-    briefSectionLabel(
-      ICON_CRATE,
-      "Assets",
-      model.assetCountUnknown || listed === 0 ? null : `${confirmed}/${listed}`,
-    ),
-  );
+  /* ---- The asset manifest ---- */
+  const assetsPanel = briefPanel("Assets");
+  const assets = assetsPanel.body;
 
   if (model.assets.length === 0) {
     assets.appendChild(
@@ -326,7 +332,7 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
     );
   } else {
     const list = document.createElement("ul");
-    list.className = "card-brief__assets";
+    list.className = "card-brief__assets card-brief__assets--grid";
     for (const row of model.assets) {
       list.appendChild(briefAssetRow(row));
     }
@@ -342,6 +348,6 @@ export function buildLocationBrief(model: LocationBriefModel): HTMLElement {
     assets.appendChild(list);
   }
 
-  cols.appendChild(assets);
+  root.appendChild(assetsPanel.panel);
   return root;
 }
