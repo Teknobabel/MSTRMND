@@ -5157,6 +5157,10 @@ function initGameController(
   const OMEGA_PHASE_NUMERALS = ["I", "II", "III"] as const;
 
   function buildOmegaPlanPanel(): void {
+    /* Carried across the rebuild so picking a phase tile, or any refresh, does not jump the
+     * scroller back to the top. */
+    const priorScrollTop =
+      omegaPlanPanelEl.querySelector<HTMLElement>(".omega-plan-scroll")?.scrollTop ?? 0;
     omegaPlanPanelEl.innerHTML = "";
     const activeId = state.activeOmegaPlanId;
     if (activeId === null) {
@@ -5214,6 +5218,11 @@ function initGameController(
     hero.appendChild(heroText);
 
     omegaPlanPanelEl.appendChild(hero);
+
+    /* Everything under the hero scrolls as one: the phase strip rides up with the cards. */
+    const scroller = document.createElement("div");
+    scroller.className = "omega-plan-scroll";
+    omegaPlanPanelEl.appendChild(scroller);
 
     /* ---- Phase strip: three tiles, click one to bring up its operations ---- */
 
@@ -5325,9 +5334,9 @@ function initGameController(
     for (let stageIndex = 0; stageIndex < OMEGA_STAGE_COUNT; stageIndex += 1) {
       strip.appendChild(buildPhaseTile(stageIndex));
     }
-    omegaPlanPanelEl.appendChild(strip);
+    scroller.appendChild(strip);
 
-    /* ---- Operations: the selected phase's missions, scrolling under a fixed heading ---- */
+    /* ---- Operations: the selected phase's missions ---- */
 
     const stage = currentPlan.stages[selectedStage]!;
     const stageProgress = state.omegaStageProgress[selectedStage]!;
@@ -5392,7 +5401,8 @@ function initGameController(
     }
 
     ops.appendChild(missionWrap);
-    omegaPlanPanelEl.appendChild(ops);
+    scroller.appendChild(ops);
+    scroller.scrollTop = priorScrollTop;
   }
 
   /**
@@ -8094,6 +8104,10 @@ function initGameController(
    * column of whatever happens to be startable this turn.
    */
   function buildLairPanel(): void {
+    /* Carried across the rebuild so picking a level tile, or any refresh, does not jump the
+     * scroller back to the top. */
+    const priorScrollTop =
+      lairPanelEl.querySelector<HTMLElement>(".lair-panel-scroll")?.scrollTop ?? 0;
     lairPanelEl.innerHTML = "";
     if (state.activeLairId === null) {
       const empty = document.createElement("p");
@@ -8153,6 +8167,11 @@ function initGameController(
       lairPanelEl.appendChild(empty);
       return;
     }
+
+    /* Everything under the hero scrolls as one: the level strip rides up with the cards. */
+    const scroller = document.createElement("div");
+    scroller.className = "lair-panel-scroll";
+    lairPanelEl.appendChild(scroller);
 
     /* ---- Ladder strip: one tile per level, click one to bring up its choices ---- */
 
@@ -8274,7 +8293,7 @@ function initGameController(
     for (const rung of ladder) {
       strip.appendChild(buildRungTile(rung));
     }
-    lairPanelEl.appendChild(strip);
+    scroller.appendChild(strip);
 
     /* ---- The selected level's mutually exclusive choices ---- */
 
@@ -8298,7 +8317,8 @@ function initGameController(
       missionWrap.appendChild(buildMissionEntryCard(entry));
     }
     ops.appendChild(missionWrap);
-    lairPanelEl.appendChild(ops);
+    scroller.appendChild(ops);
+    scroller.scrollTop = priorScrollTop;
   }
 
   /**

@@ -3608,7 +3608,7 @@ body {
   gap: 0.75rem;
 }
 
-/* The panel hands its scrolling to the mission grid inside it (see the grid's rule below). */
+/* The panel hands its scrolling to the wrapper under its hero (see `.omega-plan-scroll`). */
 .game-panel--omega,
 .game-panel--lair {
   overflow: hidden;
@@ -3969,32 +3969,40 @@ body {
 
 /* ---------------- Missions of the selected tier ---------------- */
 
-.omega-ops,
-.lair-ops {
+/*
+ * The menu's only scroller: everything under the hero — the phase / level strip and the mission
+ * cards below it — scrolls as one, so only the hero stays put.
+ */
+.omega-plan-scroll,
+.lair-panel-scroll {
   flex: 1 1 0;
   min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-right: 0.15rem;
+  padding-bottom: var(--drawer-floor);
+}
+
+.omega-ops,
+.lair-ops {
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
 /*
- * The menu's only scroller, so the cards give way rather than the bands above them. Three
- * columns to match the three mission slots a phase holds — and the three an upgrade level
- * offers at its widest; `align-content: start` keeps a short row at the top instead of centring
- * it in the leftover height.
+ * Three columns to match the three mission slots a phase holds — and the three an upgrade level
+ * offers at its widest.
  */
 .omega-plan-phase-missions,
 .lair-level-missions {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: start;
   gap: 0.6rem;
-  padding-right: 0.15rem;
-  padding-bottom: var(--drawer-floor);
 }
 
 .omega-plan-mission-card {
