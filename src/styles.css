@@ -7496,6 +7496,21 @@ body {
   fill: none;
 }
 
+/* A site's category wears its map hue here too — the same sigil in the same colour as its pin,
+   so a card and the dot it belongs to are read as one thing. An unidentified site has no
+   category to light and keeps the cyan globe above. */
+.minions-card-badge--type[data-location-type="military"] .minions-card-badge__icon {
+  color: var(--site-military);
+}
+
+.minions-card-badge--type[data-location-type="political"] .minions-card-badge__icon {
+  color: var(--site-political);
+}
+
+.minions-card-badge--type[data-location-type="economic"] .minions-card-badge__icon {
+  color: var(--site-economic);
+}
+
 .minions-card-badge--security .minions-card-badge__icon {
   color: var(--red-bright);
   stroke: currentColor;

@@ -893,8 +893,22 @@ function createMissionCardStatsRow(stats: {
   return row;
 }
 
+/**
+ * The Location Type badge's glyph: the site category's own map-pin sigil, so a card and its pin
+ * on the world map are marked the same way. A site the player has not identified has no category
+ * to draw, and keeps the generic globe.
+ */
+function locationTypeBadgeIconSvg(locationType: LocationType | undefined): string {
+  if (locationType === undefined) {
+    return LOCATION_STAT_ICON_TYPE;
+  }
+  return `<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${MAP_MARKER_TYPE_ICON_SVG_PATHS[locationType]}</svg>`;
+}
+
 function createLocationCardStatsRow(stats: {
   type: string;
+  /** Drives the badge's glyph; omitted for a site the player has not identified. */
+  locationType?: LocationType;
   level: string | number;
   securityLevel: string | number;
   intelLevel: string | number;
@@ -914,7 +928,12 @@ function createLocationCardStatsRow(stats: {
   setTooltip(typeBadge, "Location Type", "The site's category — political, economic or military. Missions filter on it, so it decides what can be aimed here.");
   typeBadge.tabIndex = 0;
   typeBadge.setAttribute("aria-label", `Location Type: ${stats.type}`);
-  typeBadge.innerHTML = `${LOCATION_STAT_ICON_TYPE}<span class="minions-card-badge__value">${stats.type}</span>`;
+  /* Carries the category to the stylesheet, which lights the glyph in that category's map hue
+   * (see `.minions-card-badge--type[data-location-type]`). */
+  if (stats.locationType !== undefined) {
+    typeBadge.dataset.locationType = stats.locationType;
+  }
+  typeBadge.innerHTML = `${locationTypeBadgeIconSvg(stats.locationType)}<span class="minions-card-badge__value">${stats.type}</span>`;
 
   const levelBadge = document.createElement("div");
   levelBadge.className = "minions-card-badge minions-card-badge--level";
@@ -4433,6 +4452,7 @@ function initGameController(
       identified
         ? {
             type: formatLocationTypeLabel(loc.locationType),
+            locationType: loc.locationType,
             level: loc.locationLevel,
             securityLevel: securityLevel !== undefined ? String(securityLevel) : "—",
             intelLevel: intelLevel,
