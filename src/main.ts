@@ -320,14 +320,24 @@ const MAP_MARKER_TYPE_ICON_SVG_PATHS: Record<LocationType, string> = {
 };
 
 /* Minion, Mission & Location card stat icons */
+/** The Minions drawer tab's mark (`index.html`), so a card names its kind with the same glyph. */
+const MINION_STAT_ICON_KIND =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="7.5" r="4"/><path d="M4.5 21v-1.5a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6V21"/></svg>';
 const MINION_STAT_ICON_CP =
   '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" aria-hidden="true" focusable="false"><path d="M13 2 4.5 13.5H10L9 22l8.5-11.5H12L13 2Z" fill="currentColor"/></svg>';
 const MINION_STAT_ICON_LEVEL =
   '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" aria-hidden="true" focusable="false"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>';
 const MINION_STAT_ICON_XP =
   '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" aria-hidden="true" focusable="false"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/></svg>';
-const MISSION_STAT_ICON_TARGET =
-  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>';
+/** The Assets drawer tab's mark (`index.html`), so a card names its kind with the same glyph. */
+const ASSET_STAT_ICON_KIND =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z"/><path d="M2.5 9h19"/></svg>';
+/** The Locations drawer tab's mark (`index.html`), so a card names its kind with the same glyph. */
+const LOCATION_STAT_ICON_KIND =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-7-5.7-7-11a7 7 0 0 1 14 0c0 5.3-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+/** The Missions drawer tab's mark (`index.html`), so a card names its kind with the same glyph. */
+const MISSION_STAT_ICON_KIND =
+  '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1.5v3.5m0 14v3.5M1.5 12H5m14 0h3.5"/></svg>';
 const MISSION_STAT_ICON_DURATION =
   '<svg viewBox="0 0 24 24" class="minions-card-badge__icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>';
 const LOCATION_STAT_ICON_TYPE =
@@ -798,6 +808,13 @@ function createMinionsCardStatsRow(stats: {
   const row = document.createElement("div");
   row.className = "minions-card-stats-row";
 
+  const kindBadge = document.createElement("div");
+  kindBadge.className = "minions-card-badge minions-card-badge--kind";
+  setTooltip(kindBadge, "Minion", "An agent you hire to carry out missions. Their skills cover a mission's requirements, and each mission they finish earns XP that levels them up and unlocks new skills.");
+  kindBadge.tabIndex = 0;
+  kindBadge.setAttribute("aria-label", "Card type: Minion");
+  kindBadge.innerHTML = `${MINION_STAT_ICON_KIND}<span class="minions-card-badge__value">Minion</span>`;
+
   const cpBadge = document.createElement("div");
   cpBadge.className = "minions-card-badge minions-card-badge--cp";
   setTooltip(cpBadge, "CP Cost", "Command points spent to hire this minion. Your CP pool refills at the start of every turn.");
@@ -819,26 +836,42 @@ function createMinionsCardStatsRow(stats: {
   xpBadge.setAttribute("aria-label", `XP: ${stats.xp}`);
   xpBadge.innerHTML = `${MINION_STAT_ICON_XP}<span class="minions-card-badge__value">${stats.xp}</span>`;
 
+  row.appendChild(kindBadge);
   row.appendChild(cpBadge);
   row.appendChild(levelBadge);
   row.appendChild(xpBadge);
   return row;
 }
 
+/** An asset card's stats row. Assets carry no numbers of their own, so it holds only the kind badge. */
+function createAssetCardStatsRow(): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "minions-card-stats-row";
+
+  const kindBadge = document.createElement("div");
+  kindBadge.className = "minions-card-badge minions-card-badge--kind";
+  setTooltip(kindBadge, "Asset", "Equipment, intel or resources your organization holds. Missions can require assets to launch, support assets boost the missions they join, and missions can win new ones or lose them.");
+  kindBadge.tabIndex = 0;
+  kindBadge.setAttribute("aria-label", "Card type: Asset");
+  kindBadge.innerHTML = `${ASSET_STAT_ICON_KIND}<span class="minions-card-badge__value">Asset</span>`;
+
+  row.appendChild(kindBadge);
+  return row;
+}
+
 function createMissionCardStatsRow(stats: {
-  target: string;
   cpCost: string | number;
   duration: string | number;
 }): HTMLElement {
   const row = document.createElement("div");
   row.className = "minions-card-stats-row";
 
-  const targetBadge = document.createElement("div");
-  targetBadge.className = "minions-card-badge minions-card-badge--target";
-  setTooltip(targetBadge, "Target", "What this mission can be aimed at — a site, an asset stored in one, a minion, or nothing at all.");
-  targetBadge.tabIndex = 0;
-  targetBadge.setAttribute("aria-label", `Target: ${stats.target}`);
-  targetBadge.innerHTML = `${MISSION_STAT_ICON_TARGET}<span class="minions-card-badge__value">${stats.target}</span>`;
+  const kindBadge = document.createElement("div");
+  kindBadge.className = "minions-card-badge minions-card-badge--kind";
+  setTooltip(kindBadge, "Mission", "A job for your minions. Crew it with skills and assets that cover its requirements, aim it at a target, and pay its cost to launch. It resolves after its duration, for better or worse.");
+  kindBadge.tabIndex = 0;
+  kindBadge.setAttribute("aria-label", "Card type: Mission");
+  kindBadge.innerHTML = `${MISSION_STAT_ICON_KIND}<span class="minions-card-badge__value">Mission</span>`;
 
   const cpBadge = document.createElement("div");
   cpBadge.className = "minions-card-badge minions-card-badge--cp";
@@ -854,7 +887,7 @@ function createMissionCardStatsRow(stats: {
   durationBadge.setAttribute("aria-label", `Duration: ${stats.duration}`);
   durationBadge.innerHTML = `${MISSION_STAT_ICON_DURATION}<span class="minions-card-badge__value">${stats.duration}</span>`;
 
-  row.appendChild(targetBadge);
+  row.appendChild(kindBadge);
   row.appendChild(cpBadge);
   row.appendChild(durationBadge);
   return row;
@@ -868,6 +901,13 @@ function createLocationCardStatsRow(stats: {
 }): HTMLElement {
   const row = document.createElement("div");
   row.className = "minions-card-stats-row";
+
+  const kindBadge = document.createElement("div");
+  kindBadge.className = "minions-card-badge minions-card-badge--kind";
+  setTooltip(kindBadge, "Location", "A site on the world map. Missions are aimed at locations, which hold assets to steal and security traits your crew must cover. Raise intel to learn more about a site, but expect its security to rise as you act there.");
+  kindBadge.tabIndex = 0;
+  kindBadge.setAttribute("aria-label", "Card type: Location");
+  kindBadge.innerHTML = `${LOCATION_STAT_ICON_KIND}<span class="minions-card-badge__value">Location</span>`;
 
   const typeBadge = document.createElement("div");
   typeBadge.className = "minions-card-badge minions-card-badge--type";
@@ -897,6 +937,7 @@ function createLocationCardStatsRow(stats: {
   intelBadge.setAttribute("aria-label", `Intel Level: ${stats.intelLevel}`);
   intelBadge.innerHTML = `${LOCATION_STAT_ICON_INTEL}<span class="minions-card-badge__value">${stats.intelLevel}</span>`;
 
+  row.appendChild(kindBadge);
   row.appendChild(typeBadge);
   row.appendChild(levelBadge);
   row.appendChild(securityBadge);
@@ -4263,7 +4304,6 @@ function initGameController(
             : `${targetTypeLabel} - ${siteFilters}`;
 
       const statsRow = createMissionCardStatsRow({
-        target: targetValue,
         cpCost: mission.startCommandPoints,
         duration: mission.durationTurns,
       });
@@ -4285,6 +4325,16 @@ function initGameController(
       body.appendChild(
         buildMissionBrief({
           description: mission.description ?? null,
+          target:
+            mission.targetType === "none"
+              ? null
+              : {
+                  name: targetValue,
+                  tooltip: tooltipText(
+                    "Target",
+                    "What this mission can be aimed at — a site, an asset stored in one, or a minion.",
+                  ),
+                },
           requirementPills,
           /* Every required asset is named the moment the mission is offered, so every row here
            * can show its card — nothing to gate, unlike a location's manifest. */
@@ -5426,6 +5476,7 @@ function initGameController(
     title.className = "asset-card-title";
     title.textContent = template?.name ?? assetId;
     meta.appendChild(title);
+    meta.appendChild(createAssetCardStatsRow());
 
     const descText = template?.description?.trim();
     if (descText) {

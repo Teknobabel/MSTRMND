@@ -7449,7 +7449,7 @@ body {
   color: var(--warn);
 }
 
-.minions-card-badge--target .minions-card-badge__icon {
+.minions-card-badge--kind .minions-card-badge__icon {
   color: var(--cyan);
   stroke: currentColor;
   stroke-width: 2;

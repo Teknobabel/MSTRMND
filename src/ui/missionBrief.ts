@@ -38,7 +38,7 @@
  * Purely presentational and data-in / DOM-out, like `locationBrief.ts`: the caller builds the
  * skill cells and hands in the asset list already resolved against the roster.
  */
-import { ICON_CRATE, briefIcon, briefPanel, briefPlaceholder } from "./cardBrief";
+import { ICON_CRATE, ICON_TARGET, briefIcon, briefPanel, briefPlaceholder } from "./cardBrief";
 
 /**
  * Which modifier an asset cell wears. A required asset only ever asks whether the roster covers
@@ -77,8 +77,17 @@ const ASSET_ROW_VARIANT_CLASS: Record<MissionBriefAssetRowVariant, string> = {
   bad: "minions-trait-pill--bad",
 };
 
+/** What the mission is aimed at, as its Requirements grid names it. */
+export interface MissionBriefTarget {
+  /** The site's name, or the kind of target when the mission takes any that fits. */
+  name: string;
+  tooltip: string;
+}
+
 export interface MissionBriefModel {
   description: string | null;
+  /** Leads the Requirements grid when present; `null` for a mission aimed at nothing. */
+  target: MissionBriefTarget | null;
   /** Skill (trait) cells, built by the caller so it can carry roster-match colouring. */
   requirementPills: readonly HTMLElement[];
   assets: readonly MissionBriefAssetRow[];
@@ -127,6 +136,34 @@ export function missionAssetCell(row: MissionBriefAssetRow): HTMLElement {
 }
 
 /**
+ * The target cell: same slot as a skill or asset cell, with the crosshair in the icon box and a
+ * "Target" caption. It has no have/missing accent — a target is picked when the mission is
+ * planned, not something the roster either holds or lacks.
+ */
+function missionTargetCell(target: MissionBriefTarget): HTMLElement {
+  const cell = document.createElement("span");
+  cell.className = "minions-trait-pill minions-trait-pill--target";
+  cell.title = target.tooltip;
+  cell.tabIndex = 0;
+
+  cell.appendChild(briefIcon(ICON_TARGET, "minions-trait-pill__icon"));
+
+  const text = document.createElement("span");
+  text.className = "minions-trait-pill__text";
+  const caption = document.createElement("span");
+  caption.className = "minions-trait-pill__caption";
+  caption.textContent = "Target";
+  text.appendChild(caption);
+  const name = document.createElement("span");
+  name.className = "minions-trait-pill__label";
+  name.textContent = target.name;
+  text.appendChild(name);
+  cell.appendChild(text);
+
+  return cell;
+}
+
+/**
  * Builds the brief. Returns the whole block ready to append under a mission card's art; the
  * caller decides nothing about its layout.
  */
@@ -146,13 +183,16 @@ export function buildMissionBrief(model: MissionBriefModel): HTMLElement {
   }
   root.appendChild(brief.panel);
 
-  /* ---- Requirements: skills, then assets, in one two-across grid ---- */
+  /* ---- Requirements: target, skills, then assets, in one two-across grid ---- */
   const reqs = briefPanel("Requirements");
-  if (model.requirementPills.length === 0 && model.assets.length === 0) {
+  if (model.target === null && model.requirementPills.length === 0 && model.assets.length === 0) {
     reqs.body.appendChild(briefPlaceholder("No requirements"));
   } else {
     const grid = document.createElement("div");
     grid.className = "card-brief__pills card-brief__pills--grid";
+    if (model.target !== null) {
+      grid.appendChild(missionTargetCell(model.target));
+    }
     for (const pill of model.requirementPills) {
       grid.appendChild(pill);
     }

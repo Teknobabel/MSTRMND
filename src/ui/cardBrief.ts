@@ -10,6 +10,9 @@
 export const ICON_CLIPBOARD =
   '<path d="M9 3h6v3H9z"/><path d="M15 4.5h3v16H6v-16h3"/><path d="M9 11h6M9 15h4"/>';
 export const ICON_CRATE = '<path d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5Z"/><path d="M2.5 9h19"/>';
+/** The crosshair a mission's target wears — the same mark the old Target stat badge used. */
+export const ICON_TARGET =
+  '<circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>';
 
 export function briefIcon(paths: string, className: string): SVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
