@@ -5007,8 +5007,10 @@ body {
  * row in a brief, and they keep their own ground.
  */
 .card-brief__pills > .minions-trait-pill {
+  --pill-accent: var(--line-0);
   border: 1px solid var(--line-0);
   border-left-width: 2px;
+  border-left-color: var(--pill-accent);
   background: rgba(10, 4, 5, 0.4);
   color: var(--text-1);
   /* Room for the divider below to sit in, clear of both the glyph and the name. */
@@ -5016,19 +5018,17 @@ body {
 }
 
 /*
- * Have / missing used to be carried by the border's *style* and the presence of a background —
- * dotted and hollow for a requirement the roster cannot meet. With every slot on the same solid
- * ground that reads as flimsy rather than as unmet, so the signal moves to the left accent
- * instead: it lights up and the name comes up to full strength when the requirement is met, and
- * both stay dim when it is not.
+ * Have / missing is carried by the left accent alone: green when the roster covers the
+ * requirement, red when it does not. The name and the glyph stay exactly as they are either way
+ * — a cell that also brightened its text was saying the same thing twice, and it made a met
+ * requirement read as the more important line rather than simply as the met one.
  */
 .card-brief__pills > .minions-trait-pill--req-have {
-  border-left-color: var(--line-2);
-  color: var(--text-0);
+  --pill-accent: var(--good);
 }
 
 .card-brief__pills > .minions-trait-pill--req-missing {
-  color: var(--text-2);
+  --pill-accent: var(--red);
 }
 
 /* An asset an outcome hands over or takes away, rather than one a mission asks for: no
@@ -5037,11 +5037,11 @@ body {
  * cell reads as the same kind of object rather than gaining a border the requirement cells don't
  * have. */
 .card-brief__pills > .minions-trait-pill--good {
-  border-left-color: var(--good-dim);
+  --pill-accent: var(--good-dim);
 }
 
 .card-brief__pills > .minions-trait-pill--bad {
-  border-left-color: var(--red-deep);
+  --pill-accent: var(--red-deep);
 }
 
 /*
@@ -5054,11 +5054,13 @@ body {
  */
 .card-brief__pills > .minions-trait-pill--status-positive {
   border-color: var(--good-dim);
+  border-left-color: var(--pill-accent);
   color: #8df0b2;
 }
 
 .card-brief__pills > .minions-trait-pill--status-negative {
   border-color: var(--red-deep);
+  border-left-color: var(--pill-accent);
   color: #ff9aa6;
 }
 
@@ -5068,6 +5070,8 @@ body {
 .card-brief__pills > .minions-trait-pill:hover,
 .card-brief__pills > .minions-trait-pill:focus-visible {
   border-color: var(--line-2);
+  /* The left accent carries met/unmet, so hovering must not paint over it. */
+  border-left-color: var(--pill-accent);
   background: rgba(28, 11, 13, 0.75);
   outline: none;
 }
@@ -5140,7 +5144,7 @@ body {
 .card-brief__pills > .minions-trait-pill.card-brief__req--previewable:hover,
 .card-brief__pills > .minions-trait-pill.card-brief__req--previewable:focus-visible {
   border-color: var(--line-2);
-  border-left-color: var(--red);
+  border-left-color: var(--pill-accent);
   background: rgba(44, 13, 17, 0.6);
 }
 
