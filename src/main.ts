@@ -126,6 +126,7 @@ import {
 import { initRunBriefing, type RunBriefingApi, type RunBriefingRow } from "./ui/runBriefing";
 import { initSettingsMenu } from "./ui/playerSettings";
 import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
+import { initStageZoom, stageFitScale } from "./ui/stageZoom";
 import {
   INBOUND_CALLOUT_CLASS,
   playDispatchSequence,
@@ -6679,12 +6680,15 @@ function initGameController(
    */
   let mapPlotRect: DOMRect | null = null;
 
-  /** The uniform scale `ui/stageScale` puts on the shell, as a number. */
+  /**
+   * The uniform scale `ui/stageScale` puts on the shell, as a number.
+   *
+   * Read from a cached number rather than off `--ui-scale`, because this runs once per frame:
+   * a `getComputedStyle` here forces a synchronous style recalc of whatever the frame has
+   * already invalidated. It deliberately excludes the pinch zoom — see `stageFitScale`.
+   */
   function stageScaleFactor(): number {
-    const raw = Number(
-      getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"),
-    );
-    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+    return stageFitScale();
   }
 
   /**
@@ -10389,6 +10393,7 @@ startRunFromMenu = gameController.startRun;
 openRunBriefing = gameController.openRunBriefing;
 
 initStageScale();
+initStageZoom();
 initGlobalTooltips();
 initDragFocus();
 initDropHints();
