@@ -612,8 +612,8 @@ const TRAIT_TOOLTIP_KIND_NOUN: Record<Trait["type"], string> = {
 };
 
 const TRAIT_TOOLTIP_DESC: Record<Trait["type"], string> = {
-  primary: "A core skill. It covers this requirement on any mission that asks for it.",
-  secondary: "A supporting skill. It covers this requirement on any mission that asks for it.",
+  primary: "A core skill. Assign a minion with the matching skill to improve the odds of success.",
+  secondary: "A supporting skill. Assign a minion with the matching skill to improve the odds of success.",
   status_positive: "A good turn for this minion: +10% mission success chance while it holds.",
   status_negative: "A bad turn for this minion: −20% mission success chance while it holds.",
   dynamic: "A standing projected from this minion's affinity scores, not a skill it can be given.",
@@ -1462,6 +1462,18 @@ function formatAssignMissionError(err: GameError): string {
     default:
       return `Cannot assign (${(err as { code: string }).code}).`;
   }
+}
+
+/**
+ * A blocking modal is up over the console: a turn report, the activity log, the run-end
+ * screen (all `.turn-report-overlay`), the pause menu, or the run's opening briefing.
+ */
+function isBlockingModalOpen(): boolean {
+  return (
+    document.querySelector(
+      ".turn-report-overlay:not([hidden]), .pause-overlay:not([hidden]), .run-briefing-overlay:not([hidden])",
+    ) !== null
+  );
 }
 
 type GameControllerApi = {
@@ -9202,10 +9214,7 @@ function initGameController(
     }
     /* Escape sends an open drawer back down, unless a dialog is up over it. Focus goes to its
      * tab: wherever it was inside the menu is about to go inert. */
-    const dialogOpen =
-      document.querySelector(
-        ".turn-report-overlay:not([hidden]), .pause-overlay:not([hidden]), .run-briefing-overlay:not([hidden])",
-      ) !== null;
+    const dialogOpen = isBlockingModalOpen();
     const drawer = menuDrawers.find((d) => d.id === openDrawer);
     if (drawer !== undefined && !dialogOpen) {
       drawer.tabEl.focus();
@@ -10451,8 +10460,15 @@ initStageScale();
       enabled: () => playerSettings.read().mapParallax,
       /* The boot sequence is choreography that has already decided where the map is — it opens
        * the panel from a line and runs a scanner across it — so the map holds still until the
-       * console is live. */
-      suppressed: () => omegaShell?.classList.contains("omega-shell--booting") === true,
+       * console is live. A menu drawer up over the map already has the plot receded behind its
+       * veil (`.map-panel--receded`, toggled in `applyDrawerState`), and a modal — the pause
+       * menu, the run briefing, a turn report — sits over everything including the drawers; in
+       * both cases the pointer is over something other than the map, so leaning it would read as
+       * a glitch. */
+      suppressed: () =>
+        omegaShell?.classList.contains("omega-shell--booting") === true ||
+        mapPanelForParallax.classList.contains("map-panel--receded") ||
+        isBlockingModalOpen(),
     });
   }
 }
