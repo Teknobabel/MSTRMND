@@ -5,19 +5,40 @@
  * but every readout on it is dark. Over the next several seconds it comes up the way a
  * cathode-ray console would — power hits, the world map strikes from a line and opens, a scanner
  * crosses it and every site it passes locks in under the beam, the status readouts light one
- * after another, the menu tabs rise into their row, and the mission planner slides in off the
- * left edge.
+ * after another, the menu tabs rise into their row, and the rest of the chrome fills in.
  *
- * It takes its time, and it can afford to: any pointer or key ends it on the spot. The length is
- * {@link BOOT_STAGES}' to set and has been retimed more than once, so nothing outside that table
- * — here or in the stylesheet — should be written as though it knew the total.
+ * **The opening is two acts, and this module plays both of them.**
+ *
+ *  - **The boot** ({@link BOOT_STAGES}, {@link startBootSequence}) is the console coming up, and
+ *    it runs the moment the game screen is revealed. It ends into the run briefing
+ *    (`ui/runBriefing.ts`), the classified page laid over the finished map — after holding on
+ *    the finished console for a beat first ({@link BOOT_HAND_OVER_MS}).
+ *  - **The planner's arrival** ({@link PLANNER_STAGES}, {@link startPlannerArrival}) is the
+ *    mission planner sliding in off the left edge, and it waits for the player to dismiss that
+ *    page. It used to be the boot's sixth stage, and it was the wrong place for it: the planner
+ *    is what the briefing's third row tells the player to go and use, so it arriving *behind* a
+ *    modal meant the one piece of furniture the page is about had already finished moving by the
+ *    time anyone could look at it. Held back, the dismissal is what brings it in.
+ *
+ * So the boot *arms* the second act rather than playing it: it leaves the shell carrying
+ * {@link PLANNER_HOLD_CLASS}, which parks the panel off-stage on exactly the frame its own
+ * animation starts from. Whoever starts a boot therefore owes the shell either a
+ * {@link startPlannerArrival} or a {@link clearPlannerHold} — and note that the boot's handle is
+ * usually gone by then, because `onDone` fires a briefing before the hold is released, so the
+ * hold cannot be the handle's to clean up. `main.ts` owns both ends of that.
+ *
+ * Each act takes its time, and can afford to: any pointer or key ends it on the spot. The length
+ * of each is its stage table's to set and both have been retimed more than once, so nothing
+ * outside those tables — here or in the stylesheet — should be written as though it knew a total.
  *
  * Almost all of it is CSS. This module's job is only the four things a stylesheet cannot do for
  * itself:
  *
- *  1. Say *when*. {@link BOOT_STAGES} is the whole clock, written onto the shell as custom
- *     properties at the start of a run, so the sequence can be retimed here rather than by
- *     hunting delays through a dozen `@keyframes` blocks.
+ *  1. Say *when*. The stage tables are the whole clock, written onto the shell as custom
+ *     properties when their act starts, so a sequence can be retimed here rather than by
+ *     hunting delays through a dozen `@keyframes` blocks. Both tables publish `--boot-*` names
+ *     off their `cssStem`, and the stems are disjoint, so the two acts can never overwrite each
+ *     other's clock on the one element they share.
  *  2. Say *in what order*. Stat blocks, drawer tabs and plan sections take their place in their
  *     stage from `--boot-i`, counted off in DOM order.
  *  3. Put the map pins under the scanner. A pin does not light on its turn in a list — it lights
@@ -29,25 +50,34 @@
  *     anything, whichever is first.
  *
  * Nothing here is load-bearing for the game: a run whose boot never plays is a run that opened
- * instantly, which is exactly what the "Skip boot up animation" setting asks for.
+ * instantly, which is exactly what the "Skip boot up animation" setting asks for — and a run
+ * that opened that way never armed the hold, so it gets no planner arrival either, which is the
+ * same answer that setting gives to everything else.
  */
 
 /** The class that puts the shell in its dark, pre-power state and arms every stage. */
 export const BOOT_SHELL_CLASS = "omega-shell--booting";
 
-/** The stages, in the order a player sees them start. */
-export type BootStageId =
-  | "power"
-  | "map"
-  | "pins"
-  | "stats"
-  | "tabs"
-  | "plan"
-  | "planSections"
-  | "chrome";
+/**
+ * The class that parks the planner off-stage, armed for {@link startPlannerArrival}.
+ *
+ * Its rule in the stylesheet is `boot-plan-in`'s own `0%` frame, written out statically — which
+ * is what makes the hand-over invisible: the first frame of the animation is the frame that was
+ * already on screen.
+ */
+export const PLANNER_HOLD_CLASS = "omega-shell--planner-held";
+
+/** The class that plays the planner in. Replaces {@link PLANNER_HOLD_CLASS}. */
+export const PLANNER_ARRIVAL_CLASS = "omega-shell--planner-arriving";
+
+/** The stages of the boot, in the order a player sees them start. */
+export type BootStageId = "power" | "map" | "pins" | "stats" | "tabs" | "chrome";
+
+/** The stages of the planner's arrival. */
+export type PlannerStageId = "plan" | "planSections";
 
 export interface BootStage {
-  /** When the stage's first element starts moving, ms after the sequence does. */
+  /** When the stage's first element starts moving, ms after its own act does. */
   readonly atMs: number;
   /** How long one element of the stage takes. */
   readonly durationMs: number;
@@ -71,10 +101,30 @@ export interface BootStage {
 export const BOOT_PIN_SPAN_MS = 560;
 
 /**
- * A beat of stillness after the last stage lands before the boot class comes off, so the
+ * A beat of stillness after an act's last stage lands before its class comes off, so the
  * hand-over to the live console is not on the same frame as the last thing to move.
  */
 export const BOOT_SETTLE_MS = 140;
+
+/**
+ * How long the finished console is left to itself before the run briefing is laid over it.
+ *
+ * The boot ends on a lit console with the world map open across it, and the briefing then covers
+ * most of that. Handing over on the same beat the last stage settled gave the player no moment
+ * to look at what they had just watched come up — the map arrived and was immediately papered
+ * over — so the sequence holds at its own ending for a second first.
+ *
+ * Part of the boot's clock ({@link bootSequenceDurationMs}) rather than a timer at the call
+ * site, which buys two things. It is cancelled along with everything else when a run is
+ * abandoned, so a briefing can never surface on the title screen a second after someone quit.
+ * And a player who *skips* the boot does not then sit through it: a skip goes straight to
+ * `finish`, which hands over at once, because someone who skipped asked to get on with it.
+ *
+ * Holding the boot class for the extra second costs nothing to look at. Every stage's `100%`
+ * frame is its resting appearance — that is the contract the whole sequence is written on — and
+ * both overlays (`.boot-veil`, `.boot-map-fx`) end their keyframes at `opacity: 0`.
+ */
+export const BOOT_HAND_OVER_MS = 1000;
 
 export const BOOT_STAGES: Readonly<Record<BootStageId, BootStage>> = {
   /* The power surge: a red bloom over the whole shell and one roll of interference. */
@@ -87,21 +137,37 @@ export const BOOT_STAGES: Readonly<Record<BootStageId, BootStage>> = {
   stats: { atMs: 3660, durationMs: 440, stepMs: 65, cssStem: "stats" },
   /* The menu tabs rise into their row along the bottom of the map. */
   tabs: { atMs: 4080, durationMs: 440, stepMs: 55, cssStem: "tabs" },
-  /* The planner, in off the left edge. */
-  plan: { atMs: 5000, durationMs: 560, stepMs: 0, cssStem: "plan" },
-  /* Its three sections fill in as it comes to rest, not after — a panel that arrives empty and
-   * is furnished a beat later reads as two events rather than one arrival. */
-  planSections: { atMs: 5500, durationMs: 1340, stepMs: 60, cssStem: "plan-sections" },
-  /* Everything left: the events ticker, the bottom bar, the map layers panel. */
-  chrome: { atMs: 6000, durationMs: 440, stepMs: 0, cssStem: "chrome" },
+  /*
+   * Everything left: the events ticker, the bottom bar, the map layers panel.
+   *
+   * Moved up from 6000ms when the planner became its own act. The planner used to fill
+   * 5000–6840 and the chrome landed inside it; with that gone, the old timing left the console
+   * standing still for more than a second after the tabs had risen, and a console that goes
+   * still part-way through reads as one that has finished, or hung.
+   */
+  chrome: { atMs: 4950, durationMs: 440, stepMs: 0, cssStem: "chrome" },
 };
 
-/** How many of each staggered thing the shell actually has, counted at boot. */
+/**
+ * The planner's arrival, timed from the moment the briefing is dismissed rather than from the
+ * top of the run — which is the whole reason it is a table of its own.
+ */
+export const PLANNER_STAGES: Readonly<Record<PlannerStageId, BootStage>> = {
+  /* The panel itself, in off the left edge. The small lead-in keeps it off the frame the
+   * briefing's own `display: none` lands on. */
+  plan: { atMs: 40, durationMs: 560, stepMs: 0, cssStem: "plan" },
+  /* Its three sections fill in as it comes to rest, not after — a panel that arrives empty and
+   * is furnished a beat later reads as two events rather than one arrival. The 500ms between
+   * this and the panel is the gap the two carried as boot stages and is the shape of the
+   * arrival; retime them together. */
+  planSections: { atMs: 540, durationMs: 1340, stepMs: 60, cssStem: "plan-sections" },
+};
+
+/** How many of each staggered thing the shell actually has, counted when the boot starts. */
 export interface BootElementCounts {
   readonly pins: number;
   readonly stats: number;
   readonly tabs: number;
-  readonly planSections: number;
 }
 
 function stageEndMs(stage: BootStage, count: number): number {
@@ -109,9 +175,12 @@ function stageEndMs(stage: BootStage, count: number): number {
 }
 
 /**
- * When the last thing on screen stops moving, plus the settle. Derived rather than written down,
- * so retiming a stage — or a shell that grows a seventh stat block — cannot leave the class on
- * after the animation it was holding has finished, or take it off before.
+ * When the boot hands the console over: the last thing on screen stopping, plus the settle, plus
+ * the beat the finished console is left to itself for ({@link BOOT_HAND_OVER_MS}).
+ *
+ * Derived rather than written down, so retiming a stage — or a shell that grows a seventh stat
+ * block — cannot leave the class on after the animation it was holding has finished, or take it
+ * off before.
  */
 export function bootSequenceDurationMs(counts: BootElementCounts): number {
   const ends = [
@@ -122,28 +191,53 @@ export function bootSequenceDurationMs(counts: BootElementCounts): number {
     counts.pins > 0 ? BOOT_STAGES.pins.atMs + BOOT_PIN_SPAN_MS + BOOT_STAGES.pins.durationMs : 0,
     stageEndMs(BOOT_STAGES.stats, counts.stats),
     stageEndMs(BOOT_STAGES.tabs, counts.tabs),
-    stageEndMs(BOOT_STAGES.plan, 1),
-    stageEndMs(BOOT_STAGES.planSections, counts.planSections),
     stageEndMs(BOOT_STAGES.chrome, 1),
   ];
-  return Math.max(...ends) + BOOT_SETTLE_MS;
+  return Math.max(...ends) + BOOT_SETTLE_MS + BOOT_HAND_OVER_MS;
 }
 
 /**
- * The stage clock as the stylesheet reads it. Every stage contributes `--boot-t-<stem>` and
+ * The same, for the second act: when the planner and its last section have come to rest.
+ *
+ * No hand-over beat on this one. The boot's exists to keep a modal off a console the player has
+ * not had a moment to look at; this act *is* what the player is looking at, and it hands over to
+ * nothing but the live game.
+ */
+export function plannerArrivalDurationMs(sections: number): number {
+  return (
+    Math.max(
+      stageEndMs(PLANNER_STAGES.plan, 1),
+      stageEndMs(PLANNER_STAGES.planSections, sections),
+    ) + BOOT_SETTLE_MS
+  );
+}
+
+/**
+ * A stage table as the stylesheet reads it. Every stage contributes `--boot-t-<stem>` and
  * `--boot-d-<stem>`; a staggered one also contributes `--boot-step-<stem>`.
  */
-export function bootTimingVars(): ReadonlyMap<string, string> {
+function stageTimingVars(stages: Readonly<Record<string, BootStage>>): Map<string, string> {
   const vars = new Map<string, string>();
-  for (const stage of Object.values(BOOT_STAGES)) {
+  for (const stage of Object.values(stages)) {
     vars.set(`--boot-t-${stage.cssStem}`, `${stage.atMs}ms`);
     vars.set(`--boot-d-${stage.cssStem}`, `${stage.durationMs}ms`);
     if (stage.stepMs > 0) {
       vars.set(`--boot-step-${stage.cssStem}`, `${stage.stepMs}ms`);
     }
   }
+  return vars;
+}
+
+/** The boot's clock, plus the sweep span the pin delays are measured against. */
+export function bootTimingVars(): ReadonlyMap<string, string> {
+  const vars = stageTimingVars(BOOT_STAGES);
   vars.set("--boot-span-pins", `${BOOT_PIN_SPAN_MS}ms`);
   return vars;
+}
+
+/** The planner act's clock. Disjoint stems from {@link bootTimingVars}; see the module note. */
+export function plannerTimingVars(): ReadonlyMap<string, string> {
+  return stageTimingVars(PLANNER_STAGES);
 }
 
 /**
@@ -163,19 +257,36 @@ export function bootPinDelayMs(y: number, height: number): number {
 
 /** What a caller gets back: a way to end the sequence early, and a way to ask if it has ended. */
 export interface BootSequenceHandle {
-  /** Take the console live now — the player skipped, or left the screen. Idempotent. */
+  /**
+   * Take the console live now — the player skipped, or left the screen. Idempotent.
+   *
+   * Ends the boot act only. The planner's hold is deliberately left on, because the usual
+   * reason this is called is a player skipping ahead to the briefing, and the planner is meant
+   * to arrive after that page rather than under it. Releasing it is {@link startPlannerArrival}
+   * or {@link clearPlannerHold}.
+   */
   finish(): void;
   /** True once {@link BootSequenceHandle.finish} has run, by skip or by the clock. */
   readonly done: boolean;
 }
 
+/** What {@link startPlannerArrival} gives back — the same shape, for the same two reasons. */
+export interface PlannerArrivalHandle {
+  /** Land the planner now. Idempotent. */
+  finish(): void;
+  readonly done: boolean;
+}
+
 /** A handle for the times there is nothing to play: reduced motion, or no window to play in. */
-function noopHandle(): BootSequenceHandle {
+function noopHandle(): BootSequenceHandle & PlannerArrivalHandle {
   return { finish: () => {}, done: true };
 }
 
 /** Everything this module writes onto an element, so a finish can take it all back off. */
 const ELEMENT_VARS = ["--boot-i", "--boot-pin-at", "--boot-elapsed"] as const;
+
+/** The planner's three section frames, the one staggered thing in the second act. */
+const PLAN_SECTION_SELECTOR = ".game-panel--plan-column .plan-section";
 
 /** Number the elements of a staggered stage in DOM order. Returns how many there were. */
 function numberInOrder(root: ParentNode, selector: string, touched: Set<HTMLElement>): number {
@@ -185,6 +296,32 @@ function numberInOrder(root: ParentNode, selector: string, touched: Set<HTMLElem
     touched.add(el);
   });
   return els.length;
+}
+
+/** True when the player has asked their system for less motion. */
+function prefersReducedMotion(view: Window): boolean {
+  return (
+    typeof view.matchMedia === "function" &&
+    view.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+/**
+ * Take any planner hold off the shell, animating nothing.
+ *
+ * The belt to {@link startPlannerArrival}'s braces, and not redundant with it: a run abandoned
+ * while the briefing is still up has no boot handle left to ask (see the module note), and a
+ * hold left behind would be inherited by the next run — including one that opens with the boot
+ * skipped and so never calls the second act at all. Safe on a shell carrying neither class.
+ */
+export function clearPlannerHold(shell: HTMLElement): void {
+  shell.classList.remove(PLANNER_HOLD_CLASS, PLANNER_ARRIVAL_CLASS);
+  for (const name of plannerTimingVars().keys()) {
+    shell.style.removeProperty(name);
+  }
+  for (const el of shell.querySelectorAll<HTMLElement>(PLAN_SECTION_SELECTOR)) {
+    el.style.removeProperty("--boot-i");
+  }
 }
 
 export interface BootSequenceOptions {
@@ -210,6 +347,9 @@ export interface BootSequenceOptions {
  * step waits two frames — by which time the `ResizeObserver` in `main.ts` has run and every pin
  * carries a real `--map-py`. Until then pins fall back to the head of their own stage, which is
  * whole seconds away on the current clock and was never less than a few hundred milliseconds.
+ *
+ * Also arms the second act, {@link startPlannerArrival}. See the module note for what the caller
+ * owes the shell in return.
  */
 export function startBootSequence(
   shell: HTMLElement,
@@ -223,11 +363,9 @@ export function startBootSequence(
   /* Re-bound past the null check because the timers and listeners below are reached from hoisted
    * function declarations, which narrowing does not follow into. */
   const view: Window = doc.defaultView;
-  /* Someone who has asked their system for less motion gets the console, not the show. */
-  if (
-    typeof view.matchMedia === "function" &&
-    view.matchMedia("(prefers-reduced-motion: reduce)").matches
-  ) {
+  /* Someone who has asked their system for less motion gets the console, not the show — and no
+   * hold either, so the planner is simply there from the first frame. */
+  if (prefersReducedMotion(view)) {
     onDone?.();
     return noopHandle();
   }
@@ -239,6 +377,8 @@ export function startBootSequence(
   let observer: MutationObserver | null = null;
 
   shell.classList.add(BOOT_SHELL_CLASS);
+  /* Armed, not played: the planner sits off-stage until the briefing has been read. */
+  shell.classList.add(PLANNER_HOLD_CLASS);
   for (const [name, value] of bootTimingVars()) {
     shell.style.setProperty(name, value);
   }
@@ -276,10 +416,11 @@ export function startBootSequence(
     mapSection.appendChild(mapFx);
   }
 
-  /* The static stages can be numbered now: none of this markup is rebuilt by a render. */
+  /* The static stages can be numbered now: none of this markup is rebuilt by a render. The plan
+   * sections are not among them any more — they belong to the second act, which numbers them
+   * when it runs, long after `finish` has taken `--boot-i` back off everything written here. */
   const stats = numberInOrder(shell, ".game-stats .stat-block", touched);
   const tabs = numberInOrder(shell, ".drawer-cabinet .drawer-tab", touched);
-  const planSections = numberInOrder(shell, ".game-panel--plan-column .plan-section", touched);
 
   const startedAt = view.performance.now();
 
@@ -342,6 +483,7 @@ export function startBootSequence(
     touched.clear();
     veil.remove();
     mapFx?.remove();
+    /* PLANNER_HOLD_CLASS stays on — see the note on `BootSequenceHandle.finish`. */
     onDone?.();
   }
 
@@ -381,13 +523,96 @@ export function startBootSequence(
          */
         observer.observe(mapPanel, { childList: true });
       }
-      const total = bootSequenceDurationMs({ pins, stats, tabs, planSections });
+      const total = bootSequenceDurationMs({ pins, stats, tabs });
       endTimer = view.setTimeout(
         finish,
         Math.max(0, total - (view.performance.now() - startedAt)),
       );
     });
   });
+
+  return {
+    finish,
+    get done(): boolean {
+      return done;
+    },
+  };
+}
+
+export interface PlannerArrivalOptions {
+  /** Called once the planner is at rest, however it got there. */
+  readonly onDone?: () => void;
+  /** Whether a pointer or key lands the planner early. On by default, as for the boot. */
+  readonly skippable?: boolean;
+}
+
+/**
+ * Play the act the boot held back: the mission planner in off the left edge, its three sections
+ * filling in as it lands, and the Deploy bar under them.
+ *
+ * Only ever plays an arrival that was *armed* — a shell not carrying {@link PLANNER_HOLD_CLASS}
+ * is one whose planner has been on screen since the first frame (the "Skip boot up animation"
+ * setting, reduced motion, or an arrival that has already run), and sliding it out and back in
+ * would be an animation nobody asked for. So this is safe to call on any dismissal of the
+ * briefing without the caller having to remember how the run opened.
+ */
+export function startPlannerArrival(
+  shell: HTMLElement,
+  options: PlannerArrivalOptions = {},
+): PlannerArrivalHandle {
+  const { onDone, skippable = true } = options;
+  const doc = shell.ownerDocument;
+  if (doc.defaultView === null || !shell.classList.contains(PLANNER_HOLD_CLASS)) {
+    onDone?.();
+    return noopHandle();
+  }
+  /* Re-bound past the null check for the same reason `startBootSequence` does it: the timer and
+   * listeners below are reached from hoisted function declarations. */
+  const view: Window = doc.defaultView;
+  if (prefersReducedMotion(view)) {
+    clearPlannerHold(shell);
+    onDone?.();
+    return noopHandle();
+  }
+
+  let done = false;
+  let endTimer: number | null = null;
+
+  for (const [name, value] of plannerTimingVars()) {
+    shell.style.setProperty(name, value);
+  }
+  const sections = numberInOrder(shell, PLAN_SECTION_SELECTOR, new Set<HTMLElement>());
+  /* Added before the hold comes off, though the order does not actually matter: the hold's rule
+   * *is* the arrival's `0%` frame, so both orders paint the same first frame. Added first anyway,
+   * so no reading of this leaves a window where neither class is on. */
+  shell.classList.add(PLANNER_ARRIVAL_CLASS);
+  shell.classList.remove(PLANNER_HOLD_CLASS);
+
+  function finish(): void {
+    if (done) {
+      return;
+    }
+    done = true;
+    if (endTimer !== null) {
+      view.clearTimeout(endTimer);
+      endTimer = null;
+    }
+    view.removeEventListener("pointerdown", onSkip, true);
+    view.removeEventListener("keydown", onSkip, true);
+    clearPlannerHold(shell);
+    onDone?.();
+  }
+
+  function onSkip(): void {
+    finish();
+  }
+
+  if (skippable) {
+    view.addEventListener("pointerdown", onSkip, true);
+    view.addEventListener("keydown", onSkip, true);
+  }
+
+  endTimer = view.setTimeout(finish, plannerArrivalDurationMs(sections));
 
   return {
     finish,

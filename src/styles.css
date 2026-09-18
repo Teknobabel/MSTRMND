@@ -9121,6 +9121,15 @@ body {
  *  - `.stat-block__num` carries the rise and tint of a number that is counting. The stats stage
  *    animates the block around it and the value's clip, never the number.
  */
+/*
+ * The house easing for anything that arrives: fast out of the gate, long settle. On both of the
+ * opening's acts, because both of them use it.
+ */
+.omega-shell--booting,
+.omega-shell--planner-arriving {
+  --boot-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .omega-shell--booting {
   /*
    * The stage clock, as a readable snapshot.
@@ -9145,15 +9154,18 @@ body {
   --boot-t-tabs: 4080ms;
   --boot-d-tabs: 440ms;
   --boot-step-tabs: 55ms;
-  --boot-t-plan: 5000ms;
+  --boot-t-chrome: 4950ms;
+  --boot-d-chrome: 440ms;
+}
+
+/* The second act's half of the same snapshot; `PLANNER_STAGES` is its authority. Measured from
+   the dismissal of the briefing, not from the top of the run. */
+.omega-shell--planner-arriving {
+  --boot-t-plan: 40ms;
   --boot-d-plan: 560ms;
-  --boot-t-plan-sections: 5500ms;
+  --boot-t-plan-sections: 540ms;
   --boot-d-plan-sections: 1340ms;
   --boot-step-plan-sections: 60ms;
-  --boot-t-chrome: 6000ms;
-  --boot-d-chrome: 440ms;
-  /* The house easing for anything that arrives: fast out of the gate, long settle. */
-  --boot-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ---------------- Stage 1: power ---------------- */
@@ -9762,7 +9774,23 @@ body {
   }
 }
 
-/* ---------------- Stage 6: the mission planner slides in ---------------- */
+/* ---------------- Act 2: the mission planner slides in ---------------- */
+
+/*
+ * Not a boot stage: the planner is held back until the player dismisses the run briefing, and
+ * `startPlannerArrival` in `src/ui/bootSequence.ts` plays it then. See that module's note on why
+ * the one panel the briefing tells the player to go and use is not allowed to arrive behind it.
+ *
+ * The armed state, and the reason the hand-over cannot be seen: it is `boot-plan-in`'s own `0%`
+ * frame written out statically, so the first frame of the animation is the frame that was
+ * already on screen. `pointer-events` because a panel parked at `opacity: 0` still occupies its
+ * box, and the hold can outlast the briefing's backdrop if a run is abandoned under it.
+ */
+.omega-shell--planner-held .omega-body--floating .game-panel--plan-column {
+  transform: translateX(-130%);
+  opacity: 0;
+  pointer-events: none;
+}
 
 /*
  * In off the left edge of the screen, past its resting place and back.
@@ -9772,7 +9800,7 @@ body {
  * `height` transition — armed by `syncPlanColumnHeight` once it has measured — is on a different
  * property and is not disturbed by this.
  */
-.omega-shell--booting .omega-body--floating .game-panel--plan-column {
+.omega-shell--planner-arriving .omega-body--floating .game-panel--plan-column {
   animation: boot-plan-in var(--boot-d-plan) var(--boot-ease) var(--boot-t-plan) both;
 }
 
@@ -9794,7 +9822,7 @@ body {
 }
 
 /* Operation, Deployment, Assessment, filling in down the column once the panel has landed. */
-.omega-shell--booting .game-panel--plan-column .plan-section {
+.omega-shell--planner-arriving .game-panel--plan-column .plan-section {
   animation: boot-plan-section var(--boot-d-plan-sections) var(--boot-ease)
     calc(var(--boot-t-plan-sections) + var(--boot-i, 0) * var(--boot-step-plan-sections)) both;
 }
@@ -9811,12 +9839,12 @@ body {
 }
 
 /* The Deploy bar is the last of the planner to arrive, under the sections it acts on. */
-.omega-shell--booting .plan-column-footer {
+.omega-shell--planner-arriving .plan-column-footer {
   animation: boot-rise var(--boot-d-plan-sections) var(--boot-ease)
     calc(var(--boot-t-plan-sections) + 180ms) both;
 }
 
-/* ---------------- Stage 7: the rest of the console ---------------- */
+/* ---------------- Stage 6: the rest of the console ---------------- */
 
 /*
  * The events ticker and the bottom bar light the same way the status bar does, so all three read
@@ -9887,15 +9915,641 @@ body {
 }
 
 /*
- * A player who has asked their system for less motion never sees any of this:
- * `startBootSequence` returns before the class is ever added. This is the belt to that braces —
- * a shell that somehow carries the class under reduced motion opens live rather than dark.
+ * A player who has asked their system for less motion never sees any of this: both
+ * `startBootSequence` and `startPlannerArrival` return before their class is ever added. This is
+ * the belt to that braces — a shell that somehow carries one under reduced motion opens live
+ * rather than dark, and a planner that somehow ends up held is put back on stage rather than
+ * left off it.
  */
 @media (prefers-reduced-motion: reduce) {
   .omega-shell--booting,
   .omega-shell--booting *,
   .omega-shell--booting *::before,
-  .omega-shell--booting *::after {
+  .omega-shell--booting *::after,
+  .omega-shell--planner-arriving .game-panel--plan-column,
+  .omega-shell--planner-arriving .game-panel--plan-column *,
+  .omega-shell--planner-arriving .plan-column-footer {
+    animation: none !important;
+  }
+
+  .omega-shell--planner-held .omega-body--floating .game-panel--plan-column {
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ============================================================
+   Run briefing — the classified page a run opens on
+   ============================================================ */
+
+/*
+ * What the console hands the player the instant the viewscreen has finished coming on: the
+ * Omega Plan they are advancing, the Lair they are advancing it from, and what to do first.
+ * Built by `src/ui/runBriefing.ts`; put up by `main.ts` off the boot sequence's `onDone`, so it
+ * lands on the frame the shell goes live rather than at a time of its own.
+ *
+ * Every piece of it is console furniture that already exists somewhere else in this stylesheet,
+ * at briefing scale: the panel's chamfer and drop shadow are `.turn-report-panel`'s, the red
+ * corner brackets are `.game-panel`'s, each row's left-edge bracket pair and notched top-right
+ * corner are `.plan-section`'s, the `//` before a stamp is `.plan-section__title`'s, and the
+ * art-with-a-plate-over-it is the card heroes' (`.omega-plan-hero`, `.card-hero__meta`). Nothing
+ * here is a new visual idea; it is the same console saying something at length for once.
+ *
+ * A sibling of `.omega-shell` rather than a child of it, like the other dialogs — but unlike
+ * them it is authored at the shell's own fixed 1920x1080 and scaled by the same `--ui-scale`
+ * (see `.run-briefing-stage`). It is laid directly over the console and reads as a page put up
+ * *by* it, so it has to hold the same proportion against it at every window size; sized in
+ * window pixels it would swell to fill a small one and rattle around in a large one. That also
+ * means nothing below carries a breakpoint, exactly as inside the shell.
+ */
+.run-briefing-overlay {
+  position: absolute;
+  inset: 0;
+  /* Under the pause overlay (5) and the resolve (6): those are things the player asked for, and
+     a briefing is not allowed to sit on top of either. */
+  z-index: 4;
+  /* The house easing for anything that arrives, same curve as `--boot-ease`. */
+  --brief-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* The marginal column: the head's motto, each row's name plate, the footer's sign-off. One
+     width for all three, so the marks down the right edge line up as a rail. */
+  --brief-rail-w: 5.5rem;
+}
+
+.run-briefing-overlay[hidden] {
+  display: none !important;
+}
+
+/*
+ * The stage the page is centred on: the shell's own box, at the shell's own scale, so every
+ * length in this section is a stage pixel. Same construction as `.omega-shell` — including the
+ * portrait-phone rotation below, which the pause panel also carries.
+ */
+.run-briefing-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: var(--stage-w);
+  height: var(--stage-h);
+  transform: translate(-50%, -50%) scale(var(--ui-scale));
+  transform-origin: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  /* A positioning layer and nothing else: the stage covers the whole window once scaled, and a
+     click in its margin is a click *outside* the page — which is one of the ways the briefing is
+     dismissed. So it passes pointers through to the backdrop and the panel takes them back. */
+  pointer-events: none;
+}
+
+:root.stage-rotated .run-briefing-stage {
+  transform: translate(-50%, -50%) rotate(90deg) scale(var(--ui-scale));
+}
+
+.run-briefing-backdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 65% 55% at 50% 45%,
+    rgba(60, 4, 12, 0.62),
+    rgba(2, 0, 1, 0.9)
+  );
+  backdrop-filter: blur(5px);
+  animation: brief-veil 340ms ease-out both;
+}
+
+.run-briefing-panel {
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 62rem;
+  max-height: 94%;
+  padding: 1.2rem 1.5rem 1.35rem;
+  background:
+    radial-gradient(ellipse 85% 55% at 50% 0%, rgba(120, 12, 24, 0.2), transparent 72%),
+    var(--panel-bg-solid);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 0 70px rgba(232, 17, 45, 0.24), 0 20px 56px rgba(0, 0, 0, 0.72);
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
+  animation: brief-arrive 520ms var(--brief-ease) both;
+}
+
+/* The panel's own corner brackets, on the two square corners the chamfer leaves. */
+.run-briefing-panel::before,
+.run-briefing-panel::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.run-briefing-panel::before {
+  top: 0;
+  right: 0;
+  border-top: 2px solid var(--red);
+  border-right: 2px solid var(--red);
+}
+
+.run-briefing-panel::after {
+  bottom: 0;
+  left: 0;
+  border-bottom: 2px solid var(--red);
+  border-left: 2px solid var(--red);
+}
+
+/* ---------------- Head ---------------- */
+
+/*
+ * Two columns: everything that is read on the left, the marginal rail on the right. The kicker
+ * and the CLASSIFIED stamp share the first row so the rule between them runs the full width;
+ * the rail then spans the title and the lede beside it.
+ */
+.run-briefing-head {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--brief-rail-w);
+  align-items: start;
+  column-gap: 1.1rem;
+  row-gap: 0.5rem;
+}
+
+.run-briefing-kicker {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.run-briefing-kicker__text {
+  flex: 0 0 auto;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+  text-shadow: 0 0 10px var(--red-glow-soft);
+}
+
+/* Gives way before either end of the strip does, the same way `.plan-section__rule` does. */
+.run-briefing-kicker__rule {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--red), rgba(232, 17, 45, 0.25) 70%, transparent);
+}
+
+.run-briefing-stamp {
+  grid-column: 2;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.run-briefing-stamp__ticks {
+  color: var(--red);
+  letter-spacing: 0.1em;
+}
+
+.run-briefing-title {
+  grid-column: 1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.05rem;
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-0);
+  text-shadow: 0 0 22px var(--red-glow-soft);
+}
+
+/* "Welcome," and the mastermind's name are one heading on two lines, not two headings. */
+.run-briefing-title__line {
+  display: block;
+}
+
+.run-briefing-lede {
+  grid-column: 1;
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-1);
+}
+
+/*
+ * The rail: the console muttering to itself down the right margin. Wide tracking and a short
+ * measure, so it wraps to a stack of two or three words and reads as a stamp rather than as
+ * prose — which is the only reason it can sit beside a paragraph without competing with it.
+ */
+.run-briefing-rail {
+  grid-column: 2;
+  grid-row: 2 / span 2;
+  margin: 0;
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--line-0);
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  line-height: 2.1;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* The tick the console signs a marginal note off with. */
+.run-briefing-rail::after {
+  content: "—";
+  display: block;
+  color: var(--line-2);
+}
+
+/* ---------------- Rows ---------------- */
+
+.run-briefing-rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* The three rows are sized to fit the panel; this is only the safety valve for a window short
+     enough that they cannot be, the same one `.turn-report-body` carries. */
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/*
+ * One subject per row: what it is and what it means on the left, its picture on the right. The
+ * frame is `.plan-section`'s — notched top-right corner, red brackets down the left edge — so
+ * three of them stacked read as one rail of paperwork rather than as three floating cards.
+ */
+.run-briefing-row {
+  position: relative;
+  flex: 1 1 0;
+  /* Never squashed below the point where the art still reads as a photograph. */
+  min-height: 10.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  border: 1px solid var(--line-0);
+  background:
+    var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
+    linear-gradient(180deg, rgba(48, 14, 19, 0.4), transparent 45%),
+    rgba(12, 4, 6, 0.55);
+  animation: brief-row 460ms var(--brief-ease) calc(200ms + var(--brief-i, 0) * 110ms) both;
+}
+
+.run-briefing-row::before,
+.run-briefing-row::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+  z-index: 1;
+  border-left: 2px solid var(--red);
+}
+
+.run-briefing-row::before {
+  top: -1px;
+  border-top: 2px solid var(--red);
+}
+
+.run-briefing-row::after {
+  bottom: -1px;
+  border-bottom: 2px solid var(--red);
+}
+
+.run-briefing-row__text {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.7rem 0.9rem 0.65rem;
+}
+
+.run-briefing-row__label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  /* Leaves the file number its corner. */
+  padding-right: 2.4rem;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+  text-shadow: 0 0 10px var(--red-glow-soft);
+}
+
+.run-briefing-row__icon {
+  color: var(--red);
+}
+
+/* The row's number in the file, boxed in its corner — a document, not a bulleted list. */
+.run-briefing-row__num {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.55rem;
+  padding: 0.1rem 0.34rem;
+  border: 1px solid var(--line-1);
+  background: rgba(8, 3, 4, 0.7);
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-3);
+}
+
+.run-briefing-row__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-0);
+}
+
+.run-briefing-row__body {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-2);
+  /* A lair's blurb is a sentence and a plan's is a paragraph; the row is one height either way,
+     so the long one is cut rather than allowed to set the height of all three. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Pushed to the foot of the column, so all three stamps land level with each other. */
+.run-briefing-row__stamp {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: auto 0 0;
+  padding-top: 0.35rem;
+  min-width: 0;
+}
+
+.run-briefing-row__tag {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--line-1);
+  background: rgba(8, 3, 4, 0.6);
+  font-family: var(--font-display);
+  font-size: 0.52rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+}
+
+/* The console's mark for a stamped line, as on a plan section's title. */
+.run-briefing-row__tag::before {
+  content: "// ";
+  color: var(--red);
+}
+
+/* Short on purpose: a rule running the width of the column would read as a divider. */
+.run-briefing-row__rule {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 3.5rem;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line-2), transparent);
+}
+
+/*
+ * The art, full-bleed in its half of the row with the subject's name laid over it — the card
+ * heroes' arrangement (`.omega-plan-hero`, `.card-hero__meta`) at row scale. The scrim comes in
+ * from the right rather than the left here, because that is the side the plate sits on and the
+ * left edge of the picture has the row's own border to separate it from the text.
+ */
+.run-briefing-row__figure {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--line-0);
+  background: rgba(6, 2, 4, 0.9);
+}
+
+.run-briefing-row__figure > .run-briefing-row__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Card art is framed for a card: the subject sits above centre. */
+  object-position: center 38%;
+}
+
+.run-briefing-row__figure::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    270deg,
+    rgba(6, 2, 4, 0.96) 0%,
+    rgba(6, 2, 4, 0.9) 11%,
+    rgba(6, 2, 4, 0.4) 30%,
+    rgba(6, 2, 4, 0) 52%
+  );
+}
+
+.run-briefing-row__caption {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 1;
+  width: var(--brief-rail-w);
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  line-height: 1.9;
+  text-transform: uppercase;
+  color: var(--text-2);
+  text-shadow: 0 0 10px rgba(6, 2, 4, 0.9);
+}
+
+/* ---------------- Foot ---------------- */
+
+/*
+ * Three cells on one line: the file index, the way out, and the sign-off. The outer two are
+ * equal fractions so the button sits on the panel's centre line rather than on the centre of
+ * whatever is left over after them.
+ */
+.run-briefing-foot {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 1.2rem;
+  padding-top: 0.2rem;
+}
+
+.run-briefing-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  line-height: 1.9;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.run-briefing-legend__item:first-child::after {
+  content: " ///";
+  color: var(--red-deep);
+}
+
+.run-briefing-rail--foot {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  text-align: left;
+}
+
+/* The brackets the button cannot draw on itself — see the note in the markup. */
+.run-briefing-cta {
+  position: relative;
+  padding: 0.55rem 0.9rem;
+}
+
+.run-briefing-cta::before,
+.run-briefing-cta::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  border-color: var(--red);
+  border-style: solid;
+  border-width: 0;
+}
+
+.run-briefing-cta::before {
+  top: 0;
+  left: 0;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.run-briefing-cta::after {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+.btn-run-briefing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.6rem;
+  min-width: 17rem;
+  min-height: 54px;
+  font-size: 0.9rem;
+  letter-spacing: 0.26em;
+}
+
+.btn-run-briefing__chevron {
+  font-size: 1.25rem;
+  line-height: 1;
+  opacity: 0.8;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.btn-run-briefing:hover:not(:disabled) .btn-run-briefing__chevron {
+  transform: translateX(3px);
+  opacity: 1;
+}
+
+/* ---------------- Arrival ---------------- */
+
+@keyframes brief-veil {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes brief-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* The rows come in off the left edge, the way the planner does at the end of the boot. */
+@keyframes brief-row {
+  0% {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/*
+ * A player who has asked for less motion gets the page, not its arrival — the briefing itself
+ * is information and is shown either way (the boot sequence it follows is the part that is
+ * skipped for them, by `startBootSequence`).
+ */
+@media (prefers-reduced-motion: reduce) {
+  .run-briefing-backdrop,
+  .run-briefing-panel,
+  .run-briefing-row {
     animation: none !important;
   }
 }

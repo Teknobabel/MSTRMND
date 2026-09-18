@@ -671,6 +671,66 @@
           </div>
         </div>
 
+        <!-- Run briefing: the classified page a run opens on, put up over the world map the
+             moment the viewscreen has finished coming on. The shell only — the three numbered
+             rows are built by `initRunBriefing` (src/ui/runBriefing.ts) from the Omega Plan and
+             Lair the title screen picked, and cleared again when it is dismissed. -->
+        <div id="overlay-run-briefing" class="run-briefing-overlay" hidden aria-hidden="true">
+          <div id="run-briefing-backdrop" class="run-briefing-backdrop" aria-hidden="true"></div>
+          <!-- The page is authored at the shell's own 1920x1080 and scaled with it, so it keeps
+               its proportions against the console it is laid over at every window size. -->
+          <div class="run-briefing-stage">
+            <div
+              class="run-briefing-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="run-briefing-title"
+              aria-describedby="run-briefing-lede"
+            >
+              <header class="run-briefing-head">
+                <p class="run-briefing-kicker">
+                  <span class="run-briefing-kicker__text">Omega Intelligence Briefing</span>
+                  <span class="run-briefing-kicker__rule" aria-hidden="true"></span>
+                </p>
+                <p class="run-briefing-stamp">
+                  Classified
+                  <span class="run-briefing-stamp__ticks" aria-hidden="true">///</span>
+                </p>
+                <h2 id="run-briefing-title" class="run-briefing-title">
+                  <span class="run-briefing-title__line">Welcome,</span>
+                  <span id="run-briefing-name" class="run-briefing-title__line"></span>
+                </h2>
+                <p id="run-briefing-lede" class="run-briefing-lede"></p>
+                <p class="run-briefing-rail">A darker tomorrow is a brighter world.</p>
+              </header>
+              <div id="run-briefing-rows" class="run-briefing-rows"></div>
+              <footer class="run-briefing-foot">
+                <!-- Decorative: the drawers the directive above is pointing at, printed as a
+                     file index rather than as anything clickable. -->
+                <ul class="run-briefing-legend" aria-hidden="true">
+                  <li class="run-briefing-legend__item">Missions</li>
+                  <li class="run-briefing-legend__item">Assets</li>
+                  <li class="run-briefing-legend__item">Minions</li>
+                  <li class="run-briefing-legend__item">A darker tomorrow</li>
+                </ul>
+                <!-- The button's own clip-path would eat corner brackets drawn on it, so the
+                     frame around it is the wrapper's. -->
+                <div class="run-briefing-cta">
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-run-briefing"
+                    id="btn-run-briefing-enter"
+                  >
+                    <span class="btn-run-briefing__label">Enter Command</span>
+                    <span class="btn-run-briefing__chevron" aria-hidden="true">&rsaquo;</span>
+                  </button>
+                </div>
+                <p class="run-briefing-rail run-briefing-rail--foot">Power through patience.</p>
+              </footer>
+            </div>
+          </div>
+        </div>
+
         <div id="overlay-pause" class="pause-overlay" hidden aria-hidden="true">
           <div class="pause-backdrop" aria-hidden="true"></div>
           <div class="pause-panel" role="dialog" aria-modal="true" aria-labelledby="pause-heading">

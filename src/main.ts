@@ -116,7 +116,14 @@ import { wantedTierAtIndex } from "./game/wantedLevel";
 import { initNavigation, type NavigationApi } from "./navigation";
 import { createNoveltyLedger } from "./ui/novelty";
 import { observeWorldNovelty, siteNoveltySubject } from "./ui/worldNovelty";
-import { startBootSequence, type BootSequenceHandle } from "./ui/bootSequence";
+import {
+  clearPlannerHold,
+  startBootSequence,
+  startPlannerArrival,
+  type BootSequenceHandle,
+  type PlannerArrivalHandle,
+} from "./ui/bootSequence";
+import { initRunBriefing, type RunBriefingApi, type RunBriefingRow } from "./ui/runBriefing";
 import { initSettingsMenu } from "./ui/playerSettings";
 import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
 import {
@@ -186,7 +193,7 @@ import {
   type LocationBriefAssetRow,
 } from "./ui/locationBrief";
 import { buildMissionBrief, missionAssetCell, type MissionBriefAssetRow } from "./ui/missionBrief";
-import { briefPanel } from "./ui/cardBrief";
+import { briefPanel, ICON_TARGET } from "./ui/cardBrief";
 import { buildMinionBrief } from "./ui/minionBrief";
 import { initGlobalTooltips, setTooltip, tooltipText } from "./ui/tooltip";
 import {
@@ -1455,12 +1462,23 @@ function formatAssignMissionError(err: GameError): string {
 type GameControllerApi = {
   /** Throw away the current run and roll a fresh one from the title screen's picks. */
   startRun: () => void;
+  /**
+   * Put up the opening briefing for the run currently loaded — the plan, the lair, and the
+   * first directive. Called off the boot sequence finishing (`navigation.gameScreenOpened`)
+   * rather than from `startRun`, because the page is meant to land on the console once it is
+   * lit rather than behind the whole sequence.
+   */
+  openRunBriefing: () => void;
 };
 
 function initGameController(
   content: ReturnType<typeof loadContent>,
   nav: NavigationApi,
   runSetup: RunSetupApi,
+  /* Wired at module scope rather than here, because what happens when it is dismissed — the
+   * planner arriving — is choreography on the shell and belongs beside the boot that armed it.
+   * The controller only knows how to fill the page in. */
+  runBriefing: RunBriefingApi,
 ): GameControllerApi {
   let state: GameState = createInitialGameState(content, undefined, runSetup.read());
 
@@ -5175,6 +5193,80 @@ function initGameController(
   ] as const;
 
   const OMEGA_PHASE_NUMERALS = ["I", "II", "III"] as const;
+
+  /* ---------------------------------------------------------------------------------------
+   * The opening briefing.
+   *
+   * Built here rather than in `ui/runBriefing.ts` because everything it says is a lookup this
+   * file already has in hand — the plan, the lair, the map behind the plan, and the phase copy
+   * directly above. The module is handed finished strings and art URLs and knows nothing about
+   * `GameState`, the same split `ui/locationBrief.ts` and `ui/missionBrief.ts` keep.
+   *
+   * The third row is not a subject the way the other two are: it is what to do about them. It
+   * gets the map's own art because the map is what the player is being pointed at — review the
+   * sites, stage a mission — and a directive with no picture beside two rows that have one
+   * would read as a footnote rather than as the line that matters most.
+   * ------------------------------------------------------------------------------------- */
+
+  /** The lair tab's own mark, so the row is labelled with the icon the drawer wears. */
+  const ICON_LAIR = '<path d="M4 21V9l8-6 8 6v12"/><path d="M10 21v-6h4v6"/>';
+
+  const BRIEFING_DIRECTIVE_TITLE = "Conduct your first operation";
+  const BRIEFING_DIRECTIVE_BODY =
+    "Review your options, stage a mission, and take the first step toward global domination.";
+
+  function briefingRows(): RunBriefingRow[] {
+    const rows: RunBriefingRow[] = [];
+    const plan =
+      state.activeOmegaPlanId !== null
+        ? getOmegaPlanById(content, state.activeOmegaPlanId)
+        : undefined;
+    const lair = state.activeLairId !== null ? getLairById(content, state.activeLairId) : undefined;
+
+    if (plan !== undefined) {
+      /* The run's own phase rather than a hard-coded first: a briefing is only ever shown at the
+       * top of a run today, but nothing here needs to be rewritten if that ever changes. */
+      const stageIndex = Math.min(OMEGA_STAGE_COUNT - 1, Math.max(0, state.activeOmegaStageIndex));
+      rows.push({
+        label: "Omega Plan",
+        icon: { kind: "text", text: "Ω" },
+        title: `Phase ${OMEGA_PHASE_NUMERALS[stageIndex]!} — ${plan.name}`,
+        body: OMEGA_PHASES[stageIndex]!.blurb,
+        tag: "Global Impact",
+        artSrc: resolveOmegaPlanCardArt(plan),
+        artCaption: plan.name,
+      });
+    }
+
+    if (lair !== undefined) {
+      rows.push({
+        label: "Your Operation",
+        icon: { kind: "paths", paths: ICON_LAIR },
+        title: lair.name,
+        body:
+          lair.description ??
+          "Your organization gathers strength here and prepares its first strike.",
+        tag: "Operational Base",
+        artSrc: resolveLairCardArt(lair),
+        artCaption: lair.name,
+      });
+    }
+
+    const map = plan !== undefined ? getMapById(content, plan.mapId) : undefined;
+    rows.push({
+      label: "Immediate Directive",
+      icon: { kind: "paths", paths: ICON_TARGET },
+      title: BRIEFING_DIRECTIVE_TITLE,
+      body: BRIEFING_DIRECTIVE_BODY,
+      tag: "Priority: Absolute",
+      /* The plan's art stands in for a map with none of its own, rather than the generic
+       * placeholder — it is at least the right run. */
+      artSrc: map?.mapArt ?? resolveOmegaPlanCardArt(plan),
+      artCaption: map?.name ?? "Plans become reality.",
+    });
+
+    return rows;
+  }
 
   function buildOmegaPlanPanel(): void {
     /* Carried across the rebuild so picking a phase tile, or any refresh, does not jump the
@@ -9065,11 +9157,17 @@ function initGameController(
       closeActivityLogModal();
       return;
     }
+    if (runBriefing.isOpen) {
+      e.stopPropagation();
+      runBriefing.close();
+      return;
+    }
     /* Escape sends an open drawer back down, unless a dialog is up over it. Focus goes to its
      * tab: wherever it was inside the menu is about to go inert. */
     const dialogOpen =
-      document.querySelector(".turn-report-overlay:not([hidden]), .pause-overlay:not([hidden])") !==
-      null;
+      document.querySelector(
+        ".turn-report-overlay:not([hidden]), .pause-overlay:not([hidden]), .run-briefing-overlay:not([hidden])",
+      ) !== null;
     const drawer = menuDrawers.find((d) => d.id === openDrawer);
     if (drawer !== undefined && !dialogOpen) {
       drawer.tabEl.focus();
@@ -10172,7 +10270,16 @@ function initGameController(
   buildMapLayersPanel();
   refresh();
 
-  return { startRun };
+  return {
+    startRun,
+    openRunBriefing(): void {
+      runBriefing.open({
+        playerName: state.playerName,
+        lede: `${state.organizationName} is online. Your objective is simple: advance the Omega Plan and eliminate anything standing in its way.`,
+        rows: briefingRows(),
+      });
+    },
+  };
 }
 
 const runSetup = initRunSetup(catalog);
@@ -10180,14 +10287,61 @@ const playerSettings = initSettingsMenu(
   typeof localStorage === "undefined" ? null : localStorage,
 );
 
-/* The shell the boot sequence plays on. Static markup, so it is found once rather than per run. */
+/* The shell the run's opening plays on. Static markup, so it is found once rather than per run. */
 const omegaShell = document.querySelector<HTMLElement>(".omega-shell");
 /** The boot playing right now, if one is — held so leaving the screen can cut it short. */
 let bootSequence: BootSequenceHandle | null = null;
+/** The planner sliding in, once the briefing has handed over to it. Held for the same reason. */
+let plannerArrival: PlannerArrivalHandle | null = null;
+
+/**
+ * Drop whatever the run's opening is still holding, animating nothing.
+ *
+ * The `clearPlannerHold` is not redundant with the two handles above. `startBootSequence` arms
+ * the planner's arrival and hands the shell over to the briefing, and its own `onDone` drops the
+ * boot handle at that point — a whole page-read before the arrival plays. So a run abandoned
+ * while the briefing is up has no handle left to ask, and a hold left behind would be inherited
+ * by the next run, including one that opens with the boot skipped and never plays a second act
+ * at all: a planner parked off-stage for good.
+ */
+function settleRunOpening(): void {
+  bootSequence?.finish();
+  bootSequence = null;
+  plannerArrival?.finish();
+  plannerArrival = null;
+  if (omegaShell !== null) {
+    clearPlannerHold(omegaShell);
+  }
+}
+
+/*
+ * The briefing is the seam between the opening's two acts: the console comes up behind it, and
+ * the mission planner slides in once it has been read. Dismissing it is therefore the cue for
+ * the second act, whichever way the player dismissed it — so the hand-over is wired here, once,
+ * rather than at each of the three places that can take the page down.
+ *
+ * `startPlannerArrival` plays nothing unless a boot actually armed it, so a run that opened on a
+ * live console (the skip setting, reduced motion) gets no slide-in from this and needs no check
+ * here for it.
+ */
+const runBriefing: RunBriefingApi = initRunBriefing(() => {
+  if (omegaShell === null) {
+    return;
+  }
+  plannerArrival?.finish();
+  plannerArrival = startPlannerArrival(omegaShell, {
+    onDone: () => {
+      plannerArrival = null;
+    },
+  });
+});
 
 /* The controller needs `nav` and `nav` needs the controller's `startRun`, so Play routes
- * through this ref, filled in as soon as the controller exists. */
+ * through this ref, filled in as soon as the controller exists. The opening briefing routes
+ * through the same seam: the run it describes is the controller's, the moment it is shown is
+ * this file's. */
 let startRunFromMenu: () => void = () => {};
+let openRunBriefing: () => void = () => {};
 const navigation = initNavigation({
   setGameLoopRunning(running: boolean): void {
     if (running) {
@@ -10200,28 +10354,39 @@ const navigation = initNavigation({
     startRunFromMenu();
   },
   gameScreenOpened(): void {
-    /* A boot left over from a run that was quit mid-sequence would still be holding the shell
-     * dark; end it before arming another. */
-    bootSequence?.finish();
-    bootSequence = null;
+    /* An opening left over from a run that was quit part-way through would still be holding the
+     * shell dark, or its planner off-stage; settle all of it before arming another. And a
+     * briefing the last run never had dismissed is about a run that no longer exists. */
+    settleRunOpening();
+    runBriefing.close();
     /* Read at the point of use rather than cached, so the toggle takes effect on the very next
      * run rather than on the next page load. */
     if (omegaShell === null || playerSettings.read().skipBootSequence) {
+      /*
+       * The setting is "Skip boot up animation", not "skip the briefing": the page states which
+       * plan and lair the run rolled, which is the one thing about a fresh run that is not
+       * discoverable from the console itself. So it is shown either way — immediately here,
+       * and off `onDone` below when there is a sequence for it to follow.
+       */
+      openRunBriefing();
       return;
     }
     bootSequence = startBootSequence(omegaShell, {
       onDone: () => {
         bootSequence = null;
+        openRunBriefing();
       },
     });
   },
   gameScreenClosed(): void {
-    bootSequence?.finish();
-    bootSequence = null;
+    settleRunOpening();
+    runBriefing.close();
   },
 });
 
-startRunFromMenu = initGameController(catalog, navigation, runSetup).startRun;
+const gameController = initGameController(catalog, navigation, runSetup, runBriefing);
+startRunFromMenu = gameController.startRun;
+openRunBriefing = gameController.openRunBriefing;
 
 initStageScale();
 initGlobalTooltips();
