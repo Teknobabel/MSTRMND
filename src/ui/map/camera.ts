@@ -1,5 +1,6 @@
 import {
   clipScale,
+  clipShiftY,
   multiply,
   perspective,
   rotationX,
@@ -83,6 +84,29 @@ const FOCUS_PITCH_RADIANS = 0.03;
  */
 const POINTER_YAW_RADIANS = 0.024;
 const POINTER_PITCH_RADIANS = 0.015;
+
+/**
+ * How much of the empty band above the map to close up, as a fraction of it.
+ *
+ * The fit below is uniform and lands on whichever corner projects furthest out, which at this
+ * tilt is a *bottom* one: pitching the slab away shrinks the far edge, so the bottom corners hit
+ * the left and right edges of the panel while the top edge stops short of the top. That leaves
+ * about 5% of the panel's height empty along the top and only 0.7% along the bottom — the map
+ * sitting low in its frame with a dead band over it, on every aspect ratio, because the slab's
+ * half-width is `aspect` and the projection divides by `aspect`, so the two cancel and the
+ * framing is the same shape at every window size.
+ *
+ * This slides the fitted result back up. It cannot be done by fitting harder: the binding
+ * constraint is horizontal, so scaling up to reach the top would push the bottom corners out
+ * through the sides — and the fit exists precisely so that no site can be pushed off the panel.
+ * A shift moves every site by the same amount and pushes none of them anywhere.
+ *
+ * `1` puts the far edge flush against the top of the panel. The slack it takes comes out at the
+ * bottom, where the drawer cabinet's tabs already sit over the map, which is why this is worth
+ * spending there rather than leaving it split. Clamped against what the fit actually left, so
+ * this can never lift the map's far edge off the top of its own panel.
+ */
+const FRAMING_LIFT = 1;
 
 const NEAR = 0.1;
 const FAR = 20;
@@ -223,10 +247,16 @@ function unfittedCamera(
  * because `clipScale` leaves w alone — so the depths measured here are still the depths after
  * the fit is applied.
  */
-function landExtent(landCamera: Mat4): { readonly scale: number; readonly depth: MapDepthRange } {
+function landExtent(landCamera: Mat4): {
+  readonly scale: number;
+  readonly depth: MapDepthRange;
+  /** The highest corner in NDC *before* the fit, for {@link FRAMING_LIFT} to measure against. */
+  readonly topNdc: number;
+} {
   let extent = 0;
   let near = Infinity;
   let far = 0;
+  let topNdc = -Infinity;
   for (const [u, v] of [
     [0, 0],
     [1, 0],
@@ -238,13 +268,35 @@ function landExtent(landCamera: Mat4): { readonly scale: number; readonly depth:
       /* A corner behind the camera means the tilt has been pushed somewhere this fit cannot
        * describe. Leave the framing alone rather than invent a scale from a divide by zero,
        * and report a depth range the haze reads as flat. */
-      return { scale: 1, depth: { near: 1, far: 1 } };
+      return { scale: 1, depth: { near: 1, far: 1 }, topNdc: 1 };
     }
     extent = Math.max(extent, Math.abs(x / w), Math.abs(y / w));
+    topNdc = Math.max(topNdc, y / w);
     near = Math.min(near, w);
     far = Math.max(far, w);
   }
-  return { scale: extent > 0 ? 1 / extent : 1, depth: { near, far } };
+  return { scale: extent > 0 ? 1 / extent : 1, depth: { near, far }, topNdc };
+}
+
+/**
+ * How far the fitted slab can be slid up before its far edge leaves the top of the panel.
+ *
+ * Split out and exported for the tests, because it is the one number that says whether the
+ * framing is honest: a lift larger than this would be the map hanging off the top of its own
+ * frame, which is the failure the fit exists to prevent.
+ */
+export function framingLift(topNdc: number, scale: number, lift: number): number {
+  /* A fit that came back degenerate has not measured anything, and `1 - topNdc * 0` is a full
+   * half-panel of "slack" that is really an absence of information. Reframing on that would
+   * throw the map off the top of its own frame — so an unmeasured fit reframes by nothing. */
+  if (!Number.isFinite(topNdc) || !Number.isFinite(scale) || scale <= 0) {
+    return 0;
+  }
+  const slack = 1 - topNdc * scale;
+  if (!Number.isFinite(slack) || slack <= 0) {
+    return 0;
+  }
+  return Math.min(Math.max(lift, 0), 1) * slack;
 }
 
 /**
@@ -274,8 +326,11 @@ export function mapCameraFrame(options: MapCameraOptions): MapCameraFrame {
   const pitch = tilt * TILT_RADIANS + driftPitch + focusPitch + pointerPitch;
 
   const land = unfittedCamera(aspect, pitch, yaw, 0);
-  const { scale: fit, depth } = landExtent(land);
-  const scale = clipScale(fit);
+  const { scale: fit, depth, topNdc } = landExtent(land);
+  /* Fit first, then reframe: the lift is measured against what the fit left over, so the two
+   * cannot disagree about where the top of the panel is. One matrix for both, so every plane
+   * below is reframed identically and the markers — projected through `land` — come with it. */
+  const scale = multiply(clipShiftY(framingLift(topNdc, fit, FRAMING_LIFT)), clipScale(fit));
   /* Both floating layers are scaled by the land's tilt, so `tilt: 0` collapses the whole stack
    * onto one plane and the flat case stays the zero case for all three. */
   return {

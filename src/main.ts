@@ -123,6 +123,11 @@ import {
   type BootSequenceHandle,
   type PlannerArrivalHandle,
 } from "./ui/bootSequence";
+import {
+  initMapParallax,
+  type MapParallaxApi,
+  type MapParallaxOffset,
+} from "./ui/mapParallax";
 import { initRunBriefing, type RunBriefingApi, type RunBriefingRow } from "./ui/runBriefing";
 import { initSettingsMenu } from "./ui/playerSettings";
 import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
@@ -1542,6 +1547,15 @@ function initGameController(
   const lairPanelEl = req<HTMLElement>("lair-panel");
   const assetsPanelEl = req<HTMLElement>("assets-panel");
   const mapPanelEl = req<HTMLElement>("map-panel");
+  /**
+   * The framed panel around the map, as distinct from `#map-panel`, the content area inside it.
+   *
+   * The frame is the part that does *not* move: `ui/mapParallax.ts` slides the content area away
+   * from the pointer and `.map-panel--receded` steps it back when a drawer opens, and neither
+   * touches this. Anything that reads as fixed console furniture rather than as part of the
+   * picture belongs here — see `buildMapTelemetry`.
+   */
+  const mapFrameEl = mapPanelEl.closest<HTMLElement>(".game-panel--map") ?? mapPanelEl;
   const mapLayersPanelEl = req<HTMLElement>("map-layers-panel");
   /**
    * The map inspector's panes, in pane order (not slot order — a pane's slot moves). Each is a
@@ -6678,6 +6692,17 @@ function initGameController(
    * without changing the layout box the observer watches.
    */
   let mapPlotRect: DOMRect | null = null;
+  /**
+   * Where the map parallax had the panel when {@link mapPlotRect} was taken.
+   *
+   * The panel slides under `ui/mapParallax.ts` without anything relaying out, so a rect cached
+   * before a slide is stale by exactly the distance travelled since. Every other pointer answer
+   * in the app is the browser's own hit-testing against live geometry and needs no help; this one
+   * is arithmetic on a saved rect, so it gets told. Recording the offset at capture and
+   * subtracting the difference at use is exact and costs no second layout read — which is the
+   * whole reason the rect is cached in the first place.
+   */
+  let mapPlotRectAt: MapParallaxOffset = { x: 0, y: 0 };
 
   /** The uniform scale `ui/stageScale` puts on the shell, as a number. */
   function stageScaleFactor(): number {
@@ -6730,6 +6755,7 @@ function initGameController(
   /** Cache the plot's on-screen rect for the pointer maths; see `mapPlotRect`. */
   function refreshMapPlotRect(): void {
     mapPlotRect = mapPlotEl?.getBoundingClientRect() ?? null;
+    mapPlotRectAt = mapParallax?.offset() ?? { x: 0, y: 0 };
   }
 
   /**
@@ -6986,10 +7012,15 @@ function initGameController(
     if (!finePointer.matches || reducedMotion.matches || mapPlotRect === null) {
       return;
     }
-    const { left, top, width, height } = mapPlotRect;
+    const { width, height } = mapPlotRect;
     if (width === 0 || height === 0) {
       return;
     }
+    /* How far the panel has slid since the rect was cached; see `mapPlotRectAt`. The offset is a
+     * fraction of the panel, and the plot fills it, so the rect's own size converts it. */
+    const slid = mapParallax?.offset() ?? { x: 0, y: 0 };
+    const left = mapPlotRect.left + (slid.x - mapPlotRectAt.x) * width;
+    const top = mapPlotRect.top + (slid.y - mapPlotRectAt.y) * height;
     /* A ratio of the on-screen rect, so the stage scale cancels out and this needs no knowledge
      * of `--ui-scale`. Clamped because a pin near the edge can overhang the plot slightly. */
     const u = Math.min(Math.max((event.clientX - left) / width, 0), 1);
@@ -7362,13 +7393,21 @@ function initGameController(
   }
 
   /**
-   * The console furniture in the plot's corners.
+   * The console furniture in the map panel's corners: the uplink readout at the top left and the
+   * console clock at the bottom left.
    *
    * Says nothing about the run on purpose. Everything here is either constant or a clock, so
    * there is no chance of a player reading a state out of it that the rules do not back — and
    * the corners it sits in are the two the authored markers leave empty.
+   *
+   * Hung off the **frame** (`mapFrameEl`) rather than the plot, and built **once** rather than
+   * per render. It is a readout of the console, not a feature of the map: it should no more
+   * slide with the pointer parallax or step back with an opening drawer than the panel's own
+   * border does. Being built once also means the clock element outlives every `renderMapPanel`,
+   * so the frame loop is writing to the same node all run rather than to whichever one the last
+   * rebuild happened to leave behind.
    */
-  function buildMapTelemetry(plot: HTMLElement): void {
+  function buildMapTelemetry(frame: HTMLElement): void {
     const head = document.createElement("div");
     head.className = "map-telemetry map-telemetry--head";
     head.setAttribute("aria-hidden", "true");
@@ -7378,7 +7417,7 @@ function initGameController(
     const label = document.createElement("span");
     label.textContent = "ORBITAL UPLINK · NOMINAL";
     head.appendChild(label);
-    plot.appendChild(head);
+    frame.appendChild(head);
 
     const foot = document.createElement("div");
     foot.className = "map-telemetry map-telemetry--foot";
@@ -7390,7 +7429,7 @@ function initGameController(
     const bar = document.createElement("span");
     bar.className = "map-telemetry__bar";
     foot.appendChild(bar);
-    plot.appendChild(foot);
+    frame.appendChild(foot);
 
     mapClockEl = clock;
     mapClockShown = "";
@@ -7442,8 +7481,8 @@ function initGameController(
     mapReticleEl = null;
     mapReticleReadoutEl = null;
     mapReticleMarker = null;
-    mapClockEl = null;
-    mapClockShown = "";
+    /* The telemetry is not in here to be torn down — it hangs off the frame and is built once
+     * (see `buildMapTelemetry`), so `mapClockEl` stays pointed at a live node across renders. */
     mapPlotEl = null;
     mapLeaderLineEls = [];
     mapMarkersBySubject = new Map();
@@ -7522,7 +7561,6 @@ function initGameController(
     plot.appendChild(leader);
 
     buildMapReticle(plot);
-    buildMapTelemetry(plot);
 
     const playable = new Set(runLocations().map((l) => l.id));
     const mainOnly = state.phase === "main";
@@ -10268,6 +10306,7 @@ function initGameController(
   setDragTokenFaces(dragTokenFace);
   renderAssignPickSlots();
   buildMapLayersPanel();
+  buildMapTelemetry(mapFrameEl);
   refresh();
 
   return {
@@ -10289,6 +10328,12 @@ const playerSettings = initSettingsMenu(
 
 /* The shell the run's opening plays on. Static markup, so it is found once rather than per run. */
 const omegaShell = document.querySelector<HTMLElement>(".omega-shell");
+/**
+ * The world map sliding away from the pointer. Declared up here rather than beside its
+ * `initMapParallax` at the foot of the file because the map's own pointer maths reads its offset,
+ * and that is written long before this runs.
+ */
+let mapParallax: MapParallaxApi | null = null;
 /** The boot playing right now, if one is — held so leaving the screen can cut it short. */
 let bootSequence: BootSequenceHandle | null = null;
 /** The planner sliding in, once the briefing has handed over to it. Held for the same reason. */
@@ -10354,6 +10399,9 @@ const navigation = initNavigation({
     startRunFromMenu();
   },
   gameScreenOpened(): void {
+    /* The map panel has no box to measure while the game screen is `hidden`, so the parallax's
+     * idea of where it sits is taken now that it is laid out. */
+    mapParallax?.remeasure();
     /* An opening left over from a run that was quit part-way through would still be holding the
      * shell dark, or its planner off-stage; settle all of it before arming another. And a
      * briefing the last run never had dismissed is about a run that no longer exists. */
@@ -10389,6 +10437,25 @@ startRunFromMenu = gameController.startRun;
 openRunBriefing = gameController.openRunBriefing;
 
 initStageScale();
+/*
+ * The world map sliding away from the pointer — see `ui/mapParallax.ts` for why only the map
+ * moves and how it pays for the travel. After `initStageScale`, which is what sizes the stage the
+ * panel is measured inside, and outside the run lifecycle entirely: it is a property of the
+ * panel rather than of a run, and a panel with no run on it simply has no pointer over it.
+ */
+{
+  const mapPanelForParallax = document.getElementById("map-panel");
+  if (mapPanelForParallax !== null) {
+    mapParallax = initMapParallax({
+      panel: mapPanelForParallax,
+      enabled: () => playerSettings.read().mapParallax,
+      /* The boot sequence is choreography that has already decided where the map is — it opens
+       * the panel from a line and runs a scanner across it — so the map holds still until the
+       * console is live. */
+      suppressed: () => omegaShell?.classList.contains("omega-shell--booting") === true,
+    });
+  }
+}
 initGlobalTooltips();
 initDragFocus();
 initDropHints();

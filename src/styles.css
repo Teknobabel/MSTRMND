@@ -6192,11 +6192,31 @@ body {
    Global map
    ============================================================ */
 
+/*
+ * The map's content area, and the one thing the pointer parallax moves (`ui/mapParallax.ts`).
+ *
+ * The frame around it — `.game-panel--map`, its border and its corner brackets — stays nailed
+ * down, for the reason `.map-panel--receded` gives below: the frame is what the rest of the
+ * dashboard is docked against. This is one level in from that, so the whole picture slides
+ * inside a frame that does not.
+ *
+ * `scale` before `translate` so the translate is read in this element's own box (a percentage of
+ * the panel, which is how the module thinks in every unit), and the overscan then covers the
+ * slide — see `mapParallaxOverscan`. The existing `overflow: hidden` is what makes the overhang
+ * free: everything that filled the panel still fills it, the dimming veil included. No
+ * `transition`, deliberately — the easing is the module's, on a frame loop, and a CSS transition
+ * on top of it would turn every pointer move into a half-second of catching up.
+ */
 .map-panel {
+  --map-parallax-x: 0%;
+  --map-parallax-y: 0%;
+  --map-parallax-scale: 1;
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  transform: scale(var(--map-parallax-scale))
+    translate(var(--map-parallax-x), var(--map-parallax-y));
 }
 
 /* Stretch the art to the panel so markers as % of the plot stay glued to the painted land. */
@@ -7020,6 +7040,15 @@ body {
  *
  * The two corners chosen are the ones the authored markers leave empty — top right is open ocean
  * north of Siberia, bottom left is the South Pacific — so this never covers a pin.
+ */
+/*
+ * The uplink readout and the console clock in the map panel's corners.
+ *
+ * Positioned against the **frame** (`.game-panel--map`), not the content area inside it: they are
+ * built onto it by `buildMapTelemetry` precisely so the pointer parallax and the drawer recede —
+ * both of which move `#map-panel` — leave them alone. A readout of the console should sit as
+ * still as the panel's own border. The `z-index` outranks the veil the recede lays over the map
+ * (`.map-panel::after`, z-index 2), which is why they never dimmed with it even before the move.
  */
 .map-telemetry {
   position: absolute;

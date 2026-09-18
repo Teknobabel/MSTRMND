@@ -37,12 +37,19 @@ describe("player settings defaults", () => {
     // The boot is the first thing a new player sees; skipping it is something you opt into.
     expect(PLAYER_SETTINGS_DEFAULTS.skipBootSequence).toBe(false);
   });
+
+  it("slides the map away from the pointer unless asked not to", () => {
+    // The parallax is a reach aid before it is an effect (see `ui/mapParallax.ts`), so it is opt
+    // *out*: a player who never opens this screen should still be getting the shorter travel.
+    expect(PLAYER_SETTINGS_DEFAULTS.mapParallax).toBe(true);
+  });
 });
 
 describe("normalizePlayerSettings", () => {
   it("takes a well-formed payload as written", () => {
-    expect(normalizePlayerSettings({ skipBootSequence: true })).toStrictEqual({
+    expect(normalizePlayerSettings({ skipBootSequence: true, mapParallax: false })).toStrictEqual({
       skipBootSequence: true,
+      mapParallax: false,
     });
   });
 
@@ -52,6 +59,19 @@ describe("normalizePlayerSettings", () => {
     expect(normalizePlayerSettings({ skipBootSequence: "yes" })).toStrictEqual(
       PLAYER_SETTINGS_DEFAULTS,
     );
+    expect(normalizePlayerSettings({ skipBootSequence: true, mapParallax: "off" })).toStrictEqual({
+      skipBootSequence: true,
+      mapParallax: PLAYER_SETTINGS_DEFAULTS.mapParallax,
+    });
+  });
+
+  it("reads a payload parked before a setting existed as that setting's default", () => {
+    // What every player who has opened an earlier build already has in storage: the older shape,
+    // with no parallax key in it at all.
+    expect(normalizePlayerSettings({ skipBootSequence: true })).toStrictEqual({
+      skipBootSequence: true,
+      mapParallax: PLAYER_SETTINGS_DEFAULTS.mapParallax,
+    });
   });
 
   it("reads anything that is not an object as no settings at all", () => {
@@ -64,8 +84,11 @@ describe("normalizePlayerSettings", () => {
 describe("player settings storage", () => {
   it("round-trips a change", () => {
     const storage = fakeStorage();
-    savePlayerSettings(storage, { skipBootSequence: true });
-    expect(loadPlayerSettings(storage)).toStrictEqual({ skipBootSequence: true });
+    savePlayerSettings(storage, { skipBootSequence: true, mapParallax: false });
+    expect(loadPlayerSettings(storage)).toStrictEqual({
+      skipBootSequence: true,
+      mapParallax: false,
+    });
   });
 
   it("opens on the defaults when nothing has been parked", () => {
@@ -80,11 +103,15 @@ describe("player settings storage", () => {
   it("survives a browser that throws on storage access", () => {
     // Private mode in some browsers. A preference is not worth failing to open the game over.
     expect(loadPlayerSettings(throwingStorage())).toStrictEqual(PLAYER_SETTINGS_DEFAULTS);
-    expect(() => savePlayerSettings(throwingStorage(), { skipBootSequence: true })).not.toThrow();
+    expect(() =>
+      savePlayerSettings(throwingStorage(), { skipBootSequence: true, mapParallax: true }),
+    ).not.toThrow();
   });
 
   it("does nothing at all without storage", () => {
     expect(loadPlayerSettings(null)).toStrictEqual(PLAYER_SETTINGS_DEFAULTS);
-    expect(() => savePlayerSettings(null, { skipBootSequence: true })).not.toThrow();
+    expect(() =>
+      savePlayerSettings(null, { skipBootSequence: true, mapParallax: true }),
+    ).not.toThrow();
   });
 });

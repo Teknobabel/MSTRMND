@@ -105,6 +105,27 @@ export function clipScale(scale: number): Mat4 {
   ]);
 }
 
+/**
+ * A shift of clip-space y, in NDC units, leaving x, z and w alone.
+ *
+ * The `w` column rather than a plain translation, because clip space is divided by `w` on the
+ * way to the screen: putting `dy` there adds `dy * w` before the divide, which comes out as
+ * exactly `dy` of NDC however far from the camera the vertex is. A translation in the `y` column
+ * would instead move near geometry further than far geometry and shear the tilt.
+ *
+ * Multiplied on the *left* of a finished camera, like {@link clipScale}, so it reframes what the
+ * camera already produced rather than moving the camera itself.
+ */
+export function clipShiftY(dy: number): Mat4 {
+  // prettier-ignore
+  return new Float32Array([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, dy, 0, 1,
+  ]);
+}
+
 /** `m * (x, y, z, w)`, column-major. */
 export function transformVec4(
   m: Mat4,

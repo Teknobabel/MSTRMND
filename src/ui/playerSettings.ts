@@ -17,10 +17,19 @@ export interface PlayerSettings {
    * sequence short, which is the out for the runs in between.
    */
   readonly skipBootSequence: boolean;
+  /**
+   * Slide the world map away from the pointer, so the far side of it comes to meet the cursor.
+   *
+   * On by default: it is a reach aid before it is an effect — see `ui/mapParallax.ts` — and a
+   * player who never finds the toggle is better off with it. The toggle is for the two people it
+   * will bother, which on an effect keyed to pointer movement is two people worth having one for.
+   */
+  readonly mapParallax: boolean;
 }
 
 export const PLAYER_SETTINGS_DEFAULTS: PlayerSettings = {
   skipBootSequence: false,
+  mapParallax: true,
 };
 
 /** Where the settings are parked between sessions. Versioned: the list will grow. */
@@ -47,6 +56,10 @@ export function normalizePlayerSettings(raw: unknown): PlayerSettings {
       typeof row.skipBootSequence === "boolean"
         ? row.skipBootSequence
         : PLAYER_SETTINGS_DEFAULTS.skipBootSequence,
+    mapParallax:
+      typeof row.mapParallax === "boolean"
+        ? row.mapParallax
+        : PLAYER_SETTINGS_DEFAULTS.mapParallax,
   };
 }
 
@@ -90,6 +103,7 @@ export interface SettingsMenuApi {
 /** The controls on the Settings screen, by the setting each one writes. */
 const SETTINGS_CONTROL_IDS: Readonly<Record<keyof PlayerSettings, string>> = {
   skipBootSequence: "setting-skip-boot",
+  mapParallax: "setting-map-parallax",
 };
 
 /**

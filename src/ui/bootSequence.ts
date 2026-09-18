@@ -517,9 +517,9 @@ export function startBootSequence(
         /*
          * The panel's own children only, deliberately not the subtree. A rebuild replaces the
          * whole `.map-plot`, so it shows up here; watching the subtree instead would also catch
-         * the map's console clock rewriting its own text once a second, and re-time pins that
-         * were part-way through lighting — which would drop each of them back to the head of its
-         * animation and pop the whole map a second time.
+         * the reticle rewriting its coordinate readout as the pointer crosses the map, and
+         * re-time pins that were part-way through lighting — which would drop each of them back
+         * to the head of its animation and pop the whole map a second time.
          */
         observer.observe(mapPanel, { childList: true });
       }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import mapsJson from "../../../content/maps.json";
-import { easeMapLean, mapCameraFrame } from "./camera";
+import { easeMapLean, framingLift, mapCameraFrame } from "./camera";
 import { transformVec4 } from "./mat4";
 import { flatMapMatrix, projectMatrix, type Mat4 } from "./projection";
 
@@ -88,6 +88,29 @@ describe("mapCameraFrame under tilt and drift", () => {
       const extent = Math.max(...corners.map((c) => Math.max(Math.abs(c.x), Math.abs(c.y))));
       // The fit is exact by construction: the outermost corner sits on the edge.
       expect(extent).toBeCloseTo(1, 5);
+    }
+  });
+
+  it("closes up the empty band the tilt leaves above the map", () => {
+    // The fit is uniform and lands on whichever corner projects furthest out, which at this tilt
+    // is a bottom one — so without reframing the far edge stops ~5% of the panel's height short
+    // of the top and the map sits low in its frame. The lift spends that slack at the bottom,
+    // where the drawer cabinet's tabs already sit over the map.
+    for (const timeSeconds of SAMPLES) {
+      const { land } = mapCameraFrame({ aspect: ASPECT, timeSeconds, tilt: 1, drift: 1 });
+      const top = Math.max(ndc(land, 0, 0).y, ndc(land, 1, 0).y);
+      expect(top).toBeCloseTo(1, 5);
+    }
+  });
+
+  it("never lifts the far edge off the top of its own frame", () => {
+    // The reframing is clamped against what the fit actually left over. Overshooting would hang
+    // the map off the top of the panel, which is the failure the fit exists to prevent.
+    for (const timeSeconds of SAMPLES) {
+      const { land } = mapCameraFrame({ aspect: ASPECT, timeSeconds, tilt: 1, drift: 1 });
+      for (const [u, v] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) {
+        expect(ndc(land, u, v).y).toBeLessThanOrEqual(1 + 1e-5);
+      }
     }
   });
 
@@ -375,5 +398,38 @@ describe("easeMapLean", () => {
   it("does nothing on a zero or negative frame delta", () => {
     expect(easeMapLean(REST, { u: 1, v: 1 }, 0, 0.15)).toBe(REST);
     expect(easeMapLean(REST, { u: 1, v: 1 }, -1, 0.15)).toBe(REST);
+  });
+});
+
+describe("framingLift", () => {
+  it("is nothing at all on a map that already fills its frame", () => {
+    // The flat case: the fit puts the corners on the edges, so there is no band to close and
+    // `flatMapMatrix` stays reproducible to the bit.
+    expect(framingLift(1, 1, 1)).toBe(0);
+    expect(framingLift(1.2, 1, 1)).toBe(0);
+  });
+
+  it("closes exactly the slack the fit left, and no more", () => {
+    expect(framingLift(0.9, 1, 1)).toBeCloseTo(0.1, 12);
+    expect(framingLift(0.8, 0.5, 1)).toBeCloseTo(0.6, 12);
+  });
+
+  it("spends only the fraction it is asked for", () => {
+    expect(framingLift(0.9, 1, 0.5)).toBeCloseTo(0.05, 12);
+    expect(framingLift(0.9, 1, 0)).toBe(0);
+  });
+
+  it("cannot be talked into more than the slack, or into a negative lift", () => {
+    expect(framingLift(0.9, 1, 5)).toBeCloseTo(0.1, 12);
+    expect(framingLift(0.9, 1, -3)).toBe(0);
+  });
+
+  it("reframes by nothing when the fit came back degenerate", () => {
+    // A scale of zero is an absence of measurement, not a half-panel of slack to spend: reading
+    // `1 - top * 0` as room would throw the map clean off the top of the frame.
+    expect(framingLift(0.5, 0, 1)).toBe(0);
+    expect(framingLift(0.5, -2, 1)).toBe(0);
+    expect(framingLift(Number.NaN, 1, 1)).toBe(0);
+    expect(framingLift(0.9, Number.NaN, 1)).toBe(0);
   });
 });
