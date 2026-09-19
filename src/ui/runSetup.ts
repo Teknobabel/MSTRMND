@@ -327,7 +327,7 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
       badge.setAttribute("aria-hidden", "true");
       badge.innerHTML = ICON_LOCK;
       const word = document.createElement("span");
-      word.textContent = "Locked";
+      word.textContent = "Restricted";
       badge.appendChild(word);
       meta.before(badge);
     }
@@ -362,7 +362,7 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
     if (card.locked) {
       const note = document.createElement("p");
       note.className = "setup-card__lock-note";
-      note.textContent = `Locked — unlock this ${spec.lockedNoun} to bring it into a run.`;
+      note.textContent = `Restricted — unlock this ${spec.lockedNoun} to bring it into a run.`;
       body.appendChild(note);
       article.classList.add("setup-card--locked");
     }
@@ -389,7 +389,7 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
       article.setAttribute("aria-disabled", "true");
       setTooltip(
         article,
-        `${card.name} — Locked`,
+        `${card.name} — Restricted`,
         `This ${spec.lockedNoun} is not unlocked yet. Unlock it to pick it, or turn on Unlock All Content in Settings.`,
       );
       return article;

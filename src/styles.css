@@ -207,41 +207,6 @@ body {
   }
 }
 
-.menu-emblem {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 7rem;
-  height: 7rem;
-  border: 2px solid var(--line-2);
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 40%, rgba(120, 12, 24, 0.5), rgba(10, 3, 4, 0.9));
-  box-shadow:
-    0 0 32px var(--red-glow),
-    inset 0 0 24px rgba(232, 17, 45, 0.25);
-  animation: emblem-pulse 3.2s ease-in-out infinite;
-}
-
-.menu-emblem span {
-  font-family: var(--font-display);
-  font-size: 4rem;
-  font-weight: 900;
-  color: var(--red-bright);
-  text-shadow: 0 0 18px var(--red-glow);
-  transform: translateY(-2px);
-}
-
-@keyframes emblem-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 24px var(--red-glow), inset 0 0 20px rgba(232, 17, 45, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 52px var(--red-glow), inset 0 0 32px rgba(232, 17, 45, 0.35);
-  }
-}
-
 .screen-title {
   margin: 0;
   font-family: var(--font-display);
@@ -258,32 +223,6 @@ body {
   text-shadow:
     0 0 12px var(--red-glow),
     0 0 42px rgba(232, 17, 45, 0.35);
-}
-
-.menu-tagline {
-  position: relative;
-  margin: -0.5rem 0 0.5rem;
-  font-family: var(--font-display);
-  font-size: 0.8rem;
-  font-weight: 500;
-  letter-spacing: 0.55em;
-  text-indent: 0.55em;
-  color: var(--red-bright);
-  text-transform: uppercase;
-  animation: tagline-flicker 6s linear infinite;
-}
-
-@keyframes tagline-flicker {
-  0%,
-  91%,
-  94%,
-  100% {
-    opacity: 1;
-  }
-  92%,
-  93% {
-    opacity: 0.35;
-  }
 }
 
 .screen-actions {
@@ -10721,85 +10660,317 @@ body {
   transform-origin: center;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem 0.5rem;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem 0.4rem;
+  /* The brand panel's width, read by the roster to know where to stop. Declared here rather
+     than on either panel because it is the one number the two of them share. */
+  --brand-w: 32.5rem;
 }
 
 :root.stage-rotated .setup-shell {
   transform: translate(-50%, -50%) rotate(90deg) scale(var(--ui-scale));
 }
 
-/* The title bar the console wears instead of a splash: emblem and wordmark on the left, the one
-   line of instruction the screen needs in the middle, Settings on the right. */
-.setup-masthead {
+/* ------------------------------------------------------------------
+   Status rails
+
+   The screen opens on a machine that is already running, so the top and bottom of it are given
+   to the machine saying so rather than to a splash. Nothing on either rail is information the
+   player needs — the one thing up here that does anything is Settings — and that is the whole
+   claim: a console does not introduce itself.
+   ------------------------------------------------------------------ */
+.setup-rail-bar {
   position: relative;
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid var(--line-1);
-  border-image: linear-gradient(90deg, var(--red), rgba(232, 17, 45, 0.3) 55%, transparent 95%) 1;
-  background: linear-gradient(180deg, rgba(30, 9, 13, 0.9), rgba(14, 5, 7, 0.82));
-}
-
-.setup-masthead__brand {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
   min-width: 0;
+  padding: 0 1.45rem;
 }
 
-/* The emblem at bar scale; everything else about it is `.menu-emblem`'s, pulse included. */
-.menu-emblem--masthead {
+.setup-rail-bar--head {
+  min-height: 2.6rem;
+}
+
+/* The foot rail stands off the console rather than butting into it: the head rail is the same
+   piece of chrome as the panels below it, the foot rail is the surface they are sitting on. */
+.setup-rail-bar--foot {
+  min-height: 1.7rem;
+  margin-top: 0.75rem;
+}
+
+.setup-rail-bar__id {
   flex: 0 0 auto;
-  width: 3.1rem;
-  height: 3.1rem;
-}
-
-.menu-emblem--masthead span {
-  font-size: 1.8rem;
-}
-
-.setup-masthead__text {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
+  gap: 0.02rem;
 }
 
-.setup-masthead__title {
-  font-size: 1.5rem;
-  line-height: 1;
-  text-align: left;
+.setup-rail-bar__os {
+  font-family: var(--font-display);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--red);
+  text-shadow: 0 0 12px var(--red-glow);
 }
 
-.setup-masthead__tagline {
-  margin: 0;
-  font-size: 0.6rem;
-  letter-spacing: 0.4em;
-  text-indent: 0.4em;
+.setup-rail-bar__build {
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(232, 17, 45, 0.55);
 }
 
-/* The instruction. Centred in the bar rather than over the planner, so it reads as chrome the
-   player can stop seeing once they know the gesture. */
-.setup-masthead__brief {
+/* The rule between the rail's two ends. It fades at both ends rather than butting into the
+   text, so the bar reads as one cut line across the console instead of three boxed labels. */
+.setup-rail-bar__rule {
   flex: 1 1 auto;
   min-width: 0;
-  margin: 0;
-  text-align: center;
-  font-family: var(--font-display);
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-2);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(232, 17, 45, 0.45) 12%,
+    rgba(232, 17, 45, 0.45) 88%,
+    transparent
+  );
 }
 
-.setup-masthead .btn {
+/* One break in the line, a third of the way along: the mark a console puts where a reading
+   would go if there were one to take. */
+.setup-rail-bar__rule--ticked {
+  position: relative;
+}
+
+.setup-rail-bar__rule--ticked::after {
+  content: "";
+  position: absolute;
+  left: 82%;
+  top: -2px;
+  width: 1.1rem;
+  height: 5px;
+  background: var(--bg-0);
+  border-left: 3px solid var(--red);
+  border-right: 1px solid var(--red-bright);
+}
+
+.setup-rail-bar__creed,
+.setup-rail-bar__tag {
   flex: 0 0 auto;
-  min-height: 2.2rem;
-  padding: 0.4rem 1.1rem;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+.setup-rail-bar__tag {
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  color: rgba(232, 17, 45, 0.6);
+}
+
+.setup-rail-bar__tag--dim {
+  color: rgba(232, 17, 45, 0.45);
+}
+
+/* Settings rides the rail as one more readout until it is reached for. */
+.setup-rail-bar__settings {
+  flex: 0 0 auto;
+  min-height: 1.6rem;
+  padding: 0.2rem 0.8rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.22em;
+  background: transparent;
+  border-color: rgba(232, 17, 45, 0.4);
+  color: var(--red);
+}
+
+/* A single bracketed corner, drawn from two borders. Used on both rails and around the brand
+   panel; which corner it is decides which two. */
+.setup-hud-corner {
+  position: absolute;
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 0 solid var(--red);
+  pointer-events: none;
+}
+
+.setup-hud-corner--tl {
+  top: 0;
+  left: 0;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+
+.setup-hud-corner--tr {
+  top: 0;
+  right: 0;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+
+.setup-hud-corner--bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+
+.setup-hud-corner--br {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
+/* ------------------------------------------------------------------
+   The left rail
+
+   The planner occupies the middle of the left dock and nothing else ever will, so the space
+   above and below it is either dead air or it is the machine the planner is bolted to. Two
+   plates, sized in fractions so they close on the planner from both sides at any stage height,
+   and a line of creed in the lower one. Decoration, and `aria-hidden` because it is.
+   ------------------------------------------------------------------ */
+.setup-rail {
+  position: absolute;
+  left: 0.6rem;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: calc(18.5rem - 0.6rem);
+  display: grid;
+  grid-template-rows: 29fr 42fr 29fr;
+  pointer-events: none;
+}
+
+.setup-rail__plate {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(232, 17, 45, 0.12);
+  background:
+    linear-gradient(rgba(232, 17, 45, 0.07) 1px, transparent 1px) 0 0 / 100% 2.1rem,
+    linear-gradient(90deg, rgba(232, 17, 45, 0.07) 1px, transparent 1px) 0 0 / 2.1rem 100%,
+    radial-gradient(ellipse 90% 70% at 50% 50%, rgba(120, 12, 24, 0.22), transparent 75%);
+}
+
+.setup-rail__plate--top {
+  grid-row: 1;
+}
+
+.setup-rail__plate--bottom {
+  grid-row: 3;
+  justify-content: center;
+  background-image:
+    linear-gradient(rgba(232, 17, 45, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 17, 45, 0.07) 1px, transparent 1px),
+    radial-gradient(ellipse 62% 40% at 74% 30%, rgba(200, 24, 44, 0.16), transparent 70%),
+    radial-gradient(ellipse 90% 70% at 50% 50%, rgba(120, 12, 24, 0.22), transparent 75%);
+  background-size: 100% 2.1rem, 2.1rem 100%, 100% 100%, 100% 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0 1.1rem;
+}
+
+/* The line a HUD plate is cut along: a run across the plate that breaks upward at the far end.
+   Drawn as a rotated edge on the run's own right end rather than as a clip, so the plate keeps
+   its rectangle and only the line reads as the cut. */
+.setup-rail__cutline {
+  position: absolute;
+  left: 1rem;
+  top: 34%;
+  width: 52%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(232, 17, 45, 0.1), var(--red));
+}
+
+.setup-rail__cutline::after {
+  content: "";
+  position: absolute;
+  left: 100%;
+  bottom: 0;
+  width: 9.5rem;
+  height: 1px;
+  background: linear-gradient(90deg, var(--red), rgba(232, 17, 45, 0.18));
+  transform: rotate(-42deg);
+  transform-origin: left bottom;
+}
+
+.setup-rail__ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.9rem;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(232, 17, 45, 0.55), rgba(232, 17, 45, 0.08));
+}
+
+.setup-rail__ticks::after {
+  content: "";
+  position: absolute;
+  right: 18%;
+  bottom: -2px;
+  width: 2.2rem;
+  height: 5px;
+  background: linear-gradient(90deg, var(--red) 0 1px, transparent 1px) 0 0 / 0.7rem 100% repeat-x;
+}
+
+.setup-rail__creed {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.7;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(232, 17, 45, 0.72);
+}
+
+.setup-rail__dash {
+  width: 1.5rem;
+  height: 3px;
+  background: var(--red);
+  box-shadow: 0 0 10px var(--red-glow);
+}
+
+/* The rule the plate closes on, with the two markers a console hangs off a scale. */
+.setup-rail__markers {
+  position: absolute;
+  left: 0.6rem;
+  right: 0.6rem;
+  bottom: 0.55rem;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(232, 17, 45, 0.5), rgba(232, 17, 45, 0.12));
+}
+
+.setup-rail__markers::before,
+.setup-rail__markers::after {
+  content: "";
+  position: absolute;
+  bottom: 1px;
+  width: 0;
+  height: 0;
+  border-left: 0.3rem solid transparent;
+  border-right: 0.3rem solid transparent;
+  border-bottom: 0.32rem solid var(--red);
+}
+
+.setup-rail__markers::before {
+  left: 2%;
+}
+
+.setup-rail__markers::after {
+  left: 62%;
 }
 
 /* The docking rectangle the two panels resolve their offsets against — the same job
@@ -10833,12 +11004,13 @@ body {
   overflow: visible;
 }
 
-/* The roster fills everything right of the planner, starting where the map-layers dock does so
-   the gutter between the two panels is the one the console already uses. */
+/* The roster takes the middle of the console: it starts where the map-layers dock does, so the
+   gutter after the planner is the one the console already uses, and it stops a gutter short of
+   the brand panel on the right. */
 .setup-deck {
   position: absolute;
   left: var(--dock-left);
-  right: 0;
+  right: calc(var(--brand-w) + var(--dock-gap));
   top: 0;
   bottom: 0;
   z-index: 2;
@@ -10857,18 +11029,28 @@ body {
 }
 
 /*
- * A page of dossiers. `auto-fill` rather than a fixed column count because the three tabs hold
- * very different numbers of cards — a dozen masterminds against a single omega plan — and a
- * tab with one card in it should not stretch that card across the panel.
+ * A page of dossiers: three columns, at a fixed width, centred in the panel.
+ *
+ * Fixed rather than fluid (`auto-fill` with a flexible track, which this was) because the three
+ * tabs hold very different numbers of cards — eight masterminds against two omega plans — and a
+ * fluid grid answers that by changing the size of a dossier from tab to tab. A dossier is the
+ * same object in all three, so it is the same size in all three, and a short tab simply has
+ * fewer of them. Centring is what keeps the short tab from reading as left-aligned in a panel
+ * the full tab fills.
+ *
+ * Three is the count the cards are legible at across this panel: wide enough for the portrait
+ * to carry a face and for the organization line to sit beside its label, and two full rows fit
+ * the height, so the page opens on six dossiers rather than on a band of thumbnails.
  */
 .setup-deck__page {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 18.5rem));
   grid-auto-rows: min-content;
   align-content: start;
-  gap: 0.6rem;
+  justify-content: center;
+  gap: 0.65rem;
   padding: 0.1rem 0.15rem 0.5rem;
   overflow-y: auto;
   overflow-x: hidden;
@@ -10896,10 +11078,10 @@ body {
 }
 
 /* A mastermind is a portrait, not a place: the banner is drawn upright so the face is not
-   cropped to a letterbox. Shallower than the roster minions' 9:16, which at this card width
-   would be taller than the panel. */
+   cropped to a letterbox. Square rather than the roster minions' 9:16 — at this card's width
+   that would be a dossier taller than the panel, and two rows have to fit. */
 .setup-card--portrait > .card-hero > .card-art {
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 1 / 1;
 }
 
 /* Random wears the console's own mark for something it cannot see yet — the same static an
@@ -10915,6 +11097,277 @@ body {
 
 .setup-card--random:hover {
   border-left-color: var(--cyan);
+}
+
+/* ------------------------------------------------------------------
+   The brand panel
+
+   The game's name is the one thing on this screen that is not a control, so it is given its own
+   panel beside the roster rather than a bar across the top of it: at this size the title can be
+   read as a title, and the planner and the deck keep the full height of the stage.
+
+   Everything under the wordmark is the screen's instructions, written as console output rather
+   than as a caption. The four verbs above the mark say what the game is; the four steps below
+   it say what to do next, and they are the planner's three slots and its Deploy button, in the
+   order the planner asks for them.
+   ------------------------------------------------------------------ */
+.setup-brand {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: var(--brand-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.55rem 1.35rem 1.35rem;
+  overflow: hidden;
+  border: 1px solid rgba(232, 17, 45, 0.32);
+  background:
+    radial-gradient(ellipse 58% 31% at 50% 36%, rgba(206, 22, 44, 0.38), transparent 74%),
+    radial-gradient(ellipse 104% 60% at 50% 41%, rgba(126, 12, 27, 0.4), transparent 76%),
+    linear-gradient(180deg, rgba(26, 5, 9, 0.97), rgba(10, 2, 5, 0.98));
+  box-shadow:
+    inset 0 0 120px rgba(3, 1, 2, 0.92),
+    0 18px 44px rgba(0, 0, 0, 0.6);
+}
+
+/* The tube the panel is being read off. Over the content rather than under it — a scanline that
+   stops at the edge of the logo is a texture on the background; one that crosses it is the
+   screen itself, which is the claim the whole console makes. */
+.setup-brand::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.26) 0 1px,
+    transparent 1px 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+.setup-brand > * {
+  position: relative;
+  z-index: 1;
+}
+
+.setup-brand .setup-hud-corner {
+  /* Restated because `.setup-brand > *` below matches these too and would otherwise take the
+     positioning off them — the stacking rule is about content, and a corner is not content. */
+  position: absolute;
+  z-index: 2;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0.3rem;
+}
+
+/* The readout above the mark: what the machine is for on the left, what it reports on the
+   right. Neither column is addressed to the player, which is why they read as a machine. */
+.setup-brand__status {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 2.9rem;
+}
+
+.setup-brand__verbs,
+.setup-brand__sys {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  line-height: 2.05;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.setup-brand__verbs {
+  color: var(--red);
+}
+
+.setup-brand__sys {
+  text-align: right;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.setup-brand__dash {
+  width: 1.6rem;
+  height: 3px;
+  background: var(--red);
+  box-shadow: 0 0 10px var(--red-glow);
+}
+
+.setup-brand__status > .setup-brand__dash {
+  position: absolute;
+  left: 0;
+  bottom: 1.3rem;
+}
+
+/* An empty reticle, bracketing nothing. The console draws one wherever it is holding a lock, so
+   one with nothing in it is the screen saying it is between targets. */
+.setup-brand__reticle {
+  position: absolute;
+  right: 0;
+  bottom: 0.9rem;
+  width: 1.55rem;
+  height: 1.55rem;
+  border: 1px solid var(--red);
+  -webkit-mask:
+    linear-gradient(#000 0 0) 0 0 / 0.5rem 0.5rem no-repeat,
+    linear-gradient(#000 0 0) 100% 0 / 0.5rem 0.5rem no-repeat,
+    linear-gradient(#000 0 0) 0 100% / 0.5rem 0.5rem no-repeat,
+    linear-gradient(#000 0 0) 100% 100% / 0.5rem 0.5rem no-repeat;
+  mask:
+    linear-gradient(#000 0 0) 0 0 / 0.5rem 0.5rem no-repeat,
+    linear-gradient(#000 0 0) 100% 0 / 0.5rem 0.5rem no-repeat,
+    linear-gradient(#000 0 0) 0 100% / 0.5rem 0.5rem no-repeat,
+    linear-gradient(#000 0 0) 100% 100% / 0.5rem 0.5rem no-repeat;
+}
+
+/* The mark is a white silhouette; all of its colour is the light it is throwing, so the glow is
+   a filter rather than baked into the file and the panel behind it can change without the logo
+   having to be redrawn. The pulse is the emblem's, at the slower rate a thing this size wants. */
+.setup-brand__mark {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.setup-brand__mark img {
+  display: block;
+  width: 84%;
+  height: auto;
+  filter:
+    drop-shadow(0 0 16px rgba(255, 46, 66, 0.5))
+    drop-shadow(0 0 46px rgba(232, 17, 45, 0.34));
+  animation: brand-mark-pulse 4.6s ease-in-out infinite;
+}
+
+@keyframes brand-mark-pulse {
+  0%,
+  100% {
+    filter:
+      drop-shadow(0 0 14px rgba(255, 46, 66, 0.42))
+      drop-shadow(0 0 38px rgba(232, 17, 45, 0.28));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 22px rgba(255, 46, 66, 0.6))
+      drop-shadow(0 0 62px rgba(232, 17, 45, 0.42));
+  }
+}
+
+.setup-brand__wordmark {
+  margin: 2.5rem 0 0;
+  font-family: var(--font-display);
+  font-size: 3.65rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--text-0);
+  text-shadow:
+    0 0 14px rgba(255, 60, 80, 0.45),
+    0 0 46px rgba(232, 17, 45, 0.3);
+}
+
+/* The suffix is the half of the name that says what this is — an operating system, not a
+   person — so it is the half that carries the console's colour. */
+.setup-brand__wordmark-suffix {
+  color: var(--red);
+  text-shadow: 0 0 18px var(--red-glow);
+}
+
+.setup-brand__wordmark-rule {
+  width: 100%;
+  height: 1px;
+  margin-top: 1.1rem;
+  background: linear-gradient(
+    90deg,
+    rgba(232, 17, 45, 0.15),
+    var(--red-bright) 18%,
+    var(--red-bright) 82%,
+    rgba(232, 17, 45, 0.15)
+  );
+  box-shadow: 0 0 12px var(--red-glow);
+}
+
+.setup-brand__tagline {
+  margin: 0.55rem 0 0;
+  font-family: var(--font-display);
+  font-size: 0.93rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--red-bright);
+  text-shadow: 0 0 12px var(--red-glow);
+}
+
+/* The stripe a door carries when what is behind it is not safe. Nothing here is a door; that is
+   the joke, and it is the same joke the whole console is telling. */
+.setup-brand__hazard {
+  width: 100%;
+  height: 1.7rem;
+  margin-top: 1.5rem;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(232, 17, 45, 0.55) 0 10px,
+    rgba(232, 17, 45, 0.05) 10px 22px
+  );
+  opacity: 0.45;
+}
+
+.setup-brand__brief {
+  width: 100%;
+  margin-top: auto;
+  padding: 1.4rem 0 1.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.setup-brand__brief-lede {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+  text-shadow: 0 0 12px var(--red-glow);
+}
+
+.setup-brand__steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-display);
+  font-size: 0.64rem;
+  font-weight: 500;
+  line-height: 1.85;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--text-1);
+}
+
+/* The last step is not one of the three the planner takes; it is what they are for. */
+.setup-brand__steps-last {
+  color: var(--red-bright);
+  text-shadow: 0 0 12px var(--red-glow);
 }
 
 /* ------------------------------------------------------------------

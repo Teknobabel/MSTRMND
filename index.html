@@ -38,23 +38,45 @@
       <section id="screen-main" class="screen screen-main" aria-labelledby="main-title">
         <div class="menu-backdrop" aria-hidden="true"></div>
         <div class="setup-shell">
-          <header class="setup-masthead">
-            <div class="setup-masthead__brand">
-              <div class="menu-emblem menu-emblem--masthead" aria-hidden="true"><span>&Omega;</span></div>
-              <div class="setup-masthead__text">
-                <h1 id="main-title" class="screen-title screen-title--menu setup-masthead__title">
-                  MASTERMIND
-                </h1>
-                <p class="menu-tagline setup-masthead__tagline">ALL WILL KNEEL.</p>
-              </div>
+          <!--
+            The console's own status rails, top and bottom. Neither says anything the player has
+            to read — that is the point of them: a screen that opens on a machine already running
+            is a stronger claim about the fiction than a splash screen ever is, and the wordmark
+            has moved to the brand panel on the right where it can be the size it deserves.
+            Settings rides the top rail because it is the one control up here that does anything.
+          -->
+          <header class="setup-rail-bar setup-rail-bar--head">
+            <span class="setup-hud-corner setup-hud-corner--tl" aria-hidden="true"></span>
+            <div class="setup-rail-bar__id">
+              <span class="setup-rail-bar__os">MSTRMND.OS</span>
+              <span class="setup-rail-bar__build">v0.9.7 // Operational</span>
             </div>
-            <p class="setup-masthead__brief">
-              Drag an identity, a lair and an omega plan into the planner, then deploy.
-            </p>
-            <button type="button" class="btn" id="btn-main-settings">Settings</button>
+            <span class="setup-rail-bar__rule setup-rail-bar__rule--ticked" aria-hidden="true"></span>
+            <p class="setup-rail-bar__creed">Power // Secrecy // Inevitability</p>
+            <button type="button" class="btn setup-rail-bar__settings" id="btn-main-settings">
+              Settings
+            </button>
+            <span class="setup-hud-corner setup-hud-corner--tr" aria-hidden="true"></span>
           </header>
 
           <div class="omega-body omega-body--floating setup-body">
+            <!--
+              The strip of console the planner floats on. It is decoration and says so
+              (`aria-hidden`), but it is not arbitrary: the planner occupies the middle of the
+              left dock and nothing else ever will, so the space above and below it is either
+              dead air or it is the machine the planner is bolted to. This is the second.
+            -->
+            <div class="setup-rail" aria-hidden="true">
+              <div class="setup-rail__plate setup-rail__plate--top">
+                <span class="setup-rail__cutline"></span>
+                <span class="setup-rail__ticks"></span>
+              </div>
+              <div class="setup-rail__plate setup-rail__plate--bottom">
+                <p class="setup-rail__creed">The world<br />is a system.<br />You are<br />the exploit.</p>
+                <span class="setup-rail__dash"></span>
+                <span class="setup-rail__markers"></span>
+              </div>
+            </div>
             <aside
               id="setup-plan-column"
               class="omega-sidebar game-panel game-panel--plan-column setup-plan-column"
@@ -141,7 +163,72 @@
               ></div>
               <div id="setup-deck-pages" class="setup-deck__pages"></div>
             </main>
+
+            <!--
+              The title card, given its own panel rather than a bar across the top. A game's name
+              is the one thing on this screen that is not a control, and putting it beside the
+              roster instead of above it lets it be read at the size a title should be read at
+              while the planner and the deck keep the full height of the stage.
+
+              Everything under the wordmark is the screen's instructions, written as console
+              output rather than as a caption: the four verbs at the top say what the game is,
+              the four steps at the bottom say what to do next, and they are the same four steps
+              the planner's three slots and its Deploy button ask for, in order.
+            -->
+            <aside class="setup-brand" aria-labelledby="main-title">
+              <span class="setup-hud-corner setup-hud-corner--tl" aria-hidden="true"></span>
+              <span class="setup-hud-corner setup-hud-corner--tr" aria-hidden="true"></span>
+              <span class="setup-hud-corner setup-hud-corner--bl" aria-hidden="true"></span>
+              <span class="setup-hud-corner setup-hud-corner--br" aria-hidden="true"></span>
+
+              <div class="setup-brand__status" aria-hidden="true">
+                <ul class="setup-brand__verbs">
+                  <li>Control</li>
+                  <li>Manipulate</li>
+                  <li>Destroy</li>
+                  <li>Repeat</li>
+                </ul>
+                <ul class="setup-brand__sys">
+                  <li>SYS.ONLINE</li>
+                  <li>NET.SEGMENTED</li>
+                  <li>OPSEC.OK</li>
+                </ul>
+                <span class="setup-brand__dash"></span>
+                <span class="setup-brand__reticle"></span>
+              </div>
+
+              <div class="setup-brand__mark" aria-hidden="true">
+                <img src="/assets/brand/omega-mark.png" alt="" />
+              </div>
+
+              <h1 id="main-title" class="setup-brand__wordmark">
+                MSTRMND<span class="setup-brand__wordmark-suffix">.OS</span>
+              </h1>
+              <span class="setup-brand__wordmark-rule" aria-hidden="true"></span>
+              <p class="setup-brand__tagline">Villains build a brighter tomorrow</p>
+              <span class="setup-brand__hazard" aria-hidden="true"></span>
+
+              <div class="setup-brand__brief">
+                <span class="setup-brand__dash"></span>
+                <p class="setup-brand__brief-lede">Initialize your operation.</p>
+                <ol class="setup-brand__steps">
+                  <li>Become the mastermind.</li>
+                  <li>Establish a lair.</li>
+                  <li>Activate your omega plan.</li>
+                  <li class="setup-brand__steps-last">Change the world.</li>
+                </ol>
+                <span class="setup-brand__dash"></span>
+              </div>
+            </aside>
           </div>
+
+          <footer class="setup-rail-bar setup-rail-bar--foot">
+            <span class="setup-hud-corner setup-hud-corner--bl" aria-hidden="true"></span>
+            <span class="setup-rail-bar__tag">MSTRMND.OS // Global Dominance Interface</span>
+            <span class="setup-rail-bar__rule" aria-hidden="true"></span>
+            <span class="setup-rail-bar__tag setup-rail-bar__tag--dim">All systems serve you</span>
+            <span class="setup-hud-corner setup-hud-corner--br" aria-hidden="true"></span>
+          </footer>
         </div>
       </section>
 
