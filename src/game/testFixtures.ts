@@ -29,7 +29,6 @@ export type FixtureSlices = Record<ContentSliceKey, unknown> & {
   omegaPlans: JsonRecord[];
   lairs: JsonRecord[];
   events: JsonRecord[];
-  organizationNames: string[];
   playerProfiles: JsonRecord[];
   wantedLevels: JsonRecord[];
   balance: JsonRecord;
@@ -177,8 +176,9 @@ export function rawFixtureSlices(): FixtureSlices {
         onFailureEffects: [{ kind: "grant_command_points_next_turn", amount: 2 }],
       },
     ],
-    organizationNames: ["Test Syndicate"],
-    playerProfiles: [{ name: "Tester", profilePic: "/assets/test.png" }],
+    playerProfiles: [
+      { name: "Tester", organizationName: "Test Syndicate", profilePic: "/assets/test.png" },
+    ],
     wantedLevels: [
       { minHeat: 0, name: "Shadow", maxAgents: 0 },
       { minHeat: 5, name: "Noticed", maxAgents: 2 },

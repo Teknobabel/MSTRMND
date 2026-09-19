@@ -52,5 +52,376 @@
         ]
       }
     ]
+  },
+  {
+    "id": "trench_nine",
+    "name": "Trench Nine",
+    "description": "A pressure hull wedged into an abyssal trench: sealed moon pools, sonar-blind approaches, and eleven kilometers of water between you and a warrant.",
+    "availableMissionIds": [
+      "smash_and_grab",
+      "ghost_heist",
+      "pen_test"
+    ],
+    "mapPosition": {
+      "x": 8.0,
+      "y": 52.0
+    },
+    "startingAssets": {
+      "ghost_protocol": 1,
+      "emp_scrambler": 1
+    },
+    "upgradeLevels": [
+      {
+        "name": "Foundations",
+        "missionIds": [
+          "upg_ops_center",
+          "upg_barracks",
+          "upg_workshop"
+        ]
+      },
+      {
+        "name": "Infrastructure",
+        "minInfamy": 25,
+        "missionIds": [
+          "upg_panopticon",
+          "upg_infirmary",
+          "upg_mint"
+        ]
+      },
+      {
+        "name": "Ascendancy",
+        "minInfamy": 45,
+        "missionIds": [
+          "upg_war_room",
+          "upg_propaganda"
+        ]
+      },
+      {
+        "name": "Apotheosis",
+        "minInfamy": 65,
+        "missionIds": [
+          "upg_doomsday_vault",
+          "upg_obsidian_throne"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "hollow_glacier",
+    "name": "The Hollow Glacier",
+    "description": "Sixty meters under the ice cap: meltwater turbine halls, a runway groomed nightly, and a heat signature every satellite files as weather.",
+    "availableMissionIds": [
+      "smash_and_grab",
+      "ghost_heist",
+      "pen_test"
+    ],
+    "mapPosition": {
+      "x": 36.0,
+      "y": 10.0
+    },
+    "startingAssets": {
+      "emp_scrambler": 1,
+      "med_drone": 1
+    },
+    "upgradeLevels": [
+      {
+        "name": "Foundations",
+        "missionIds": [
+          "upg_ops_center",
+          "upg_barracks",
+          "upg_workshop"
+        ]
+      },
+      {
+        "name": "Infrastructure",
+        "minInfamy": 25,
+        "missionIds": [
+          "upg_panopticon",
+          "upg_infirmary",
+          "upg_mint"
+        ]
+      },
+      {
+        "name": "Ascendancy",
+        "minInfamy": 45,
+        "missionIds": [
+          "upg_war_room",
+          "upg_propaganda"
+        ]
+      },
+      {
+        "name": "Apotheosis",
+        "minInfamy": 65,
+        "missionIds": [
+          "upg_doomsday_vault",
+          "upg_obsidian_throne"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "obsidian_spire",
+    "name": "Obsidian Spire",
+    "description": "A radio-dark tower in the driest place on earth: mirrored ascent shafts, an observatory dome, and nine hundred kilometers of nothing in every direction.",
+    "availableMissionIds": [
+      "smash_and_grab",
+      "ghost_heist",
+      "pen_test"
+    ],
+    "mapPosition": {
+      "x": 29.0,
+      "y": 71.0
+    },
+    "startingAssets": {
+      "state_secrets": 1,
+      "midnight_lens": 1
+    },
+    "upgradeLevels": [
+      {
+        "name": "Foundations",
+        "missionIds": [
+          "upg_ops_center",
+          "upg_barracks",
+          "upg_workshop"
+        ]
+      },
+      {
+        "name": "Infrastructure",
+        "minInfamy": 25,
+        "missionIds": [
+          "upg_panopticon",
+          "upg_infirmary",
+          "upg_mint"
+        ]
+      },
+      {
+        "name": "Ascendancy",
+        "minInfamy": 45,
+        "missionIds": [
+          "upg_war_room",
+          "upg_propaganda"
+        ]
+      },
+      {
+        "name": "Apotheosis",
+        "minInfamy": 65,
+        "missionIds": [
+          "upg_doomsday_vault",
+          "upg_obsidian_throne"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "permafrost_silo",
+    "name": "The Permafrost Silo",
+    "description": "A decommissioned missile silo bought at auction: forty meters of reinforced throat, a launch ring still under warranty, and a thaw season nobody stays for.",
+    "availableMissionIds": [
+      "smash_and_grab",
+      "ghost_heist",
+      "pen_test"
+    ],
+    "mapPosition": {
+      "x": 70.0,
+      "y": 22.0
+    },
+    "startingAssets": {
+      "prototype_railgun": 1,
+      "mercenary_contracts": 1
+    },
+    "upgradeLevels": [
+      {
+        "name": "Foundations",
+        "missionIds": [
+          "upg_ops_center",
+          "upg_barracks",
+          "upg_workshop"
+        ]
+      },
+      {
+        "name": "Infrastructure",
+        "minInfamy": 25,
+        "missionIds": [
+          "upg_panopticon",
+          "upg_infirmary",
+          "upg_mint"
+        ]
+      },
+      {
+        "name": "Ascendancy",
+        "minInfamy": 45,
+        "missionIds": [
+          "upg_war_room",
+          "upg_propaganda"
+        ]
+      },
+      {
+        "name": "Apotheosis",
+        "minInfamy": 65,
+        "missionIds": [
+          "upg_doomsday_vault",
+          "upg_obsidian_throne"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "red_quarter",
+    "name": "Red Quarter Station",
+    "description": "A drilling platform in the empty quarter that never struck oil: derrick hangars, a buried fuel farm, and a dune line that redraws the approach every night.",
+    "availableMissionIds": [
+      "smash_and_grab",
+      "ghost_heist",
+      "pen_test"
+    ],
+    "mapPosition": {
+      "x": 59.0,
+      "y": 45.0
+    },
+    "startingAssets": {
+      "gold_bullion": 1,
+      "holo_disguise": 1
+    },
+    "upgradeLevels": [
+      {
+        "name": "Foundations",
+        "missionIds": [
+          "upg_ops_center",
+          "upg_barracks",
+          "upg_workshop"
+        ]
+      },
+      {
+        "name": "Infrastructure",
+        "minInfamy": 25,
+        "missionIds": [
+          "upg_panopticon",
+          "upg_infirmary",
+          "upg_mint"
+        ]
+      },
+      {
+        "name": "Ascendancy",
+        "minInfamy": 45,
+        "missionIds": [
+          "upg_war_room",
+          "upg_propaganda"
+        ]
+      },
+      {
+        "name": "Apotheosis",
+        "minInfamy": 65,
+        "missionIds": [
+          "upg_doomsday_vault",
+          "upg_obsidian_throne"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "cloudreach",
+    "name": "Cloudreach Monastery",
+    "description": "A mountain monastery leased in perpetuity at four thousand meters: server stacks in the prayer halls, a cable-car freight line, and air thin enough to make interrogation redundant.",
+    "availableMissionIds": [
+      "smash_and_grab",
+      "ghost_heist",
+      "pen_test"
+    ],
+    "mapPosition": {
+      "x": 68.5,
+      "y": 41.5
+    },
+    "startingAssets": {
+      "inside_man": 1,
+      "blackmail_dossier": 1
+    },
+    "upgradeLevels": [
+      {
+        "name": "Foundations",
+        "missionIds": [
+          "upg_ops_center",
+          "upg_barracks",
+          "upg_workshop"
+        ]
+      },
+      {
+        "name": "Infrastructure",
+        "minInfamy": 25,
+        "missionIds": [
+          "upg_panopticon",
+          "upg_infirmary",
+          "upg_mint"
+        ]
+      },
+      {
+        "name": "Ascendancy",
+        "minInfamy": 45,
+        "missionIds": [
+          "upg_war_room",
+          "upg_propaganda"
+        ]
+      },
+      {
+        "name": "Apotheosis",
+        "minInfamy": 65,
+        "missionIds": [
+          "upg_doomsday_vault",
+          "upg_obsidian_throne"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "fissure_works",
+    "name": "The Fissure Works",
+    "description": "A geothermal plant straddling a continental rift: free power forever, steam cover on demand, and a floor that opens a little wider every year.",
+    "availableMissionIds": [
+      "smash_and_grab",
+      "ghost_heist",
+      "pen_test"
+    ],
+    "mapPosition": {
+      "x": 57.5,
+      "y": 57.0
+    },
+    "startingAssets": {
+      "fusion_core": 1,
+      "slush_fund": 1
+    },
+    "upgradeLevels": [
+      {
+        "name": "Foundations",
+        "missionIds": [
+          "upg_ops_center",
+          "upg_barracks",
+          "upg_workshop"
+        ]
+      },
+      {
+        "name": "Infrastructure",
+        "minInfamy": 25,
+        "missionIds": [
+          "upg_panopticon",
+          "upg_infirmary",
+          "upg_mint"
+        ]
+      },
+      {
+        "name": "Ascendancy",
+        "minInfamy": 45,
+        "missionIds": [
+          "upg_war_room",
+          "upg_propaganda"
+        ]
+      },
+      {
+        "name": "Apotheosis",
+        "minInfamy": 65,
+        "missionIds": [
+          "upg_doomsday_vault",
+          "upg_obsidian_throne"
+        ]
+      }
+    ]
   }
 ]

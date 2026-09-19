@@ -130,7 +130,7 @@ import {
 } from "./ui/mapParallax";
 import { initRunBriefing, type RunBriefingApi, type RunBriefingRow } from "./ui/runBriefing";
 import { initSettingsMenu } from "./ui/playerSettings";
-import { initStageScale, STAGE_WIDTH } from "./ui/stageScale";
+import { initStageScale } from "./ui/stageScale";
 import {
   INBOUND_CALLOUT_CLASS,
   playDispatchSequence,
@@ -181,7 +181,8 @@ import { omegaPhaseTargetsByLocation } from "./ui/map/omegaTargets";
 import { createGlitchDirector } from "./ui/glitchDirector";
 import { initDragFocus } from "./ui/dragFocus";
 import { initDragTether } from "./ui/dragTether";
-import { initDragToken, setDragTokenFaces, type DragTokenFace } from "./ui/dragToken";
+import { addDragTokenFaces, initDragToken, type DragTokenFace } from "./ui/dragToken";
+import { attachCardPreview, hideCardPreview, showCardPreview } from "./ui/cardPreview";
 import {
   beginCardDrag,
   initDropHints,
@@ -428,8 +429,6 @@ console.info(
   "omega plans,",
   catalog.events.length,
   "events,",
-  catalog.organizationNames.length,
-  "organization names,",
   catalog.playerProfiles.length,
   "player profiles,",
   catalog.wantedLevels.length,
@@ -3037,76 +3036,13 @@ function initGameController(
     renderAssetsPanel();
   }
 
-  /**
-   * Floating full-card preview for a collapsed pick slot.
-   *
-   * A staged mission or target only shows a thumbnail and a name in the plan column, which keeps
-   * the column short enough that Target, Minions and the success gauge all stay on screen. The
-   * card the player actually dropped is parked off-slot and floated beside the chip on hover.
-   *
-   * The layer lives on `document.body`, not inside the slot: every panel between here and the
-   * stage clips its overflow, and a card that is six times the height of its chip would be cut
-   * off. The cost is that it sits outside the scaled stage and has to re-apply `--ui-scale`
-   * itself.
+  /*
+   * The floating full-card preview a collapsed pick slot shows on hover lives in
+   * `ui/cardPreview.ts` — one layer for the page, shared with the title screen's setup planner.
+   * Aliased to the names this file has always called them by.
    */
-  let assignPickPreviewEl: HTMLElement | null = null;
-
-  function assignPickPreviewLayer(): HTMLElement {
-    if (assignPickPreviewEl === null) {
-      const el = document.createElement("div");
-      el.className = "assign-pick-preview";
-      el.hidden = true;
-      document.body.appendChild(el);
-      assignPickPreviewEl = el;
-      /* The preview is anchored to a rect measured once, so anything that can move the chip out
-       * from under it drops it rather than leaving it floating in the wrong place. */
-      document.addEventListener("pointerdown", hideAssignPickPreview, { passive: true });
-      window.addEventListener("scroll", hideAssignPickPreview, { capture: true, passive: true });
-    }
-    return assignPickPreviewEl;
-  }
-
-  function hideAssignPickPreview(): void {
-    if (assignPickPreviewEl === null) {
-      return;
-    }
-    assignPickPreviewEl.hidden = true;
-    assignPickPreviewEl.replaceChildren();
-  }
-
-  function showAssignPickPreview(anchor: HTMLElement, card: HTMLElement): void {
-    const layer = assignPickPreviewLayer();
-    layer.replaceChildren(card);
-    layer.hidden = false;
-    const shell = document.querySelector(".omega-shell");
-    const scale = shell === null ? 1 : shell.getBoundingClientRect().width / STAGE_WIDTH;
-    layer.style.transform = `scale(${scale})`;
-    /* Measured after the transform, so these are on-screen pixels either way. */
-    const rect = anchor.getBoundingClientRect();
-    const box = layer.getBoundingClientRect();
-    const margin = 8;
-    let left = rect.right + margin;
-    if (left + box.width > window.innerWidth - margin) {
-      /* No room to the right of the plan column: flip to the other side of the chip. */
-      left = Math.max(margin, rect.left - margin - box.width);
-    }
-    const top = Math.max(margin, Math.min(rect.top, window.innerHeight - box.height - margin));
-    layer.style.left = `${Math.round(left)}px`;
-    layer.style.top = `${Math.round(top)}px`;
-  }
-
-  /** Makes `chip` float `card` beside itself on hover or keyboard focus. */
-  function attachAssignPickPreview(chip: HTMLElement, card: HTMLElement): void {
-    chip.addEventListener("mouseenter", () => {
-      showAssignPickPreview(chip, card);
-    });
-    chip.addEventListener("mouseleave", hideAssignPickPreview);
-    chip.addEventListener("focus", () => {
-      showAssignPickPreview(chip, card);
-    });
-    chip.addEventListener("blur", hideAssignPickPreview);
-    chip.addEventListener("dragstart", hideAssignPickPreview);
-  }
+  const hideAssignPickPreview = hideCardPreview;
+  const attachAssignPickPreview = attachCardPreview;
 
   /**
    * `attachAssignPickPreview` for a manifest row, building the card only once it is first
@@ -3122,7 +3058,7 @@ function initGameController(
     let card: HTMLElement | null = null;
     row.addEventListener("mouseenter", () => {
       card ??= buildAssetPreviewArticle(assetId);
-      showAssignPickPreview(row, card);
+      showCardPreview(row, card);
     });
     row.addEventListener("mouseleave", hideAssignPickPreview);
     /* A row that is also a drag handle for the planner target must not leave its card floating
@@ -10312,7 +10248,7 @@ function initGameController(
   });
 
   ensureAssignPickSlotsWired();
-  setDragTokenFaces(dragTokenFace);
+  addDragTokenFaces(dragTokenFace);
   renderAssignPickSlots();
   buildMapLayersPanel();
   buildMapTelemetry(mapFrameEl);

@@ -52,7 +52,6 @@ export const CONTENT_SLICE_KEYS = [
   "omegaPlans",
   "lairs",
   "events",
-  "organizationNames",
   "playerProfiles",
   "wantedLevels",
   "balance",
@@ -503,6 +502,7 @@ export const assetSchema: z.ZodType<Asset> = z.object({
 
 export const playerProfileSchema: z.ZodType<PlayerProfile> = z.object({
   name: z.string().min(1),
+  organizationName: z.string().min(1),
   profilePic: z.string().min(1),
 });
 
@@ -629,7 +629,6 @@ export const contentSliceSchemas = {
   omegaPlans: z.array(omegaPlanTemplateSchema),
   lairs: z.array(lairTemplateSchema),
   events: z.array(eventTemplateSchema),
-  organizationNames: z.array(z.string().min(1)).min(1),
   playerProfiles: z.array(playerProfileSchema).min(1),
   wantedLevels: z.array(wantedLevelTierSchema).min(1),
   balance: balanceConfigSchema,
@@ -880,7 +879,6 @@ export function parseContentSlices(raw: RawContentSlices): {
     omegaPlans: shape("omegaPlans", normalizeOmegaPlans),
     lairs: shape("lairs", normalizeLairs),
     events: shape("events", normalizeEventTemplates),
-    organizationNames: shape("organizationNames", (d) => d as string[]),
     playerProfiles: shape("playerProfiles", (d) => d as PlayerProfile[]),
     wantedLevels: shape("wantedLevels", (d) => d as WantedLevelTier[]),
     balance: shape("balance", (d) => d as BalanceConfig),

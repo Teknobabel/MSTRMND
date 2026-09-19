@@ -71,5 +71,5 @@ if (missingArt.length > 0) {
 }
 
 console.log(
-  `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.agents.length} agent templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.events.length} events, ${catalog.organizationNames.length} organization names, ${catalog.playerProfiles.length} player profiles, ${catalog.wantedLevels.length} wanted levels`,
+  `Content OK: ${catalog.traits.length} traits, ${catalog.minions.length} minion templates, ${catalog.agents.length} agent templates, ${catalog.missions.length} missions, ${catalog.locations.length} locations, ${catalog.maps.length} maps, ${catalog.assets.length} assets, ${catalog.omegaPlans.length} omega plans, ${catalog.lairs.length} lairs, ${catalog.events.length} events, ${catalog.playerProfiles.length} player profiles, ${catalog.wantedLevels.length} wanted levels`,
 );

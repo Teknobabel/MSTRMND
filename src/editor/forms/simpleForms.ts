@@ -267,20 +267,6 @@ export function renderMapForm(container: HTMLElement, ctx: FormCtx): void {
   );
 }
 
-export function renderOrganizationNameForm(container: HTMLElement, ctx: FormCtx): void {
-  /* organizationNames rows are plain strings; main.ts wraps the string as { value }. */
-  container.appendChild(
-    formRow(
-      "name",
-      textInput(str(ctx.row, "value"), (v) =>
-        ctx.update((row) => {
-          row.value = v;
-        }),
-      ),
-    ),
-  );
-}
-
 export function renderPlayerProfileForm(container: HTMLElement, ctx: FormCtx): void {
   container.appendChild(
     formRow(
@@ -288,6 +274,16 @@ export function renderPlayerProfileForm(container: HTMLElement, ctx: FormCtx): v
       textInput(str(ctx.row, "name"), (v) =>
         ctx.update((row) => {
           row.name = v;
+        }),
+      ),
+    ),
+  );
+  container.appendChild(
+    formRow(
+      "organizationName",
+      textInput(str(ctx.row, "organizationName"), (v) =>
+        ctx.update((row) => {
+          row.organizationName = v;
         }),
       ),
     ),

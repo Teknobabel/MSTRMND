@@ -1,50 +1,42 @@
 [
   {
     "name": "Victor Malice",
-    "profilePic": "/assets/cards/minion.png"
-  },
-  {
-    "name": "Iris Vex",
+    "organizationName": "The Midnight Syndicate",
     "profilePic": "/assets/cards/minion.png"
   },
   {
     "name": "Silas Rook",
+    "organizationName": "The Obsidian Hand",
     "profilePic": "/assets/cards/minion.png"
   },
   {
     "name": "Mara Thorn",
+    "organizationName": "The Cinder Court",
     "profilePic": "/assets/cards/minion.png"
   },
   {
     "name": "Dr. Gideon Frost",
-    "profilePic": "/assets/cards/minion.png"
-  },
-  {
-    "name": "Lenora Blackwell",
+    "organizationName": "Doomsday Cooperative, Ltd.",
     "profilePic": "/assets/cards/minion.png"
   },
   {
     "name": "Kade Mercer",
+    "organizationName": "The World Ransom Company",
     "profilePic": "/assets/cards/minion.png"
   },
   {
     "name": "Elodie Cross",
+    "organizationName": "Church of the Beautiful Catastrophe",
     "profilePic": "/assets/cards/minion.png"
   },
   {
     "name": "Roman Vale",
-    "profilePic": "/assets/cards/minion.png"
-  },
-  {
-    "name": "Juno Pike",
+    "organizationName": "Legion of the Black Sun",
     "profilePic": "/assets/cards/minion.png"
   },
   {
     "name": "The Architect",
-    "profilePic": "/assets/cards/minion.png"
-  },
-  {
-    "name": "Cassandra Wry",
+    "organizationName": "Omega Ascendant",
     "profilePic": "/assets/cards/minion.png"
   }
 ]

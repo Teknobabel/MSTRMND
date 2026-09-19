@@ -26,6 +26,7 @@ import type {
   MissionTarget,
   MissionTargetType,
   MissionTemplate,
+  PlayerProfile,
   SecurityLevel,
   SupportAssetAbility,
 } from "./types";
@@ -385,7 +386,7 @@ export type OmegaSlotFlags = [boolean, boolean, boolean];
 export type GameState = {
   phase: TurnPhase;
   turnNumber: number;
-  /** Evil organization display name for this run (from `ContentCatalog.organizationNames`). */
+  /** Evil organization display name for this run (from the chosen profile’s `organizationName`). */
   organizationName: string;
   /** Player mastermind display name for this run (from `ContentCatalog.playerProfiles`). */
   playerName: string;
@@ -901,20 +902,33 @@ function ownedMinionTemplateIds(player: PlayerState): Set<string> {
   return new Set(player.minions.map((m) => m.templateId));
 }
 
-function pickRandomOrganizationName(catalog: ContentCatalog, rng: Rng): string {
-  const names = catalog.organizationNames;
-  const i = Math.floor(rng() * names.length);
-  return names[i]!;
-}
-
-function pickRandomPlayerProfile(
-  catalog: ContentCatalog,
-  rng: Rng,
-): { name: string; profilePic: string } {
+function pickRandomPlayerProfile(catalog: ContentCatalog, rng: Rng): PlayerProfile {
   const profiles = catalog.playerProfiles;
   const i = Math.floor(rng() * profiles.length);
-  const p = profiles[i]!;
-  return { name: p.name, profilePic: p.profilePic };
+  return profiles[i]!;
+}
+
+/**
+ * Mastermind identity for a new run: the profile `requestedName` names, otherwise a random pick.
+ * Only the random path draws from `rng`, so a chosen identity costs no draw — the same rule
+ * `resolveRunOmegaPlanId` and `resolveRunLairId` follow, which is what keeps a seeded run
+ * reproducible however many of the three the title screen pinned.
+ *
+ * Keyed by name rather than by an id because {@link PlayerProfile} has none: the name *is* the
+ * identity, and a catalog shipping the same mastermind twice would be a content bug either way.
+ */
+function resolveRunPlayerProfile(
+  catalog: ContentCatalog,
+  requestedName: string | null,
+  rng: Rng,
+): PlayerProfile {
+  if (requestedName !== null) {
+    const chosen = catalog.playerProfiles.find((p) => p.name === requestedName);
+    if (chosen !== undefined) {
+      return chosen;
+    }
+  }
+  return pickRandomPlayerProfile(catalog, rng);
 }
 
 /**
@@ -1005,6 +1019,8 @@ export type RunSetup = {
   omegaPlanId?: string | null;
   /** `LairTemplate.id` to start in, or `null` to roll one. */
   lairId?: string | null;
+  /** `PlayerProfile.name` to play as, or `null` to roll one. */
+  playerProfileName?: string | null;
 };
 
 /**
@@ -1063,10 +1079,13 @@ export function createInitialGameState(
   const locationSecurityTraits = rollLocationSecurityTraits(catalog, runLocations, rng);
   const locationIntelStates = rollInitialLocationIntelStates(catalog, runLocations, rng);
   const lairMissionIds = initialLairMissionIds(catalog, lairTemplate);
-  const playerProfile = pickRandomPlayerProfile(catalog, rng);
-  /* Draw order is fixed so seeded runs stay reproducible: org name → hire offers → asset
-   * placements → opening event offer. */
-  const organizationName = pickRandomOrganizationName(catalog, rng);
+  const playerProfile = resolveRunPlayerProfile(
+    catalog,
+    setup.playerProfileName ?? null,
+    rng,
+  );
+  /* Draw order is fixed so seeded runs stay reproducible: hire offers → asset placements →
+   * opening event offer. */
   const availableMinionTemplateIds = pickHireOfferTemplateIds(
     catalog,
     player.maxHireOffers,
@@ -1082,7 +1101,7 @@ export function createInitialGameState(
   const base: GameState = {
     phase: "main",
     turnNumber: 1,
-    organizationName,
+    organizationName: playerProfile.organizationName,
     playerName: playerProfile.name,
     playerProfilePic: playerProfile.profilePic,
     player,

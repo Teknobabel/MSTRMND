@@ -93,7 +93,7 @@ describe("applyIdRenameRaw", () => {
     const before = JSON.stringify(raw);
     applyIdRenameRaw(raw, "traits", "t-req", "t-x");
     expect(JSON.stringify(raw)).toBe(before);
-    const noop = applyIdRenameRaw(raw, "organizationNames", "a", "b");
+    const noop = applyIdRenameRaw(raw, "playerProfiles", "a", "b");
     expect(JSON.stringify(noop)).toBe(before);
   });
 });

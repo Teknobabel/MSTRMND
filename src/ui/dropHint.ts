@@ -53,7 +53,10 @@ export type DragPayloadKind =
   | "mastermind-location"
   | "mastermind-asset"
   | "mastermind-minion"
-  | "mastermind-asset-card";
+  | "mastermind-asset-card"
+  | "mastermind-identity"
+  | "mastermind-lair"
+  | "mastermind-omega-plan";
 
 const ALL_KINDS: readonly string[] = [
   "mastermind-mission",
@@ -61,6 +64,11 @@ const ALL_KINDS: readonly string[] = [
   "mastermind-asset",
   "mastermind-minion",
   "mastermind-asset-card",
+  /* The title screen's three, dropped into the setup planner rather than the run's — same
+   * gesture, same slots, so the drag the game is played with is the one it is started with. */
+  "mastermind-identity",
+  "mastermind-lair",
+  "mastermind-omega-plan",
 ];
 
 /** Marks a slot as a live destination for the card in hand; styled in `styles.css`. */

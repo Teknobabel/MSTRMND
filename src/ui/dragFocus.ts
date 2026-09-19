@@ -24,8 +24,11 @@ const BLUR_CLASS = "ui-drag-blurred";
  */
 const BASE_FILTER_PROP = "--ui-drag-blur-base";
 
-/** The subtree the effect covers: the game screen, menus and overlays included. */
-const ROOT_SELECTOR = ".screen-game";
+/**
+ * The subtree the effect covers: the game screen, menus and overlays included — and the title
+ * screen, whose setup planner is dragged into exactly the same way.
+ */
+const ROOT_SELECTOR = ".screen-game, .screen-main";
 
 /** Stays sharp wherever the drag started — the planner is where the card is going. */
 const KEEP_SHARP_SELECTOR = ".game-panel--plan-column";

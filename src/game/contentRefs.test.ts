@@ -77,7 +77,6 @@ describe("collectContentReferences", () => {
       omegaPlans: new Set(real.omegaPlans.map((p) => p.id)),
       lairs: new Set(real.lairs.map((l) => l.id)),
       events: new Set(real.events.map((e) => e.id)),
-      organizationNames: new Set<string>(),
       playerProfiles: new Set<string>(),
       wantedLevels: new Set<string>(),
       balance: new Set<string>(),

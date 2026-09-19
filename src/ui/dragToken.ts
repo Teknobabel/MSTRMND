@@ -72,7 +72,14 @@ interface LiveToken {
   frame: number;
 }
 
-let resolveFace: FaceResolver | null = null;
+/**
+ * Every surface that can start a card drag registers what its payloads look like. Kept as a list
+ * rather than as one resolver because two of them are live at once and neither owns the other:
+ * the title screen's setup planner is built before the run controller exists, and the controller
+ * would otherwise replace its faces with ones that only know about a run in progress. Asked in
+ * registration order; the first that recognizes a payload answers for it.
+ */
+const faceResolvers: FaceResolver[] = [];
 let blank: HTMLImageElement | null = null;
 let live: LiveToken | null = null;
 
@@ -171,8 +178,18 @@ function exit(
 }
 
 /** Says what each payload looks like in hand. Without a face for it, a drag keeps the browser's. */
-export function setDragTokenFaces(resolver: FaceResolver): void {
-  resolveFace = resolver;
+export function addDragTokenFaces(resolver: FaceResolver): void {
+  faceResolvers.push(resolver);
+}
+
+function faceFor(payload: string): DragTokenFace | null {
+  for (const resolve of faceResolvers) {
+    const face = resolve(payload);
+    if (face !== null) {
+      return face;
+    }
+  }
+  return null;
 }
 
 export function isDragTokenLive(): boolean {
@@ -186,7 +203,7 @@ export function isDragTokenLive(): boolean {
  */
 export function startDragToken(e: DragEvent, payload: string): boolean {
   removeNow();
-  const face = resolveFace?.(payload) ?? null;
+  const face = faceFor(payload);
   if (face === null || blank === null || e.dataTransfer === null) {
     return false;
   }

@@ -7,7 +7,6 @@ import locationsJson from "../../content/locations.json";
 import mapsJson from "../../content/maps.json";
 import minionsJson from "../../content/minions.json";
 import missionsJson from "../../content/missions.json";
-import organizationNamesJson from "../../content/organizationNames.json";
 import playerProfilesJson from "../../content/playerProfiles.json";
 import omegaPlansJson from "../../content/omegaPlans.json";
 import traitsJson from "../../content/traits.json";
@@ -30,7 +29,6 @@ const rawContentSlices: RawContentSlices = {
   omegaPlans: omegaPlansJson,
   lairs: lairsJson,
   events: eventsJson,
-  organizationNames: organizationNamesJson,
   playerProfiles: playerProfilesJson,
   wantedLevels: wantedLevelsJson,
   balance: balanceJson,

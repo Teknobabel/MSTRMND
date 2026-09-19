@@ -749,6 +749,8 @@ export type LairTemplate = {
 /** Catalog entry for the player mastermind identity; one row chosen per run. */
 export type PlayerProfile = {
   name: string;
+  /** Display name of the evil organization this mastermind fronts. */
+  organizationName: string;
   /** Site root path under `public/` (e.g. `/assets/cards/minion.png`). */
   profilePic: string;
 };
@@ -978,9 +980,7 @@ export type ContentCatalog = {
   lairs: LairTemplate[];
   /** Rotating global event mission templates (`content/events.json`). */
   events: EventTemplate[];
-  /** Display names for the player's evil organization; one chosen per run. */
-  organizationNames: string[];
-  /** Player mastermind profiles; one chosen per run for name + portrait. */
+  /** Player mastermind profiles; one chosen per run for name, organization + portrait. */
   playerProfiles: PlayerProfile[];
   /** Ordered wanted tiers (ascending `minHeat`); drives max opposing agents cap. */
   wantedLevels: WantedLevelTier[];

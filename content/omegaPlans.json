@@ -37,5 +37,236 @@
       "In the caldera of Mount Cinder, the Obsidian Throne is warm from the afternoon light you have graciously permitted. Somewhere below, a henchman is already painting your next scheme on the war room wall. The Midnight Sun hangs overhead, patient as winter. Let them have their little daylight. It's yours now, on loan."
     ],
     "victoryTitle": "The Sun Sets at Noon"
+  },
+  {
+    "id": "project_basilisk",
+    "name": "Project Basilisk",
+    "description": "A recognition lattice stitched out of every camera, cash machine and doorbell on the planet — nine billion faces indexed, cross-referenced and searchable in four seconds. Seize the index, wire it to a switchboard of your own, and no one anywhere is ever unaccounted for again. The lattice can be broken into, bought outright, or simply inherited; the agencies that built it can be blackmailed, replaced, or left holding an empty rack. Choose your path.",
+    "mapId": "the_global_stage",
+    "stages": [
+      {
+        "missionIds": [
+          "om1_convoy",
+          "om1_committee",
+          "om1_buyout"
+        ],
+        "requiredMissions": 1
+      },
+      {
+        "missionIds": [
+          "om2_skywatch",
+          "om2_ministry",
+          "om2_aerodyne"
+        ],
+        "requiredMissions": 2
+      },
+      {
+        "missionIds": [
+          "om3_interceptors",
+          "om3_assembly",
+          "om3_markets"
+        ],
+        "requiredMissions": 2
+      }
+    ],
+    "victoryTitle": "Nine Billion Names"
+  },
+  {
+    "id": "drowned_clock",
+    "name": "Operation Drowned Clock",
+    "description": "A string of thermal lances seated under the polar shelf, each one patient enough to take a decade off a coastline in a single season. Set the timers, publish the map of what will still be dry in thirty years, and let the deeds sort themselves out. The lances can be stolen, smuggled, or built in plain sight; the panic can be seeded, sold, or denied right up to the tide line. Choose your path.",
+    "mapId": "the_global_stage",
+    "stages": [
+      {
+        "missionIds": [
+          "om1_convoy",
+          "om1_committee",
+          "om1_buyout"
+        ],
+        "requiredMissions": 1
+      },
+      {
+        "missionIds": [
+          "om2_skywatch",
+          "om2_ministry",
+          "om2_aerodyne"
+        ],
+        "requiredMissions": 2
+      },
+      {
+        "missionIds": [
+          "om3_interceptors",
+          "om3_assembly",
+          "om3_markets"
+        ],
+        "requiredMissions": 2
+      }
+    ],
+    "victoryTitle": "High Water, On Schedule"
+  },
+  {
+    "id": "dead_air",
+    "name": "Project Dead Air",
+    "description": "A cascade seeded into every undersea cable and relay bird at once: no calls, no trades, no orders, no news. Twelve hours of it would unpick a century of trust. Prime the cascade, name the hour, and be the only thing still transmitting when it arrives. The cascade can be cut in, bribed in, or carried in by hand; the silence can be blamed on the sun, on a rival, or on nobody at all. Choose your path.",
+    "mapId": "the_global_stage",
+    "stages": [
+      {
+        "missionIds": [
+          "om1_convoy",
+          "om1_committee",
+          "om1_buyout"
+        ],
+        "requiredMissions": 1
+      },
+      {
+        "missionIds": [
+          "om2_skywatch",
+          "om2_ministry",
+          "om2_aerodyne"
+        ],
+        "requiredMissions": 2
+      },
+      {
+        "missionIds": [
+          "om3_interceptors",
+          "om3_assembly",
+          "om3_markets"
+        ],
+        "requiredMissions": 2
+      }
+    ],
+    "victoryTitle": "The Only Voice Left"
+  },
+  {
+    "id": "gilded_famine",
+    "name": "Operation Gilded Famine",
+    "description": "Not a weapon — a ledger. Corner the seed patents, the freight lanes and the futures desks inside the same fortnight and the world's next harvest belongs to you before it is planted. Starve no one; simply set the price of not starving. The corner can be built with money, with leverage, or with fear; the regulators can be bought, buried, or beaten to the filing. Choose your path.",
+    "mapId": "the_global_stage",
+    "stages": [
+      {
+        "missionIds": [
+          "om1_convoy",
+          "om1_committee",
+          "om1_buyout"
+        ],
+        "requiredMissions": 1
+      },
+      {
+        "missionIds": [
+          "om2_skywatch",
+          "om2_ministry",
+          "om2_aerodyne"
+        ],
+        "requiredMissions": 2
+      },
+      {
+        "missionIds": [
+          "om3_interceptors",
+          "om3_assembly",
+          "om3_markets"
+        ],
+        "requiredMissions": 2
+      }
+    ],
+    "victoryTitle": "The Price of Not Starving"
+  },
+  {
+    "id": "pale_horse",
+    "name": "Project Pale Horse",
+    "description": "A vault holding the only working antivirals for a disease that does not exist yet — because you commissioned both halves of the problem. Hold the vault, let the season turn, and every health ministry on Earth will queue for an appointment. The vault can be seized, franchised, or quietly duplicated; the outbreak can be announced, leaked, or left as a rumor that does the work unassisted. Choose your path.",
+    "mapId": "the_global_stage",
+    "stages": [
+      {
+        "missionIds": [
+          "om1_convoy",
+          "om1_committee",
+          "om1_buyout"
+        ],
+        "requiredMissions": 1
+      },
+      {
+        "missionIds": [
+          "om2_skywatch",
+          "om2_ministry",
+          "om2_aerodyne"
+        ],
+        "requiredMissions": 2
+      },
+      {
+        "missionIds": [
+          "om3_interceptors",
+          "om3_assembly",
+          "om3_markets"
+        ],
+        "requiredMissions": 2
+      }
+    ],
+    "victoryTitle": "By Appointment Only"
+  },
+  {
+    "id": "sleeping_giant",
+    "name": "Operation Sleeping Giant",
+    "description": "A grid of deep-bore resonators threaded along the world's most photogenic fault lines, tuned to a frequency the continent itself will agree with. One demonstration is enough; a second is never required. Sink the bores, run the rehearsal somewhere offshore and empty, then send the invoice. The grid can be drilled, chartered, or repurposed from someone else's survey; the rehearsal can be aimed at open water, at a desert, or at a rival's front garden. Choose your path.",
+    "mapId": "the_global_stage",
+    "stages": [
+      {
+        "missionIds": [
+          "om1_convoy",
+          "om1_committee",
+          "om1_buyout"
+        ],
+        "requiredMissions": 1
+      },
+      {
+        "missionIds": [
+          "om2_skywatch",
+          "om2_ministry",
+          "om2_aerodyne"
+        ],
+        "requiredMissions": 2
+      },
+      {
+        "missionIds": [
+          "om3_interceptors",
+          "om3_assembly",
+          "om3_markets"
+        ],
+        "requiredMissions": 2
+      }
+    ],
+    "victoryTitle": "No Second Demonstration"
+  },
+  {
+    "id": "oracle_glass",
+    "name": "Project Oracle Glass",
+    "description": "A predictive engine fed on forty years of transactions, messages and satellite passes, and right about tomorrow slightly more often than chance permits. Own the engine and you do not rule the world so much as arrive in it first, every time, forever. The engine can be taken whole, rebuilt from its papers, or talked out of the people who wrote them; its verdicts can be sold, seeded, or kept for an audience of one. Choose your path.",
+    "mapId": "the_global_stage",
+    "stages": [
+      {
+        "missionIds": [
+          "om1_convoy",
+          "om1_committee",
+          "om1_buyout"
+        ],
+        "requiredMissions": 1
+      },
+      {
+        "missionIds": [
+          "om2_skywatch",
+          "om2_ministry",
+          "om2_aerodyne"
+        ],
+        "requiredMissions": 2
+      },
+      {
+        "missionIds": [
+          "om3_interceptors",
+          "om3_assembly",
+          "om3_markets"
+        ],
+        "requiredMissions": 2
+      }
+    ],
+    "victoryTitle": "First, Every Time"
   }
 ]

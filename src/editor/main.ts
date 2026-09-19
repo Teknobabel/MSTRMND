@@ -15,7 +15,6 @@ import {
   renderAssetForm,
   renderLocationForm,
   renderMapForm,
-  renderOrganizationNameForm,
   renderPlayerProfileForm,
   renderTraitForm,
   renderWantedLevelForm,
@@ -38,7 +37,6 @@ const SLICE_ORDER: ContentSliceKey[] = [
   "omegaPlans",
   "lairs",
   "wantedLevels",
-  "organizationNames",
   "playerProfiles",
 ];
 
@@ -55,7 +53,6 @@ const SLICE_LABELS: Record<ContentSliceKey, string> = {
   omegaPlans: "Omega Plans",
   lairs: "Lairs",
   wantedLevels: "Wanted Levels",
-  organizationNames: "Org Names",
   playerProfiles: "Player Profiles",
 };
 
@@ -74,7 +71,6 @@ const FORM_RENDERERS: Record<ContentSliceKey, FormRenderer> = {
   omegaPlans: renderOmegaPlanForm,
   lairs: renderLairForm,
   wantedLevels: renderWantedLevelForm,
-  organizationNames: renderOrganizationNameForm,
   playerProfiles: renderPlayerProfileForm,
 };
 
@@ -98,17 +94,11 @@ function isDynamicTraitRow(slice: ContentSliceKey, row: unknown): boolean {
 }
 
 function entityId(row: unknown): string | null {
-  if (typeof row === "string") {
-    return null;
-  }
   const id = (row as Row).id;
   return typeof id === "string" ? id : null;
 }
 
 function entityLabel(slice: ContentSliceKey, row: unknown, index: number): string {
-  if (typeof row === "string") {
-    return row;
-  }
   const r = row as Row;
   if (slice === "wantedLevels") {
     return `${String(r.minHeat ?? "?")}+ · ${str(r, "name") || `#${index}`}`;
@@ -195,10 +185,12 @@ function defaultRowForSlice(
       return { id, name: "New Lair", availableMissionIds: [] };
     case "wantedLevels":
       return { minHeat: 0, name: "New Tier", maxAgents: 0 };
-    case "organizationNames":
-      return "New Organization";
     case "playerProfiles":
-      return { name: "New Profile", profilePic: "/assets/profile.png" };
+      return {
+        name: "New Profile",
+        organizationName: "New Organization",
+        profilePic: "/assets/profile.png",
+      };
     case "balance":
       /* Singleton slice; never created from the entity list. */
       return {};
@@ -532,29 +524,19 @@ function initEditor(store: EditorStore): void {
       panel.appendChild(box);
     }
 
-    /* organizationNames rows are plain strings — wrap them so forms always see a Row. */
-    const isStringSlice = selectedSlice === "organizationNames";
-    const formRowObj: Row = isStringSlice ? { value: row as string } : (row as Row);
     const index = selectedIndex;
     const slice = selectedSlice;
     const ctx: FormCtx = {
       slice,
       index,
-      row: formRowObj,
+      row: row as Row,
       draft: store.draft,
       ids,
       names,
       update(mutate) {
         statusOverride = null;
         store.update((draft) => {
-          const arr = sliceArray(draft, slice);
-          if (isStringSlice) {
-            const wrapped: Row = { value: arr[index] as string };
-            mutate(wrapped);
-            arr[index] = typeof wrapped.value === "string" ? wrapped.value : "";
-          } else {
-            mutate(arr[index] as Row);
-          }
+          mutate(sliceArray(draft, slice)[index] as Row);
         });
       },
     };

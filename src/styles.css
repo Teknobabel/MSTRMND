@@ -296,20 +296,6 @@ body {
   max-width: 300px;
 }
 
-.menu-setup {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-bottom: 0.25rem;
-}
-
-.menu-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  text-align: left;
-}
-
 /* ============================================================
    Buttons
    ============================================================ */
@@ -4122,7 +4108,8 @@ body {
 
 .asset-card,
 .location-card,
-.minions-card {
+.minions-card,
+.setup-card {
   position: relative;
   padding: 0.5rem 0.55rem;
   border: 1px solid var(--line-1);
@@ -4137,7 +4124,8 @@ body {
 
 .asset-card:hover,
 .location-card:hover,
-.minions-card:hover {
+.minions-card:hover,
+.setup-card:hover {
   background:
     var(--notch-line) top right / var(--cut-sm) var(--cut-sm) no-repeat,
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 30%),
@@ -10705,3 +10693,227 @@ body {
     opacity: 1;
   }
 }
+
+/* ============================================================
+   Title screen setup console
+
+   The title screen is a rehearsal of the game: the run is configured on a mission planner, in
+   the planner's own place on screen, by dragging cards into its slots. So almost nothing here
+   is new paint — the planner is a real `.game-panel--plan-column` inside a real
+   `.omega-body--floating`, which is what puts it at exactly the left-edge dock a run's planner
+   occupies, and its slots, chips and Deploy button are the run planner's own classes. What
+   follows is only the shell those two panels sit in, and the roster card's own face.
+   ============================================================ */
+
+/*
+ * The title screen's stage: the same 1920x1080 box `.omega-shell` is authored at, scaled and
+ * centred the same way, so a length written here is a stage pixel and the planner lands on the
+ * same coordinates in both screens. Rows: the masthead, then the console body taking the rest.
+ */
+.setup-shell {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: var(--stage-w);
+  height: var(--stage-h);
+  transform: translate(-50%, -50%) scale(var(--ui-scale));
+  transform-origin: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem 0.5rem;
+}
+
+:root.stage-rotated .setup-shell {
+  transform: translate(-50%, -50%) rotate(90deg) scale(var(--ui-scale));
+}
+
+/* The title bar the console wears instead of a splash: emblem and wordmark on the left, the one
+   line of instruction the screen needs in the middle, Settings on the right. */
+.setup-masthead {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--line-1);
+  border-image: linear-gradient(90deg, var(--red), rgba(232, 17, 45, 0.3) 55%, transparent 95%) 1;
+  background: linear-gradient(180deg, rgba(30, 9, 13, 0.9), rgba(14, 5, 7, 0.82));
+}
+
+.setup-masthead__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+/* The emblem at bar scale; everything else about it is `.menu-emblem`'s, pulse included. */
+.menu-emblem--masthead {
+  flex: 0 0 auto;
+  width: 3.1rem;
+  height: 3.1rem;
+}
+
+.menu-emblem--masthead span {
+  font-size: 1.8rem;
+}
+
+.setup-masthead__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.setup-masthead__title {
+  font-size: 1.5rem;
+  line-height: 1;
+  text-align: left;
+}
+
+.setup-masthead__tagline {
+  margin: 0;
+  font-size: 0.6rem;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+}
+
+/* The instruction. Centred in the bar rather than over the planner, so it reads as chrome the
+   player can stop seeing once they know the gesture. */
+.setup-masthead__brief {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.setup-masthead .btn {
+  flex: 0 0 auto;
+  min-height: 2.2rem;
+  padding: 0.4rem 1.1rem;
+}
+
+/* The docking rectangle the two panels resolve their offsets against — the same job
+   `.omega-body--floating` does on the game screen, which is where the planner's own placement
+   rules come from. */
+.setup-body {
+  position: relative;
+  min-height: 0;
+}
+
+/*
+ * The planner is sized to the plan in it, the way the run's is once `syncPlanColumnHeight` has
+ * measured it. There is no script measuring this one — three fixed sections is the whole plan,
+ * and it cannot grow — so the height is simply given to the content, and the stack that would
+ * otherwise stretch to fill a definite height is told not to.
+ */
+/* Selectors matched to the rules they override — `.omega-body--floating .game-panel--plan-column`
+   and `.game-panel.game-panel--plan-column > .plan-column-stack` — so the cascade lands on
+   weight rather than on this section happening to come last in the file. */
+.omega-body--floating .setup-plan-column {
+  height: fit-content;
+  max-height: 100%;
+}
+
+.setup-plan-column.game-panel--plan-column > .plan-column-stack {
+  flex: 0 0 auto;
+}
+
+.setup-plan-column .missions-panel-page {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+/* The roster fills everything right of the planner, starting where the map-layers dock does so
+   the gutter between the two panels is the one the console already uses. */
+.setup-deck {
+  position: absolute;
+  left: var(--dock-left);
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  --panel-bg: rgba(12, 4, 7, 0.9);
+  overflow: hidden;
+}
+
+.setup-deck__tabs {
+  flex: 0 0 auto;
+}
+
+.setup-deck__pages {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+}
+
+/*
+ * A page of dossiers. `auto-fill` rather than a fixed column count because the three tabs hold
+ * very different numbers of cards — a dozen masterminds against a single omega plan — and a
+ * tab with one card in it should not stretch that card across the panel.
+ */
+.setup-deck__page {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-auto-rows: min-content;
+  align-content: start;
+  gap: 0.6rem;
+  padding: 0.1rem 0.15rem 0.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.setup-deck__page[hidden] {
+  display: none !important;
+}
+
+.setup-card {
+  display: flex;
+  flex-direction: column;
+  cursor: grab;
+}
+
+.setup-card:active {
+  cursor: grabbing;
+}
+
+.setup-card > .card-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* A mastermind is a portrait, not a place: the banner is drawn upright so the face is not
+   cropped to a letterbox. Shallower than the roster minions' 9:16, which at this card width
+   would be taller than the panel. */
+.setup-card--portrait > .card-hero > .card-art {
+  aspect-ratio: 3 / 4;
+}
+
+/* Random wears the console's own mark for something it cannot see yet — the same static an
+   unscouted site does — so the art is left ungraded, as an Unknown location card's is. */
+.setup-card--random {
+  border-left-color: var(--cyan);
+}
+
+.setup-card--random > .card-hero > .card-art,
+.setup-card--random:hover > .card-hero > .card-art {
+  filter: none;
+}
+
+.setup-card--random:hover {
+  border-left-color: var(--cyan);
+}
+

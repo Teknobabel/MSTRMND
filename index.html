@@ -22,28 +22,126 @@
   </head>
   <body>
     <div id="app" class="app-root">
+      <!--
+        The title screen is a dry run of the game itself. Rather than two dropdowns and a Play
+        button, the run is configured on the same mission planner the game is played with, in the
+        same place on screen, by the same gesture: drag a card off the roster on the right into
+        the slot it belongs in on the left, and press Deploy once the plan is complete. A player
+        who has started a run has already been taught the one interaction the whole game is built
+        on, without being told about it.
+
+        The shell below deliberately borrows the console's own classes — `.omega-body--floating`
+        docks the planner to the left edge exactly where a run's planner sits, and the panel is a
+        real `.game-panel--plan-column` with real `.plan-section` frames. Everything inside the
+        two panels is built by `initRunSetup` (src/ui/runSetup.ts) from the catalog.
+      -->
       <section id="screen-main" class="screen screen-main" aria-labelledby="main-title">
         <div class="menu-backdrop" aria-hidden="true"></div>
-        <div class="menu-emblem" aria-hidden="true"><span>&Omega;</span></div>
-        <h1 id="main-title" class="screen-title screen-title--menu">MASTERMIND</h1>
-        <p class="menu-tagline">ALL WILL KNEEL.</p>
-        <div class="screen-actions">
-          <div class="menu-setup">
-            <div class="menu-field">
-              <label class="game-field-label" for="select-omega-plan">Omega Plan</label>
-              <select class="game-select" id="select-omega-plan">
-                <option value="random">Random</option>
-              </select>
+        <div class="setup-shell">
+          <header class="setup-masthead">
+            <div class="setup-masthead__brand">
+              <div class="menu-emblem menu-emblem--masthead" aria-hidden="true"><span>&Omega;</span></div>
+              <div class="setup-masthead__text">
+                <h1 id="main-title" class="screen-title screen-title--menu setup-masthead__title">
+                  MASTERMIND
+                </h1>
+                <p class="menu-tagline setup-masthead__tagline">ALL WILL KNEEL.</p>
+              </div>
             </div>
-            <div class="menu-field">
-              <label class="game-field-label" for="select-lair">Lair</label>
-              <select class="game-select" id="select-lair">
-                <option value="random">Random</option>
-              </select>
-            </div>
+            <p class="setup-masthead__brief">
+              Drag an identity, a lair and an omega plan into the planner, then deploy.
+            </p>
+            <button type="button" class="btn" id="btn-main-settings">Settings</button>
+          </header>
+
+          <div class="omega-body omega-body--floating setup-body">
+            <aside
+              id="setup-plan-column"
+              class="omega-sidebar game-panel game-panel--plan-column setup-plan-column"
+              aria-label="Run planning"
+            >
+              <header class="game-panel-head">
+                <h2 id="setup-plan-title" class="game-panel-title">Run Planning</h2>
+              </header>
+              <div class="plan-column-stack">
+                <div class="missions-panel-page" aria-labelledby="setup-plan-title">
+                  <section class="plan-section" aria-labelledby="setup-section-identity-title">
+                    <header class="plan-section__head">
+                      <h3 id="setup-section-identity-title" class="plan-section__title">Identity</h3>
+                      <span class="plan-section__rule" aria-hidden="true"></span>
+                      <span class="plan-section__note">Who you are</span>
+                    </header>
+                    <div class="plan-section__body">
+                      <div
+                        id="setup-slot-identity"
+                        class="assign-pick-slot"
+                        aria-label="Mastermind slot, drag a mastermind card here"
+                      ></div>
+                    </div>
+                  </section>
+
+                  <section class="plan-section" aria-labelledby="setup-section-lair-title">
+                    <header class="plan-section__head">
+                      <h3 id="setup-section-lair-title" class="plan-section__title">Lair</h3>
+                      <span class="plan-section__rule" aria-hidden="true"></span>
+                      <span class="plan-section__note">Where you work</span>
+                    </header>
+                    <div class="plan-section__body">
+                      <div
+                        id="setup-slot-lair"
+                        class="assign-pick-slot"
+                        aria-label="Lair slot, drag a lair card here"
+                      ></div>
+                    </div>
+                  </section>
+
+                  <section class="plan-section" aria-labelledby="setup-section-omega-title">
+                    <header class="plan-section__head">
+                      <h3 id="setup-section-omega-title" class="plan-section__title">Omega Plan</h3>
+                      <span class="plan-section__rule" aria-hidden="true"></span>
+                      <span class="plan-section__note">What you want</span>
+                    </header>
+                    <div class="plan-section__body">
+                      <div
+                        id="setup-slot-omega-plan"
+                        class="assign-pick-slot"
+                        aria-label="Omega plan slot, drag an omega plan card here"
+                      ></div>
+                    </div>
+                  </section>
+                </div>
+                <div class="plan-column-footer">
+                  <div class="btn-submit-mission-wrap" id="setup-submit-wrap">
+                    <button type="button" class="btn btn-submit-mission" id="btn-play">
+                      <span>Deploy</span>
+                    </button>
+                    <span
+                      id="setup-blocked-alert"
+                      class="assign-blocked-alert"
+                      role="status"
+                      aria-live="polite"
+                    ></span>
+                  </div>
+                </div>
+              </div>
+            </aside>
+
+            <main
+              class="game-panel setup-deck"
+              aria-labelledby="setup-deck-title"
+            >
+              <header class="game-panel-head">
+                <h2 id="setup-deck-title" class="game-panel-title">Dossier Roster</h2>
+              </header>
+              <div
+                id="setup-deck-tabs"
+                class="missions-panel-tabs setup-deck__tabs"
+                role="tablist"
+                aria-label="Dossier categories"
+              ></div>
+              <div id="setup-deck-pages" class="setup-deck__pages"></div>
+            </main>
           </div>
-          <button type="button" class="btn btn-primary" id="btn-play">Initiate</button>
-          <button type="button" class="btn" id="btn-main-settings">Settings</button>
         </div>
       </section>
 
