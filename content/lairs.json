@@ -64,12 +64,12 @@
       "pen_test"
     ],
     "mapPosition": {
-      "x": 8.0,
-      "y": 52.0
+      "x": 8,
+      "y": 52
     },
     "startingAssets": {
-      "ghost_protocol": 1,
-      "emp_scrambler": 1
+      "emp_scrambler": 1,
+      "ghost_protocol": 1
     },
     "unlockedByDefault": true,
     "upgradeLevels": [
@@ -118,8 +118,8 @@
       "pen_test"
     ],
     "mapPosition": {
-      "x": 36.0,
-      "y": 10.0
+      "x": 36,
+      "y": 10
     },
     "startingAssets": {
       "emp_scrambler": 1,
@@ -171,12 +171,12 @@
       "pen_test"
     ],
     "mapPosition": {
-      "x": 29.0,
-      "y": 71.0
+      "x": 29,
+      "y": 71
     },
     "startingAssets": {
-      "state_secrets": 1,
-      "midnight_lens": 1
+      "midnight_lens": 1,
+      "state_secrets": 1
     },
     "upgradeLevels": [
       {
@@ -224,12 +224,12 @@
       "pen_test"
     ],
     "mapPosition": {
-      "x": 70.0,
-      "y": 22.0
+      "x": 70,
+      "y": 22
     },
     "startingAssets": {
-      "prototype_railgun": 1,
-      "mercenary_contracts": 1
+      "mercenary_contracts": 1,
+      "prototype_railgun": 1
     },
     "upgradeLevels": [
       {
@@ -277,8 +277,8 @@
       "pen_test"
     ],
     "mapPosition": {
-      "x": 59.0,
-      "y": 45.0
+      "x": 59,
+      "y": 45
     },
     "startingAssets": {
       "gold_bullion": 1,
@@ -334,8 +334,8 @@
       "y": 41.5
     },
     "startingAssets": {
-      "inside_man": 1,
-      "blackmail_dossier": 1
+      "blackmail_dossier": 1,
+      "inside_man": 1
     },
     "upgradeLevels": [
       {
@@ -384,7 +384,7 @@
     ],
     "mapPosition": {
       "x": 57.5,
-      "y": 57.0
+      "y": 57
     },
     "startingAssets": {
       "fusion_core": 1,

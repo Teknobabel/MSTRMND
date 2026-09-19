@@ -2,44 +2,44 @@
   {
     "name": "Victor Malice",
     "organizationName": "The Midnight Syndicate",
-    "profilePic": "/assets/cards/minion.png",
+    "profilePic": "/assets/cards/custom/profile-victor-malice.webp",
     "unlockedByDefault": true
   },
   {
     "name": "Silas Rook",
     "organizationName": "The Obsidian Hand",
-    "profilePic": "/assets/cards/minion.png",
+    "profilePic": "/assets/cards/custom/profile-silas-rook.webp",
     "unlockedByDefault": true
   },
   {
     "name": "Mara Thorn",
     "organizationName": "The Cinder Court",
-    "profilePic": "/assets/cards/minion.png",
+    "profilePic": "/assets/cards/custom/profile-mara-thorn.webp",
     "unlockedByDefault": true
   },
   {
     "name": "Dr. Gideon Frost",
     "organizationName": "Doomsday Cooperative, Ltd.",
-    "profilePic": "/assets/cards/minion.png"
+    "profilePic": "/assets/cards/custom/profile-dr-gideon-frost.webp"
   },
   {
     "name": "Kade Mercer",
     "organizationName": "The World Ransom Company",
-    "profilePic": "/assets/cards/minion.png"
+    "profilePic": "/assets/cards/custom/profile-kade-mercer.webp"
   },
   {
     "name": "Elodie Cross",
     "organizationName": "Church of the Beautiful Catastrophe",
-    "profilePic": "/assets/cards/minion.png"
+    "profilePic": "/assets/cards/custom/profile-elodie-cross.webp"
   },
   {
     "name": "Roman Vale",
     "organizationName": "Legion of the Black Sun",
-    "profilePic": "/assets/cards/minion.png"
+    "profilePic": "/assets/cards/custom/profile-roman-vale.webp"
   },
   {
     "name": "The Architect",
     "organizationName": "Omega Ascendant",
-    "profilePic": "/assets/cards/minion.png"
+    "profilePic": "/assets/cards/custom/profile-the-architect.webp"
   }
 ]

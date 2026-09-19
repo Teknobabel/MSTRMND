@@ -11029,27 +11029,29 @@ body {
 }
 
 /*
- * A page of dossiers: three columns, at a fixed width, centred in the panel.
+ * A page of dossiers: four columns across the full width of the panel.
  *
- * Fixed rather than fluid (`auto-fill` with a flexible track, which this was) because the three
- * tabs hold very different numbers of cards — eight masterminds against two omega plans — and a
+ * A fixed count rather than a fluid one (`auto-fill`, which this was) because the three tabs
+ * hold very different numbers of cards — eight masterminds against two omega plans — and a
  * fluid grid answers that by changing the size of a dossier from tab to tab. A dossier is the
  * same object in all three, so it is the same size in all three, and a short tab simply has
- * fewer of them. Centring is what keeps the short tab from reading as left-aligned in a panel
- * the full tab fills.
+ * fewer of them.
  *
- * Three is the count the cards are legible at across this panel: wide enough for the portrait
- * to carry a face and for the organization line to sit beside its label, and two full rows fit
- * the height, so the page opens on six dossiers rather than on a band of thumbnails.
+ * Four is what the panel's width will carry at this card's proportions: a dossier lands near
+ * 17.5rem, still wide enough for the portrait to read as a face and for the organization line
+ * to sit beside its label. The tracks are `1fr` rather than a fixed width, so the row spans the
+ * panel edge to edge and there is no centring gutter left over at either end.
+ *
+ * A full masterminds tab is nine cards over three rows and scrolls; the second row is most of
+ * the way onto the screen at rest, which is what says so.
  */
 .setup-deck__page {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 18.5rem));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-auto-rows: min-content;
   align-content: start;
-  justify-content: center;
   gap: 0.65rem;
   padding: 0.1rem 0.15rem 0.5rem;
   overflow-y: auto;
@@ -11078,10 +11080,11 @@ body {
 }
 
 /* A mastermind is a portrait, not a place: the banner is drawn upright so the face is not
-   cropped to a letterbox. Square rather than the roster minions' 9:16 — at this card's width
-   that would be a dossier taller than the panel, and two rows have to fit. */
+   cropped to a letterbox. 3:4 because that is what the dossier portraits are authored at
+   (864x1152) — `.card-art` covers its box, so any other ratio here would crop a face the
+   artist framed. If the portraits are ever re-cut, this number follows them. */
 .setup-card--portrait > .card-hero > .card-art {
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 3 / 4;
 }
 
 /* Random wears the console's own mark for something it cannot see yet — the same static an
