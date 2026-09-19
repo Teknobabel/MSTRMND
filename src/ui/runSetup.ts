@@ -80,6 +80,11 @@ interface SetupCard {
   description: string;
   /** Labelled lines under the description — what this choice actually changes about the run. */
   stats: readonly { label: string; value: string }[];
+  /**
+   * The same facts as {@link stats}, written as one sentence. A banner row has no second column
+   * to hang a stat table off, so it prints this instead; a card ignores it.
+   */
+  line: string;
   /** Not yet unlocked: shown, scrimmed, and inert. The Random card is never locked. */
   locked: boolean;
 }
@@ -96,8 +101,14 @@ interface SetupSlotSpec {
   emptyHint: string;
   /** What a locked card in this tab says it is. */
   lockedNoun: string;
-  /** Portrait art rather than the default 16:9 banner. */
+  /** Portrait art rather than the default 16:9 banner. Card layout only. */
   portrait: boolean;
+  /**
+   * How the tab lays its dossiers out. `"grid"` is the four-up deck of cards; `"list"` is a
+   * stack of full-width banner rows, which is what a tab holding a handful of things the player
+   * reads rather than compares wants — see `.setup-card--row` in `styles.css`.
+   */
+  layout: "grid" | "list";
   /** Rebuilt whenever the unlock view changes, so the tab is never stale. */
   cards: readonly SetupCard[];
 }
@@ -163,6 +174,7 @@ function randomCard(what: string, unlockedCount: number): SetupCard {
      * about to be handed to them by the console.
      */
     stats: [{ label: "Drawn From", value: `${unlockedCount} unlocked` }],
+    line: `Drawn from ${unlockedCount} unlocked ${what}s.`,
     locked: false,
   };
 }
@@ -192,6 +204,7 @@ function identityCards(profiles: readonly PlayerProfile[], unlocked: UnlockView)
       art: p.profilePic === "" ? DEFAULT_MINION_CARD_ART : p.profilePic,
       description: "The name on the broadcasts and the face on every warrant.",
       stats: [{ label: "Organization", value: p.organizationName }],
+      line: p.organizationName,
       locked: !unlocked.isUnlocked("mastermind", p.name),
     })),
   );
@@ -209,6 +222,7 @@ function lairCards(lairs: readonly LairTemplate[], unlocked: UnlockView): SetupC
         { label: "Opening Missions", value: String(lair.availableMissionIds.length) },
         { label: "Upgrade Tiers", value: String(lair.upgradeLevels.length) },
       ],
+      line: `${lair.upgradeLevels.length} levels. ${lair.availableMissionIds.length} missions open from the start.`,
       locked: !unlocked.isUnlocked("lair", lair.id),
     })),
   );
@@ -220,20 +234,27 @@ function omegaPlanCards(
   unlocked: UnlockView,
 ): SetupCard[] {
   const cards = unlockedFirst(
-    plans.map((plan) => ({
-      id: plan.id,
-      name: plan.name,
-      art: resolveOmegaPlanCardArt(plan),
-      description: plan.description ?? "",
-      stats: [
-        { label: "Stages", value: String(plan.stages.length) },
-        {
-          label: "Missions Required",
-          value: String(plan.stages.reduce((n, s) => n + s.requiredMissions, 0)),
-        },
-      ],
-      locked: !unlocked.isUnlocked("omegaPlan", plan.id),
-    })),
+    plans.map((plan) => {
+      const missions = plan.stages.reduce((n, s) => n + s.requiredMissions, 0);
+      return {
+        id: plan.id,
+        name: plan.name,
+        art: resolveOmegaPlanCardArt(plan),
+        description: plan.description ?? "",
+        stats: [
+          { label: "Stages", value: String(plan.stages.length) },
+          { label: "Missions Required", value: String(missions) },
+        ],
+        /*
+         * The stat table's two numbers, said the way the plan would say them. A banner row is
+         * read like a poster rather than scanned like a spec sheet, and "3 phases, 5 operations"
+         * is the same information a player actually needs off one: how long this is, and how
+         * much of it is work.
+         */
+        line: `${plan.stages.length} phases. ${missions} operations to a darker tomorrow.`,
+        locked: !unlocked.isUnlocked("omegaPlan", plan.id),
+      };
+    }),
   );
   return [randomCard("plan", unlocked.counts("omegaPlan").unlocked), ...cards];
 }
@@ -253,6 +274,7 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
       emptyHint: "Drag a mastermind here",
       lockedNoun: "mastermind",
       portrait: true,
+      layout: "grid",
       cards: [],
     },
     lair: {
@@ -264,6 +286,7 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
       emptyHint: "Drag a lair here",
       lockedNoun: "lair",
       portrait: false,
+      layout: "list",
       cards: [],
     },
     omegaPlan: {
@@ -275,6 +298,7 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
       emptyHint: "Drag an omega plan here",
       lockedNoun: "omega plan",
       portrait: false,
+      layout: "list",
       cards: [],
     },
   };
@@ -309,11 +333,35 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
    * Cards
    * ------------------------------------------------------------------------------------ */
 
+  /** The "Restricted" badge a locked dossier wears, wherever its layout hangs one. */
+  function lockBadge(): HTMLElement {
+    const badge = document.createElement("div");
+    badge.className = "setup-card__lock-badge";
+    badge.setAttribute("aria-hidden", "true");
+    badge.innerHTML = ICON_LOCK;
+    const word = document.createElement("span");
+    word.textContent = "Restricted";
+    badge.appendChild(word);
+    return badge;
+  }
+
+  /** What a locked dossier says about itself, in place of whatever it would have said. */
+  function lockNoteText(spec: SetupSlotSpec): string {
+    return `Restricted — unlock this ${spec.lockedNoun} to bring it into a run.`;
+  }
+
+  function lockNote(spec: SetupSlotSpec): HTMLElement {
+    const note = document.createElement("p");
+    note.className = "setup-card__lock-note";
+    note.textContent = lockNoteText(spec);
+    return note;
+  }
+
   /**
-   * A roster card's face, with none of the behaviour — so the same build serves the card in the
-   * deck and the hover preview a staged chip floats beside itself, the way the run's cards do.
+   * The deck's card face: art across the top, name on the picture, prose and a stat table under
+   * it. What a tab the player is comparing things across wants.
    */
-  function fillCard(article: HTMLElement, spec: SetupSlotSpec, card: SetupCard): void {
+  function fillGridCard(article: HTMLElement, spec: SetupSlotSpec, card: SetupCard): void {
     const { meta, body } = appendCardHeroShell(article, card.art);
 
     /* Over the art and under the name plate, so the picture reads as shut away while the name
@@ -322,14 +370,7 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
      * parented to it would measure its `top` from there instead of from the top of the banner. */
     if (card.locked) {
       appendCardHeroOverlay(meta, "setup-card__lock-scrim");
-      const badge = document.createElement("div");
-      badge.className = "setup-card__lock-badge";
-      badge.setAttribute("aria-hidden", "true");
-      badge.innerHTML = ICON_LOCK;
-      const word = document.createElement("span");
-      word.textContent = "Restricted";
-      badge.appendChild(word);
-      meta.before(badge);
+      meta.before(lockBadge());
     }
 
     const title = document.createElement("h4");
@@ -360,10 +401,69 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
       article.classList.add("setup-card--portrait");
     }
     if (card.locked) {
-      const note = document.createElement("p");
-      note.className = "setup-card__lock-note";
-      note.textContent = `Restricted — unlock this ${spec.lockedNoun} to bring it into a run.`;
-      body.appendChild(note);
+      body.appendChild(lockNote(spec));
+    }
+  }
+
+  /**
+   * The list's banner row — which is the `.lair-hero` / `.omega-plan-hero` banner the lair and
+   * omega menus open on, in the roster. Same markup, same rules (see "Plan banner" in
+   * `styles.css`), so a lair looks on the title screen exactly like the thing the player will
+   * be looking at all run: art full-bleed behind the band, name over it, prose and a count
+   * stacked under the name on the dark end of a scrim.
+   *
+   * The art is the row rather than a picture inside the row, which is the difference between
+   * the two faces. A tab of four cards is a comparison — each one has to present the same fields
+   * in the same places, so the picture is boxed and the text is tabulated beside it. A tab of
+   * two or three plans is not a comparison; it is a choice between two futures, and the thing
+   * that sells a future is the picture of it. So the picture gets the whole row and the text
+   * rides on top of it.
+   */
+  function fillRowCard(article: HTMLElement, spec: SetupSlotSpec, card: SetupCard): void {
+    article.classList.add("setup-card--row");
+    article.appendChild(createCardArtImg(card.art, "setup-row__art"));
+
+    if (card.locked) {
+      const scrim = document.createElement("div");
+      scrim.className = "setup-card__lock-scrim";
+      scrim.setAttribute("aria-hidden", "true");
+      article.appendChild(scrim);
+      article.appendChild(lockBadge());
+    }
+
+    const text = document.createElement("div");
+    text.className = "setup-row__text";
+
+    const title = document.createElement("h4");
+    title.className = "setup-row__title";
+    title.textContent = card.name;
+    text.appendChild(title);
+
+    const desc = document.createElement("p");
+    desc.className = "setup-row__desc";
+    desc.textContent = card.description;
+    text.appendChild(desc);
+
+    const line = document.createElement("p");
+    line.className = "setup-row__line";
+    line.textContent = card.locked ? lockNoteText(spec) : card.line;
+    text.appendChild(line);
+
+    article.appendChild(text);
+  }
+
+  /**
+   * A roster card's face, with none of the behaviour — so the same build serves the card in the
+   * deck and the hover preview a staged chip floats beside itself, the way the run's cards do.
+   * Which face is the tab's to say; see {@link SetupSlotSpec.layout}.
+   */
+  function fillCard(article: HTMLElement, spec: SetupSlotSpec, card: SetupCard): void {
+    if (spec.layout === "list") {
+      fillRowCard(article, spec, card);
+    } else {
+      fillGridCard(article, spec, card);
+    }
+    if (card.locked) {
       article.classList.add("setup-card--locked");
     }
     if (card.id === null) {
@@ -686,7 +786,8 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
 
       const page = document.createElement("div");
       page.id = pageId;
-      page.className = "setup-deck__page";
+      page.className =
+        spec.layout === "list" ? "setup-deck__page setup-deck__page--list" : "setup-deck__page";
       page.setAttribute("role", "tabpanel");
       page.setAttribute("aria-labelledby", tabId);
       for (const card of spec.cards) {

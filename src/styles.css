@@ -3545,6 +3545,12 @@ body {
  * The subject's art runs full-bleed across the whole band with the copy laid over it, so the
  * negative margins pull the banner back out through the menu's gutter to its top and side
  * edges — the panel's own clip-path re-cuts the corners over it.
+ *
+ * The title screen's roster rows (`.setup-card--row`) are this same banner, and join these
+ * rules outright rather than restating their numbers: a lair on the title screen should be the
+ * object the player will be looking at all run, not a drawing of it. Only what makes a menu
+ * header a menu header — the bleed-out margins, the rule under it — is left to the two heroes,
+ * and the row's own box is set where the roster's cards are.
  */
 .omega-plan-hero,
 .lair-hero {
@@ -3565,7 +3571,8 @@ body {
  * art itself, and the house saturate/contrast grade visibly darkens it against the source.
  */
 .omega-plan-hero > .omega-plan-hero__art,
-.lair-hero > .lair-hero__art {
+.lair-hero > .lair-hero__art,
+.setup-card--row > .setup-row__art {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -3581,7 +3588,8 @@ body {
  * top-and-tail layer over it would tint the clear side too.
  */
 .omega-plan-hero::after,
-.lair-hero::after {
+.lair-hero::after,
+.setup-card--row::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -3596,7 +3604,8 @@ body {
 }
 
 .omega-plan-hero__text,
-.lair-hero__text {
+.lair-hero__text,
+.setup-row__text {
   position: relative;
   /* Above the art and its scrim. */
   z-index: 1;
@@ -3608,7 +3617,8 @@ body {
 }
 
 .omega-plan-name,
-.lair-hero-name {
+.lair-hero-name,
+.setup-row__title {
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.85rem;
@@ -3621,7 +3631,8 @@ body {
 }
 
 .omega-plan-description,
-.lair-hero-description {
+.lair-hero-description,
+.setup-row__desc {
   margin: 0.15rem 0 0;
   font-size: 0.78rem;
   line-height: 1.45;
@@ -3635,7 +3646,8 @@ body {
 
 /* Flavour line under the blurb, in the same red as the kicker above it. */
 .omega-plan-tagline,
-.lair-hero-tagline {
+.lair-hero-tagline,
+.setup-row__line {
   margin: auto 0 0;
   padding-top: 0.35rem;
   font-family: var(--font-display);
@@ -11062,6 +11074,12 @@ body {
   display: none !important;
 }
 
+/* A tab that stacks banner rows instead of dealing cards. One column, so the row is as wide as
+   the panel and the art in it has somewhere to be a landscape. */
+.setup-deck__page--list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .setup-card {
   display: flex;
   flex-direction: column;
@@ -11371,6 +11389,126 @@ body {
 .setup-brand__steps-last {
   color: var(--red-bright);
   text-shadow: 0 0 12px var(--red-glow);
+}
+
+/* ------------------------------------------------------------------
+   Banner rows
+
+   The other face a dossier can wear, and the lairs' and omega plans' one. Everything about how
+   it looks is the in-game hero's, up under "Plan banner" — the art, the scrim, the text column,
+   and the three lines of copy all come from the rules `.lair-hero` sets. What is here is only
+   what a roster row has that a menu header does not: a box of its own, the states a pickable
+   card wears, and a size for the hover preview. See `fillRowCard` in `src/ui/runSetup.ts`.
+   ------------------------------------------------------------------ */
+
+/*
+ * The box. `justify-content` and the flex column come from `.setup-card`, which is already what
+ * the hero is; what the row adds is a definite height, because a list is read down its left edge
+ * and rows of different heights read as a mistake. With the description clamped the tallest row
+ * this can hold is known, so the height can be fixed rather than grown into.
+ *
+ * `min-height: 0` is what lets that height stand: a grid item's automatic minimum is its own
+ * content, which would otherwise quietly stretch the longest row and leave the others short.
+ */
+.setup-card--row {
+  justify-content: center;
+  height: 11.5rem;
+  min-height: 0;
+  padding: 1.1rem 1.5rem 1.2rem;
+  overflow: hidden;
+}
+
+/*
+ * The two numbers the roster row does not take from the hero, and the reason is the same for
+ * both: this band is about 1.7x the width of the menu panel the hero was tuned against. At the
+ * hero's 46% every second name in the catalog breaks over two lines — which a menu header can
+ * carry, being one of it, and a list of three cannot. So the copy gets a wider column, and the
+ * scrim's ramp moves right by as much, to keep the last word of a line on the dark of the plate
+ * rather than out over the picture.
+ */
+.setup-row__text {
+  max-width: 58%;
+  /* Over the lock scrim as well as the art scrim, where the hero only has the one to clear. */
+  z-index: 2;
+}
+
+.setup-card--row::after {
+  background: linear-gradient(
+    90deg,
+    rgba(6, 2, 4, 0.96) 0%,
+    rgba(6, 2, 4, 0.93) 46%,
+    rgba(6, 2, 4, 0.6) 64%,
+    rgba(6, 2, 4, 0) 78%
+  );
+}
+
+/* A row's badge sits on the row itself, there being no banner inside it to hang from. */
+.setup-card--row > .setup-card__lock-badge {
+  top: 0.6rem;
+  right: 0.6rem;
+}
+
+/*
+ * Restricted: hatching and a grade, not a second wash of black. The row already carries a scrim
+ * built to leave the right of the picture clear, and what is behind the lock is the reason to
+ * keep playing — a plate you cannot make out says nothing about that.
+ */
+.setup-card--row > .setup-card__lock-scrim {
+  z-index: 1;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 0, 0, 0.34) 0 6px,
+    rgba(0, 0, 0, 0.1) 6px 12px
+  );
+}
+
+.setup-card--row.setup-card--locked > .setup-row__art {
+  filter: grayscale(1) brightness(0.62) contrast(1.05);
+}
+
+.setup-card--row.setup-card--locked .setup-row__title {
+  color: var(--text-2);
+}
+
+/* The note has taken the count's place (`fillRowCard`), so it is coloured like the warning it
+   is rather than like the fact it replaced. */
+.setup-card--row.setup-card--locked .setup-row__line {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-style: italic;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-3);
+}
+
+/* Random wears the console's mark for something it cannot see yet, as it does in the deck. */
+.setup-card--row.setup-card--random > .setup-row__art {
+  filter: none;
+}
+
+/*
+ * The same row, floated beside a staged chip. A hover preview is a tooltip rather than a band
+ * across a panel, and at the 300px every other preview is drawn at this one would be all title
+ * and no room — three lines of name, no prose, and a count cut off mid-word.
+ *
+ * So the preview gets a plate wide enough to still be a banner, and inside it the two things
+ * that only make sense at panel width give way: the copy takes the whole plate instead of its
+ * left 46%, and the scrim goes flat instead of ramping off to a clear right-hand third that no
+ * longer exists. The face is the same one the deck shows; only what it stands on changed.
+ */
+.setup-card--row.assign-pick-preview-card {
+  width: 30rem;
+  max-width: 30rem;
+  height: auto;
+}
+
+.setup-card--row.assign-pick-preview-card .setup-row__text {
+  max-width: 100%;
+}
+
+.setup-card--row.assign-pick-preview-card::after {
+  background:
+    linear-gradient(90deg, rgba(6, 2, 4, 0.93), rgba(6, 2, 4, 0.84) 65%, rgba(6, 2, 4, 0.7));
 }
 
 /* ------------------------------------------------------------------
