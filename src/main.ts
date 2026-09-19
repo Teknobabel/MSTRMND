@@ -129,6 +129,7 @@ import {
   type MapParallaxOffset,
 } from "./ui/mapParallax";
 import { initRunBriefing, type RunBriefingApi, type RunBriefingRow } from "./ui/runBriefing";
+import { initProgression } from "./game/progression";
 import { initSettingsMenu } from "./ui/playerSettings";
 import { initStageScale } from "./ui/stageScale";
 import {
@@ -10266,10 +10267,28 @@ function initGameController(
   };
 }
 
-const runSetup = initRunSetup(catalog);
 const playerSettings = initSettingsMenu(
   typeof localStorage === "undefined" ? null : localStorage,
 );
+
+/*
+ * What the player has unlocked, built before the title screen because the title screen is the
+ * screen that shows it. It reads Unlock All Content through a callback rather than a value, so
+ * the settings screen and this never have to agree about who was built first; the subscription
+ * below is what turns a change into a redraw.
+ */
+const progression = initProgression({
+  catalog,
+  storage: typeof localStorage === "undefined" ? null : localStorage,
+  unlockAll: () => playerSettings.read().unlockAllContent,
+});
+playerSettings.subscribe((key) => {
+  if (key === "unlockAllContent") {
+    progression.refresh();
+  }
+});
+
+const runSetup = initRunSetup(catalog, progression);
 
 /* The shell the run's opening plays on. Static markup, so it is found once rather than per run. */
 const omegaShell = document.querySelector<HTMLElement>(".omega-shell");

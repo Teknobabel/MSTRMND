@@ -155,6 +155,10 @@ export function rawFixtureSlices(): FixtureSlices {
           { missionIds: ["ms-basic", "ms-basic", "ms-basic"] },
           { missionIds: ["ms-basic", "ms-basic", "ms-basic"] },
         ],
+        /* The fixtures ship one row per unlockable slice, so that row has to be the starting
+         * deck — an all-locked slice is a content error (see `pushEmptyStartingDeckIssue`) and
+         * would fail every test that parses this catalog. */
+        unlockedByDefault: true,
       },
     ],
     lairs: [
@@ -162,6 +166,7 @@ export function rawFixtureSlices(): FixtureSlices {
         id: "lair-1",
         name: "Volcano Base",
         availableMissionIds: ["ms-basic", "ms-asset"],
+        unlockedByDefault: true,
       },
     ],
     events: [
@@ -177,7 +182,12 @@ export function rawFixtureSlices(): FixtureSlices {
       },
     ],
     playerProfiles: [
-      { name: "Tester", organizationName: "Test Syndicate", profilePic: "/assets/test.png" },
+      {
+        name: "Tester",
+        organizationName: "Test Syndicate",
+        profilePic: "/assets/test.png",
+        unlockedByDefault: true,
+      },
     ],
     wantedLevels: [
       { minHeat: 0, name: "Shadow", maxAgents: 0 },

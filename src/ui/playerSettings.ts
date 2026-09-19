@@ -25,11 +25,21 @@ export interface PlayerSettings {
    * will bother, which on an effect keyed to pointer movement is two people worth having one for.
    */
   readonly mapParallax: boolean;
+  /**
+   * Open every mastermind, lair and omega plan at the title screen, whatever has been earned.
+   *
+   * Off by default: the unlock ladder is the reason most of the catalog is not pickable on a
+   * new save, and a toggle that quietly skips it is not one a player should find already
+   * flipped. It overrides the progress rather than rewriting it — see `game/progression.ts` —
+   * so switching it back off hands the player exactly the deck they had.
+   */
+  readonly unlockAllContent: boolean;
 }
 
 export const PLAYER_SETTINGS_DEFAULTS: PlayerSettings = {
   skipBootSequence: false,
   mapParallax: true,
+  unlockAllContent: false,
 };
 
 /** Where the settings are parked between sessions. Versioned: the list will grow. */
@@ -60,6 +70,10 @@ export function normalizePlayerSettings(raw: unknown): PlayerSettings {
       typeof row.mapParallax === "boolean"
         ? row.mapParallax
         : PLAYER_SETTINGS_DEFAULTS.mapParallax,
+    unlockAllContent:
+      typeof row.unlockAllContent === "boolean"
+        ? row.unlockAllContent
+        : PLAYER_SETTINGS_DEFAULTS.unlockAllContent,
   };
 }
 
@@ -98,12 +112,22 @@ export function savePlayerSettings(
 export interface SettingsMenuApi {
   /** The settings as they stand right now. Read at the point of use, never cached by callers. */
   read(): PlayerSettings;
+  /**
+   * Run `listener` after any control is changed, with the setting it wrote.
+   *
+   * Most settings are read at the moment they matter and need no notice — the boot sequence
+   * asks on its way in, the parallax asks on every pointer move. Unlock All is the exception:
+   * it decides what a screen that is already built is showing, so that screen has to be told.
+   * Returns the unsubscribe, though nothing in the game outlives the settings menu.
+   */
+  subscribe(listener: (key: keyof PlayerSettings, settings: PlayerSettings) => void): () => void;
 }
 
 /** The controls on the Settings screen, by the setting each one writes. */
 const SETTINGS_CONTROL_IDS: Readonly<Record<keyof PlayerSettings, string>> = {
   skipBootSequence: "setting-skip-boot",
   mapParallax: "setting-map-parallax",
+  unlockAllContent: "setting-unlock-all-content",
 };
 
 /**
@@ -119,6 +143,7 @@ const SETTINGS_CONTROL_IDS: Readonly<Record<keyof PlayerSettings, string>> = {
  */
 export function initSettingsMenu(storage: PlayerSettingsStorage | null): SettingsMenuApi {
   let settings = loadPlayerSettings(storage);
+  const listeners = new Set<(key: keyof PlayerSettings, settings: PlayerSettings) => void>();
 
   for (const [key, id] of Object.entries(SETTINGS_CONTROL_IDS) as [
     keyof PlayerSettings,
@@ -132,10 +157,17 @@ export function initSettingsMenu(storage: PlayerSettingsStorage | null): Setting
     input.addEventListener("change", () => {
       settings = { ...settings, [key]: input.checked };
       savePlayerSettings(storage, settings);
+      for (const listener of [...listeners]) {
+        listener(key, settings);
+      }
     });
   }
 
   return {
     read: () => settings,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
   };
 }

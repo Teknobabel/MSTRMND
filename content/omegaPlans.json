@@ -31,6 +31,7 @@
         "requiredMissions": 2
       }
     ],
+    "unlockedByDefault": true,
     "victoryNarrative": [
       "At 11:58 local time, the sky over the World Assembly dims. Not a cloud, not an eclipse — a shadow with edges, cast by ten thousand mirrors turning in perfect silence four hundred kilometers up. By 12:01 the markets have noticed. By 12:04, the generals. By 12:07, everyone else.",
       "Your broadcast is forty seconds long. You do not shout. You do not demand. You simply list the cities, the hours of daylight remaining to each, and an account number. The interceptors never launch; the ministries never object; the money is already moving. It turns out the world was for sale after all — it just needed someone to name the price.",
@@ -69,6 +70,7 @@
         "requiredMissions": 2
       }
     ],
+    "unlockedByDefault": true,
     "victoryTitle": "Nine Billion Names"
   },
   {

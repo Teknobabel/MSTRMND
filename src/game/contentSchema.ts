@@ -471,6 +471,8 @@ export const omegaPlanTemplateSchema = z.object({
   cardArt: z.string().min(1).optional(),
   mapId: z.string().min(1),
   stages: z.array(omegaPlanStageSchema).length(3),
+  /** In the title screen's starting deck; see `OmegaPlanTemplate.unlockedByDefault`. */
+  unlockedByDefault: z.boolean().optional(),
   /** Victory copy shown when this plan's final phase clears; absent ⇒ generic fallback. */
   victoryTitle: z.string().min(1).optional(),
   victoryNarrative: z.array(z.string().min(1)).optional(),
@@ -504,6 +506,8 @@ export const playerProfileSchema: z.ZodType<PlayerProfile> = z.object({
   name: z.string().min(1),
   organizationName: z.string().min(1),
   profilePic: z.string().min(1),
+  /** In the title screen's starting deck; see `PlayerProfile.unlockedByDefault`. */
+  unlockedByDefault: z.boolean().optional(),
 });
 
 export const wantedLevelTierSchema: z.ZodType<WantedLevelTier> = z.object({
@@ -613,6 +617,8 @@ export const lairTemplateSchema = z.object({
    */
   upgradeMissionIds: z.array(z.string().min(1)).optional(),
   startingAssets: z.record(z.string().min(1), z.number().int().min(1)).optional(),
+  /** In the title screen's starting deck; see `LairTemplate.unlockedByDefault`. */
+  unlockedByDefault: z.boolean().optional(),
   /** Fixed spot on the world map; see `LairTemplate.mapPosition`. */
   mapPosition: mapPointSchema.optional(),
 });
@@ -807,6 +813,7 @@ function normalizeOmegaPlans(
     ...(p.cardArt !== undefined ? { cardArt: p.cardArt } : {}),
     mapId: p.mapId,
     stages: assertOmegaPlanStages(p.stages),
+    ...(p.unlockedByDefault === true ? { unlockedByDefault: true } : {}),
     ...(p.victoryTitle !== undefined ? { victoryTitle: p.victoryTitle } : {}),
     ...(p.victoryNarrative !== undefined && p.victoryNarrative.length > 0
       ? { victoryNarrative: [...p.victoryNarrative] }
@@ -823,6 +830,7 @@ function normalizeLairs(arr: z.infer<typeof lairTemplateSchema>[]): LairTemplate
     availableMissionIds: [...l.availableMissionIds],
     upgradeLevels: normalizeLairUpgradeLevels(l),
     ...(l.startingAssets !== undefined ? { startingAssets: { ...l.startingAssets } } : {}),
+    ...(l.unlockedByDefault === true ? { unlockedByDefault: true } : {}),
     ...(l.mapPosition !== undefined ? { mapPosition: { ...l.mapPosition } } : {}),
   }));
 }
@@ -892,6 +900,27 @@ export function parseContentSlices(raw: RawContentSlices): {
  * Checks that depend on a slice that failed shape parsing (null) are skipped — the shape
  * issues already explain why.
  * ---------------------------------------------------------------------------------------------- */
+
+/**
+ * Every unlockable slice needs at least one row a new player already owns. Skipped for a slice
+ * that failed shape parsing (its own issues say why) and for an empty one — a game shipped with
+ * no lairs at all is a different, louder problem than a game shipped with eight locked ones.
+ */
+function pushEmptyStartingDeckIssue(
+  slice: "omegaPlans" | "lairs" | "playerProfiles",
+  rows: readonly { unlockedByDefault?: boolean }[] | null,
+  issues: ContentIssue[],
+): void {
+  if (rows === null || rows.length === 0 || rows.some((r) => r.unlockedByDefault === true)) {
+    return;
+  }
+  issues.push({
+    slice,
+    entityId: null,
+    path: "",
+    message: `No ${slice} row is unlockedByDefault — a new player would have nothing to pick in this slot. Flag at least one.`,
+  });
+}
 
 function pushDuplicateIdIssues(
   slice: ContentSliceKey,
@@ -1821,6 +1850,16 @@ export function collectContentIssues(slices: ParsedContentSlices | ContentCatalo
       }
     }
   }
+
+  /*
+   * The title screen has to be able to open a run out of the box. Everything the player has
+   * unlocked is unioned on top of `unlockedByDefault` (see `game/progression.ts`), so a slice
+   * that flags nothing would leave a brand-new save with an unpickable slot. This is the one
+   * place that can be checked, because it is a property of the slice rather than of any row.
+   */
+  pushEmptyStartingDeckIssue("omegaPlans", s.omegaPlans, issues);
+  pushEmptyStartingDeckIssue("lairs", s.lairs, issues);
+  pushEmptyStartingDeckIssue("playerProfiles", s.playerProfiles, issues);
 
   if (s.wantedLevels !== null && s.wantedLevels.length > 0) {
     const arr = s.wantedLevels;

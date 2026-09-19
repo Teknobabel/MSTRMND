@@ -16,16 +16,25 @@
  *
  * **Random** is a card, not a checkbox. It sits at the head of each tab and is dragged in like
  * any other, so "let the game choose" is reached by the same gesture as every other choice and a
- * slot is never ambiguous about whether it has been answered. A staged Random reads back as
- * `null`, which is what `createInitialGameState` already takes to mean "roll one".
+ * slot is never ambiguous about whether it has been answered. It is rolled on the way out of
+ * `read`, over the unlocked cards only.
+ *
+ * **Locked cards** stay in the deck rather than being filtered out of it. A roster that grows
+ * as you play is only legible if you can see what is still out there, so a locked dossier keeps
+ * its art, its name and its stats behind a scrim and simply cannot be picked up — no drag, no
+ * reticle, no keyboard route. What is open is decided by `game/progression.ts`, which this
+ * module only ever reads; the deck is rebuilt whenever that answer changes, which is how the
+ * Unlock All Content setting takes effect on a title screen that is already on screen.
  *
  * The markup shell is in `index.html`; the look is under "Title screen setup console" in
  * `styles.css`.
  */
 
 import type { RunSetup } from "../game/gameState";
+import type { ProgressionApi, UnlockView, UnlockableKind } from "../game/progression";
 import type { ContentCatalog, LairTemplate, OmegaPlanTemplate, PlayerProfile } from "../game/types";
 import {
+  appendCardHeroOverlay,
   appendCardHeroShell,
   createCardArtImg,
   resolveLairCardArt,
@@ -45,7 +54,11 @@ import {
 import { setTooltip } from "./tooltip";
 
 export type RunSetupApi = {
-  /** The title screen's current picks; a field is `null` when its slot holds the Random card. */
+  /**
+   * The title screen's answer for each slot. A staged Random card is rolled here, against the
+   * unlocked pool only — so a field is `null` just when the slot was never answered at all, and
+   * the run's own roll takes it from there.
+   */
   read: () => RunSetup;
 };
 
@@ -67,18 +80,25 @@ interface SetupCard {
   description: string;
   /** Labelled lines under the description — what this choice actually changes about the run. */
   stats: readonly { label: string; value: string }[];
+  /** Not yet unlocked: shown, scrimmed, and inert. The Random card is never locked. */
+  locked: boolean;
 }
 
 interface SetupSlotSpec {
   id: SetupSlotId;
   /** The drag payload kind, and the field it rides in. */
   kind: DragPayloadKind;
+  /** Which unlockable kind this slot draws from; see `game/progression.ts`. */
+  unlockKind: UnlockableKind;
   /** Tab label, slot tag, and the line an empty slot shows. */
   tab: string;
   tag: string;
   emptyHint: string;
+  /** What a locked card in this tab says it is. */
+  lockedNoun: string;
   /** Portrait art rather than the default 16:9 banner. */
   portrait: boolean;
+  /** Rebuilt whenever the unlock view changes, so the tab is never stale. */
   cards: readonly SetupCard[];
 }
 
@@ -90,6 +110,9 @@ const SLOT_ELEMENT_ID: Record<SetupSlotId, string> = {
   lair: "setup-slot-lair",
   omegaPlan: "setup-slot-omega-plan",
 };
+
+const ICON_LOCK =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="1.5"/><path d="M8.2 10.5V7.4a3.8 3.8 0 0 1 7.6 0v3.1"/></svg>';
 
 const ICON_CROSSHAIR =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>';
@@ -127,14 +150,32 @@ function parseSetupPayload(raw: string, kind: DragPayloadKind): SetupPick | unde
  * The Random card, at the head of every tab. It wears the same static an unscouted site does —
  * the console's own mark for something it cannot see yet, which is exactly what this is.
  */
-function randomCard(what: string, stat: string): SetupCard {
+function randomCard(what: string, unlockedCount: number): SetupCard {
   return {
     id: null,
     name: "Random",
     art: resolveUnknownCardArt(),
     description: `Leave the choice to the console. A ${what} is drawn when the run opens, and you find out which at the briefing.`,
-    stats: [{ label: "Drawn", value: stat }],
+    /*
+     * The pool it draws from, not a flat "at deployment": Random only ever rolls dossiers the
+     * player has open (see {@link rollUnlocked}), and saying how many says that — a player who
+     * has unlocked three of eight can read straight off the card that the locked five are not
+     * about to be handed to them by the console.
+     */
+    stats: [{ label: "Drawn From", value: `${unlockedCount} unlocked` }],
+    locked: false,
   };
+}
+
+/**
+ * Locked dossiers to the back of the tab, each group left in catalog order.
+ *
+ * Sorting rather than filtering: what is unlocked is the deck you are picking from and belongs
+ * under the hand, while what is not is the reason to keep playing and belongs where it can be
+ * browsed without getting in the way of the pick.
+ */
+function unlockedFirst(cards: SetupCard[]): SetupCard[] {
+  return [...cards.filter((c) => !c.locked), ...cards.filter((c) => c.locked)];
 }
 
 /**
@@ -143,23 +184,23 @@ function randomCard(what: string, stat: string): SetupCard {
  * row. A row reading "Alias: Victor Malice" under a card titled "Victor Malice" would be furniture
  * pretending to be information; the org name is not, because it is not on the card already.
  */
-function identityCards(profiles: readonly PlayerProfile[]): SetupCard[] {
-  return [
-    randomCard("mastermind", "At deployment"),
-    ...profiles.map((p) => ({
+function identityCards(profiles: readonly PlayerProfile[], unlocked: UnlockView): SetupCard[] {
+  const cards = unlockedFirst(
+    profiles.map((p) => ({
       id: p.name,
       name: p.name,
       art: p.profilePic === "" ? DEFAULT_MINION_CARD_ART : p.profilePic,
       description: "The name on the broadcasts and the face on every warrant.",
       stats: [{ label: "Organization", value: p.organizationName }],
+      locked: !unlocked.isUnlocked("mastermind", p.name),
     })),
-  ];
+  );
+  return [randomCard("mastermind", unlocked.counts("mastermind").unlocked), ...cards];
 }
 
-function lairCards(lairs: readonly LairTemplate[]): SetupCard[] {
-  return [
-    randomCard("lair", "At deployment"),
-    ...lairs.map((lair) => ({
+function lairCards(lairs: readonly LairTemplate[], unlocked: UnlockView): SetupCard[] {
+  const cards = unlockedFirst(
+    lairs.map((lair) => ({
       id: lair.id,
       name: lair.name,
       art: resolveLairCardArt(lair),
@@ -168,14 +209,18 @@ function lairCards(lairs: readonly LairTemplate[]): SetupCard[] {
         { label: "Opening Missions", value: String(lair.availableMissionIds.length) },
         { label: "Upgrade Tiers", value: String(lair.upgradeLevels.length) },
       ],
+      locked: !unlocked.isUnlocked("lair", lair.id),
     })),
-  ];
+  );
+  return [randomCard("lair", unlocked.counts("lair").unlocked), ...cards];
 }
 
-function omegaPlanCards(plans: readonly OmegaPlanTemplate[]): SetupCard[] {
-  return [
-    randomCard("plan", "At deployment"),
-    ...plans.map((plan) => ({
+function omegaPlanCards(
+  plans: readonly OmegaPlanTemplate[],
+  unlocked: UnlockView,
+): SetupCard[] {
+  const cards = unlockedFirst(
+    plans.map((plan) => ({
       id: plan.id,
       name: plan.name,
       art: resolveOmegaPlanCardArt(plan),
@@ -187,44 +232,62 @@ function omegaPlanCards(plans: readonly OmegaPlanTemplate[]): SetupCard[] {
           value: String(plan.stages.reduce((n, s) => n + s.requiredMissions, 0)),
         },
       ],
+      locked: !unlocked.isUnlocked("omegaPlan", plan.id),
     })),
-  ];
+  );
+  return [randomCard("plan", unlocked.counts("omegaPlan").unlocked), ...cards];
 }
 
 /**
  * Wires the title screen's planner from the catalog. Both panels are filled here; the shell they
  * are filled into is static markup in `index.html`.
  */
-export function initRunSetup(catalog: ContentCatalog): RunSetupApi {
+export function initRunSetup(catalog: ContentCatalog, progression: ProgressionApi): RunSetupApi {
   const specs: Record<SetupSlotId, SetupSlotSpec> = {
     identity: {
       id: "identity",
       kind: "mastermind-identity",
+      unlockKind: "mastermind",
       tab: "Masterminds",
       tag: "Identity",
       emptyHint: "Drag a mastermind here",
+      lockedNoun: "mastermind",
       portrait: true,
-      cards: identityCards(catalog.playerProfiles),
+      cards: [],
     },
     lair: {
       id: "lair",
       kind: "mastermind-lair",
+      unlockKind: "lair",
       tab: "Lairs",
       tag: "Lair",
       emptyHint: "Drag a lair here",
+      lockedNoun: "lair",
       portrait: false,
-      cards: lairCards(catalog.lairs),
+      cards: [],
     },
     omegaPlan: {
       id: "omegaPlan",
       kind: "mastermind-omega-plan",
+      unlockKind: "omegaPlan",
       tab: "Omega Plans",
       tag: "Omega Plan",
       emptyHint: "Drag an omega plan here",
+      lockedNoun: "omega plan",
       portrait: false,
-      cards: omegaPlanCards(catalog.omegaPlans),
+      cards: [],
     },
   };
+
+  /** Re-read the unlock view onto the specs. Cheap; the whole deck is rebuilt after it. */
+  function rebuildCards(): void {
+    const unlocked = progression.view();
+    specs.identity.cards = identityCards(catalog.playerProfiles, unlocked);
+    specs.lair.cards = lairCards(catalog.lairs, unlocked);
+    specs.omegaPlan.cards = omegaPlanCards(catalog.omegaPlans, unlocked);
+  }
+
+  rebuildCards();
 
   /** A slot with no entry has not been answered; an entry of `null` is a staged Random card. */
   const picks = new Map<SetupSlotId, SetupPick>();
@@ -253,6 +316,22 @@ export function initRunSetup(catalog: ContentCatalog): RunSetupApi {
   function fillCard(article: HTMLElement, spec: SetupSlotSpec, card: SetupCard): void {
     const { meta, body } = appendCardHeroShell(article, card.art);
 
+    /* Over the art and under the name plate, so the picture reads as shut away while the name
+     * stays legible — the same layering an unscouted site's comb uses. The badge goes in beside
+     * the scrim rather than inside `meta`: `meta` is the bottom-anchored name plate, and a badge
+     * parented to it would measure its `top` from there instead of from the top of the banner. */
+    if (card.locked) {
+      appendCardHeroOverlay(meta, "setup-card__lock-scrim");
+      const badge = document.createElement("div");
+      badge.className = "setup-card__lock-badge";
+      badge.setAttribute("aria-hidden", "true");
+      badge.innerHTML = ICON_LOCK;
+      const word = document.createElement("span");
+      word.textContent = "Locked";
+      badge.appendChild(word);
+      meta.before(badge);
+    }
+
     const title = document.createElement("h4");
     title.className = "asset-card-title";
     title.textContent = card.name;
@@ -280,6 +359,13 @@ export function initRunSetup(catalog: ContentCatalog): RunSetupApi {
     if (spec.portrait) {
       article.classList.add("setup-card--portrait");
     }
+    if (card.locked) {
+      const note = document.createElement("p");
+      note.className = "setup-card__lock-note";
+      note.textContent = `Locked — unlock this ${spec.lockedNoun} to bring it into a run.`;
+      body.appendChild(note);
+      article.classList.add("setup-card--locked");
+    }
     if (card.id === null) {
       article.classList.add("setup-card--random");
     }
@@ -290,6 +376,22 @@ export function initRunSetup(catalog: ContentCatalog): RunSetupApi {
     article.className = "asset-card setup-card";
     fillCard(article, spec, card);
     if (!draggable) {
+      return article;
+    }
+
+    /*
+     * A locked dossier is browsable and nothing else: no `draggable`, no drag payload, no
+     * reticle. Every route into a slot goes through one of those three, so withholding them is
+     * the whole of "not selectable" — there is no disabled state left over to police. The
+     * tooltip is what a player who tried gets back, since the card itself cannot respond.
+     */
+    if (card.locked) {
+      article.setAttribute("aria-disabled", "true");
+      setTooltip(
+        article,
+        `${card.name} — Locked`,
+        `This ${spec.lockedNoun} is not unlocked yet. Unlock it to pick it, or turn on Unlock All Content in Settings.`,
+      );
       return article;
     }
 
@@ -458,9 +560,14 @@ export function initRunSetup(catalog: ContentCatalog): RunSetupApi {
     host.appendChild(inner);
   }
 
-  /** Stages `id` in `slot`; false when the card is not one this slot knows. */
+  /** Stages `id` in `slot`; false when the card is not one this slot knows, or is locked. */
   function stage(slot: SetupSlotId, id: SetupPick): boolean {
-    if (cardFor(slot, id) === undefined) {
+    const card = cardFor(slot, id);
+    /* Locked is checked here rather than only at the card, because this is the one funnel every
+     * route runs through — drop, reticle, and the re-stage a rebuild does. A pick that survived
+     * a change to the unlock view is refused on exactly the same line as one that never had a
+     * card to come from. */
+    if (card === undefined || card.locked) {
       return false;
     }
     picks.set(slot, id);
@@ -557,7 +664,21 @@ export function initRunSetup(catalog: ContentCatalog): RunSetupApi {
       tab.dataset.setupTab = slot;
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-controls", pageId);
-      tab.textContent = spec.tab;
+      tab.replaceChildren(document.createTextNode(spec.tab));
+      /* The ladder, stated where the deck is chosen from. Dropped once everything in the tab is
+       * open — a counter reading 8/8 on every tab is noise, and on a finished collection the
+       * absence of it is the reward. */
+      const { unlocked, total } = progression.view().counts(spec.unlockKind);
+      if (unlocked < total) {
+        const count = document.createElement("span");
+        count.className = "setup-deck__tab-count";
+        count.textContent = `${unlocked}/${total}`;
+        count.setAttribute(
+          "aria-label",
+          `${unlocked} of ${total} unlocked`,
+        );
+        tab.appendChild(count);
+      }
       tab.addEventListener("click", () => {
         setActiveTab(slot);
       });
@@ -619,14 +740,67 @@ export function initRunSetup(catalog: ContentCatalog): RunSetupApi {
     }
   });
 
+  /**
+   * The unlock view moved — the setting was toggled, or something was earned. Rebuild the cards,
+   * rebuild the deck around them, and drop any staged pick the new view no longer allows.
+   *
+   * Dropping rather than leaving it staged: turning Unlock All Content off with a locked plan in
+   * the planner and then pressing Deploy would start a run on content the player does not have,
+   * and a slot that says a thing is picked while the rules say it is not is the worse of the two
+   * ways to be wrong. `stage` already refuses a locked card, so re-staging each pick through it
+   * is both the test and the repair.
+   */
+  function onUnlocksChanged(): void {
+    rebuildCards();
+    for (const slot of SLOT_ORDER) {
+      const pick = picks.get(slot);
+      if (pick !== undefined) {
+        picks.delete(slot);
+        stage(slot, pick);
+      }
+      renderSlot(slot);
+    }
+    buildDeck();
+    syncDeployButton();
+  }
+
+  progression.subscribe(onUnlocksChanged);
+
+  /**
+   * What a staged Random card resolves to: a uniform draw over this slot's **unlocked** cards.
+   *
+   * Rolled here rather than left to `createInitialGameState`'s own roll, which knows nothing
+   * about unlocks and would happily hand the player a lair they have never seen. An empty pool
+   * reads back as `null` and falls through to that roll, which is the right degenerate answer —
+   * a slot with nothing in it is a content problem, not a reason to refuse to start.
+   */
+  function rollUnlocked(slot: SetupSlotId): string | null {
+    const pool = specs[slot].cards.filter((c): c is SetupCard & { id: string } =>
+      c.id !== null && !c.locked,
+    );
+    if (pool.length === 0) {
+      return null;
+    }
+    return pool[Math.floor(Math.random() * pool.length)]!.id;
+  }
+
+  /** A slot's answer: the staged id, a roll for Random, `null` for a slot never answered. */
+  function resolve(slot: SetupSlotId): string | null {
+    const pick = picks.get(slot);
+    if (pick === undefined) {
+      return null;
+    }
+    return pick ?? rollUnlocked(slot);
+  }
+
   buildDeck();
   syncDeployButton();
 
   return {
     read: (): RunSetup => ({
-      omegaPlanId: picks.get("omegaPlan") ?? null,
-      lairId: picks.get("lair") ?? null,
-      playerProfileName: picks.get("identity") ?? null,
+      omegaPlanId: resolve("omegaPlan"),
+      lairId: resolve("lair"),
+      playerProfileName: resolve("identity"),
     }),
   };
 }

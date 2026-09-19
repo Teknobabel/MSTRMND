@@ -17,6 +17,7 @@
       "dirty_money": 1,
       "ghost_protocol": 1
     },
+    "unlockedByDefault": true,
     "upgradeLevels": [
       {
         "name": "Foundations",
@@ -70,6 +71,7 @@
       "ghost_protocol": 1,
       "emp_scrambler": 1
     },
+    "unlockedByDefault": true,
     "upgradeLevels": [
       {
         "name": "Foundations",

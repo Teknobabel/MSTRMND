@@ -427,6 +427,8 @@ describe("buildTurnReport — turn summary", () => {
           { missionIds: ["ms-basic", "ms-basic", "ms-basic"], requiredMissions: 1 },
           { missionIds: ["ms-basic", "ms-basic", "ms-basic"], requiredMissions: 1 },
         ],
+        /* The only plan in this catalog, so it has to be the one a new player starts with. */
+        unlockedByDefault: true,
       },
     ];
     const planCatalog = parseCatalog(slices);

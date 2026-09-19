@@ -2,6 +2,7 @@ import { artFieldRow } from "../artField";
 import { SUPPORT_ASSET_ABILITY_KINDS } from "../../game/types";
 import type { SupportAssetAbilityKind } from "../../game/types";
 import type { FormCtx } from "./context";
+import { unlockedByDefaultRow } from "./unlockRow";
 import { setTooltip } from "../../ui/tooltip";
 import {
   el,
@@ -294,6 +295,7 @@ export function renderPlayerProfileForm(container: HTMLElement, ctx: FormCtx): v
       suggestedName: `profile-${str(ctx.row, "name")}`,
     }),
   );
+  unlockedByDefaultRow(container, ctx, "mastermind");
 }
 
 export function renderWantedLevelForm(container: HTMLElement, ctx: FormCtx): void {

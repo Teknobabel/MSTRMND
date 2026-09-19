@@ -431,6 +431,52 @@ describe("parseCatalog (throwing wrapper)", () => {
   });
 });
 
+describe("unlockedByDefault (the title screen's starting deck)", () => {
+  it("carries the flag through to the catalog, and omits it when off", () => {
+    const raw = rawFixtureSlices();
+    raw.lairs.push({
+      id: "lair-2",
+      name: "Second Base",
+      availableMissionIds: [],
+      unlockedByDefault: false,
+    });
+    const { catalog, issues } = parseContentCatalog(raw);
+    expect(issues).toEqual([]);
+    expect(catalog?.lairs[0]?.unlockedByDefault).toBe(true);
+    /* Written only when true, so the key's absence is the locked state everywhere. */
+    expect(catalog?.lairs[1]).not.toHaveProperty("unlockedByDefault");
+  });
+
+  it("refuses a slice where nothing is unlocked by default", () => {
+    // Every row locked means a title-screen slot the player cannot fill, and a game that
+    // cannot be started is a content error rather than something to discover at runtime.
+    const raw = rawFixtureSlices();
+    delete raw.lairs[0]!.unlockedByDefault;
+    const { catalog, issues } = parseContentCatalog(raw);
+    expect(catalog).toBeNull();
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.slice).toBe("lairs");
+    expect(issues[0]?.message).toContain("unlockedByDefault");
+  });
+
+  it("says nothing about a slice with no rows in it at all", () => {
+    // A game shipped with no lairs is a different, louder problem; this rule is about eight
+    // lairs none of which can be picked, not about zero lairs.
+    const raw = rawFixtureSlices();
+    raw.lairs = [];
+    const { issues } = parseContentCatalog(raw);
+    expect(issues.filter((i) => i.message.includes("unlockedByDefault"))).toEqual([]);
+  });
+
+  it("checks each unlockable slice independently", () => {
+    const raw = rawFixtureSlices();
+    delete raw.omegaPlans[0]!.unlockedByDefault;
+    delete raw.playerProfiles[0]!.unlockedByDefault;
+    const { issues } = parseContentCatalog(raw);
+    expect(issues.map((i) => i.slice).sort()).toEqual(["omegaPlans", "playerProfiles"]);
+  });
+});
+
 describe("dynamic trait rows", () => {
   it("parses an art-only row for each relationship kind", () => {
     const raw = rawFixtureSlices();

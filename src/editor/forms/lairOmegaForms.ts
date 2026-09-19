@@ -1,5 +1,6 @@
 import { artFieldRow } from "../artField";
 import type { FormCtx } from "./context";
+import { unlockedByDefaultRow } from "./unlockRow";
 import { setTooltip } from "../../ui/tooltip";
 import {
   el,
@@ -51,6 +52,7 @@ export function renderLairForm(container: HTMLElement, ctx: FormCtx): void {
       suggestedName: `lair-${str(ctx.row, "id")}`,
     }),
   );
+  unlockedByDefaultRow(container, ctx, "lair");
 
   /* Where this lair is plotted on the world map: percentages of the map art, left/top origin,
    * the same space maps.json markers use. Fixed per lair, not rolled per run. Clearing either
@@ -273,6 +275,7 @@ export function renderOmegaPlanForm(container: HTMLElement, ctx: FormCtx): void 
       ),
     ),
   );
+  unlockedByDefaultRow(container, ctx, "omega plan");
 
   /* Victory copy: the only place a run's ending is written, so it lives with the plan. */
   container.appendChild(

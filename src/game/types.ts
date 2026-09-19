@@ -667,6 +667,19 @@ export type OmegaPlanTemplate = {
   mapId: string;
   stages: [OmegaPlanStage, OmegaPlanStage, OmegaPlanStage];
   /**
+   * Whether a player who has never unlocked anything can pick this at the title screen.
+   *
+   * Absent ⇒ **locked**: new content is hidden until it is earned, which is the point of the
+   * unlock ladder, and making that the default means a designer opts a row *into* the starting
+   * set rather than having to remember to opt every new one out. The content validator requires
+   * at least one row here to carry the flag, so a run is always startable.
+   *
+   * This is only the floor. `src/game/progression.ts` unions it with what the player has
+   * earned, and the Unlock All Content setting overrides both.
+   */
+  unlockedByDefault?: boolean;
+
+  /**
    * Headline on the **victory** modal when this plan's final phase clears — the payoff line
    * for *this* plan, not a generic "You win". Falls back to `"Omega Complete"` when absent.
    */
@@ -731,6 +744,19 @@ export type LairTemplate = {
   /** Optional starting `Asset.id` quantities merged into `player.assets` at run start. */
   startingAssets?: Record<string, number>;
   /**
+   * Whether a player who has never unlocked anything can pick this at the title screen.
+   *
+   * Absent ⇒ **locked**: new content is hidden until it is earned, which is the point of the
+   * unlock ladder, and making that the default means a designer opts a row *into* the starting
+   * set rather than having to remember to opt every new one out. The content validator requires
+   * at least one row here to carry the flag, so a run is always startable.
+   *
+   * This is only the floor. `src/game/progression.ts` unions it with what the player has
+   * earned, and the Unlock All Content setting overrides both.
+   */
+  unlockedByDefault?: boolean;
+
+  /**
    * Where this lair sits on the world map, in the same percentage space as {@link MapMarker}.
    *
    * Authored per lair and **fixed for every run**, rather than rolled at run start. A lair is a
@@ -753,6 +779,18 @@ export type PlayerProfile = {
   organizationName: string;
   /** Site root path under `public/` (e.g. `/assets/cards/minion.png`). */
   profilePic: string;
+  /**
+   * Whether a player who has never unlocked anything can pick this at the title screen.
+   *
+   * Absent ⇒ **locked**: new content is hidden until it is earned, which is the point of the
+   * unlock ladder, and making that the default means a designer opts a row *into* the starting
+   * set rather than having to remember to opt every new one out. The content validator requires
+   * at least one row here to carry the flag, so a run is always startable.
+   *
+   * This is only the floor. `src/game/progression.ts` unions it with what the player has
+   * earned, and the Unlock All Content setting overrides both.
+   */
+  unlockedByDefault?: boolean;
 };
 
 /**

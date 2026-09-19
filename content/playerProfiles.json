@@ -2,17 +2,20 @@
   {
     "name": "Victor Malice",
     "organizationName": "The Midnight Syndicate",
-    "profilePic": "/assets/cards/minion.png"
+    "profilePic": "/assets/cards/minion.png",
+    "unlockedByDefault": true
   },
   {
     "name": "Silas Rook",
     "organizationName": "The Obsidian Hand",
-    "profilePic": "/assets/cards/minion.png"
+    "profilePic": "/assets/cards/minion.png",
+    "unlockedByDefault": true
   },
   {
     "name": "Mara Thorn",
     "organizationName": "The Cinder Court",
-    "profilePic": "/assets/cards/minion.png"
+    "profilePic": "/assets/cards/minion.png",
+    "unlockedByDefault": true
   },
   {
     "name": "Dr. Gideon Frost",
