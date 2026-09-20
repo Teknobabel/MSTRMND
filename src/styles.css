@@ -7869,6 +7869,12 @@ body {
  * slot replaces what is in it, so it is just as much a destination. Which slots light up is
  * decided in src/ui/dropHint.ts; this is only what the lit ones look like.
  *
+ * `.plan-slot--guide-hint` runs the same shine with nothing in hand at all. The title screen's
+ * planner lights its next unanswered slot with it from the moment the screen opens — identity,
+ * then lair, then omega plan, one at a time — so a player who has never dragged a card yet still
+ * has somewhere to look, and it goes dark once the plan is complete. See `syncGuideHint` in
+ * `src/ui/runSetup.ts`.
+ *
  * The ring is one masked pseudo-element laid over the slot's own border: `inset: -1px` lands its
  * border box on the slot's, and the two mask layers cancel each other everywhere but the band
  * between them, so the shine travels the border instead of glowing out of the middle. Rotating
@@ -7893,7 +7899,8 @@ body {
  * planner the moment the card leaves its menu. The order comes from src/ui/dropHint.ts. `backwards`
  * holds each slot dark through its delay, so a slot waiting its turn does not glow early.
  */
-.plan-slot--drop-hint {
+.plan-slot--drop-hint,
+.plan-slot--guide-hint {
   --plan-slot-ignite-delay: calc(var(--plan-slot-hint-order, 0) * 55ms);
   box-shadow: 0 0 14px var(--red-glow-soft);
   animation: plan-slot-ignite 0.4s ease-out var(--plan-slot-ignite-delay) backwards;
@@ -7915,7 +7922,8 @@ body {
 
 /* Lower specificity than either --drop-lock rule above, so the slot actually under the cursor
    still takes over the border and fill while the shine keeps running on top of it. */
-.plan-slot--drop-hint::before {
+.plan-slot--drop-hint::before,
+.plan-slot--guide-hint::before {
   content: "";
   position: absolute;
   inset: -1px;
@@ -8836,7 +8844,8 @@ body {
    * by the blanket rule above it would sit as an arbitrary arc on one edge, so it becomes a plain
    * bright ring instead: the same "this slot takes the card" answer, held still.
    */
-  .plan-slot--drop-hint::before {
+  .plan-slot--drop-hint::before,
+  .plan-slot--guide-hint::before {
     background: var(--red-bright);
   }
 
@@ -8848,7 +8857,8 @@ body {
 
   /* The blanket rule shortens animations but leaves their delays alone, so without this the
      ignition sweep would still play out as slots blinking on one by one. All at once instead. */
-  .plan-slot--drop-hint {
+  .plan-slot--drop-hint,
+  .plan-slot--guide-hint {
     --plan-slot-ignite-delay: 0s;
   }
 

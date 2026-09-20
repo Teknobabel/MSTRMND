@@ -695,11 +695,27 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
     btnDeploy.classList.toggle("btn-submit-mission--ready", ready);
     setTooltip(
       btnDeploy,
-      "Deploy",
+      "Initialize",
       ready
         ? "Opens the run on the picks staged above."
         : `Fill the ${missing.map((s) => s.tag).join(", ")} slot${missing.length === 1 ? "" : "s"} first.`,
     );
+    syncGuideHint();
+  }
+
+  /**
+   * A new player has never dragged a card anywhere, so the very first thing the planner does is
+   * show them: the same shine a valid slot runs while a card is in hand (`.plan-slot--drop-hint`
+   * in `styles.css`), lit here with nothing being dragged at all. Only the single next unanswered
+   * slot ever wears it — identity, then lair, then omega plan — so it reads as "do this next"
+   * rather than "any of these will do". Once the plan is complete, nothing is lit; there is
+   * nothing left to point at.
+   */
+  function syncGuideHint(): void {
+    const next = SLOT_ORDER.find((slot) => !picks.has(slot));
+    for (const slot of SLOT_ORDER) {
+      req<HTMLElement>(SLOT_ELEMENT_ID[slot]).classList.toggle("plan-slot--guide-hint", slot === next);
+    }
   }
 
   /**
