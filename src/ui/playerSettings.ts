@@ -10,7 +10,8 @@
 
 export interface PlayerSettings {
   /**
-   * Bypass the viewscreen boot sequence and open a run on the live console.
+   * Bypass the viewscreen boot sequence and the opening briefing after it, and open a run on the
+   * live console.
    *
    * Off by default: the boot is the first thing a new player sees, and it is worth seeing once.
    * The toggle is for the run after the fiftieth — as is the fact that any click or key cuts the
@@ -34,12 +35,23 @@ export interface PlayerSettings {
    * so switching it back off hands the player exactly the deck they had.
    */
   readonly unlockAllContent: boolean;
+  /**
+   * Take the Directives card off the map — the opening checklist a new player is walked through.
+   *
+   * Off by default, i.e. the tutorial is on: the card is the only place the console spells out
+   * what Omega Phase 1 is actually asking for, and a player who needs it is exactly the player
+   * who will not think to go looking for a switch that turns it on. It stands down on its own
+   * once the plan leaves phase 1, so this is for the run after the first — and for the player
+   * who wants the corner of the map back before then.
+   */
+  readonly disableTutorial: boolean;
 }
 
 export const PLAYER_SETTINGS_DEFAULTS: PlayerSettings = {
   skipBootSequence: false,
   mapParallax: true,
   unlockAllContent: false,
+  disableTutorial: false,
 };
 
 /** Where the settings are parked between sessions. Versioned: the list will grow. */
@@ -74,6 +86,10 @@ export function normalizePlayerSettings(raw: unknown): PlayerSettings {
       typeof row.unlockAllContent === "boolean"
         ? row.unlockAllContent
         : PLAYER_SETTINGS_DEFAULTS.unlockAllContent,
+    disableTutorial:
+      typeof row.disableTutorial === "boolean"
+        ? row.disableTutorial
+        : PLAYER_SETTINGS_DEFAULTS.disableTutorial,
   };
 }
 
@@ -116,8 +132,9 @@ export interface SettingsMenuApi {
    * Run `listener` after any control is changed, with the setting it wrote.
    *
    * Most settings are read at the moment they matter and need no notice — the boot sequence
-   * asks on its way in, the parallax asks on every pointer move. Unlock All is the exception:
-   * it decides what a screen that is already built is showing, so that screen has to be told.
+   * asks on its way in, the parallax asks on every pointer move. Unlock All and Disable Tutorial
+   * are the exceptions: each decides what a screen that is already built is showing (the title
+   * screen's decks, the map's Directives card), so those screens have to be told.
    * Returns the unsubscribe, though nothing in the game outlives the settings menu.
    */
   subscribe(listener: (key: keyof PlayerSettings, settings: PlayerSettings) => void): () => void;
@@ -128,6 +145,7 @@ const SETTINGS_CONTROL_IDS: Readonly<Record<keyof PlayerSettings, string>> = {
   skipBootSequence: "setting-skip-boot",
   mapParallax: "setting-map-parallax",
   unlockAllContent: "setting-unlock-all-content",
+  disableTutorial: "setting-disable-tutorial",
 };
 
 /**

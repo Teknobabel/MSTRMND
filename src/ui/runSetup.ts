@@ -62,8 +62,32 @@ export type RunSetupApi = {
   read: () => RunSetup;
 };
 
+export type RunSetupOptions = {
+  /**
+   * Whether an Initialize click on a completely empty planner may quick-start the debug run
+   * ({@link DEBUG_QUICK_START_PICKS}) instead of flashing "No Identity Assigned". Read at the
+   * moment of the click, so it follows the setting it is keyed to without a subscription.
+   */
+  quickStartEnabled: () => boolean;
+};
+
 /** The three slots, in the order they run down the planner. */
 type SetupSlotId = "identity" | "lair" | "omegaPlan";
+
+/**
+ * The run the debug quick start stages: the one the shipped content is built around and tested
+ * on (see `content/omegaPlans.json`), so a developer iterating on the console lands on the same
+ * map every time rather than on whatever the Random cards roll.
+ *
+ * All three are `unlockedByDefault`, so they stage through `stage` like any dragged card — the
+ * shortcut never starts a run on content the save could not have picked by hand. Ids here, not
+ * names, except the identity: a mastermind card is keyed by its profile's `name`.
+ */
+const DEBUG_QUICK_START_PICKS: Readonly<Record<SetupSlotId, string>> = {
+  identity: "Victor Malice",
+  lair: "mount_cinder",
+  omegaPlan: "project_midnight_sun",
+};
 
 /**
  * The card a slot holds. `null` is the Random card — a real pick, distinct from an empty slot,
@@ -263,7 +287,11 @@ function omegaPlanCards(
  * Wires the title screen's planner from the catalog. Both panels are filled here; the shell they
  * are filled into is static markup in `index.html`.
  */
-export function initRunSetup(catalog: ContentCatalog, progression: ProgressionApi): RunSetupApi {
+export function initRunSetup(
+  catalog: ContentCatalog,
+  progression: ProgressionApi,
+  options: RunSetupOptions,
+): RunSetupApi {
   const specs: Record<SetupSlotId, SetupSlotSpec> = {
     identity: {
       id: "identity",
@@ -852,10 +880,48 @@ export function initRunSetup(catalog: ContentCatalog, progression: ProgressionAp
    * real click reports as its target, so "did this click miss the button" cannot be asked that
    * way. Disabled is the only state in which the wrap hears a click at all. */
   deploySubmitWrap.addEventListener("click", () => {
-    if (btnDeploy.disabled) {
-      flashBlockedAlert();
+    if (!btnDeploy.disabled) {
+      return;
     }
+    if (tryDebugQuickStart()) {
+      return;
+    }
+    flashBlockedAlert();
   });
+
+  /**
+   * Debug: an Initialize click on an empty planner, with the quick start allowed, stages
+   * {@link DEBUG_QUICK_START_PICKS} and presses Initialize for real.
+   *
+   * Only an *empty* planner qualifies. A player who has staged one card and missed the other two
+   * is mid-choice, and should be told what is missing rather than have their pick quietly
+   * joined by two they did not make.
+   *
+   * Pressing the real button, rather than starting a run from in here, is what keeps this a
+   * shortcut and not a second way in: the run starts through navigation's own Play handler and
+   * reads its picks through `read()`, exactly as a hand-built plan does. That click bubbles back
+   * up to the wrap, which ignores it — the button is enabled by then.
+   *
+   * If any default fails to stage — renamed, removed, or locked on this save — every slot is
+   * cleared back to where the player left it and the ordinary alert runs instead. A planner
+   * left one card short by a debug path would look like the player's own mistake.
+   */
+  function tryDebugQuickStart(): boolean {
+    if (!options.quickStartEnabled() || picks.size > 0) {
+      return false;
+    }
+    const staged = SLOT_ORDER.every((slot) => stage(slot, DEBUG_QUICK_START_PICKS[slot]));
+    if (!staged) {
+      picks.clear();
+      for (const slot of SLOT_ORDER) {
+        renderSlot(slot);
+      }
+      syncDeployButton();
+      return false;
+    }
+    btnDeploy.click();
+    return true;
+  }
 
   /**
    * The unlock view moved — the setting was toggled, or something was earned. Rebuild the cards,

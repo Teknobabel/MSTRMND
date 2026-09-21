@@ -1446,9 +1446,11 @@ body {
 }
 
 /* The selection reads as the one in front, whichever pane happens to be holding it — and so
-   does the event offer, which sits in the corner and is nobody's to cover. */
+   do the event offer and the Directives card, which sit at the corner end of the row and are nobody's
+   to cover. */
 .omega-body--floating .game-panel--site-inspector--pinned,
-.omega-body--floating .game-panel--site-inspector--event {
+.omega-body--floating .game-panel--site-inspector--event,
+.omega-body--floating .game-panel--site-inspector--tutorial {
   z-index: 3;
 }
 
@@ -1458,18 +1460,28 @@ body {
 }
 
 /* A pane only previewing a hover stays click-through (see the note above). A selected one takes
-   the pointer for its X, and the Event pane for the offer that drags off it. */
+   the pointer for its X, the Event pane for the offer that drags off it, and the Directives pane for
+   its twirls and its X. */
 .game-panel--site-inspector:not(.game-panel--site-inspector--pinned):not(
     .game-panel--site-inspector--event
-  ) {
+  ):not(.game-panel--site-inspector--tutorial) {
   pointer-events: none;
 }
 
 /* The offer is the run talking, not a card the player went and opened, so its pane is lit
-   rather than left to sit in the same near-black as the sites around it. */
-.omega-body--floating .game-panel--site-inspector--event {
+   rather than left to sit in the same near-black as the sites around it. The Directives card is the
+   console talking, which is the same kind of thing — so it is lit the same way, and marked off
+   from the offer by its own warning-toned header rather than by a second panel colour. */
+.omega-body--floating .game-panel--site-inspector--event,
+.omega-body--floating .game-panel--site-inspector--tutorial {
   --panel-bg: rgba(36, 11, 15, 0.94);
   border-color: var(--line-2);
+}
+
+/* The Directives card sizes to its checklist rather than filling the height a site card is given:
+   with every task twirled shut it is three rows tall, and it grows as they open. */
+.omega-body--floating .game-panel--site-inspector--tutorial {
+  height: fit-content;
 }
 
 .site-inspector-body {
@@ -11623,3 +11635,332 @@ body {
   color: var(--text-2);
 }
 
+
+
+/* ============================================================
+   Directives card — the opening checklist
+   ============================================================ */
+
+/*
+ * The tutorial's three tasks, hanging in the map's inspector row like a site card (see
+ * `ui/tutorialDirectives.ts` for what it says and `renderInspectorPane` in main.ts for how it gets
+ * there). A task is one row: a twirl that opens onto the phase's missions, and a tick box at the
+ * end that goes green when the run says the work is done.
+ *
+ * Denser than a site card on purpose. This is a checklist read at a glance between other things,
+ * not a dossier browsed one page at a time, so it is sized to be skimmed down the left edge —
+ * caret, label, tick — with the detail folded away until it is asked for.
+ */
+.tutorial-directives {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.tutorial-directives__lede {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.74rem;
+  font-style: italic;
+  line-height: 1.35;
+}
+
+.tutorial-directives__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each task is its own plate: the 2px leading edge is the console's mark for "a thing with a
+   state", the same one a requirement row wears, and it is what goes green on completion. */
+.tutorial-directives__task {
+  border: 1px solid var(--line-0);
+  border-left: 2px solid var(--line-1);
+  background: rgba(10, 4, 5, 0.45);
+}
+
+.tutorial-directives__task--done {
+  border-left-color: var(--good-dim);
+}
+
+.tutorial-directives__row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.4rem;
+  min-width: 0;
+}
+
+/* The whole label is the hit target, not just the caret: a three-word row with a 12px triangle
+   to aim at is a row most players will decide is not clickable. */
+.tutorial-directives__twirl {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tutorial-directives__twirl:hover,
+.tutorial-directives__twirl:focus-visible {
+  color: var(--text-0);
+  outline: none;
+}
+
+.tutorial-directives__twirl:focus-visible .tutorial-directives__label {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.tutorial-directives__caret {
+  flex: 0 0 auto;
+  width: 0.72rem;
+  height: 0.72rem;
+  fill: currentColor;
+  stroke: none;
+  color: var(--red);
+  transform-origin: 50% 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tutorial-directives__caret {
+    transition: transform 0.18s ease, color 0.15s;
+  }
+}
+
+.tutorial-directives__task--open > .tutorial-directives__row .tutorial-directives__caret {
+  transform: rotate(90deg);
+  color: var(--red-bright);
+}
+
+.tutorial-directives__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A readout, not a control: nothing here is the player's to tick, so it is a box that fills in
+   rather than an input. Empty it reads as work outstanding, which is the whole point of it. */
+.tutorial-directives__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid var(--line-2);
+  background: rgba(6, 3, 4, 0.7);
+}
+
+.tutorial-directives__check--done {
+  border-color: var(--good-dim);
+  background: rgba(29, 107, 61, 0.22);
+}
+
+.tutorial-directives__check-mark {
+  width: 0.72rem;
+  height: 0.72rem;
+  fill: none;
+  stroke: var(--good);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/*
+ * The twirl itself. `grid-template-rows: 0fr` travelling to `1fr` is the one way to animate to a
+ * height nobody has measured, which is what this needs — a task's detail is as tall as the
+ * missions in it. The inner box is what gets clipped, and it is what goes `visibility: hidden`
+ * while shut so the pills inside a closed task stay out of the tab order (every pill is
+ * focusable for its tooltip). The visibility flip is delayed out rather than transitioned, so it
+ * lands after the slide rather than blanking the content on the way down.
+ */
+.tutorial-directives__drop {
+  display: grid;
+  grid-template-rows: 0fr;
+}
+
+.tutorial-directives__task--open > .tutorial-directives__drop {
+  grid-template-rows: 1fr;
+}
+
+.tutorial-directives__drop-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.tutorial-directives__task--open > .tutorial-directives__drop > .tutorial-directives__drop-inner {
+  visibility: visible;
+  padding: 0 0.4rem 0.4rem 0.55rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tutorial-directives__drop {
+    transition: grid-template-rows 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .tutorial-directives__drop-inner {
+    transition: visibility 0s linear 0.22s;
+  }
+
+  .tutorial-directives__task--open > .tutorial-directives__drop > .tutorial-directives__drop-inner {
+    transition-delay: 0s;
+  }
+}
+
+/* One mission per sub-section, filed under its own name. The hairline down the left is what
+   holds the three of them together as a list under one task rather than as three loose blocks. */
+.tutorial-directives__section {
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--line-0);
+}
+
+.tutorial-directives__section--done {
+  border-left-color: var(--good-dim);
+}
+
+.tutorial-directives__section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.22rem;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+}
+
+.tutorial-directives__section-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A sub-section's tick is a mark beside a heading rather than a box at the end of a row, so it
+   sits at the heading's own weight instead of the task row's. */
+.tutorial-directives__section-head > .tutorial-directives__check {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.tutorial-directives__section-head > .tutorial-directives__check > .tutorial-directives__check-mark {
+  width: 0.62rem;
+  height: 0.62rem;
+}
+
+/* The same stacked column the planner's requirement list runs in, and for the same reason: one
+   left edge to read down, one state per line. */
+.tutorial-directives__pills {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.tutorial-directives__pills > .minions-trait-pill {
+  --trait-icon: 1.15rem;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.14rem 0.32rem;
+  gap: 0.35rem;
+  border: 1px solid var(--line-0);
+  border-left-width: 2px;
+  background: rgba(10, 4, 5, 0.4);
+  color: var(--text-1);
+  font-size: 0.7rem;
+}
+
+.tutorial-directives__pills > .minions-trait-pill--req-have {
+  border-left-color: var(--good-dim);
+  color: var(--text-0);
+}
+
+.tutorial-directives__pills > .minions-trait-pill--req-missing {
+  color: var(--text-2);
+}
+
+/* Restated for the same reason the planner restates it: the rule above is a class deeper than
+   `.minions-trait-pill:hover`, which no longer reaches these rows. */
+.tutorial-directives__pills > .minions-trait-pill:hover,
+.tutorial-directives__pills > .minions-trait-pill:focus-visible {
+  border-color: var(--line-2);
+  border-left-width: 2px;
+  background: rgba(28, 11, 13, 0.75);
+  outline: none;
+}
+
+/* A located site is a fact, not a requirement with a state, so its chip carries the plain
+   hairline the have/missing pills tint rather than a have/missing accent of its own. */
+.tutorial-directives__pills > .tutorial-directives__site {
+  border-left-color: var(--line-2);
+  color: var(--text-0);
+}
+
+/*
+ * The category sigil ahead of an uncovered site's name, in the same hue its pin wears on the
+ * map — the one thing about a site worth reading without hovering, and the thing that lets a
+ * name read here be found out there without a second lookup. The binding is restated rather
+ * than inherited because `--site-hue` is set on `.map-marker--*`, which is a pin, not a chip.
+ *
+ * `color` rather than `stroke`: these sigils are part stroke and part `fill="currentColor"`
+ * silhouette (see `MAP_MARKER_TYPE_ICON_SVG_PATHS` in main.ts), and only `currentColor` reaches
+ * both halves.
+ */
+.tutorial-directives__site--military {
+  --site-hue: var(--site-military);
+}
+
+.tutorial-directives__site--political {
+  --site-hue: var(--site-political);
+}
+
+.tutorial-directives__site--economic {
+  --site-hue: var(--site-economic);
+}
+
+.tutorial-directives__pills > .tutorial-directives__site > .tutorial-directives__site-icon {
+  color: var(--site-hue);
+}
+
+.tutorial-directives__note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.7rem;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+/* The one line on this card that is an open question rather than an answer. Warn rather than
+   red: the player has not failed anything, they just have not found it yet. */
+.tutorial-directives__note--unknown {
+  color: var(--warn);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* Twirled shut the card is nowhere near the map's height; twirled open on a plan with long
+   requirement lists it can be, and then the checklist scrolls inside the panel rather than
+   running on past the drawer tabs. */
+.game-panel--site-inspector--tutorial .site-inspector-body {
+  overflow: auto;
+}

@@ -245,7 +245,8 @@
               <label class="settings-row__text" for="setting-skip-boot">
                 <span class="settings-row__label">Skip boot up animation</span>
                 <span class="settings-row__note">
-                  Open a run on the live console instead of powering the viewscreen on.
+                  Open a run on the live console instead of powering the viewscreen on, with no
+                  opening briefing to dismiss.
                 </span>
               </label>
               <input
@@ -266,6 +267,24 @@
                 type="checkbox"
                 class="settings-switch"
                 id="setting-map-parallax"
+                role="switch"
+              />
+            </div>
+          </div>
+          <div class="settings-group">
+            <h3 class="settings-group__title">Guidance</h3>
+            <div class="settings-row">
+              <label class="settings-row__text" for="setting-disable-tutorial">
+                <span class="settings-row__label">Disable tutorial</span>
+                <span class="settings-row__note">
+                  Take the Directives card off the world map. It lists what Omega Phase 1 needs from
+                  you, and stands down on its own once the plan moves past it.
+                </span>
+              </label>
+              <input
+                type="checkbox"
+                class="settings-switch"
+                id="setting-disable-tutorial"
                 role="switch"
               />
             </div>

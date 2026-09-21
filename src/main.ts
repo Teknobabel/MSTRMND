@@ -130,7 +130,7 @@ import {
 } from "./ui/mapParallax";
 import { initRunBriefing, type RunBriefingApi, type RunBriefingRow } from "./ui/runBriefing";
 import { initProgression } from "./game/progression";
-import { initSettingsMenu } from "./ui/playerSettings";
+import { initSettingsMenu, type SettingsMenuApi } from "./ui/playerSettings";
 import { initStageScale } from "./ui/stageScale";
 import {
   INBOUND_CALLOUT_CLASS,
@@ -179,6 +179,14 @@ import {
   type MapLayerState,
 } from "./ui/map/mapLayers";
 import { omegaPhaseTargetsByLocation } from "./ui/map/omegaTargets";
+import {
+  DIRECTIVES_TARGET_UNKNOWN,
+  buildTutorialDirectives,
+  directivesAssetNeeds,
+  directivesSkillNeeds,
+  type TutorialDirectivesSection,
+  type TutorialDirectivesTask,
+} from "./ui/tutorialDirectives";
 import { createGlitchDirector } from "./ui/glitchDirector";
 import { initDragFocus } from "./ui/dragFocus";
 import { initDragTether } from "./ui/dragTether";
@@ -1496,6 +1504,10 @@ function initGameController(
    * planner arriving — is choreography on the shell and belongs beside the boot that armed it.
    * The controller only knows how to fill the page in. */
   runBriefing: RunBriefingApi,
+  /* The player's preferences, not the run's. Only one of them reaches in here — Disable
+   * Tutorial, which decides whether the map's Directives card is up — and it is read at the point of
+   * use rather than copied, so a flip mid-run lands on the next render. */
+  settings: SettingsMenuApi,
 ): GameControllerApi {
   let state: GameState = createInitialGameState(content, undefined, runSetup.read());
 
@@ -1673,12 +1685,15 @@ function initGameController(
    * site, the odd one out being the player's own lair, which has no location id to be known by
    * and shows the Lair tile's contents rather than a location card. The global event offer is
    * the one subject with no marker behind it at all — the run puts it in the corner pane
-   * itself rather than the player pointing at anything — so it draws no leader line.
+   * itself rather than the player pointing at anything — so it draws no leader line. The
+   * tutorial's Directives card is the second of those: it is the console talking to a new player, not
+   * a place on the map, and it hangs in the row on the same terms.
    */
   type MapSubject =
     | { readonly kind: "site"; readonly locationId: string }
     | { readonly kind: "lair" }
-    | { readonly kind: "event" };
+    | { readonly kind: "event" }
+    | { readonly kind: "tutorial" };
 
   /** A subject flattened to something comparable, and the key its marker is cached under. */
   function mapSubjectKey(subject: MapSubject | null): string | null {
@@ -1696,6 +1711,8 @@ function initGameController(
         return "lair";
       case "event":
         return "event";
+      case "tutorial":
+        return "tutorial";
     }
   }
 
@@ -7789,13 +7806,320 @@ function initGameController(
     mapPlotResizeObserver.observe(plot);
   }
 
+  /* ---------------------------------------------------------------------------------------
+   * The Directives card: the opening checklist, built from the run's own Omega Phase 1.
+   *
+   * See `ui/tutorialDirectives.ts` for what it draws and why. Everything here is the half that has to
+   * know about the run: which missions phase 1 holds, which of their targets the player has
+   * actually found, and what their inventory and roster already cover.
+   * ------------------------------------------------------------------------------------- */
+
+  /** The phase the card is about. A new player is in phase 1; the card is for phase 1. */
+  const DIRECTIVES_OMEGA_STAGE_INDEX = 0;
+
+  /**
+   * Which tasks the player has twirled open.
+   *
+   * Held here rather than in the card because the card is rebuilt from scratch on every render
+   * — and the inspector re-renders on every hover of the map, so a twirl living in the DOM
+   * would snap shut the moment the pointer crossed a pin. Not run state: it is where the
+   * player's attention is, the same line `novelty` and the map layers draw, so it survives
+   * `startRun` on purpose.
+   */
+  const directivesOpenTasks = new Set<string>();
+
+  /** Closed with the card's X. Per-run: a new run is a new chance to want the checklist. */
+  let directivesDismissed = false;
+
+  /**
+   * Phase 1's missions, in slot order, with the slots already finished flagged rather than
+   * dropped. A finished slot reads as a ticked sub-section — a checklist that quietly removes
+   * the line you just completed gives the player no way to check their own work.
+   */
+  function directivesPhaseMissions(): { template: MissionTemplate; done: boolean }[] {
+    const planId = state.activeOmegaPlanId;
+    const plan = planId !== null ? getOmegaPlanById(content, planId) : undefined;
+    const stage = plan?.stages[DIRECTIVES_OMEGA_STAGE_INDEX];
+    const progress = state.omegaStageProgress[DIRECTIVES_OMEGA_STAGE_INDEX];
+    if (stage === undefined || progress === undefined) {
+      return [];
+    }
+    const rows: { template: MissionTemplate; done: boolean }[] = [];
+    for (let slotIndex = 0; slotIndex < OMEGA_MISSIONS_PER_STAGE; slotIndex += 1) {
+      const missionTemplateId = stage.missionIds[slotIndex];
+      if (missionTemplateId === undefined) {
+        continue;
+      }
+      const template = findMissionOrEventTemplate(missionTemplateId);
+      if (template !== undefined) {
+        rows.push({ template, done: progress[slotIndex] === true });
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Whether the Directives card is on the map.
+   *
+   * Three ways it is not: the player turned the tutorial off, they closed it for this run, or
+   * the run has moved past phase 1 — at which point the checklist is about work that is behind
+   * them. Read at the point of use, so flipping the setting mid-run lands on the next render.
+   */
+  function directivesCardShowing(): boolean {
+    if (directivesDismissed || settings.read().disableTutorial) {
+      return false;
+    }
+    if (state.activeOmegaStageIndex !== DIRECTIVES_OMEGA_STAGE_INDEX) {
+      return false;
+    }
+    return directivesPhaseMissions().length > 0;
+  }
+
+  function dismissDirectivesCard(): void {
+    if (directivesDismissed) {
+      return;
+    }
+    directivesDismissed = true;
+    renderSiteInspector();
+  }
+
+  /* Every other setting is read at the moment it matters, but this one decides what a row of
+   * panes that is already on screen is showing — so the row has to be told. Turning the tutorial
+   * back on also clears a dismissal: asking for the card is asking for the card. */
+  settings.subscribe((key) => {
+    if (key !== "disableTutorial") {
+      return;
+    }
+    if (!settings.read().disableTutorial) {
+      directivesDismissed = false;
+    }
+    renderSiteInspector();
+  });
+
+  /** A site the player has uncovered, as the Directives card lists it. */
+  interface DirectivesTargetSite {
+    readonly name: string;
+    readonly locationType: LocationType;
+  }
+
+  /**
+   * Mission template id → the sites that mission could be aimed at *and* the player has
+   * identified.
+   *
+   * Identified is the whole point of the question: an Unknown pin is a dot on the map with no
+   * name and no category, so a mission whose only legal targets are Unknown has not been located
+   * yet however many of them there are. Same set the map's own Omega-target flag draws from —
+   * `renderMapPanel` drops the flag on unidentified sites for exactly this reason — so the card
+   * and the pins can never disagree about what has been found. It is also what makes the
+   * category safe to print: a site is only listed here once the player has earned its name, and
+   * its type comes with that.
+   */
+  function directivesTargetSitesByMission(
+    missions: readonly MissionTemplate[],
+  ): Map<string, DirectivesTargetSite[]> {
+    const byLocation = omegaPhaseTargetsByLocation({
+      missions,
+      sites: runLocations()
+        .filter((location) => isSiteIdentified(location.id))
+        .map((location) => ({
+          location,
+          intelLevel: intelLevelAtLocation(state, location.id),
+          securityLevel: securityLevelForLocation(state.locationSecurityStates, location.id),
+        })),
+    });
+    const byMission = new Map<string, DirectivesTargetSite[]>();
+    for (const [locationId, missionIds] of byLocation) {
+      const locationType = getLocationById(content, locationId)?.locationType;
+      if (locationType === undefined) {
+        continue;
+      }
+      const site: DirectivesTargetSite = { name: siteDisplayName(locationId), locationType };
+      for (const missionId of missionIds) {
+        const sites = byMission.get(missionId);
+        if (sites === undefined) {
+          byMission.set(missionId, [site]);
+        } else {
+          sites.push(site);
+        }
+      }
+    }
+    for (const sites of byMission.values()) {
+      sites.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return byMission;
+  }
+
+  /**
+   * One uncovered site as a chip on the target line, its category sigil ahead of the name.
+   *
+   * The same glyph and the same hue the site's own pin wears, so a name read here can be found
+   * on the map without a second lookup — which is the whole job of this line. Inert: the map is
+   * where a site is actually handled.
+   */
+  function directivesSiteChip(site: DirectivesTargetSite): HTMLElement {
+    const chip = document.createElement("span");
+    chip.className = `minions-trait-pill tutorial-directives__site tutorial-directives__site--${site.locationType}`;
+    chip.appendChild(
+      createSvgPillIcon(
+        MAP_MARKER_TYPE_ICON_SVG_PATHS[site.locationType],
+        "minions-trait-pill__icon tutorial-directives__site-icon",
+      ),
+    );
+    const label = document.createElement("span");
+    label.className = "minions-trait-pill__label";
+    label.textContent = site.name;
+    chip.appendChild(label);
+    setTooltip(chip, site.name, `${LOCATION_CATEGORY_LABEL[site.locationType]} site.`);
+    return chip;
+  }
+
+  /**
+   * A finished slot's sub-section. The same shape whichever task is asking, because the answer
+   * is the same one: the run is no longer waiting on this mission for anything.
+   */
+  function directivesDoneSection(name: string): TutorialDirectivesSection {
+    return { heading: name, done: true, pills: [], note: "Mission complete", noteTone: "settled" };
+  }
+
+  /** "Locate Omega Plan targets": where each of phase 1's missions can actually be sent. */
+  function directivesTargetsTask(
+    missions: readonly { template: MissionTemplate; done: boolean }[],
+  ): TutorialDirectivesTask {
+    const targetSites = directivesTargetSitesByMission(
+      missions.filter((m) => !m.done).map((m) => m.template),
+    );
+    const sections = missions.map(({ template, done }): TutorialDirectivesSection => {
+      if (done) {
+        return directivesDoneSection(template.name);
+      }
+      if (!missionTargetTypeTargetsLocation(template.targetType)) {
+        /* A mission aimed at a minion or at nothing has no site to go looking for, so there is
+         * nothing here for the player to do and the line reads as settled rather than open. */
+        return {
+          heading: template.name,
+          done: true,
+          pills: [],
+          note: "No site target",
+          noteTone: "settled",
+        };
+      }
+      const sites = targetSites.get(template.id) ?? [];
+      return {
+        heading: template.name,
+        done: sites.length > 0,
+        pills: sites.map(directivesSiteChip),
+        note: sites.length === 0 ? DIRECTIVES_TARGET_UNKNOWN : null,
+        noteTone: "unknown",
+      };
+    });
+    return {
+      id: "targets",
+      label: "Locate Omega Plan targets",
+      hint: "Each Phase 1 mission needs a site it is allowed to be aimed at. Run missions to raise intel until one turns up.",
+      sections,
+      emptyNote: "This plan has no Phase 1 missions.",
+    };
+  }
+
+  /** "Acquire assets for Omega Plan": the gear each of phase 1's missions is short of. */
+  function directivesAssetsTask(
+    missions: readonly { template: MissionTemplate; done: boolean }[],
+  ): TutorialDirectivesTask {
+    const sections = missions.map(({ template, done }): TutorialDirectivesSection => {
+      if (done) {
+        return directivesDoneSection(template.name);
+      }
+      const needs = directivesAssetNeeds(template.requiredAssetIds, state.player.assets);
+      if (needs.length === 0) {
+        return {
+          heading: template.name,
+          done: true,
+          pills: [],
+          note: "No assets required",
+          noteTone: "settled",
+        };
+      }
+      return {
+        heading: template.name,
+        done: needs.every((need) => need.met),
+        pills: needs.map((need) => createAssetPillEl(content, need.assetId, need.met)),
+        note: null,
+        noteTone: "settled",
+      };
+    });
+    return {
+      id: "assets",
+      label: "Acquire assets for Omega Plan",
+      hint: "Assets are taken off the map by missions, or handed over by your lair. A lit pill is one you already hold.",
+      sections,
+      emptyNote: "This plan has no Phase 1 missions.",
+    };
+  }
+
+  /** "Put together a team": the skills phase 1 wants, against the roster the player has hired. */
+  function directivesTeamTask(
+    missions: readonly { template: MissionTemplate; done: boolean }[],
+  ): TutorialDirectivesTask {
+    const rosterTraitIds = new Set(state.player.minions.flatMap((m) => m.traitIds));
+    const sections = missions.map(({ template, done }): TutorialDirectivesSection => {
+      if (done) {
+        return directivesDoneSection(template.name);
+      }
+      const needs = directivesSkillNeeds(
+        sortedTraitIdsForDisplay(content, template.requiredTraitIds),
+        rosterTraitIds,
+      );
+      if (needs.length === 0) {
+        return {
+          heading: template.name,
+          done: true,
+          pills: [],
+          note: "No skills required",
+          noteTone: "settled",
+        };
+      }
+      return {
+        heading: template.name,
+        done: needs.every((need) => need.met),
+        pills: needs.map((need) =>
+          createTraitPillEl(
+            content,
+            need.traitId,
+            need.met ? new Set([need.traitId]) : new Set<string>(),
+          ),
+        ),
+        note: null,
+        noteTone: "settled",
+      };
+    });
+    return {
+      id: "team",
+      label: "Put together a team",
+      hint: "Hire from the Minions menu until someone on the roster holds each skill. One holder covers it.",
+      sections,
+      emptyNote: "This plan has no Phase 1 missions.",
+    };
+  }
+
+  function buildTutorialDirectivesModel(): { tasks: TutorialDirectivesTask[] } {
+    const missions = directivesPhaseMissions();
+    return {
+      tasks: [
+        directivesTargetsTask(missions),
+        directivesAssetsTask(missions),
+        directivesTeamTask(missions),
+      ],
+    };
+  }
+
   /**
    * The card the inspector is showing, or null when it should be down. A pinned site that has
    * dropped off the run's map (a plan swap between renders) is forgotten rather than shown.
    */
   /**
    * Whether a subject still exists to be shown: sites leave with a plan swap, lairs get given
-   * up, and the event offer goes the moment it expires or the player takes it.
+   * up, the event offer goes the moment it expires or the player takes it, and the Directives card
+   * stands down when phase 1 is behind the player (or they said they did not want it).
    */
   function mapSubjectAlive(subject: MapSubject | null): boolean {
     if (subject === null) {
@@ -7806,6 +8130,8 @@ function initGameController(
         return state.activeLairId !== null;
       case "event":
         return currentEventOfferId() !== null;
+      case "tutorial":
+        return directivesCardShowing();
       case "site":
         return runLocations().some((l) => l.id === subject.locationId);
     }
@@ -7813,11 +8139,12 @@ function initGameController(
 
   /**
    * How many panes the player's selections are free to fill. A global event offer owns the
-   * corner pane outright — it is not a selection and there is no closing it — so while one is
-   * on the table it comes off the top of what the selections can claim.
+   * corner pane outright — it is not a selection and there is no closing it — and the Directives card
+   * owns the next one while it is up, so both come off the top of what the selections can claim.
    */
   function inspectorPinCapacity(): number {
-    return MAX_INSPECTOR_CARDS - (currentEventOfferId() !== null ? 1 : 0);
+    const owned = (currentEventOfferId() !== null ? 1 : 0) + (directivesCardShowing() ? 1 : 0);
+    return MAX_INSPECTOR_CARDS - owned;
   }
 
   /**
@@ -7837,6 +8164,8 @@ function initGameController(
    *
    * A global event offer takes the corner slot first and holds it for as long as it is on the
    * table, so it never slides out from under the eye and nothing the player does can cover it.
+   * The Directives card takes the next slot along on the same terms, and is pushed a tile left by an
+   * offer arriving rather than being covered by one.
    * The selections fill from the first free slot leftward in the order they were made. A hover
    * goes in the next slot along — to the left of the whole stack, so every selected card and
    * its leader line stay exactly where they are while the map is browsed around them — and
@@ -7857,8 +8186,13 @@ function initGameController(
     if (hasEventOffer) {
       slots[0] = { kind: "event" };
     }
-    /* Where the selections start: past the offer's corner when there is one. */
-    const first = hasEventOffer ? 1 : 0;
+    /* Where the selections start: past the offer's corner when there is one, and past the Directives
+     * card when that is up. */
+    let first = hasEventOffer ? 1 : 0;
+    if (directivesCardShowing()) {
+      slots[first] = { kind: "tutorial" };
+      first += 1;
+    }
     pinnedMapSubjects = pinnedMapSubjects.filter((s) => mapSubjectAlive(s));
     trimPinnedMapSubjects();
     pinnedMapSubjects.forEach((subject, i) => {
@@ -7949,21 +8283,54 @@ function initGameController(
     /* Only the selected pane takes the pointer: see the click-through note in the CSS. Its X
      * is the only one that could do anything, so the preview's is not offered. The Event pane
      * takes the pointer too — the offer on it drags into the planner — but never shows an X:
-     * the offer is the run's to put up and take away, not the player's to close. */
+     * the offer is the run's to put up and take away, not the player's to close. The Directives pane
+     * takes the pointer for its twirls, and does show an X: closing the checklist is the one way
+     * to put the tutorial away for this run without going to the settings screen for it. */
     const isEvent = subject.kind === "event";
+    const isTutorial = subject.kind === "tutorial";
     const isPinned = isPinnedMapSubject(subject);
     pane.el.classList.toggle("game-panel--site-inspector--pinned", isPinned);
     pane.el.classList.toggle("game-panel--site-inspector--event", isEvent);
-    pane.closeEl.hidden = isEvent || !isPinned;
+    pane.el.classList.toggle("game-panel--site-inspector--tutorial", isTutorial);
+    pane.closeEl.hidden = isEvent || !(isPinned || isTutorial);
+    pane.closeEl.setAttribute(
+      "aria-label",
+      isTutorial ? "Close directives for this run" : "Close site detail",
+    );
 
     pane.titleEl.textContent =
-      subject.kind === "lair" ? "Lair" : subject.kind === "event" ? "Event" : "Site Detail";
+      subject.kind === "lair"
+        ? "Lair"
+        : subject.kind === "event"
+          ? "Event"
+          : subject.kind === "tutorial"
+            ? "Directives"
+            : "Site Detail";
     pane.el.classList.toggle(
       "game-panel--site-inspector--lair",
       subject.kind === "lair",
     );
 
     pane.bodyEl.innerHTML = "";
+    if (subject.kind === "tutorial") {
+      /* Rebuilt from scratch like every other card, so the open/closed twirls are restored from
+       * `directivesOpenTasks` rather than living in the DOM that is about to be thrown away. */
+      pane.bodyEl.appendChild(
+        buildTutorialDirectives(buildTutorialDirectivesModel(), `${pane.el.id}-directives`, {
+          isExpanded: (taskId) => directivesOpenTasks.has(taskId),
+          onToggle: (taskId, expanded) => {
+            if (expanded) {
+              directivesOpenTasks.add(taskId);
+            } else {
+              directivesOpenTasks.delete(taskId);
+            }
+            /* Nothing to redraw here: the twirl changes the pane's height, and the inspector's
+             * own ResizeObserver is what carries that to the leader lines. */
+          },
+        }),
+      );
+      return;
+    }
     if (subject.kind === "lair") {
       /* The drawer's contents folded into tabs, under a per-pane id prefix — several tablists
        * can be up at once, and shared tab ids would leave every `aria-labelledby` ambiguous. */
@@ -8168,12 +8535,19 @@ function initGameController(
     return true;
   }
 
-  /* A pane's X drops whatever that pane is showing, not whatever was selected last. */
+  /* A pane's X drops whatever that pane is showing, not whatever was selected last. The Directives
+   * card is not a selection, so closing it is putting the tutorial away rather than letting a
+   * pin go — for this run only; the settings switch is the one that outlives it. */
   for (const pane of inspectorPanes) {
     pane.closeEl.addEventListener("click", () => {
-      if (pane.subject !== null) {
-        dropPinnedMapSubject(pane.subject);
+      if (pane.subject === null) {
+        return;
       }
+      if (pane.subject.kind === "tutorial") {
+        dismissDirectivesCard();
+        return;
+      }
+      dropPinnedMapSubject(pane.subject);
     });
   }
 
@@ -9041,7 +9415,9 @@ function initGameController(
       case "lair":
         return mapPanelEl.querySelector<HTMLElement>('.map-marker[data-map-lair="true"]');
       case "event":
-        /* The event offer is an inspector card in the corner, not a marker on the map. */
+      case "tutorial":
+        /* Neither is a place: the event offer and the Directives card are inspector cards the run
+         * puts in the row itself, with no pin on the plot behind them. */
         return null;
     }
   }
@@ -9935,6 +10311,9 @@ function initGameController(
      * land would acknowledge a subject in the new run's ledger on the player's behalf. */
     cancelMapNoveltyDwell();
     novelty.reset();
+    /* A checklist put away belongs to the run it was about. The twirls are not reset with it:
+     * those are how this player likes to read the card, not a fact about the run. */
+    directivesDismissed = false;
     state = createInitialGameState(content, undefined, runSetup.read());
     refresh();
   }
@@ -10288,7 +10667,16 @@ playerSettings.subscribe((key) => {
   }
 });
 
-const runSetup = initRunSetup(catalog, progression);
+/*
+ * Debug quick start: Initialize on an empty planner opens a fixed run (see
+ * `DEBUG_QUICK_START_PICKS` in ui/runSetup.ts). Keyed to Skip Boot Up Animation because the two
+ * are wanted by the same person — someone restarting runs fast enough that the boot and the
+ * three drags are both in the way — and a player who has never touched settings keeps the
+ * ordinary "No Identity Assigned" teaching moment.
+ */
+const runSetup = initRunSetup(catalog, progression, {
+  quickStartEnabled: () => playerSettings.read().skipBootSequence,
+});
 
 /* The shell the run's opening plays on. Static markup, so it is found once rather than per run. */
 const omegaShell = document.querySelector<HTMLElement>(".omega-shell");
@@ -10373,13 +10761,22 @@ const navigation = initNavigation({
     runBriefing.close();
     /* Read at the point of use rather than cached, so the toggle takes effect on the very next
      * run rather than on the next page load. */
-    if (omegaShell === null || playerSettings.read().skipBootSequence) {
+    if (playerSettings.read().skipBootSequence) {
       /*
-       * The setting is "Skip boot up animation", not "skip the briefing": the page states which
-       * plan and lair the run rolled, which is the one thing about a fresh run that is not
-       * discoverable from the console itself. So it is shown either way — immediately here,
-       * and off `onDone` below when there is a sequence for it to follow.
+       * The whole opening goes, briefing included: the setting is for someone restarting runs
+       * fast enough that every beat between Initialize and a live console is in the way, and a
+       * page to dismiss is one more of those. What the briefing says — which plan and lair the
+       * run is on — is still on the console, in the Omega Plan and Lair menus.
+       *
+       * Nothing else to settle: the briefing's dismissal is what cues the planner's slide-in,
+       * and that only plays once a boot has armed it, so a run opened here comes up with the
+       * planner already in place.
        */
+      return;
+    }
+    if (omegaShell === null) {
+      /* No shell to play the boot on, but the setting did not ask to skip the opening — so the
+       * briefing still comes up, straight away rather than off a sequence that cannot run. */
       openRunBriefing();
       return;
     }
@@ -10396,7 +10793,13 @@ const navigation = initNavigation({
   },
 });
 
-const gameController = initGameController(catalog, navigation, runSetup, runBriefing);
+const gameController = initGameController(
+  catalog,
+  navigation,
+  runSetup,
+  runBriefing,
+  playerSettings,
+);
 startRunFromMenu = gameController.startRun;
 openRunBriefing = gameController.openRunBriefing;
 

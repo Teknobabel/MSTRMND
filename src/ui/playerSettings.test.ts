@@ -44,6 +44,12 @@ describe("player settings defaults", () => {
     expect(PLAYER_SETTINGS_DEFAULTS.unlockAllContent).toBe(false);
   });
 
+  it("walks a player who has never opened settings through the opening checklist", () => {
+    // The Todo card is the only place the console spells out what Omega Phase 1 wants, and a
+    // player who needs it is the last one who would go switching it on.
+    expect(PLAYER_SETTINGS_DEFAULTS.disableTutorial).toBe(false);
+  });
+
   it("slides the map away from the pointer unless asked not to", () => {
     // The parallax is a reach aid before it is an effect (see `ui/mapParallax.ts`), so it is opt
     // *out*: a player who never opens this screen should still be getting the shorter travel.
@@ -58,11 +64,13 @@ describe("normalizePlayerSettings", () => {
         skipBootSequence: true,
         mapParallax: false,
         unlockAllContent: true,
+        disableTutorial: true,
       }),
     ).toStrictEqual({
       skipBootSequence: true,
       mapParallax: false,
       unlockAllContent: true,
+      disableTutorial: true,
     });
   });
 
@@ -76,6 +84,7 @@ describe("normalizePlayerSettings", () => {
       skipBootSequence: true,
       mapParallax: PLAYER_SETTINGS_DEFAULTS.mapParallax,
       unlockAllContent: PLAYER_SETTINGS_DEFAULTS.unlockAllContent,
+      disableTutorial: PLAYER_SETTINGS_DEFAULTS.disableTutorial,
     });
   });
 
@@ -86,6 +95,7 @@ describe("normalizePlayerSettings", () => {
       skipBootSequence: true,
       mapParallax: PLAYER_SETTINGS_DEFAULTS.mapParallax,
       unlockAllContent: PLAYER_SETTINGS_DEFAULTS.unlockAllContent,
+      disableTutorial: PLAYER_SETTINGS_DEFAULTS.disableTutorial,
     });
   });
 
@@ -103,11 +113,13 @@ describe("player settings storage", () => {
       skipBootSequence: true,
       mapParallax: false,
       unlockAllContent: true,
+      disableTutorial: true,
     });
     expect(loadPlayerSettings(storage)).toStrictEqual({
       skipBootSequence: true,
       mapParallax: false,
       unlockAllContent: true,
+      disableTutorial: true,
     });
   });
 
@@ -128,6 +140,7 @@ describe("player settings storage", () => {
         skipBootSequence: true,
         mapParallax: true,
         unlockAllContent: false,
+        disableTutorial: false,
       }),
     ).not.toThrow();
   });
@@ -139,6 +152,7 @@ describe("player settings storage", () => {
         skipBootSequence: true,
         mapParallax: true,
         unlockAllContent: false,
+        disableTutorial: false,
       }),
     ).not.toThrow();
   });
