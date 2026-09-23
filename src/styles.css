@@ -5949,21 +5949,84 @@ body {
   gap: 0.45rem;
 }
 
-/* Assets have the whole menu to themselves, so their cards fill it three to a row. */
+/*
+ * The Assets menu is three tracks wide: the owned cards take the first two, and the third is the
+ * list of everything identified out on the map (`renderAssetsPanel`). The owned column *spans*
+ * two tracks rather than being a 2fr column of its own, and splits them with the same gap —
+ * which is what keeps an owned card exactly the width it was when the cards ran three to a row.
+ *
+ * Each column scrolls on its own. A long inventory should not push the map's list out of sight,
+ * nor the other way round, and the two are read side by side.
+ */
 .game-panel.game-panel--assets .assets-panel {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-content: start;
   gap: 0.55rem;
+}
+
+.assets-panel-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.assets-panel-column--owned {
+  grid-column: span 2;
+}
+
+.assets-panel-column__body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 0.15rem;
   padding-bottom: var(--drawer-floor);
 }
 
-.game-panel.game-panel--assets .assets-panel > .assets-panel-empty {
+.assets-panel-column__body--owned {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 0.55rem;
+}
+
+.assets-panel-column__body--owned > .assets-panel-empty {
   grid-column: 1 / -1;
+}
+
+/* The Revealed column is one track wide, so its cards stack one to a row at exactly the owned
+   cards' width, with the same gap between them. */
+.assets-panel-column__body--revealed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+/* A revealed card is not the player's yet, so it is not draggable into an asset slot — but in the
+   Main Phase it drags into the planner as a target, and takes the grab cursor when it does. */
+.assets-revealed__card[draggable="true"] {
+  cursor: grab;
+}
+
+.assets-revealed__card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* The site badge carries a name rather than a one-word value, so it may be the one badge on the
+   row that runs long. It gives way before the card does, and its name clips rather than wraps. */
+.assets-revealed__site-badge {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.assets-revealed__site-badge > .minions-card-badge__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .game-panel.game-panel--lair,
@@ -11924,6 +11987,7 @@ body {
  * `color` rather than `stroke`: these sigils are part stroke and part `fill="currentColor"`
  * silhouette (see `MAP_MARKER_TYPE_ICON_SVG_PATHS` in main.ts), and only `currentColor` reaches
  * both halves.
+ *
  */
 .tutorial-directives__site--military {
   --site-hue: var(--site-military);

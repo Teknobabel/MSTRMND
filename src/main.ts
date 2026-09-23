@@ -2722,6 +2722,26 @@ function initGameController(
     });
   }
 
+  /**
+   * Makes a manifest line a drag handle for the planner's target slot: dropping it aims the
+   * staged mission at that slot of that site. Shared by the location card's manifest and the
+   * Assets menu's Revealed column, so the two cannot disagree about what dragging one does.
+   */
+  function wireAssetSlotDrag(
+    el: HTMLElement,
+    locationId: string,
+    slotIndex: number,
+    visibility: "hidden" | "revealed",
+  ): void {
+    el.draggable = true;
+    setCardDragPayload(el, () => assetDragJson(locationId, slotIndex, visibility));
+    el.addEventListener("dragstart", (e) => {
+      e.stopPropagation();
+      beginCardDrag(e, assetDragJson(locationId, slotIndex, visibility));
+      e.dataTransfer!.effectAllowed = "copy";
+    });
+  }
+
   function minionDragJson(instanceId: string): string {
     return JSON.stringify({ kind: "mastermind-minion", instanceId });
   }
@@ -4588,15 +4608,7 @@ function initGameController(
          * real asset's would hand over the intel the slot is still withholding. */
         preview: identifiedSlot ? (el) => attachAssetRowPreview(el, slot.assetId) : undefined,
         wire: enableAssignDrag
-          ? (el) => {
-              el.draggable = true;
-              setCardDragPayload(el, () => assetDragJson(loc.id, si, targetVisibility));
-              el.addEventListener("dragstart", (e) => {
-                e.stopPropagation();
-                beginCardDrag(e, assetDragJson(loc.id, si, targetVisibility));
-                e.dataTransfer!.effectAllowed = "copy";
-              });
-            }
+          ? (el) => wireAssetSlotDrag(el, loc.id, si, targetVisibility)
           : undefined,
       });
     }
@@ -5529,10 +5541,160 @@ function initGameController(
     }
   }
 
-  /** The Assets drawer: everything the run owns, one card per unit. */
+  /** One uncovered asset out in the world: which site, which slot, and what is in it. */
+  interface RevealedSiteAsset {
+    readonly assetId: string;
+    readonly assetName: string;
+    readonly locationId: string;
+    readonly siteName: string;
+    readonly locationType: LocationType;
+    readonly slotIndex: number;
+  }
+
+  /**
+   * Every asset the player has identified at a site, across the whole map, sorted by asset then
+   * by site so two of the same thing sit together.
+   *
+   * The same bar the map's tag rail and the location card's manifest name a slot by: the site
+   * itself identified, the slot occupied, and the slot either revealed by play or read by intel
+   * deep enough to see inside it (`assetSlotKnowledge`). A slot the player only knows *exists*
+   * is not listed — there is no asset to name yet, only a crate.
+   */
+  function revealedSiteAssets(): RevealedSiteAsset[] {
+    const assetNameById = new Map(content.assets.map((a) => [a.id, a.name]));
+    const rows: RevealedSiteAsset[] = [];
+    for (const loc of runLocations()) {
+      if (!isSiteIdentified(loc.id)) {
+        continue;
+      }
+      const intel = intelLevelAtLocation(state, loc.id);
+      const slots = state.locationAssetSlots.find((p) => p.locationId === loc.id)?.slots ?? [];
+      slots.forEach((slot, slotIndex) => {
+        if (!isOccupiedAssetSlot(slot) || assetSlotKnowledge(slot, intel) !== "identified") {
+          return;
+        }
+        rows.push({
+          assetId: slot.assetId,
+          assetName: assetNameById.get(slot.assetId) ?? slot.assetId,
+          locationId: loc.id,
+          siteName: siteDisplayName(loc.id),
+          locationType: loc.locationType,
+          slotIndex,
+        });
+      });
+    }
+    return rows.sort(
+      (a, b) => a.assetName.localeCompare(b.assetName) || a.siteName.localeCompare(b.siteName),
+    );
+  }
+
+  /**
+   * One card of the Revealed column: the same full asset card the Owned column shows, with a
+   * badge on its stat row naming the site that holds it.
+   *
+   * The badge is the location card's own Location Type badge — the category glyph lit in its pin's
+   * hue — carrying the site's name instead of the category's, so the card says *where* in the
+   * same visual language a site card says *what kind*, and can be found on the map at a glance.
+   *
+   * No Add-to-planner button: that button drops an *owned* unit into a required-asset slot, and
+   * this one is not the player's yet. What it can do is be aimed at — in the Main Phase the whole
+   * card drags into the planner as a mission target, exactly as the slot's row does off the site's
+   * own card.
+   */
+  function buildRevealedAssetCard(row: RevealedSiteAsset, enableAssignDrag: boolean): HTMLElement {
+    const template = content.assets.find((a) => a.id === row.assetId);
+    const article = document.createElement("article");
+    article.className = "asset-card assets-revealed__card";
+    if (template !== undefined && isSupportAsset(template)) {
+      article.classList.add("asset-card--support");
+    }
+    const { statsRow } = fillAssetCard(article, row.assetId, template);
+
+    const siteBadge = document.createElement("div");
+    siteBadge.className = "minions-card-badge minions-card-badge--type assets-revealed__site-badge";
+    siteBadge.dataset.locationType = row.locationType;
+    siteBadge.tabIndex = 0;
+    setTooltip(
+      siteBadge,
+      row.siteName,
+      `${LOCATION_CATEGORY_LABEL[row.locationType]} site holding this asset.`,
+    );
+    siteBadge.innerHTML = locationTypeBadgeIconSvg(row.locationType);
+    const siteName = document.createElement("span");
+    siteName.className = "minions-card-badge__value";
+    siteName.textContent = row.siteName;
+    siteBadge.appendChild(siteName);
+    statsRow.appendChild(siteBadge);
+
+    if (enableAssignDrag) {
+      wireAssetSlotDrag(article, row.locationId, row.slotIndex, "revealed");
+    }
+    article.setAttribute(
+      "aria-label",
+      enableAssignDrag
+        ? `${row.assetName} at ${row.siteName}. Drag to the plan to aim a mission at it.`
+        : `${row.assetName} at ${row.siteName}.`,
+    );
+    return article;
+  }
+
+  /** A column of the Assets drawer: a heading, then whatever it holds. */
+  function assetsPanelColumn(
+    modifier: string,
+    label: string,
+    heading: string,
+  ): { section: HTMLElement; body: HTMLElement } {
+    const section = document.createElement("section");
+    section.className = `assets-panel-column assets-panel-column--${modifier}`;
+    section.setAttribute("aria-label", label);
+    const h = document.createElement("h3");
+    h.className = "game-controls-heading assets-panel-column-title";
+    h.textContent = heading;
+    section.appendChild(h);
+    const body = document.createElement("div");
+    body.className = `assets-panel-column__body assets-panel-column__body--${modifier}`;
+    section.appendChild(body);
+    return { section, body };
+  }
+
+  /**
+   * The Assets drawer, in two columns: what the run owns on the left, two cards to a row, and
+   * everything identified out on the map on the right.
+   *
+   * The right column is the question the owned cards cannot answer — "what could I go and take?"
+   * — which before this meant opening every site on the map one card at a time. Laid beside the
+   * inventory rather than in a menu of its own because the two are read together: a mission that
+   * wants an asset is answered either from the left column or by a raid on the right.
+   */
   function renderAssetsPanel(): void {
     withDeferredCardArt(openDrawer !== "assets", () => {
-      fillAssetsInto(assetsPanelEl);
+      const ownedUnits = Object.values(state.player.assets).reduce(
+        (n, qty) => n + Math.max(0, qty),
+        0,
+      );
+      const owned = assetsPanelColumn("owned", "Assets you own", `Owned (${ownedUnits})`);
+      fillAssetsInto(owned.body);
+
+      const revealedRows = revealedSiteAssets();
+      const revealed = assetsPanelColumn(
+        "revealed",
+        "Assets revealed at sites",
+        `Revealed at sites (${revealedRows.length})`,
+      );
+      if (revealedRows.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "assets-panel-empty";
+        empty.textContent =
+          "Nothing identified yet. Raise intel at a site, or run missions there, to see what it stores.";
+        revealed.body.appendChild(empty);
+      } else {
+        const enableAssignDrag = state.phase === "main";
+        for (const row of revealedRows) {
+          revealed.body.appendChild(buildRevealedAssetCard(row, enableAssignDrag));
+        }
+      }
+
+      assetsPanelEl.replaceChildren(owned.section, revealed.section);
     });
   }
 
@@ -5577,14 +5739,15 @@ function initGameController(
     article: HTMLElement,
     assetId: string,
     template: Asset | undefined,
-  ): void {
+  ): { statsRow: HTMLElement } {
     const { meta, body } = appendCardHeroShell(article, resolveAssetCardArt(template));
 
     const title = document.createElement("h4");
     title.className = "asset-card-title";
     title.textContent = template?.name ?? assetId;
     meta.appendChild(title);
-    meta.appendChild(createAssetCardStatsRow());
+    const statsRow = createAssetCardStatsRow();
+    meta.appendChild(statsRow);
 
     const descText = template?.description?.trim();
     if (descText) {
@@ -5602,6 +5765,7 @@ function initGameController(
       ]);
       body.appendChild(dl);
     }
+    return { statsRow };
   }
 
   /**

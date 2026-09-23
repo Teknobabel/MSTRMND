@@ -388,7 +388,7 @@
     "name": "Operations Nerve Center",
     "description": "A wall of screens, a better chair, and the capacity to run one more scheme at a time.",
     "cardArt": "/assets/cards/custom/mission-upg-ops-center.webp",
-    "durationTurns": 1,
+    "durationTurns": 3,
     "onFailureEffects": [
       {
         "kind": "heat_delta",
@@ -406,10 +406,9 @@
       }
     ],
     "requiredTraitIds": [
-      "tactician",
       "engineer"
     ],
-    "startCommandPoints": 2,
+    "startCommandPoints": 3,
     "targetType": "none"
   },
   {
@@ -417,7 +416,7 @@
     "name": "Excavated Barracks",
     "description": "Blast out the east lava tube. Bunks for a bigger, louder family.",
     "cardArt": "/assets/cards/custom/mission-upg-barracks.webp",
-    "durationTurns": 1,
+    "durationTurns": 3,
     "onFailureEffects": [
       {
         "kind": "heat_delta",
@@ -435,10 +434,9 @@
       }
     ],
     "requiredTraitIds": [
-      "enforcer",
       "engineer"
     ],
-    "startCommandPoints": 2,
+    "startCommandPoints": 3,
     "targetType": "none"
   },
   {
@@ -446,7 +444,7 @@
     "name": "Fabrication Workshop",
     "description": "Lathes, lasers, and a gadget bench. Every op leaves with one more toy.",
     "cardArt": "/assets/cards/custom/mission-upg-workshop.webp",
-    "durationTurns": 1,
+    "durationTurns": 3,
     "onFailureEffects": [
       {
         "kind": "heat_delta",
@@ -470,10 +468,9 @@
       }
     ],
     "requiredTraitIds": [
-      "engineer",
-      "brilliant"
+      "engineer"
     ],
-    "startCommandPoints": 2,
+    "startCommandPoints": 3,
     "targetType": "none"
   },
   {
