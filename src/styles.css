@@ -6905,6 +6905,7 @@ body {
 }
 
 .map-callout {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.15rem;
@@ -6938,6 +6939,90 @@ body {
   font-size: 0.6rem;
   line-height: 40px;
   color: var(--text-2);
+}
+
+/* ---------------- Minion barks ----------------
+ *
+ * One minion saying something over the map, hung on its own portrait inside whichever callout
+ * is drawing it — the crew on an operation, or the idle stack at the lair. See
+ * `src/ui/minionBarks.ts` for when it appears and why it appears as rarely as it does.
+ *
+ * Positioned from `--bark-x`, the centre of the speaking portrait inside the callout, so a crew
+ * of three gets a bubble over the right face rather than over the middle of the box. The map
+ * panel clips, so `--bark-nudge` pulls a bubble near the frame's edge back inside — and the tail
+ * subtracts that nudge again, keeping the point on the portrait while the box slides.
+ */
+.map-bark {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: var(--bark-x, 50%);
+  transform: translateX(-50%) translateX(var(--bark-nudge, 0px));
+  z-index: 6;
+  width: max-content;
+  max-width: 14rem;
+  padding: 0.3rem 0.5rem 0.28rem;
+  background: rgba(8, 3, 4, 0.94);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 14px rgba(232, 17, 45, 0.25);
+  /* Never in the way: it is a remark, not a control, and the pins under it stay clickable. */
+  pointer-events: none;
+  /* No fill mode on purpose — the entry animation has to hand the element back to its resting
+     style so the `--leaving` transition below has something to run from. */
+  animation: map-bark-in 0.22s ease-out;
+  transition: opacity 0.45s ease-in, transform 0.45s ease-in;
+}
+
+.map-bark__text {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  line-height: 1.25;
+  color: var(--text-0);
+}
+
+/* Who said it, for the crews where the portrait alone is not enough to place the voice. */
+.map-bark__name {
+  display: block;
+  margin-top: 0.12rem;
+  font-family: var(--font-display);
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* The tail, pointing back down at the face that is talking. */
+.map-bark::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: calc(50% - var(--bark-nudge, 0px));
+  width: 0.5rem;
+  height: 0.34rem;
+  margin-left: -0.25rem;
+  background: rgba(8, 3, 4, 0.94);
+  border-right: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line-2);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.map-bark--leaving {
+  opacity: 0;
+  transform: translateX(-50%) translateX(var(--bark-nudge, 0px)) translateY(-0.2rem);
+}
+
+@keyframes map-bark-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateX(var(--bark-nudge, 0px)) translateY(0.25rem);
+  }
+}
+
+/* The face currently talking, so a bubble over a three-portrait callout is never ambiguous. */
+.map-callout__portrait--speaking.card-art {
+  border-color: var(--red);
+  filter: saturate(1) contrast(1.05);
+  box-shadow: 0 0 8px rgba(232, 17, 45, 0.55);
 }
 
 /* A pin the projector reports as not visible. Spelled out rather than left to the UA's

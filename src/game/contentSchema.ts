@@ -200,6 +200,9 @@ export const minionTemplateSchema = z.object({
   levelUpTraitOrder: z.array(z.string().min(1)),
   startingLevel: z.coerce.number().int().min(1).max(99).optional(),
   startingDynamicTraits: z.array(startingDynamicTraitSchema).optional(),
+  /* Flavour lines for the map's speech bubbles; see `MinionTemplate.barks`. No cross-references
+   * to check, so the shape phase is the whole of their validation. */
+  barks: z.array(z.string().min(1)).optional(),
 });
 
 /** Agents extend the minion template JSON shape with challenge traits + movement behavior. */
@@ -664,6 +667,9 @@ function normalizeMinionLikeTemplates(
     }
     if (m.startingDynamicTraits !== undefined && m.startingDynamicTraits.length > 0) {
       base.startingDynamicTraits = [...m.startingDynamicTraits];
+    }
+    if (m.barks !== undefined && m.barks.length > 0) {
+      base.barks = [...m.barks];
     }
     return base;
   });

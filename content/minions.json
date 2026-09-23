@@ -4,6 +4,18 @@
     "name": "Static",
     "description": "A teenage botnet wearing a hoodie. Firewalls file restraining orders against her.",
     "cardArt": "/assets/cards/custom/minion-static.webp",
+    "barks": [
+      "Their firewall has a default password. In this economy.",
+      "I'm in. I was in yesterday too, I just got bored.",
+      "Do not touch the hoodie. The hoodie is load-bearing.",
+      "Their sysadmin's password is his cat's name. The cat is Admin.",
+      "I renamed their mainframe. It's called Big Stupid now.",
+      "Can evil get better snacks? There's a budget, right?",
+      "Someone's scanning us back. Cute. Adorable, even.",
+      "I don't sleep. I compile.",
+      "Their security certificate expired in 2019. Nobody noticed.",
+      "If it has a login screen, it's already ours."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "brilliant",
@@ -20,6 +32,18 @@
     "name": "Glitch",
     "description": "Doesn't hack systems so much as convince them to self-destruct out of spite.",
     "cardArt": "/assets/cards/custom/minion-glitch.webp",
+    "barks": [
+      "I didn't break it. I convinced it to break itself.",
+      "Every machine wants to fail. I just give it permission.",
+      "Their backup server is lying to them too. I checked.",
+      "Ooh. That one screamed before it died. Rare.",
+      "Elegant code is just a longer way to fall over.",
+      "I left a message in their error logs. It's rude.",
+      "Systems don't crash. They surrender.",
+      "I fixed their printer. Now it only prints threats.",
+      "Watch it argue with itself for a while. Go on.",
+      "Nothing personal. The machine had it coming."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "saboteur",
@@ -42,6 +66,18 @@
     "name": "Knuckles",
     "description": "Retired pit fighter. Solves most problems with the same two tools.",
     "cardArt": "/assets/cards/custom/minion-knuckles.webp",
+    "barks": [
+      "Door's locked. Door was locked.",
+      "Two tools. Never needed a third.",
+      "Guy had a whole speech ready. Didn't get to it.",
+      "My knee says rain. My knee's never wrong.",
+      "Retirement was boring. Does this have a pension?",
+      "Talk first, sure. I'll stretch while you do.",
+      "Round three never happens. I'm efficient.",
+      "They keep making guards younger. Or I got older.",
+      "Get some ice. Not for me — for him.",
+      "Hit it till it opens. Works on most things."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "tactician",
@@ -64,6 +100,18 @@
     "name": "Tiny",
     "description": "Two meters of quiet menace. Has never once needed to raise his voice.",
     "cardArt": "/assets/cards/custom/minion-tiny.webp",
+    "barks": [
+      "I asked him nicely. Once.",
+      "People move when I stand up. I like that.",
+      "I've never had to shout. Nobody's made me.",
+      "Doorways are the real enemy.",
+      "He apologized. I hadn't said anything yet.",
+      "Broke another chair. Just by sitting.",
+      "Small room. Big problem.",
+      "The quiet part is the part that works.",
+      "I carry things. Sometimes people.",
+      "They ran. Saves everyone the paperwork."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "intimidating",
@@ -80,6 +128,18 @@
     "name": "Fingers",
     "description": "Once stole a judge's gavel mid-sentencing. Keeps it on her mantel.",
     "cardArt": "/assets/cards/custom/minion-fingers.webp",
+    "barks": [
+      "You still have your watch? Check again.",
+      "The gavel's on my mantel. He never finished the sentence.",
+      "Locks are questions with rude answers.",
+      "Pockets are a suggestion.",
+      "I lifted the boss's pen. He counts them, so hush.",
+      "Crowds are honest. Nobody's looking at anyone.",
+      "Museum glass is thinner than the insurance claims.",
+      "If it's loose it's mine. If it's bolted, give me a minute.",
+      "Never run. Running is how they remember your face.",
+      "That guard has lovely keys."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "stealthy",
@@ -102,6 +162,18 @@
     "name": "Gasket",
     "description": "Builds doomsday devices out of vending machine parts. Warranty void everywhere.",
     "cardArt": "/assets/cards/custom/minion-gasket.webp",
+    "barks": [
+      "Vending machine coil, doomsday device. Same spring.",
+      "Warranty void in eleven countries. Twelve by Friday.",
+      "It only hums like that for a minute. Probably.",
+      "Built a death ray from a toaster and spite.",
+      "Do not press the red one. Press the other red one.",
+      "Parts is parts. Apocalypse is apocalypse.",
+      "The manual said do not. I chose to grow.",
+      "Anything's a weapon if you're disappointed enough.",
+      "Needs one more capacitor. It always needs one more.",
+      "It isn't leaking. It's expressing itself."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "brilliant",
@@ -118,6 +190,18 @@
     "name": "Fuse",
     "description": "Believes every structural problem is three charges away from a structural solution.",
     "cardArt": "/assets/cards/custom/minion-fuse.webp",
+    "barks": [
+      "Three charges. Maybe four. Let's say four.",
+      "Every wall is a door if you ask loudly enough.",
+      "Structural problem, meet structural solution.",
+      "I measured. I did. Roughly.",
+      "That's not an explosion, that's a renovation.",
+      "The fire is just the receipt.",
+      "Stand back. No — further. There, that's it.",
+      "If it doesn't go off, that's worse. Much worse.",
+      "Load-bearing is a matter of opinion.",
+      "I've never used too much. Only exactly enough, loudly."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "fearless",
@@ -134,6 +218,18 @@
     "name": "Lanyard",
     "description": "Walks in through the front door with a laminated badge. The lamination is real; nothing else on it is.",
     "cardArt": "/assets/cards/custom/minion-lanyard.webp",
+    "barks": [
+      "Badge says corporate. Nobody argues with corporate.",
+      "Walked in the front. They held the door for me.",
+      "Confidence is a laminated document.",
+      "I'm here about the thing. Everyone knows the thing.",
+      "Told them I was IT. They apologized for the mess.",
+      "Nobody reads the badge. They read the lanyard.",
+      "Got a visitor sticker and a parking pass today.",
+      "Employee of the month at four places I never worked.",
+      "Nod, and carry a clipboard. That's the whole trick.",
+      "Security waved me through. I waved back. Courtesy."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "magnetic",
@@ -150,6 +246,18 @@
     "name": "Vents",
     "description": "Knows every building by its ductwork and has strong opinions about airflow codes. Doors are for guests.",
     "cardArt": "/assets/cards/custom/minion-vents.webp",
+    "barks": [
+      "Their airflow is a disgrace. Also I'm inside it.",
+      "Doors are for guests.",
+      "Second floor duct is a tight fit. Worth it.",
+      "This building breathes wrong. I can feel it.",
+      "Whoever spec'd this ductwork should be arrested. By me.",
+      "Nobody ever looks up. Nobody.",
+      "I know this place by its sheet metal.",
+      "Four screws on the grille. Amateurs.",
+      "Blueprints lie. Ductwork never does.",
+      "The kitchen vent smells like payday."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "swift",
@@ -166,6 +274,18 @@
     "name": "Shim",
     "description": "Carries eleven kinds of tape and a soldering iron she calls a scalpel. Every prototype works exactly once, which is usually enough.",
     "cardArt": "/assets/cards/custom/minion-shim.webp",
+    "barks": [
+      "Eleven kinds of tape. All of them necessary.",
+      "It'll work once. Once is usually enough.",
+      "This is a scalpel. It's a soldering iron, but it's a scalpel.",
+      "Prototype's ready. Don't breathe on it.",
+      "Held together with tape and confidence. Mostly tape.",
+      "One more wire. There. Ugly, but beautiful.",
+      "I can fix that. I can't fix it twice.",
+      "Duct tape is structural. I won't be debating this.",
+      "If it sparks, fine. If it sparks twice, run.",
+      "Rated for one use. Rate it higher yourself."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "meticulous",
@@ -182,6 +302,18 @@
     "name": "Magpie",
     "description": "Cannot walk past anything that glitters. Her flat is a museum with no plaques and no insurance.",
     "cardArt": "/assets/cards/custom/minion-magpie.webp",
+    "barks": [
+      "Ooh. What's that? Mine now.",
+      "It glittered. I had no choice in the matter.",
+      "My flat is a museum. No plaques, no insurance.",
+      "Shiny. Shiny. Ugly. Shiny.",
+      "Not a thief. A collector with poor impulse control.",
+      "That chandelier is coming home with me.",
+      "Gold's fine. Chrome is better. Don't ask why.",
+      "I took the doorknob. It was a nice doorknob.",
+      "Is that real silver? Never mind. It's mine regardless.",
+      "I'll give it back. I've never given anything back."
+    ],
     "hireCommandPoints": 2,
     "levelUpTraitOrder": [
       "swift",
@@ -198,6 +330,18 @@
     "name": "Penny Dreadful",
     "description": "Keeps double books for triple agents. Her audits end careers, occasionally on purpose.",
     "cardArt": "/assets/cards/custom/minion-penny.webp",
+    "barks": [
+      "Their books are fiction. Badly edited fiction.",
+      "Page forty-one is where the career ends.",
+      "Found the money. It was in a boat. It's always a boat.",
+      "Three sets of books, and all three lie differently.",
+      "Audit season is my hunting season.",
+      "Every crime is a spreadsheet eventually.",
+      "He resigns Thursday. He just doesn't know yet.",
+      "The numbers don't lie. Their accountant certainly did.",
+      "I filed it anonymously. The anonymous part was generous.",
+      "Give me a receipt, I'll give you a resignation."
+    ],
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "connected",
@@ -220,6 +364,18 @@
     "name": "Smooth Milo",
     "description": "Could sell sand to a desert, and has — twice, to the same desert.",
     "cardArt": "/assets/cards/custom/minion-milo.webp",
+    "barks": [
+      "Sold sand to a desert. Twice. Same desert.",
+      "Everyone's buying. They just haven't heard the price.",
+      "It isn't a lie once they've signed it.",
+      "I could sell that man his own watch.",
+      "Say yes now and I'll pretend you negotiated.",
+      "A handshake is binding where I'm from. Everywhere's where I'm from.",
+      "Customer satisfaction is a state of mind. Theirs.",
+      "I don't do refunds. I do follow-up offers.",
+      "He said no. He'll call back. They always call back.",
+      "Terms and conditions are on a napkin somewhere."
+    ],
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "magnetic",
@@ -242,6 +398,18 @@
     "name": "Madame Vex",
     "description": "Attended nine embassy galas last year under nine different names. Was the guest of honor at three.",
     "cardArt": "/assets/cards/custom/minion-madame-vex.webp",
+    "barks": [
+      "Nine galas, nine names, one very good dress.",
+      "The ambassador adores me. He's never met me.",
+      "Small talk is reconnaissance with canapes.",
+      "I was guest of honor. Nobody asked whose guest.",
+      "Give me a champagne flute and twenty minutes.",
+      "He told me the entire thing. I only nodded.",
+      "My alias has better credit than I do.",
+      "Never lie at a party. Simply be someone else.",
+      "The seating chart is the real intelligence.",
+      "I'll need an invitation. I'll have one by tonight."
+    ],
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "stealthy",
@@ -265,6 +433,18 @@
     "name": "Crater",
     "description": "Demolitions artist. Insists every explosion is 'load-bearing.'",
     "cardArt": "/assets/cards/custom/minion-crater.webp",
+    "barks": [
+      "Every explosion is load-bearing. Every one.",
+      "That building had a bad attitude anyway.",
+      "It's art. Loud art, but art.",
+      "Want subtle? Hire the quiet one. I'm not the quiet one.",
+      "Symmetry matters. Collapse it evenly or don't bother.",
+      "They call it a controlled demolition. I'm the control.",
+      "They'll rebuild it. Then I'll know the layout.",
+      "The dust settles into a shape. That's the signature.",
+      "Bigger isn't always better. It's usually better.",
+      "Never brought down the wrong building. Only early."
+    ],
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "fearless",
@@ -288,6 +468,18 @@
     "name": "Sable",
     "description": "Steals reputations first, valuables second. Considers alarms a form of applause.",
     "cardArt": "/assets/cards/custom/minion-sable.webp",
+    "barks": [
+      "Take the reputation. The valuables come quietly after.",
+      "Alarms are applause. I do take a bow.",
+      "Ruin a man's name and he hands you the keys.",
+      "I don't steal things. I reassign them.",
+      "He'll be disgraced by breakfast. It's already written.",
+      "Nobody guards what they're embarrassed to own.",
+      "A good lie outlives a good lock.",
+      "I left the safe open. Let them wonder.",
+      "The best theft is the one they apologize for.",
+      "Dress well and they'll blame the staff."
+    ],
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "ruthless",
@@ -311,6 +503,18 @@
     "name": "Torque",
     "description": "Rebuilds engines blindfolded and bridges without permits. Measures twice, detonates once.",
     "cardArt": "/assets/cards/custom/minion-torque.webp",
+    "barks": [
+      "Rebuilt an engine blindfolded once. Showing off, sure.",
+      "Permits are for people who might get caught.",
+      "Measure twice. Detonate once.",
+      "That bridge will hold. Long enough, anyway.",
+      "Give me a wrench and a grudge.",
+      "Engine's running rough. So am I.",
+      "I built that. Don't lean on it.",
+      "Grease doesn't wash off. That's how you know it's honest.",
+      "I can weld anything except a relationship.",
+      "It isn't a getaway car till I've had a look at it."
+    ],
     "hireCommandPoints": 3,
     "levelUpTraitOrder": [
       "meticulous",
@@ -334,6 +538,18 @@
     "name": "Dr. Helix",
     "description": "Lost his ethics board approval and considers it a promotion.",
     "cardArt": "/assets/cards/custom/minion-dr-helix.webp",
+    "barks": [
+      "The ethics board and I disagreed. I was promoted.",
+      "Peer review is jealousy with footnotes.",
+      "The samples are stable. Stable-ish. Stable-adjacent.",
+      "I need one more volunteer. Any volunteer.",
+      "Science is asking what if and then not stopping.",
+      "It's alive. Mildly. We'll take mildly.",
+      "Do not open the cold room. I mean it this time.",
+      "They called it monstrous. They also called it reproducible.",
+      "That paper would have won prizes. And been evidence.",
+      "Side effects are simply effects nobody ordered."
+    ],
     "hireCommandPoints": 4,
     "levelUpTraitOrder": [
       "brilliant",
@@ -351,6 +567,18 @@
     "name": "Nightshade",
     "description": "Security footage of her exists only as a rumor other cameras whisper about.",
     "cardArt": "/assets/cards/custom/minion-nightshade.webp",
+    "barks": [
+      "The cameras saw nothing. We came to an arrangement.",
+      "You didn't hear me arrive. You won't hear me leave.",
+      "I was in that room an hour ago. Nobody noticed then either.",
+      "Footage of me is a rumor other cameras tell.",
+      "Stand still enough and the guard walks right past.",
+      "I prefer the dark. It's more honest.",
+      "Took the photograph, put the frame back. Straight, too.",
+      "Three guards, one hallway, zero conversations.",
+      "Silence is a skill. Everyone else is simply loud.",
+      "If they knew I'd been there, I hadn't."
+    ],
     "hireCommandPoints": 4,
     "levelUpTraitOrder": [
       "stealthy",
@@ -369,6 +597,18 @@
     "name": "The Actuary",
     "description": "Calculated the exact insurance value of the world. Intends to collect.",
     "cardArt": "/assets/cards/custom/minion-the-actuary.webp",
+    "barks": [
+      "The world is worth more insured. I've done the math.",
+      "Your odds of surviving today: acceptable.",
+      "Everything carries a premium. Everything.",
+      "I've calculated this conversation's expected value. It's low.",
+      "Risk isn't danger. Risk is a price nobody has read yet.",
+      "The claim will be enormous. I intend to collect it.",
+      "Statistically, someone here is about to be unlucky.",
+      "Act of God is a coverage category, not a compliment.",
+      "I have a table for that. I have a table for everything.",
+      "The catastrophe is already priced in. I priced it."
+    ],
     "hireCommandPoints": 4,
     "levelUpTraitOrder": [
       "brilliant",
@@ -387,6 +627,18 @@
     "name": "Baron Von Flux",
     "description": "Disgraced nobility, twice-disgraced physicist. His lab coat has epaulettes.",
     "cardArt": "/assets/cards/custom/minion-baron-flux.webp",
+    "barks": [
+      "The epaulettes are not negotiable.",
+      "Stripped of the title. Kept the accent.",
+      "Physics and I have an understanding. It obeys.",
+      "The family estate is a smoking crater. A good story.",
+      "They laughed at the academy. The academy is gone now.",
+      "A lab coat without epaulettes is merely a coat.",
+      "Nobility is a state of mind. And a reactor.",
+      "Twice disgraced. Both times I was correct.",
+      "Address me properly. The title was stolen, not surrendered.",
+      "The field is stable — within noble tolerances."
+    ],
     "hireCommandPoints": 5,
     "levelUpTraitOrder": [
       "brilliant",
@@ -411,6 +663,18 @@
     "name": "The Duchess",
     "description": "Three governments have collapsed at her dinner parties. The canapés were excellent.",
     "cardArt": "/assets/cards/custom/minion-the-duchess.webp",
+    "barks": [
+      "Three governments fell at my table. The canapes were excellent.",
+      "One does not conquer. One hosts.",
+      "Seat the ambassador beside his rival, then simply wait.",
+      "I have never raised my voice. I've never had to.",
+      "Do send flowers to the widow. She's useful.",
+      "Power is a guest list.",
+      "I remember every favor. Every single one.",
+      "He was a minister on Tuesday. Not by Sunday.",
+      "The wine matters. It is always the wine.",
+      "My invitations are not declined. It simply isn't done."
+    ],
     "hireCommandPoints": 5,
     "levelUpTraitOrder": [
       "connected",
@@ -429,6 +693,18 @@
     "name": "Colonel Razor",
     "description": "Court-martialed for winning a war nobody authorized. Still salutes himself.",
     "cardArt": "/assets/cards/custom/minion-colonel-razor.webp",
+    "barks": [
+      "Court-martialed for winning. I'd do it again.",
+      "I salute myself. Someone ought to.",
+      "A plan survives first contact if it's loud enough.",
+      "They gave the medal to a man who was hiding.",
+      "Discipline. Everything else is decoration.",
+      "That war wasn't authorized. It was won.",
+      "Show me a perimeter, I'll show you the gap in it.",
+      "Stand up straight. You as well. Yes, you.",
+      "I do not retreat. I redeploy aggressively.",
+      "Rules of engagement are written by people who weren't there."
+    ],
     "hireCommandPoints": 6,
     "levelUpTraitOrder": [
       "brutal",

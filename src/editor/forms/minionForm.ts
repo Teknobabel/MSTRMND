@@ -268,6 +268,30 @@ export function renderMinionForm(container: HTMLElement, ctx: FormCtx): void {
     ),
   );
 
+  if (ctx.slice === "minions") {
+    container.appendChild(
+      fieldset(
+        "barks (idle chatter on the world map)",
+        listEditor(
+          strArray(ctx.row, "barks"),
+          (next) =>
+            ctx.update((row) => {
+              setOrDelete(row, "barks", next, true);
+            }),
+          (item, replace) => {
+            const input = textInput(item, replace, "Something this minion would say");
+            input.style.flex = "1";
+            return input;
+          },
+          () => "",
+        ),
+        hint(
+          "Every so often one hired minion says one of these in a speech bubble over its portrait on the world map — on the job it is running, or at the lair while it sits a turn out. Flavour only: nothing in the rules reads them, and a minion with no lines simply never speaks. Keep them to a sentence — the bubble hangs over a 40px portrait. Players can switch the whole system off under Settings › Viewscreen.",
+        ),
+      ),
+    );
+  }
+
   const dynFs = fieldset(
     "startingDynamicTraits (relationships / hero / wanted)",
     listEditor(

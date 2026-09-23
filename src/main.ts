@@ -117,12 +117,14 @@ import { initNavigation, type NavigationApi } from "./navigation";
 import { createNoveltyLedger } from "./ui/novelty";
 import { observeWorldNovelty, siteNoveltySubject } from "./ui/worldNovelty";
 import {
+  BOOT_SHELL_CLASS,
   clearPlannerHold,
   startBootSequence,
   startPlannerArrival,
   type BootSequenceHandle,
   type PlannerArrivalHandle,
 } from "./ui/bootSequence";
+import { createBarkDirector } from "./ui/minionBarks";
 import {
   initMapParallax,
   type MapParallaxApi,
@@ -1504,9 +1506,10 @@ function initGameController(
    * planner arriving — is choreography on the shell and belongs beside the boot that armed it.
    * The controller only knows how to fill the page in. */
   runBriefing: RunBriefingApi,
-  /* The player's preferences, not the run's. Only one of them reaches in here — Disable
-   * Tutorial, which decides whether the map's Directives card is up — and it is read at the point of
-   * use rather than copied, so a flip mid-run lands on the next render. */
+  /* The player's preferences, not the run's. Two of them reach in here — Disable Tutorial, which
+   * decides whether the map's Directives card is up, and Disable Minion Chatter, which decides
+   * whether the crew speaks over the map — and both are read at the point of use rather than
+   * copied, so a flip mid-run lands on the next render or the next bark. */
   settings: SettingsMenuApi,
 ): GameControllerApi {
   let state: GameState = createInitialGameState(content, undefined, runSetup.read());
@@ -6610,6 +6613,19 @@ function initGameController(
     return lines;
   }
 
+  /**
+   * Mark a portrait as the face one minion speaks from, so the bark director can find it again.
+   *
+   * A data attribute rather than a map of elements: `renderMapPanel` throws the whole plot away
+   * on every state change, and a bark can outlive several of those — so the director re-finds
+   * its anchor by querying the live DOM rather than holding a node that may already be detached.
+   * See `ui/minionBarks.ts`.
+   */
+  function tagBarkSpeaker(portrait: HTMLElement, instanceId: string): HTMLElement {
+    portrait.dataset.barkSpeaker = instanceId;
+    return portrait;
+  }
+
   /** Roster order, not assign order, so the same crew always reads the same way. */
   function missionCalloutParticipants(am: ActiveMission): MinionInstance[] {
     return state.player.minions.filter((inst) =>
@@ -6649,7 +6665,10 @@ function initGameController(
       for (const inst of crew) {
         const tpl = content.minions.find((t) => t.id === inst.templateId);
         callout.appendChild(
-          createCardArtImg(resolveMinionCardArt(tpl), "map-callout__portrait"),
+          tagBarkSpeaker(
+            createCardArtImg(resolveMinionCardArt(tpl), "map-callout__portrait"),
+            inst.instanceId,
+          ),
         );
       }
     }
@@ -6682,7 +6701,12 @@ function initGameController(
     callout.setAttribute("aria-label", tipLines.join(". "));
     for (const inst of idle) {
       const tpl = content.minions.find((t) => t.id === inst.templateId);
-      callout.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "map-callout__portrait"));
+      callout.appendChild(
+        tagBarkSpeaker(
+          createCardArtImg(resolveMinionCardArt(tpl), "map-callout__portrait"),
+          inst.instanceId,
+        ),
+      );
     }
     return callout;
   }
@@ -6998,6 +7022,12 @@ function initGameController(
    * hidden panel as a zero box, and there is nothing to animate.
    */
   function drawMapFrame(timeMs: number): void {
+    /* Ahead of every early return below, and on the loop's own clock rather than the map's.
+     * Neither of those returns means the player has stopped looking at the console — one is a
+     * run with no map art, the other is reduced motion — and a bark is a line of dialogue, not
+     * an animation, so it is the one thing on this panel that should still happen in both. */
+    barkDirector.frame(timeMs / 1000);
+
     if (mapRenderer === null || currentPlotSize() === null) {
       /* Whatever was corrupting when the frames stopped would otherwise stay on screen until
        * they resume — and for a run with no map art, forever. The schedule is pure, so there is
@@ -7123,6 +7153,67 @@ function initGameController(
         throw new Error("No floating body in the markup to host the glitch layer");
       })(),
   );
+
+  /* Static markup, both of them, so they are found once here rather than on every frame the
+   * bark gate below is asked about. */
+  const barkShellEl = document.querySelector<HTMLElement>(".omega-shell");
+  const runBriefingOverlayEl = document.getElementById("overlay-run-briefing");
+
+  /**
+   * Whether the crew is allowed to speak right now — i.e. whether the map is the thing the
+   * player is actually looking at.
+   *
+   * Everything listed here is something that covers the map or asks for the player's attention
+   * somewhere else, and a bubble that pops behind a drawer is a line nobody hears. The pause
+   * overlay is deliberately *not* in the list: pausing stops the shell's frame loop outright
+   * (see `navigation.ts`), so the director is not being ticked at all by then.
+   */
+  function barksAllowed(): boolean {
+    if (settings.read().disableBarks) {
+      return false;
+    }
+    if (openDrawer !== null) {
+      return false;
+    }
+    /* The opening is choreography that has already decided what the player is looking at, and
+     * the briefing is a page laid over the map. Neither wants a minion talking over it. */
+    if (
+      barkShellEl?.classList.contains(BOOT_SHELL_CLASS) === true ||
+      runBriefingOverlayEl?.hidden === false
+    ) {
+      return false;
+    }
+    return turnReportOverlay.hidden && runEndOverlay.hidden && overlayActivityLog.hidden;
+  }
+
+  /**
+   * The crew talking to itself over the map. See `ui/minionBarks.ts` for the pacing and why it
+   * is written the way it is.
+   *
+   * Everyone on the roster can speak, wherever the map happens to be showing them — on the
+   * operation they are running, or at the lair if they are sitting the turn out. A minion the
+   * map is not drawing right now simply has no portrait to speak from, which the director takes
+   * as "not this time" rather than as a reason to go looking for state; that keeps this list to
+   * one pass over the roster and leaves *where anyone is* entirely to `renderMapPanel`.
+   */
+  const barkDirector = createBarkDirector({
+    speakers: () =>
+      state.player.minions.map((inst) => {
+        const tpl = content.minions.find((t) => t.id === inst.templateId);
+        return {
+          instanceId: inst.instanceId,
+          templateId: inst.templateId,
+          name: tpl?.name ?? inst.templateId,
+          lines: tpl?.barks ?? [],
+        };
+      }),
+    portraitFor: (instanceId) =>
+      mapPlotEl?.querySelector<HTMLElement>(
+        `[data-bark-speaker="${CSS.escape(instanceId)}"]`,
+      ) ?? null,
+    enabled: barksAllowed,
+    bounds: () => mapPlotEl,
+  });
 
   /* The shell's own loop drives the map; see `mapFrameHook`. */
   mapFrameHook = drawMapFrame;
@@ -10478,6 +10569,9 @@ function initGameController(
     /* A checklist put away belongs to the run it was about. The twirls are not reset with it:
      * those are how this player likes to read the card, not a fact about the run. */
     directivesDismissed = false;
+    /* A line said by someone the new run has not hired. The director reschedules itself, so this
+     * is only about the bubble that happens to be on screen when Play is pressed. */
+    barkDirector.clear();
     state = createInitialGameState(content, undefined, runSetup.read());
     refresh();
   }

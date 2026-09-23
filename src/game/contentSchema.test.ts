@@ -411,6 +411,34 @@ describe("optional agent features", () => {
   });
 });
 
+describe("minion barks", () => {
+  /** Put `barks` on the first fixture minion and parse the lot. */
+  function withBarks(barks: unknown) {
+    const raw = rawFixtureSlices();
+    raw.minions[0] = { ...raw.minions[0], barks };
+    return parseContentCatalog(raw);
+  }
+
+  it("carries authored lines through to the catalog", () => {
+    // The normalizer rebuilds minion templates field by field, so a new optional field reaches
+    // the game only if it is copied across explicitly — which is exactly how barks first
+    // shipped silently empty.
+    const { catalog, issues } = withBarks(["Door's locked.", "Door was locked."]);
+    expect(issues).toEqual([]);
+    expect(catalog?.minions[0]?.barks).toEqual(["Door's locked.", "Door was locked."]);
+  });
+
+  it("leaves the field off a minion with nothing to say", () => {
+    const { catalog } = parseContentCatalog(rawFixtureSlices());
+    expect(catalog?.minions[0]?.barks).toBeUndefined();
+    expect(withBarks([]).catalog?.minions[0]?.barks).toBeUndefined();
+  });
+
+  it("rejects an empty line rather than drawing an empty bubble", () => {
+    expect(withBarks([""]).issues).not.toEqual([]);
+  });
+});
+
 describe("parseCatalog (throwing wrapper)", () => {
   it("throws a ContentValidationError carrying every issue", () => {
     const raw = rawFixtureSlices();

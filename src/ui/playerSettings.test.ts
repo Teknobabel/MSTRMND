@@ -50,6 +50,12 @@ describe("player settings defaults", () => {
     expect(PLAYER_SETTINGS_DEFAULTS.disableTutorial).toBe(false);
   });
 
+  it("lets the crew talk unless asked not to", () => {
+    // Barks are how the roster reads as people rather than as trait lists, and they are paced so
+    // a player never goes looking for the switch; see `ui/minionBarks.ts`.
+    expect(PLAYER_SETTINGS_DEFAULTS.disableBarks).toBe(false);
+  });
+
   it("slides the map away from the pointer unless asked not to", () => {
     // The parallax is a reach aid before it is an effect (see `ui/mapParallax.ts`), so it is opt
     // *out*: a player who never opens this screen should still be getting the shorter travel.
@@ -65,12 +71,14 @@ describe("normalizePlayerSettings", () => {
         mapParallax: false,
         unlockAllContent: true,
         disableTutorial: true,
+        disableBarks: true,
       }),
     ).toStrictEqual({
       skipBootSequence: true,
       mapParallax: false,
       unlockAllContent: true,
       disableTutorial: true,
+      disableBarks: true,
     });
   });
 
@@ -85,6 +93,7 @@ describe("normalizePlayerSettings", () => {
       mapParallax: PLAYER_SETTINGS_DEFAULTS.mapParallax,
       unlockAllContent: PLAYER_SETTINGS_DEFAULTS.unlockAllContent,
       disableTutorial: PLAYER_SETTINGS_DEFAULTS.disableTutorial,
+      disableBarks: PLAYER_SETTINGS_DEFAULTS.disableBarks,
     });
   });
 
@@ -96,6 +105,7 @@ describe("normalizePlayerSettings", () => {
       mapParallax: PLAYER_SETTINGS_DEFAULTS.mapParallax,
       unlockAllContent: PLAYER_SETTINGS_DEFAULTS.unlockAllContent,
       disableTutorial: PLAYER_SETTINGS_DEFAULTS.disableTutorial,
+      disableBarks: PLAYER_SETTINGS_DEFAULTS.disableBarks,
     });
   });
 
@@ -114,12 +124,14 @@ describe("player settings storage", () => {
       mapParallax: false,
       unlockAllContent: true,
       disableTutorial: true,
+      disableBarks: true,
     });
     expect(loadPlayerSettings(storage)).toStrictEqual({
       skipBootSequence: true,
       mapParallax: false,
       unlockAllContent: true,
       disableTutorial: true,
+      disableBarks: true,
     });
   });
 
@@ -141,6 +153,7 @@ describe("player settings storage", () => {
         mapParallax: true,
         unlockAllContent: false,
         disableTutorial: false,
+        disableBarks: false,
       }),
     ).not.toThrow();
   });
@@ -153,6 +166,7 @@ describe("player settings storage", () => {
         mapParallax: true,
         unlockAllContent: false,
         disableTutorial: false,
+        disableBarks: false,
       }),
     ).not.toThrow();
   });

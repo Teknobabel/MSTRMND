@@ -159,6 +159,15 @@ export type MinionTemplate = {
   startingLevel?: number;
   /** Designer-authored dynamic traits at hire (minion-targeted use template id until resolved on roster). */
   startingDynamicTraits?: StartingDynamicTrait[];
+  /**
+   * Idle chatter: the lines this minion can say in a speech bubble on the world map while the
+   * player is looking at it. Flavour only — nothing in the rules reads them (see
+   * `ui/minionBarks.ts`), so a template with none simply never speaks.
+   *
+   * Write them short. The bubble is a small box hung over a 40px portrait, and a line that
+   * wraps to four rows stops being an overheard remark and starts being a dialog box.
+   */
+  barks?: string[];
 };
 
 export type MinionInstance = {

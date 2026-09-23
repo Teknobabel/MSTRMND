@@ -45,6 +45,15 @@ export interface PlayerSettings {
    * who wants the corner of the map back before then.
    */
   readonly disableTutorial: boolean;
+  /**
+   * Stop the crew talking to itself over the world map.
+   *
+   * Off by default, i.e. barks are on: they are how the roster reads as people rather than as
+   * trait lists, and the pacing is written so a player who never opens this screen is never
+   * given a reason to look for it (see `ui/minionBarks.ts`). The toggle is for the player who
+   * wants a silent console — and for the one who has read all 230 lines.
+   */
+  readonly disableBarks: boolean;
 }
 
 export const PLAYER_SETTINGS_DEFAULTS: PlayerSettings = {
@@ -52,6 +61,7 @@ export const PLAYER_SETTINGS_DEFAULTS: PlayerSettings = {
   mapParallax: true,
   unlockAllContent: false,
   disableTutorial: false,
+  disableBarks: false,
 };
 
 /** Where the settings are parked between sessions. Versioned: the list will grow. */
@@ -90,6 +100,10 @@ export function normalizePlayerSettings(raw: unknown): PlayerSettings {
       typeof row.disableTutorial === "boolean"
         ? row.disableTutorial
         : PLAYER_SETTINGS_DEFAULTS.disableTutorial,
+    disableBarks:
+      typeof row.disableBarks === "boolean"
+        ? row.disableBarks
+        : PLAYER_SETTINGS_DEFAULTS.disableBarks,
   };
 }
 
@@ -146,6 +160,7 @@ const SETTINGS_CONTROL_IDS: Readonly<Record<keyof PlayerSettings, string>> = {
   mapParallax: "setting-map-parallax",
   unlockAllContent: "setting-unlock-all-content",
   disableTutorial: "setting-disable-tutorial",
+  disableBarks: "setting-disable-barks",
 };
 
 /**
