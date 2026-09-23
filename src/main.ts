@@ -311,6 +311,9 @@ const ICON_PERSON =
 const ICON_FLAME = `<svg viewBox="0 0 24 24" aria-hidden="true">${HEAT_ICON_SVG_PATHS}</svg>`;
 const ICON_CROSSHAIR =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>';
+/** The Missions drawer tab's mark (`index.html`), reused so the readout names its kind the same way. */
+const ICON_MISSION =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1.5v3.5m0 14v3.5M1.5 12H5m14 0h3.5"/></svg>';
 const ICON_SKULL_FILLED =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2C7.1 2 3.5 5.6 3.5 10.2c0 2.9 1.5 5 3.5 6.3V20a1 1 0 0 0 1 1h1.6v-2.2h1.5V21h1.8v-2.2h1.5V21H16a1 1 0 0 0 1-1v-3.5c2-1.3 3.5-3.4 3.5-6.3C20.5 5.6 16.9 2 12 2Zm-3.2 10.8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm6.4 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"/></svg>';
 
@@ -9872,6 +9875,14 @@ function initGameController(
       blockClass: "stat-block--heat",
     },
     {
+      key: "missions",
+      icon: ICON_MISSION,
+      label: "Missions",
+      tooltip:
+        "Missions currently running, against the most you can have in flight at once. Launch more from the Missions drawer once one resolves or a slot opens up.",
+      suffix: true,
+    },
+    {
       key: "minions",
       icon: ICON_PERSON,
       label: "Minions",
@@ -10098,6 +10109,7 @@ function initGameController(
     }
 
     writeStatTail("command", `/ ${p.maxCommandPoints}`);
+    writeStatTail("missions", `/ ${p.maxConcurrentMissions}`);
     writeStatTail("minions", `/ ${p.maxRosterSize}`);
 
     /* Heat is the one readout carrying a standing intensity as well as a change: the glow and
@@ -10112,6 +10124,7 @@ function initGameController(
       ["command", p.commandPoints],
       ["infamy", p.infamy],
       ["heat", p.heat],
+      ["missions", state.activeMissions.length],
       ["minions", p.minions.length],
       ["agents", totalPlayerVisibleOpposingAgents(state)],
     ]);
