@@ -51,6 +51,28 @@ export function resolveAgentCardArt(template: AgentTemplate | undefined): string
   return template?.cardArt ?? DEFAULT_MINION_CARD_ART;
 }
 
+/**
+ * The portrait for a small **square** box — a planner chip, the drag token's thumbnail, a map
+ * callout's crew, a turn report's crew — as opposed to the upright 9:16 banner a card's hero
+ * gets from {@link resolveMinionCardArt}.
+ *
+ * It is a plain second URL rather than a crop applied at draw time, which is what lets it ride
+ * every path a card art URL already rides — `createCardArtImg`, the deferred-art parking below,
+ * `object-fit: cover` — without any of them knowing there are two of these. The editor bakes the
+ * file (see `editor/artField.ts`); by the time the game sees it, it is just art.
+ *
+ * Falling back to the full portrait is the point of the `??`: a minion nobody has cut a face for
+ * still shows something, exactly as it did before compact art existed.
+ */
+export function resolveMinionCompactArt(template: MinionTemplate | undefined): string {
+  return template?.compactArt ?? resolveMinionCardArt(template);
+}
+
+/** {@link resolveMinionCompactArt} for agents, with the agent art fallback chain. */
+export function resolveAgentCompactArt(template: AgentTemplate | undefined): string {
+  return template?.compactArt ?? resolveAgentCardArt(template);
+}
+
 export function resolveLocationCardArt(loc: LocationTemplate | undefined): string {
   return loc?.cardArt ?? DEFAULT_LOCATION_CARD_ART;
 }

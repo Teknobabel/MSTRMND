@@ -15,6 +15,8 @@ const PREFERRED_KEY_ORDER = [
   "type",
   "description",
   "cardArt",
+  "compactArt",
+  "compactCrop",
 ] as const;
 
 const preferredIndex = new Map<string, number>(

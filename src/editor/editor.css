@@ -531,6 +531,73 @@ textarea {
   max-width: 260px;
 }
 
+/* ---------- Compact portrait crop ---------- */
+
+/* The baked face is square and the game draws it square, so the preview is not the 96px box
+   the portrait preview uses — it is the shape the file actually is. */
+.ed-art-preview--compact {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+/*
+ * The crop stage: the portrait with the box laid over it. `position: relative` on the stage and
+ * `display: block` on the image are what make the box's pixel offsets mean anything — the image
+ * is the box's containing block, and an inline image would leave a baseline gap under it that
+ * every offset would then be wrong by.
+ */
+.ed-crop {
+  position: relative;
+  width: max-content;
+  max-width: 100%;
+  margin: 4px 0;
+  /* The box dims everything around it with an enormous spread shadow, which without this would
+     grey out the entire form rather than the portrait it is cropping. */
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.ed-crop__img {
+  display: block;
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  /* The portrait here is a backdrop to aim at, not something to pick up: without this a drag
+     that starts on the image begins an image drag and the box never follows the pointer. */
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Outlined on both sides so the box reads against a dark portrait and a light one alike; the
+   region it covers is the one that gets baked, so nothing is drawn inside it. */
+.ed-crop__box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #fff;
+  outline: 1px solid rgba(0, 0, 0, 0.7);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  cursor: move;
+  touch-action: none;
+}
+
+/* Inside the box rather than straddling its corner: the stage clips its overflow (above), and a
+   box dragged flush with an edge is exactly when the handle is needed most. */
+.ed-crop__handle {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.7);
+  border-radius: 2px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
 /* ---------- Preview ---------- */
 
 .ed-preview-result {

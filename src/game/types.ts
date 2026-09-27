@@ -142,12 +142,42 @@ export type StartingDynamicTrait =
     }
   | { kind: "hero" | "wanted"; locationId: string };
 
+/**
+ * A square region of a portrait, in percentages of the source image (0–100, left/top origin).
+ * Square in intent rather than by construction: `w` and `h` are both stored because the source
+ * is not square, so equal *percentages* would not be equal pixels.
+ */
+export type PortraitCrop = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 export type MinionTemplate = {
   id: string;
   name: string;
   description: string;
   /** Optional card portrait URL (site root path under `public/`, e.g. `/assets/cards/custom/x.png`). */
   cardArt?: string;
+  /**
+   * Optional face-framed portrait for the small square boxes — map callouts, planner chips, the
+   * drag token, the turn report's crew. Those are all squares, and `cardArt` is authored 9:16,
+   * so `object-fit: cover` crops it to a full-width band across the middle of the figure: a
+   * torso, correctly drawn and unidentifiable at 28px. This is the same portrait cut to the
+   * face, baked to a small square in the editor (see {@link compactCrop}).
+   *
+   * Absent ⇒ the compact surfaces fall back to `cardArt` and its torso band, which is what every
+   * minion looked like before this existed. Nothing breaks without it.
+   */
+  compactArt?: string;
+  /**
+   * The region of `cardArt` that `compactArt` was baked from, as percentages of the source
+   * (0–100, left/top origin). Nothing at runtime reads this — `compactArt` is already the
+   * cropped file. It is kept so the editor can reopen the crop with the box where you left it,
+   * and re-bake it when the portrait behind it is redrawn.
+   */
+  compactCrop?: PortraitCrop;
   /** CP cost to hire during the Main Phase. */
   hireCommandPoints: number;
   startingTraitIds?: string[];

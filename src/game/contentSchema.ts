@@ -190,11 +190,25 @@ export const startingDynamicTraitSchema: z.ZodType<StartingDynamicTrait> = z.dis
   ],
 );
 
+/* A percentage rect over a portrait; see `MinionTemplate.compactCrop`. Bounds are checked per
+ * edge rather than as `x + w <= 100` — a box the editor dragged a pixel past the edge should be
+ * clamped by the editor, and anything hand-edited far enough out to matter fails `min`/`max`
+ * here. The rect is editor bookkeeping, not something the game reads, so this is a shape check
+ * and nothing more. */
+const portraitCropSchema = z.object({
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+  w: z.number().min(0).max(100),
+  h: z.number().min(0).max(100),
+});
+
 export const minionTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
   cardArt: z.string().min(1).optional(),
+  compactArt: z.string().min(1).optional(),
+  compactCrop: portraitCropSchema.optional(),
   hireCommandPoints: z.number().int().min(0),
   startingTraitIds: z.array(z.string().min(1)).optional(),
   levelUpTraitOrder: z.array(z.string().min(1)),
@@ -661,6 +675,12 @@ function normalizeMinionLikeTemplates(
     };
     if (m.cardArt !== undefined) {
       base.cardArt = m.cardArt;
+    }
+    if (m.compactArt !== undefined) {
+      base.compactArt = m.compactArt;
+    }
+    if (m.compactCrop !== undefined) {
+      base.compactCrop = { ...m.compactCrop };
     }
     if (m.startingTraitIds !== undefined && m.startingTraitIds.length > 0) {
       base.startingTraitIds = [...m.startingTraitIds];

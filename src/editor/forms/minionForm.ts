@@ -1,4 +1,5 @@
 import { artFieldRow } from "../artField";
+import { compactArtFieldRow } from "../compactArtField";
 import { AGENT_ABILITY_DEFS } from "../../game/agentAbility";
 import type { FormCtx } from "./context";
 import { setTooltip } from "../../ui/tooltip";
@@ -137,10 +138,17 @@ export function renderMinionForm(container: HTMLElement, ctx: FormCtx): void {
       ),
     ),
   );
+  const artName = `${ctx.slice === "agents" ? "agent" : "minion"}-${str(ctx.row, "id")}`;
   container.appendChild(
-    artFieldRow(ctx, "cardArt", {
-      optional: true,
-      suggestedName: `${ctx.slice === "agents" ? "agent" : "minion"}-${str(ctx.row, "id")}`,
+    artFieldRow(ctx, "cardArt", { optional: true, suggestedName: artName }),
+  );
+  container.appendChild(
+    compactArtFieldRow(ctx, {
+      key: "compactArt",
+      sourceKey: "cardArt",
+      cropKey: "compactCrop",
+      suggestedName: artName,
+      note: "The portrait shown wherever the UI has room for a small square and not a card: crew on the world map, planner chips, the drag token, the turn report. Those boxes crop the full portrait to a band across the middle of the figure, which at 28px is a torso — cut a face here instead. Optional: without one those boxes go on using the full portrait, exactly as before.",
     }),
   );
   container.appendChild(

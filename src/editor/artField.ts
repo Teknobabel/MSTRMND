@@ -23,6 +23,16 @@ function artList(): Promise<ArtFileEntry[]> {
 /** Animation sniffs by path, so re-renders don't refetch the same image. */
 const animatedByPath = new Map<string, boolean>();
 
+/**
+ * Drops what this module remembers about the art directory after something has been written to
+ * it. Exported because uploads do not all start here — `compactArtField.ts` writes a baked face
+ * through the same endpoint, and the picker below would go on offering a stale listing.
+ */
+export function invalidateArtCaches(path: string): void {
+  artListCache = null;
+  animatedByPath.delete(path);
+}
+
 async function sniffAnimated(path: string): Promise<boolean> {
   const cached = animatedByPath.get(path);
   if (cached !== undefined) {

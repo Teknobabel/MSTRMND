@@ -221,12 +221,13 @@ import {
   loadCardArt,
   unloadCardArt,
   withDeferredCardArt,
-  resolveAgentCardArt,
+  resolveAgentCompactArt,
   resolveAssetCardArt,
   resolveLairCardArt,
   resolveMissionCardArt,
   resolvePlayerLocationCardArt,
   resolveMinionCardArt,
+  resolveMinionCompactArt,
   resolveOmegaPlanCardArt,
   resolveUnknownCardArt,
   resolveUnknownCardArtThumb,
@@ -2401,7 +2402,7 @@ function initGameController(
         return null;
       }
       const tpl = content.minions.find((t) => t.id === inst.templateId);
-      return { art: resolveMinionCardArt(tpl), label: tpl?.name ?? instanceId };
+      return { art: resolveMinionCompactArt(tpl), label: tpl?.name ?? instanceId };
     };
     const payload = parseDragPayload(raw);
     if (payload === null) {
@@ -3497,7 +3498,7 @@ function initGameController(
       wrap.className = "assign-pick-slot-card-wrap";
       wrap.appendChild(
         buildAssignPickChip(
-          resolveMinionCardArt(tpl),
+          resolveMinionCompactArt(tpl),
           "Target",
           tpl?.name ?? targetPick.instanceId,
           buildMinionPreviewArticle(inst, targetPick.instanceId),
@@ -4262,7 +4263,7 @@ function initGameController(
         chip.dataset.instanceId = instanceId;
         chip.tabIndex = 0;
 
-        chip.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "card-art--chip"));
+        chip.appendChild(createCardArtImg(resolveMinionCompactArt(tpl), "card-art--chip"));
 
         const chipMain = document.createElement("div");
         chipMain.className = "plan-slot-main assign-minion-chip-main";
@@ -4522,7 +4523,7 @@ function initGameController(
       const name = template?.name ?? a.templateId;
       const chip = document.createElement("span");
       chip.className = "location-agent-chip";
-      chip.appendChild(createCardArtImg(resolveAgentCardArt(template), "card-art--chip"));
+      chip.appendChild(createCardArtImg(resolveAgentCompactArt(template), "card-art--chip"));
       chip.appendChild(document.createTextNode(name));
       /* One agent, one description: what it makes harder here, then what it does. The pieces are
        * joined into a single line rather than stacked, because the second line of a tooltip is
@@ -6669,7 +6670,7 @@ function initGameController(
         const tpl = content.minions.find((t) => t.id === inst.templateId);
         callout.appendChild(
           tagBarkSpeaker(
-            createCardArtImg(resolveMinionCardArt(tpl), "map-callout__portrait"),
+            createCardArtImg(resolveMinionCompactArt(tpl), "map-callout__portrait"),
             inst.instanceId,
           ),
         );
@@ -6706,7 +6707,7 @@ function initGameController(
       const tpl = content.minions.find((t) => t.id === inst.templateId);
       callout.appendChild(
         tagBarkSpeaker(
-          createCardArtImg(resolveMinionCardArt(tpl), "map-callout__portrait"),
+          createCardArtImg(resolveMinionCompactArt(tpl), "map-callout__portrait"),
           inst.instanceId,
         ),
       );
@@ -10304,7 +10305,7 @@ function initGameController(
       const tpl = inst ? content.minions.find((t) => t.id === inst.templateId) : undefined;
       const chip = document.createElement("div");
       chip.className = "turn-report-crew__chip";
-      chip.appendChild(createCardArtImg(resolveMinionCardArt(tpl), "turn-report-crew__art"));
+      chip.appendChild(createCardArtImg(resolveMinionCompactArt(tpl), "turn-report-crew__art"));
       const text = document.createElement("div");
       text.className = "turn-report-crew__text";
       const name = document.createElement("span");
